@@ -1,0 +1,23 @@
+[
+  {
+    "doctype": "Role",
+    "name": "VT Manager",
+    "role_name": "VT Manager",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "VT Leader",
+    "role_name": "VT Leader",
+    "desk_access": 1,
+    "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "VT Member",
+    "role_name": "VT Member",
+    "desk_access": 1,
+    "disabled": 0
+  }
+]
