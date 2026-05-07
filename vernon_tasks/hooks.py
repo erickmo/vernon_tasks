@@ -10,11 +10,24 @@ app_version = app_version
 
 required_apps = []
 
-# Filled in later plans as modules are built
-doc_events = {}
+doc_events = {
+    "VT Task": {
+        "on_submit": "vernon_tasks.task.services.point_calculator.calculate_points",
+        "on_update": "vernon_tasks.task.services.scheduling_engine.on_task_update",
+        "validate": "vernon_tasks.task.doctype.vt_task.vt_task.validate_permissions",
+    },
+    "VT Project": {
+        "validate": "vernon_tasks.project.doctype.vt_project.vt_project.validate_team",
+    },
+}
+
 scheduler_events = {
     "daily": [
         "vernon_tasks.task.services.scheduling_engine.generate_recurring_tasks",
+        "vernon_tasks.task.services.point_calculator.check_overdue_tasks",
+        "vernon_tasks.workforce.doctype.daily_summary.daily_summary.generate_daily_summaries",
+    ],
+    "hourly": [
         "vernon_tasks.task.services.scheduling_engine.check_deadline_notifications",
     ],
 }

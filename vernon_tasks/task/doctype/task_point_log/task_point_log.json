@@ -1,0 +1,32 @@
+{
+  "actions": [],
+  "autoname": "TPL-.YYYY.MM.DD.-.#####",
+  "creation": "2026-05-07 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["task","user","transaction_type","amount","column_break_1","original_amount","overridden_by","log_timestamp","note"],
+  "fields": [
+    {"fieldname": "task", "fieldtype": "Link", "label": "Task", "options": "VT Task", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "transaction_type", "fieldtype": "Select", "label": "Type", "options": "earned\nearly_bonus\nlate_penalty\nrevision_deduction\nleader_override", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "amount", "fieldtype": "Float", "label": "Amount", "reqd": 1, "in_list_view": 1, "description": "Positive = add, Negative = deduct"},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "original_amount", "fieldtype": "Float", "label": "Original Amount"},
+    {"fieldname": "overridden_by", "fieldtype": "Link", "label": "Overridden By", "options": "User"},
+    {"fieldname": "log_timestamp", "fieldtype": "Datetime", "label": "Timestamp", "reqd": 1},
+    {"fieldname": "note", "fieldtype": "Small Text", "label": "Note"}
+  ],
+  "modified": "2026-05-07 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Task",
+  "name": "Task Point Log",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "read": 1, "role": "VT Manager"},
+    {"read": 1, "role": "VT Leader"},
+    {"read": 1, "role": "VT Member", "if_owner": 1}
+  ],
+  "sort_field": "log_timestamp",
+  "sort_order": "DESC",
+  "track_changes": 0
+}
