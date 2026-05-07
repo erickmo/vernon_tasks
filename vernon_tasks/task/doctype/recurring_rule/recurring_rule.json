@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "autoname": "RR-.YYYY.-.#####",
+  "creation": "2026-05-07 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["rule_type","interval","column_break_1","days_of_week","day_of_month","end_section","end_date","max_occurrences"],
+  "fields": [
+    {"fieldname": "rule_type", "fieldtype": "Select", "label": "Type", "options": "Daily\nWeekly\nMonthly\nCustom", "default": "Daily", "reqd": 1, "in_list_view": 1},
+    {"default": "1", "fieldname": "interval", "fieldtype": "Int", "label": "Every N (days/weeks/months)"},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "days_of_week", "fieldtype": "Data", "label": "Days of Week", "description": "Comma-separated: Mon,Tue,Wed,Thu,Fri"},
+    {"fieldname": "day_of_month", "fieldtype": "Int", "label": "Day of Month"},
+    {"fieldname": "end_section", "fieldtype": "Section Break", "label": "End Condition"},
+    {"fieldname": "end_date", "fieldtype": "Date", "label": "End Date"},
+    {"fieldname": "max_occurrences", "fieldtype": "Int", "label": "Max Occurrences"}
+  ],
+  "modified": "2026-05-07 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Task",
+  "name": "Recurring Rule",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "read": 1, "role": "VT Manager", "write": 1},
+    {"create": 1, "read": 1, "role": "VT Leader", "write": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

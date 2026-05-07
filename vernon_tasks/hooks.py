@@ -12,7 +12,12 @@ required_apps = []
 
 # Filled in later plans as modules are built
 doc_events = {}
-scheduler_events = {}
+scheduler_events = {
+    "daily": [
+        "vernon_tasks.task.services.scheduling_engine.generate_recurring_tasks",
+        "vernon_tasks.task.services.scheduling_engine.check_deadline_notifications",
+    ],
+}
 
 fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
