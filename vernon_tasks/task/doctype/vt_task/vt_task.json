@@ -23,7 +23,7 @@
     {"default": "0", "fieldname": "estimated_hours", "fieldtype": "Float", "label": "Estimated Hours"},
     {"default": "0", "fieldname": "actual_hours", "fieldtype": "Float", "label": "Actual Hours", "read_only": 1},
     {"fieldname": "review_schedule_section", "fieldtype": "Section Break", "label": "Review Schedule", "depends_on": "eval:doc.pdca_phase==\"CHECK\""},
-    {"fieldname": "review_estimated_hours", "fieldtype": "Float", "label": "Review Estimate (hrs)", "depends_on": "eval:doc.pdca_phase==\"CHECK\""},
+    {"default": "0", "fieldname": "review_estimated_hours", "fieldtype": "Float", "label": "Review Estimate (hrs)", "depends_on": "eval:doc.pdca_phase==\"CHECK\""},
     {"fieldname": "review_scheduled_date", "fieldtype": "Date", "label": "Review Date", "depends_on": "eval:doc.pdca_phase==\"CHECK\""},
     {"fieldname": "scoring_section", "fieldtype": "Section Break", "label": "Scoring"},
     {"default": "1", "fieldname": "weight", "fieldtype": "Float", "label": "Weight"},
