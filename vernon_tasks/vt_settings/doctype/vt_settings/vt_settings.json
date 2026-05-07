@@ -1,0 +1,75 @@
+{
+  "actions": [],
+  "creation": "2026-05-07 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "point_calculation_section",
+    "weight_multiplier",
+    "early_bonus_rate",
+    "late_penalty_rate",
+    "revision_deduct_rate",
+    "column_break_1",
+    "default_daily_target_hours"
+  ],
+  "fields": [
+    {
+      "fieldname": "point_calculation_section",
+      "fieldtype": "Section Break",
+      "label": "Point Calculation"
+    },
+    {
+      "default": "10",
+      "fieldname": "weight_multiplier",
+      "fieldtype": "Float",
+      "label": "Weight Multiplier",
+      "description": "base_points = weight x weight_multiplier"
+    },
+    {
+      "default": "0.05",
+      "fieldname": "early_bonus_rate",
+      "fieldtype": "Float",
+      "label": "Early Bonus Rate (per day)"
+    },
+    {
+      "default": "0.08",
+      "fieldname": "late_penalty_rate",
+      "fieldtype": "Float",
+      "label": "Late Penalty Rate (per day)"
+    },
+    {
+      "default": "0.10",
+      "fieldname": "revision_deduct_rate",
+      "fieldtype": "Float",
+      "label": "Revision Deduction Rate (per revision)"
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "8",
+      "fieldname": "default_daily_target_hours",
+      "fieldtype": "Float",
+      "label": "Default Daily Target Hours",
+      "description": "Used when user has no Work Profile"
+    }
+  ],
+  "issingle": 1,
+  "modified": "2026-05-07 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Vt Settings",
+  "name": "VT Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "read": 1,
+      "role": "VT Manager",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
