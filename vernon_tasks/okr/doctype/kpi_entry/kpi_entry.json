@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "autoname": "KE-.YYYY.MM.DD.-.#####",
+  "creation": "2026-05-07 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["kpi_definition","date","column_break_1","value","project","notes"],
+  "fields": [
+    {"fieldname": "kpi_definition", "fieldtype": "Link", "label": "KPI", "options": "KPI Definition", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "date", "fieldtype": "Date", "label": "Date", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "value", "fieldtype": "Float", "label": "Value", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "project", "fieldtype": "Link", "label": "Project", "options": "VT Project"},
+    {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes"}
+  ],
+  "modified": "2026-05-07 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Okr",
+  "name": "KPI Entry",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "read": 1, "role": "VT Manager", "write": 1},
+    {"create": 1, "read": 1, "role": "VT Leader", "write": 1},
+    {"read": 1, "role": "VT Member"}
+  ],
+  "sort_field": "date",
+  "sort_order": "DESC",
+  "track_changes": 0
+}
