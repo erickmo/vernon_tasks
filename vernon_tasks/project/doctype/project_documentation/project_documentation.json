@@ -1,0 +1,10 @@
+{
+  "actions": [], "creation": "2026-05-07 00:00:00.000000", "doctype": "DocType", "engine": "InnoDB",
+  "field_order": ["doc_title","content"],
+  "fields": [
+    {"fieldname": "doc_title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "content", "fieldtype": "Long Text", "label": "Content"}
+  ],
+  "istable": 1, "modified": "2026-05-07 00:00:00.000000", "modified_by": "Administrator",
+  "module": "Project", "name": "Project Documentation", "owner": "Administrator", "permissions": []
+}

@@ -1,0 +1,11 @@
+{
+  "actions": [], "creation": "2026-05-07 00:00:00.000000", "doctype": "DocType", "engine": "InnoDB",
+  "field_order": ["milestone_title","due_date","status"],
+  "fields": [
+    {"fieldname": "milestone_title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "due_date", "fieldtype": "Date", "label": "Due Date", "in_list_view": 1},
+    {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Open\nCompleted", "default": "Open", "in_list_view": 1}
+  ],
+  "istable": 1, "modified": "2026-05-07 00:00:00.000000", "modified_by": "Administrator",
+  "module": "Project", "name": "Project Milestone", "owner": "Administrator", "permissions": []
+}

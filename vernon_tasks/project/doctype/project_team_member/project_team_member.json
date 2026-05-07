@@ -1,0 +1,11 @@
+{
+  "actions": [], "creation": "2026-05-07 00:00:00.000000", "doctype": "DocType", "engine": "InnoDB",
+  "field_order": ["user","role","is_also_leader"],
+  "fields": [
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "role", "fieldtype": "Select", "label": "Role", "options": "Owner\nLeader\nMember", "default": "Member", "reqd": 1, "in_list_view": 1},
+    {"default": "0", "fieldname": "is_also_leader", "fieldtype": "Check", "label": "Also Leader"}
+  ],
+  "istable": 1, "modified": "2026-05-07 00:00:00.000000", "modified_by": "Administrator",
+  "module": "Project", "name": "Project Team Member", "owner": "Administrator", "permissions": []
+}

@@ -1,0 +1,38 @@
+{
+  "actions": [],
+  "autoname": "PROJ-.YYYY.-.#####",
+  "creation": "2026-05-07 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["title","project_owner","project_leader","column_break_1","start_date","end_date","status","pdca_phase","objective","team_section","team_members","milestone_section","milestones","docs_section","documentation"],
+  "fields": [
+    {"fieldname": "title", "fieldtype": "Data", "label": "Project Title", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "project_owner", "fieldtype": "Link", "label": "Project Owner", "options": "User", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "project_leader", "fieldtype": "Link", "label": "Project Leader", "options": "User", "in_list_view": 1},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "start_date", "fieldtype": "Date", "label": "Start Date", "reqd": 1},
+    {"fieldname": "end_date", "fieldtype": "Date", "label": "End Date", "reqd": 1},
+    {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Open\nOn Track\nAt Risk\nClosed", "default": "Open", "in_list_view": 1},
+    {"fieldname": "pdca_phase", "fieldtype": "Select", "label": "PDCA Phase", "options": "PLAN\nDO\nCHECK\nACT\nCLOSED", "default": "PLAN", "in_list_view": 1},
+    {"fieldname": "objective", "fieldtype": "Link", "label": "Linked Objective", "options": "Objective"},
+    {"fieldname": "team_section", "fieldtype": "Section Break", "label": "Team"},
+    {"fieldname": "team_members", "fieldtype": "Table", "label": "Team Members", "options": "Project Team Member"},
+    {"fieldname": "milestone_section", "fieldtype": "Section Break", "label": "Milestones"},
+    {"fieldname": "milestones", "fieldtype": "Table", "label": "Milestones", "options": "Project Milestone"},
+    {"fieldname": "docs_section", "fieldtype": "Section Break", "label": "Documentation"},
+    {"fieldname": "documentation", "fieldtype": "Table", "label": "Documentation", "options": "Project Documentation"}
+  ],
+  "modified": "2026-05-07 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Project",
+  "name": "VT Project",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "read": 1, "role": "VT Manager", "write": 1},
+    {"create": 1, "read": 1, "role": "VT Leader", "write": 1},
+    {"read": 1, "role": "VT Member"}
+  ],
+  "sort_field": "start_date",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
