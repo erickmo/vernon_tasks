@@ -1,0 +1,96 @@
+{
+  "actions": [],
+  "autoname": "format:UPS-{user}-{period}",
+  "creation": "2026-05-07 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "user",
+    "period",
+    "column_break_1",
+    "total_earned",
+    "total_penalty",
+    "total_bonus",
+    "total_override_delta",
+    "net_points"
+  ],
+  "fields": [
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "label": "User",
+      "options": "User",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "period",
+      "fieldtype": "Data",
+      "label": "Period",
+      "description": "e.g. 2026-05 or 2026-Q2",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_earned",
+      "fieldtype": "Float",
+      "label": "Total Earned"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_penalty",
+      "fieldtype": "Float",
+      "label": "Total Penalty"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_bonus",
+      "fieldtype": "Float",
+      "label": "Total Bonus"
+    },
+    {
+      "default": "0",
+      "fieldname": "total_override_delta",
+      "fieldtype": "Float",
+      "label": "Total Override Delta"
+    },
+    {
+      "default": "0",
+      "fieldname": "net_points",
+      "fieldtype": "Float",
+      "label": "Net Points",
+      "in_list_view": 1
+    }
+  ],
+  "modified": "2026-05-07 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Workforce",
+  "name": "User Point Summary",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "role": "VT Manager",
+      "write": 1
+    },
+    {
+      "read": 1,
+      "role": "VT Leader"
+    },
+    {
+      "read": 1,
+      "role": "VT Member",
+      "if_owner": 1
+    }
+  ],
+  "sort_field": "period",
+  "sort_order": "DESC",
+  "track_changes": 0
+}
