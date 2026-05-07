@@ -1,5 +1,6 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from vernon_tasks.task.report.leader_review_schedule.leader_review_schedule import execute
 
 OWNER = "test_lrs_owner@example.com"
 LEADER = "test_lrs_leader@example.com"
@@ -24,7 +25,6 @@ def _setup_users():
 
 
 def _make_project():
-    _setup_users()
     proj = frappe.get_doc({
         "doctype": "VT Project",
         "title": "LRS Test Project",
@@ -62,6 +62,7 @@ def _make_task(proj, review_date, review_hours, phase="CHECK"):
 class TestLeaderReviewSchedule(FrappeTestCase):
     def setUp(self):
         frappe.set_user("Administrator")
+        _setup_users()
         self.proj = _make_project()
         self.task_a = _make_task(self.proj, "2026-05-12", 2.0)
         self.task_b = _make_task(self.proj, "2026-05-14", 1.5)
@@ -72,8 +73,6 @@ class TestLeaderReviewSchedule(FrappeTestCase):
         frappe.db.rollback()
 
     def test_returns_only_check_phase_tasks(self):
-        from vernon_tasks.task.report.leader_review_schedule.leader_review_schedule import execute
-
         columns, data = execute({"from_date": "2026-05-12", "to_date": "2026-05-15"})
 
         names = [r.get("name") for r in data if r.get("name")]
@@ -82,25 +81,20 @@ class TestLeaderReviewSchedule(FrappeTestCase):
         self.assertNotIn(self.task_do.name, names)
 
     def test_excludes_tasks_outside_date_range(self):
-        from vernon_tasks.task.report.leader_review_schedule.leader_review_schedule import execute
-
         columns, data = execute({"from_date": "2026-05-12", "to_date": "2026-05-15"})
 
         names = [r.get("name") for r in data if r.get("name")]
         self.assertNotIn(self.task_out.name, names)
 
     def test_total_row_sums_hours(self):
-        from vernon_tasks.task.report.leader_review_schedule.leader_review_schedule import execute
-
         columns, data = execute({"from_date": "2026-05-12", "to_date": "2026-05-15"})
 
-        total_row = data[-1]
+        total_row = next((r for r in data if r.get("is_grand_total")), None)
+        self.assertIsNotNone(total_row)
         self.assertEqual(total_row["title"], "Total Review Hours")
         self.assertAlmostEqual(total_row["review_estimated_hours"], 3.5)
 
     def test_project_filter(self):
-        from vernon_tasks.task.report.leader_review_schedule.leader_review_schedule import execute
-
         other_proj = _make_project()
         other_task = _make_task(other_proj, "2026-05-12", 5.0)
 
@@ -115,8 +109,6 @@ class TestLeaderReviewSchedule(FrappeTestCase):
         self.assertNotIn(other_task.name, names)
 
     def test_empty_result_returns_empty_list(self):
-        from vernon_tasks.task.report.leader_review_schedule.leader_review_schedule import execute
-
         columns, data = execute({"from_date": "2020-01-01", "to_date": "2020-01-07"})
 
         self.assertEqual(data, [])
