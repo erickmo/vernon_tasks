@@ -90,6 +90,7 @@ def _get_data(filters):
     rows.append({
         "title": "Total Review Hours",
         "review_estimated_hours": total_hours,
+        "is_grand_total": True,
     })
 
     return rows

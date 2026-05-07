@@ -14,5 +14,28 @@
   "roles": [
     {"role": "VT Manager"},
     {"role": "VT Leader"}
+  ],
+  "filters": [
+    {
+      "fieldname": "from_date",
+      "label": "From Date",
+      "fieldtype": "Date",
+      "default": "",
+      "reqd": 0
+    },
+    {
+      "fieldname": "to_date",
+      "label": "To Date",
+      "fieldtype": "Date",
+      "default": "",
+      "reqd": 0
+    },
+    {
+      "fieldname": "project",
+      "label": "Project",
+      "fieldtype": "Link",
+      "options": "VT Project",
+      "reqd": 0
+    }
   ]
 }
