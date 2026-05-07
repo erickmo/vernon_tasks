@@ -27,4 +27,10 @@ def get_data():
             "icon": "octicon octicon-organization",
             "label": _("Workforce"),
         },
+        {
+            "module_name": "Vt Settings",
+            "color": "#888888",
+            "icon": "octicon octicon-gear",
+            "label": _("Settings"),
+        },
     ]
