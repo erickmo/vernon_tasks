@@ -83,7 +83,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
                         height: 180,
                         colors: ["#5e64ff"],
                         data: { labels, datasets: [{ values }] },
-                        tooltipOptions: { formatTooltipY: d => d + " tasks" },
+                        tooltipOptions: { formatTooltipY: d => (d ?? 0) + " tasks" },
                     });
                 }
             },

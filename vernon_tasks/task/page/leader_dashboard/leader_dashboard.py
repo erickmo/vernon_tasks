@@ -4,10 +4,13 @@ from frappe.utils import today
 _DONE_PHASE = "DONE"
 _IN_REVIEW_STATUS = "In Review"
 _CHECK_PHASE = "CHECK"
+_ALLOWED_ROLES = ("VT Leader", "VT Manager")
 
 
 @frappe.whitelist()
 def get_leader_stats() -> dict:
+    if not set(frappe.get_roles()) & set(_ALLOWED_ROLES):
+        frappe.throw("Not authorized", frappe.PermissionError)
     _today = today()
 
     pending_review = frappe.db.sql("""
@@ -31,6 +34,7 @@ def get_leader_stats() -> dict:
           AND MONTH(completion_date) = MONTH(%(today)s)
     """, {"done_phase": _DONE_PHASE, "today": _today}, as_list=True)[0][0]
 
+    # revision_count = 0 means approved on first try; > 0 means went through at least one rejection
     approval_rate = round((int(approved) / int(month_done) * 100), 1) if int(month_done) > 0 else 0.0
 
     team_points_month = frappe.db.sql("""
@@ -49,6 +53,8 @@ def get_leader_stats() -> dict:
 
 @frappe.whitelist()
 def get_phase_distribution() -> list:
+    if not set(frappe.get_roles()) & set(_ALLOWED_ROLES):
+        frappe.throw("Not authorized", frappe.PermissionError)
     rows = frappe.db.sql("""
         SELECT pdca_phase AS phase, COUNT(*) AS count
         FROM `tabVT Task`
@@ -60,6 +66,8 @@ def get_phase_distribution() -> list:
 
 @frappe.whitelist()
 def get_team_leaderboard() -> list:
+    if not set(frappe.get_roles()) & set(_ALLOWED_ROLES):
+        frappe.throw("Not authorized", frappe.PermissionError)
     rows = frappe.db.sql("""
         SELECT
             assigned_to AS member,
@@ -77,6 +85,8 @@ def get_team_leaderboard() -> list:
 
 @frappe.whitelist()
 def get_overdue_tasks() -> list:
+    if not set(frappe.get_roles()) & set(_ALLOWED_ROLES):
+        frappe.throw("Not authorized", frappe.PermissionError)
     rows = frappe.db.sql("""
         SELECT
             t.name AS task_name,
