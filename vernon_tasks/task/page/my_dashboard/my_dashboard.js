@@ -22,7 +22,6 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
                 <div id="${id}" style="font-size:28px; font-weight:700; color:var(--${color}-500);">—</div>
             </div>
         `).appendTo(cards_row);
-        return card;
     }
 
     make_card("md-done-today", "Done Today", "green");
@@ -42,6 +41,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
                 );
                 $("#md-blocked").text(d.blocked ?? 0);
             },
+            error(r) { frappe.show_alert({ message: r.message || "Failed to load data", indicator: "red" }); },
         });
     }
 
@@ -50,14 +50,14 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
     const charts_row = $('<div style="display:flex; gap:16px; margin-top:20px; flex-wrap:wrap;"></div>')
         .appendTo(container);
 
-    const bar_card = $(`
+    $(`
         <div class="frappe-card" style="flex:2; min-width:300px; padding:16px;">
             <h5 style="margin:0 0 12px;">Tasks Completed — Last 7 Days</h5>
             <div id="md-bar-chart"></div>
         </div>
     `).appendTo(charts_row);
 
-    const donut_card = $(`
+    $(`
         <div class="frappe-card" style="flex:1; min-width:220px; padding:16px;">
             <h5 style="margin:0 0 12px;">Hours: Logged vs Remaining</h5>
             <div id="md-donut-chart"></div>
@@ -87,6 +87,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
                     });
                 }
             },
+            error(r) { frappe.show_alert({ message: r.message || "Failed to load data", indicator: "red" }); },
         });
     }
 
@@ -98,6 +99,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
                 const remaining = Math.max(0, d.estimated_hours - d.actual_hours);
 
                 if (d.actual_hours === 0 && remaining === 0) {
+                    donut_chart = null;
                     $("#md-donut-chart").html(
                         '<p class="text-muted" style="padding:12px 0;">No active tasks.</p>'
                     );
@@ -121,6 +123,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
                     });
                 }
             },
+            error(r) { frappe.show_alert({ message: r.message || "Failed to load data", indicator: "red" }); },
         });
     }
 
