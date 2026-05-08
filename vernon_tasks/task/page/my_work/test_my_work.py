@@ -147,3 +147,43 @@ class TestMyWorkAPI(unittest.TestCase):
         result = get_what_to_do_today()
         names = [r["name"] for r in result]
         self.assertNotIn("MW-TASK-BLK", names)
+
+    # --- get_my_blocked_tasks ---
+
+    def test_get_my_blocked_tasks_returns_blocker_info(self):
+        frappe.get_doc({
+            "doctype": "VT Task",
+            "name": "MW-TASK-BLOCKER",
+            "title": "The Blocker",
+            "project": "TEST-MYWORK-PRJ",
+            "assigned_to": "Administrator",
+            "pdca_phase": "DO",
+            "kanban_status": "In Progress",
+            "start_date": today(),
+            "deadline": add_days(today(), 10),
+            "weight": 1.0,
+            "priority": "Low",
+        }).insert(ignore_permissions=True)
+
+        frappe.get_doc({
+            "doctype": "VT Task",
+            "name": "MW-TASK-BLK",
+            "title": "My Blocked Task",
+            "project": "TEST-MYWORK-PRJ",
+            "assigned_to": "Administrator",
+            "pdca_phase": "PLAN",
+            "kanban_status": "Scheduled",
+            "start_date": today(),
+            "deadline": add_days(today(), 5),
+            "weight": 2.0,
+            "priority": "High",
+            "dependencies": [{"blocked_by": "MW-TASK-BLOCKER", "dependency_type": "Finish-to-Start"}],
+        }).insert(ignore_permissions=True)
+
+        from vernon_tasks.task.page.my_work.my_work import get_my_blocked_tasks
+        result = get_my_blocked_tasks()
+        names = [r["name"] for r in result]
+        self.assertIn("MW-TASK-BLK", names)
+        row = next(r for r in result if r["name"] == "MW-TASK-BLK")
+        self.assertEqual(row["blocker_name"], "MW-TASK-BLOCKER")
+        self.assertIn("days_blocked", row)

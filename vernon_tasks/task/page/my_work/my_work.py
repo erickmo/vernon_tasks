@@ -65,7 +65,23 @@ def get_my_blocked_tasks() -> list:
 
     Returns tasks where blockers are not yet completed.
     """
-    pass
+    user = frappe.session.user
+    return frappe.db.sql("""
+        SELECT
+            t.name, t.title, t.project, t.priority, t.deadline,
+            t.pdca_phase, t.kanban_status,
+            td.blocked_by AS blocker_name,
+            bt.title AS blocker_title,
+            bt.assigned_to AS blocker_assignee,
+            DATEDIFF(CURDATE(), t.start_date) AS days_blocked
+        FROM `tabVT Task` t
+        INNER JOIN `tabTask Dependency` td ON td.parent = t.name
+        INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
+        WHERE t.assigned_to = %(user)s
+          AND t.pdca_phase NOT IN ('DONE')
+          AND bt.pdca_phase != 'DONE'
+        ORDER BY days_blocked DESC
+    """, {"user": user}, as_dict=True)
 
 
 @frappe.whitelist()
