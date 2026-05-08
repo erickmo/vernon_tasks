@@ -15,7 +15,7 @@ VALID_PDCA_TRANSITIONS = {
     "BACKLOG": ["PLAN"],
     "PLAN": ["DO"],
     "DO": ["CHECK"],
-    "CHECK": ["ACT", "DONE"],
+    "CHECK": ["ACT", "DONE", "DO"],
     "ACT": ["DO"],
     "DONE": [],
 }

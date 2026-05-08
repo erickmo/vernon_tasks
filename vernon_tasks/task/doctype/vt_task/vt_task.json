@@ -5,7 +5,7 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "is_submittable": 1,
-  "field_order": ["title","project","sprint","column_break_1","assigned_to","priority","pdca_phase","kanban_status","time_section","start_date","deadline","completion_date","column_break_2","estimated_hours","actual_hours","review_schedule_section","review_estimated_hours","review_scheduled_date","scoring_section","weight","base_points","earned_points","leader_override_points","override_reason","revision_count","recurring_section","is_recurring","recurring_rule","next_occurrence","parent_task","dependencies_section","dependencies","schedule_section","schedule_entries"],
+  "field_order": ["title","project","sprint","column_break_1","assigned_to","priority","pdca_phase","kanban_status","time_section","start_date","deadline","completion_date","column_break_2","estimated_hours","actual_hours","review_schedule_section","review_estimated_hours","review_scheduled_date","scoring_section","weight","base_points","earned_points","leader_override_points","override_reason","rejection_note","revision_count","recurring_section","is_recurring","recurring_rule","next_occurrence","parent_task","dependencies_section","dependencies","schedule_section","schedule_entries"],
   "fields": [
     {"fieldname": "title", "fieldtype": "Data", "label": "Task Title", "reqd": 1, "in_list_view": 1},
     {"fieldname": "project", "fieldtype": "Link", "label": "Project", "options": "VT Project", "reqd": 1, "in_list_view": 1},
@@ -31,6 +31,7 @@
     {"default": "0", "fieldname": "earned_points", "fieldtype": "Float", "label": "Earned Points", "read_only": 1},
     {"fieldname": "leader_override_points", "fieldtype": "Float", "label": "Leader Override Points"},
     {"fieldname": "override_reason", "fieldtype": "Small Text", "label": "Override Reason"},
+    {"fieldname": "rejection_note", "fieldtype": "Small Text", "label": "Rejection Note", "read_only": 1, "in_list_view": 0, "in_standard_filter": 0},
     {"default": "0", "fieldname": "revision_count", "fieldtype": "Int", "label": "Revision Count", "read_only": 1},
     {"fieldname": "recurring_section", "fieldtype": "Section Break", "label": "Recurring"},
     {"default": "0", "fieldname": "is_recurring", "fieldtype": "Check", "label": "Is Recurring"},
