@@ -121,7 +121,7 @@ frappe.pages["leader-dashboard"].on_page_load = function (wrapper) {
                     $("#ld-bar-chart").html('<p class="text-muted" style="padding:12px 0;">No data this month.</p>');
                     return;
                 }
-                const labels = data.map(d => d.member.split("@")[0]);
+                const labels = data.map(d => d.member ? d.member.split("@")[0] : "Unassigned");
                 const values = data.map(d => d.points);
                 const chart_data = { labels, datasets: [{ values }] };
 
@@ -167,7 +167,7 @@ frappe.pages["leader-dashboard"].on_page_load = function (wrapper) {
                         <td>${esc(t.member)}</td>
                         <td><a href="/app/vt-task/${esc(t.task_name)}" target="_blank">${esc(t.task_title)}</a></td>
                         <td>${fmt_deadline(t.deadline)}</td>
-                        <td><span style="color:var(--red-500); font-weight:600;">${t.days_overdue}d</span></td>
+                        <td><span style="color:var(--red-500); font-weight:600;">${t.days_overdue ?? 0}d</span></td>
                         <td>${esc(t.phase)}</td>
                     </tr>
                 `).join("");
