@@ -1,6 +1,10 @@
 import frappe
 from frappe.utils import today, add_days
 
+# Domain constants for task phases and priorities
+_DONE_PHASES = ("DONE",)
+_PRIORITY_ORDER = ("High", "Medium", "Low")
+
 
 @frappe.whitelist()
 def get_my_day() -> list:

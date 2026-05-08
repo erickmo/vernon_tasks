@@ -49,9 +49,19 @@ def _make_schedule_entry(task_name, user, hours=2.0):
 
 class TestMyWorkAPI(unittest.TestCase):
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         frappe.set_user("Administrator")
         _make_project()
+
+    @classmethod
+    def tearDownClass(cls):
+        if frappe.db.exists("VT Project", "TEST-MYWORK-PRJ"):
+            frappe.delete_doc("VT Project", "TEST-MYWORK-PRJ", force=True)
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user("Administrator")
 
     def tearDown(self):
         for name in ["MW-TASK-1", "MW-TASK-2", "MW-TASK-BLK", "MW-TASK-BLOCKER", "MW-TASK-SOON"]:
