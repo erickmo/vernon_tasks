@@ -95,7 +95,37 @@ def start_task(task: str) -> dict:
     Returns:
         Updated task document
     """
-    pass
+    user = frappe.session.user
+    doc = frappe.db.get_value(
+        "VT Task", task,
+        ["assigned_to", "pdca_phase", "kanban_status", "title"],
+        as_dict=True,
+    )
+    if not doc:
+        frappe.throw(f"Task {task} not found", frappe.DoesNotExistError)
+    if doc.assigned_to != user:
+        frappe.throw("Not authorized to act on this task", frappe.PermissionError)
+    if doc.pdca_phase not in ("BACKLOG", "PLAN"):
+        frappe.throw(
+            f"Task must be Backlog or Scheduled to start (current: {doc.kanban_status})",
+            frappe.ValidationError,
+        )
+    blocker = frappe.db.sql("""
+        SELECT bt.title FROM `tabTask Dependency` td
+        INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
+        WHERE td.parent = %(task)s AND bt.pdca_phase != 'DONE'
+        LIMIT 1
+    """, {"task": task}, as_dict=True)
+    if blocker:
+        frappe.throw(
+            f"Task is blocked by: {blocker[0].title}",
+            frappe.ValidationError,
+        )
+    frappe.db.set_value("VT Task", task, {
+        "pdca_phase": "DO",
+        "kanban_status": "In Progress",
+    })
+    return {"status": "ok"}
 
 
 @frappe.whitelist()
@@ -109,4 +139,23 @@ def submit_for_review(task: str) -> dict:
     Returns:
         Updated task document with review status
     """
-    pass
+    user = frappe.session.user
+    doc = frappe.db.get_value(
+        "VT Task", task,
+        ["assigned_to", "pdca_phase", "kanban_status"],
+        as_dict=True,
+    )
+    if not doc:
+        frappe.throw(f"Task {task} not found", frappe.DoesNotExistError)
+    if doc.assigned_to != user:
+        frappe.throw("Not authorized to act on this task", frappe.PermissionError)
+    if doc.pdca_phase != "DO":
+        frappe.throw(
+            f"Task must be In Progress to submit for review (current: {doc.kanban_status})",
+            frappe.ValidationError,
+        )
+    frappe.db.set_value("VT Task", task, {
+        "pdca_phase": "CHECK",
+        "kanban_status": "In Review",
+    })
+    return {"status": "ok"}

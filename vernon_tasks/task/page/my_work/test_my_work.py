@@ -187,3 +187,79 @@ class TestMyWorkAPI(unittest.TestCase):
         row = next(r for r in result if r["name"] == "MW-TASK-BLK")
         self.assertEqual(row["blocker_name"], "MW-TASK-BLOCKER")
         self.assertIn("days_blocked", row)
+
+    # --- start_task ---
+
+    def test_start_task_transitions_to_in_progress(self):
+        _make_task("MW-TASK-1", "Administrator", pdca_phase="PLAN", kanban_status="Scheduled")
+
+        from vernon_tasks.task.page.my_work.my_work import start_task
+        result = start_task("MW-TASK-1")
+        self.assertEqual(result["status"], "ok")
+
+        phase = frappe.db.get_value("VT Task", "MW-TASK-1", "pdca_phase")
+        kanban = frappe.db.get_value("VT Task", "MW-TASK-1", "kanban_status")
+        self.assertEqual(phase, "DO")
+        self.assertEqual(kanban, "In Progress")
+
+    def test_start_task_rejected_on_wrong_status(self):
+        _make_task("MW-TASK-2", "Administrator", pdca_phase="CHECK", kanban_status="In Review")
+
+        from vernon_tasks.task.page.my_work.my_work import start_task
+        with self.assertRaises(frappe.ValidationError):
+            start_task("MW-TASK-2")
+
+    def test_start_task_rejected_when_blocked(self):
+        frappe.get_doc({
+            "doctype": "VT Task",
+            "name": "MW-TASK-BLOCKER",
+            "title": "Blocker",
+            "project": "TEST-MYWORK-PRJ",
+            "assigned_to": "Administrator",
+            "pdca_phase": "DO",
+            "kanban_status": "In Progress",
+            "start_date": today(),
+            "deadline": add_days(today(), 10),
+            "weight": 1.0,
+            "priority": "Low",
+        }).insert(ignore_permissions=True)
+
+        frappe.get_doc({
+            "doctype": "VT Task",
+            "name": "MW-TASK-BLK",
+            "title": "Blocked",
+            "project": "TEST-MYWORK-PRJ",
+            "assigned_to": "Administrator",
+            "pdca_phase": "PLAN",
+            "kanban_status": "Scheduled",
+            "start_date": today(),
+            "deadline": add_days(today(), 5),
+            "weight": 2.0,
+            "priority": "High",
+            "dependencies": [{"blocked_by": "MW-TASK-BLOCKER", "dependency_type": "Finish-to-Start"}],
+        }).insert(ignore_permissions=True)
+
+        from vernon_tasks.task.page.my_work.my_work import start_task
+        with self.assertRaises(frappe.ValidationError):
+            start_task("MW-TASK-BLK")
+
+    # --- submit_for_review ---
+
+    def test_submit_for_review_transitions_to_in_review(self):
+        _make_task("MW-TASK-1", "Administrator", pdca_phase="DO", kanban_status="In Progress")
+
+        from vernon_tasks.task.page.my_work.my_work import submit_for_review
+        result = submit_for_review("MW-TASK-1")
+        self.assertEqual(result["status"], "ok")
+
+        phase = frappe.db.get_value("VT Task", "MW-TASK-1", "pdca_phase")
+        kanban = frappe.db.get_value("VT Task", "MW-TASK-1", "kanban_status")
+        self.assertEqual(phase, "CHECK")
+        self.assertEqual(kanban, "In Review")
+
+    def test_submit_for_review_rejected_on_wrong_status(self):
+        _make_task("MW-TASK-2", "Administrator", pdca_phase="PLAN", kanban_status="Scheduled")
+
+        from vernon_tasks.task.page.my_work.my_work import submit_for_review
+        with self.assertRaises(frappe.ValidationError):
+            submit_for_review("MW-TASK-2")
