@@ -131,6 +131,13 @@
       "label": "My Sprint",
       "link_to": "VT Sprint",
       "type": "DocType"
+    },
+    {
+      "color": "Green",
+      "icon": "bar-chart",
+      "label": "My Dashboard",
+      "link_to": "my-dashboard",
+      "type": "Page"
     }
   ]
 }

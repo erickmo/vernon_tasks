@@ -319,6 +319,13 @@
       "label": "Objectives",
       "link_to": "Objective",
       "type": "DocType"
+    },
+    {
+      "color": "Purple",
+      "icon": "bar-chart",
+      "label": "Leader Dashboard",
+      "link_to": "leader-dashboard",
+      "type": "Page"
     }
   ]
 }
