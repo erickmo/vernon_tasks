@@ -90,3 +90,60 @@ class TestMyWorkAPI(unittest.TestCase):
 
         names = [r["name"] for r in result]
         self.assertNotIn("MW-TASK-2", names)
+
+    # --- get_what_to_do_today ---
+
+    def test_get_what_to_do_today_includes_due_soon(self):
+        frappe.get_doc({
+            "doctype": "VT Task",
+            "name": "MW-TASK-SOON",
+            "title": "Due Soon Task",
+            "project": "TEST-MYWORK-PRJ",
+            "assigned_to": "Administrator",
+            "pdca_phase": "PLAN",
+            "kanban_status": "Scheduled",
+            "start_date": today(),
+            "deadline": add_days(today(), 2),
+            "weight": 2.0,
+            "priority": "High",
+        }).insert(ignore_permissions=True)
+
+        from vernon_tasks.task.page.my_work.my_work import get_what_to_do_today
+        result = get_what_to_do_today()
+        names = [r["name"] for r in result]
+        self.assertIn("MW-TASK-SOON", names)
+
+    def test_get_what_to_do_today_excludes_blocked(self):
+        frappe.get_doc({
+            "doctype": "VT Task",
+            "name": "MW-TASK-BLOCKER",
+            "title": "Blocker",
+            "project": "TEST-MYWORK-PRJ",
+            "assigned_to": "Administrator",
+            "pdca_phase": "DO",
+            "kanban_status": "In Progress",
+            "start_date": today(),
+            "deadline": add_days(today(), 10),
+            "weight": 1.0,
+            "priority": "Low",
+        }).insert(ignore_permissions=True)
+
+        frappe.get_doc({
+            "doctype": "VT Task",
+            "name": "MW-TASK-BLK",
+            "title": "Blocked Task",
+            "project": "TEST-MYWORK-PRJ",
+            "assigned_to": "Administrator",
+            "pdca_phase": "PLAN",
+            "kanban_status": "Scheduled",
+            "start_date": today(),
+            "deadline": add_days(today(), 1),
+            "weight": 2.0,
+            "priority": "High",
+            "dependencies": [{"blocked_by": "MW-TASK-BLOCKER", "dependency_type": "Finish-to-Start"}],
+        }).insert(ignore_permissions=True)
+
+        from vernon_tasks.task.page.my_work.my_work import get_what_to_do_today
+        result = get_what_to_do_today()
+        names = [r["name"] for r in result]
+        self.assertNotIn("MW-TASK-BLK", names)

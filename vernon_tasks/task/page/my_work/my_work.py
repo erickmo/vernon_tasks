@@ -40,7 +40,24 @@ def get_what_to_do_today() -> list:
 
     Returns high-priority unfinished tasks that should be worked on today.
     """
-    pass
+    user = frappe.session.user
+    cutoff = add_days(today(), 3)
+    return frappe.db.sql("""
+        SELECT t.name, t.title, t.project, t.priority, t.deadline,
+               t.pdca_phase, t.kanban_status
+        FROM `tabVT Task` t
+        WHERE t.assigned_to = %(user)s
+          AND t.deadline <= %(cutoff)s
+          AND t.pdca_phase NOT IN ('DONE', 'ACT')
+          AND NOT EXISTS (
+              SELECT 1 FROM `tabTask Dependency` td
+              INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
+              WHERE td.parent = t.name AND bt.pdca_phase != 'DONE'
+          )
+        ORDER BY
+            FIELD(t.priority, 'High', 'Medium', 'Low'),
+            t.deadline ASC
+    """, {"user": user, "cutoff": cutoff}, as_dict=True)
 
 
 @frappe.whitelist()
