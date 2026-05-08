@@ -31,7 +31,7 @@
     {"default": "0", "fieldname": "earned_points", "fieldtype": "Float", "label": "Earned Points", "read_only": 1},
     {"fieldname": "leader_override_points", "fieldtype": "Float", "label": "Leader Override Points"},
     {"fieldname": "override_reason", "fieldtype": "Small Text", "label": "Override Reason"},
-    {"fieldname": "rejection_note", "fieldtype": "Small Text", "label": "Rejection Note", "read_only": 1, "in_list_view": 0, "in_standard_filter": 0},
+    {"fieldname": "rejection_note", "fieldtype": "Small Text", "label": "Rejection Note", "read_only": 1, "in_list_view": 0, "in_standard_filter": 0, "depends_on": "eval:doc.rejection_note"},
     {"default": "0", "fieldname": "revision_count", "fieldtype": "Int", "label": "Revision Count", "read_only": 1},
     {"fieldname": "recurring_section", "fieldtype": "Section Break", "label": "Recurring"},
     {"default": "0", "fieldname": "is_recurring", "fieldtype": "Check", "label": "Is Recurring"},
