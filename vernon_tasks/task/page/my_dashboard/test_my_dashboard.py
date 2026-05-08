@@ -1,6 +1,6 @@
 import frappe
 import unittest
-from frappe.utils import today, add_days, get_first_day_of_week, get_last_day_of_week
+from frappe.utils import today, add_days
 
 _PROJECT_NAME = None
 _PROJECT_TITLE = "Test My Dashboard Project - MD"
@@ -107,6 +107,14 @@ class TestEmployeeDashboardAPI(unittest.TestCase):
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_employee_stats
         result = get_employee_stats()
         self.assertGreaterEqual(result["done_today"], 1)
+
+    def test_done_week_counts_task_completed_this_week(self):
+        self._track(_make_task("done-week", "Administrator",
+                               pdca_phase="DONE", kanban_status="Done",
+                               completion_date=today(), earned_points=3.0))
+        from vernon_tasks.task.page.my_dashboard.my_dashboard import get_employee_stats
+        result = get_employee_stats()
+        self.assertGreaterEqual(result["done_week"], 1)
 
     def test_done_today_excludes_not_done_task(self):
         before = self._get_done_today_count()

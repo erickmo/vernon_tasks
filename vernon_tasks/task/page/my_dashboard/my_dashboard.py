@@ -2,7 +2,6 @@ import frappe
 from frappe.utils import today, add_days
 
 _DONE_PHASE = "DONE"
-_EXCLUDE_PHASES = ("DONE", "ACT")
 
 
 @frappe.whitelist()
@@ -36,9 +35,9 @@ def get_employee_stats() -> dict:
         INNER JOIN `tabTask Dependency` td ON td.parent = t.name
         INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
         WHERE t.assigned_to = %(user)s
-          AND t.pdca_phase != %(done)s
-          AND bt.pdca_phase != %(done)s
-    """, {"user": user, "done": _DONE_PHASE}, as_list=True)[0][0]
+          AND t.pdca_phase NOT IN ('DONE', 'ACT')
+          AND bt.pdca_phase NOT IN ('DONE', 'ACT')
+    """, {"user": user}, as_list=True)[0][0]
 
     return {
         "done_today": int(done_today),
