@@ -1,0 +1,136 @@
+{
+  "charts": [],
+  "content": "[{\"id\":\"hdr-today\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Hari Ini</b>\",\"col\":12}},{\"id\":\"sc-mywork\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Work\",\"col\":3}},{\"id\":\"sc-newtask\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New Task\",\"col\":3}},{\"id\":\"sc-mypoints\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Points Progress\",\"col\":3}},{\"id\":\"sc-sprint\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Sprint\",\"col\":3}},{\"id\":\"hdr-todo\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Perlu Dikerjakan</b>\",\"col\":12}},{\"id\":\"card-tasks\",\"type\":\"card\",\"data\":{\"card_name\":\"My Tasks\",\"col\":12}},{\"id\":\"hdr-progress\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Progress & Laporan</b>\",\"col\":12}},{\"id\":\"card-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"My Reports\",\"col\":12}}]",
+  "creation": "2026-05-08 00:00:00.000000",
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "book-open",
+  "is_standard": 1,
+  "label": "My Tasks",
+  "links": [
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "My Tasks",
+      "link_count": 0,
+      "link_to": "VT Task",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Task",
+      "link_count": 0,
+      "link_to": "VT Task",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Sprint",
+      "link_count": 0,
+      "link_to": "VT Sprint",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "My Reports",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "My Day",
+      "link_count": 0,
+      "link_to": "My Day",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "What To Do Today",
+      "link_count": 0,
+      "link_to": "What To Do Today",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "My Points Progress",
+      "link_count": 0,
+      "link_to": "My Points Progress",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "My Blocked Tasks",
+      "link_count": 0,
+      "link_to": "My Blocked Tasks",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    }
+  ],
+  "modified": "2026-05-08 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Task",
+  "name": "My Tasks",
+  "owner": "Administrator",
+  "public": 1,
+  "restrict_to_domain": "",
+  "roles": [
+    {
+      "role": "VT Member"
+    }
+  ],
+  "sequence_id": 1.0,
+  "shortcuts": [
+    {
+      "color": "Blue",
+      "icon": "book-open",
+      "label": "My Work",
+      "link_to": "my-work",
+      "type": "Page"
+    },
+    {
+      "color": "Green",
+      "icon": "add",
+      "label": "New Task",
+      "link_to": "VT Task",
+      "type": "DocType"
+    },
+    {
+      "color": "Orange",
+      "icon": "chart",
+      "label": "My Points Progress",
+      "link_to": "My Points Progress",
+      "type": "Report"
+    },
+    {
+      "color": "Purple",
+      "icon": "recycle",
+      "label": "My Sprint",
+      "link_to": "VT Sprint",
+      "type": "DocType"
+    }
+  ]
+}

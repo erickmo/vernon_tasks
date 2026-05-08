@@ -34,4 +34,5 @@ scheduler_events = {
 
 fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
+    {"dt": "Workspace", "filters": [["name", "in", ["My Tasks", "My Projects", "Overview"]]]},
 ]

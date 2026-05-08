@@ -1,0 +1,324 @@
+{
+  "charts": [],
+  "content": "[{\"id\":\"hdr-pulse\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Pulse Organisasi</b>\",\"col\":12}},{\"id\":\"sc-workload\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Team Workload\",\"col\":3}},{\"id\":\"sc-kpi\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"KPI Achievement\",\"col\":3}},{\"id\":\"sc-projokr\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Project vs OKR\",\"col\":3}},{\"id\":\"sc-blocked\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Blocked Escalation\",\"col\":3}},{\"id\":\"sc-audit\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Point Audit\",\"col\":3}},{\"id\":\"sc-velocity\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sprint Velocity\",\"col\":3}},{\"id\":\"sc-allproj\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"All Projects\",\"col\":3}},{\"id\":\"sc-obj\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Objectives\",\"col\":3}},{\"id\":\"hdr-nav\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Navigasi</b>\",\"col\":12}},{\"id\":\"card-proj\",\"type\":\"card\",\"data\":{\"card_name\":\"Projects\",\"col\":6}},{\"id\":\"card-okr\",\"type\":\"card\",\"data\":{\"card_name\":\"OKR\",\"col\":6}},{\"id\":\"card-task\",\"type\":\"card\",\"data\":{\"card_name\":\"Tasks\",\"col\":6}},{\"id\":\"card-wf\",\"type\":\"card\",\"data\":{\"card_name\":\"Workforce\",\"col\":6}},{\"id\":\"card-rpt\",\"type\":\"card\",\"data\":{\"card_name\":\"Manager Reports\",\"col\":12}},{\"id\":\"card-settings\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":12}}]",
+  "creation": "2026-05-08 00:00:00.000000",
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "bar-chart",
+  "is_standard": 1,
+  "label": "Overview",
+  "links": [
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Projects",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Project",
+      "link_count": 0,
+      "link_to": "VT Project",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Sprint",
+      "link_count": 0,
+      "link_to": "VT Sprint",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "OKR",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Objective",
+      "link_count": 0,
+      "link_to": "Objective",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Key Result",
+      "link_count": 0,
+      "link_to": "Key Result",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "KPI Definition",
+      "link_count": 0,
+      "link_to": "KPI Definition",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "KPI Entry",
+      "link_count": 0,
+      "link_to": "KPI Entry",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Tasks",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Task",
+      "link_count": 0,
+      "link_to": "VT Task",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Task Point Log",
+      "link_count": 0,
+      "link_to": "Task Point Log",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Workforce",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Work Profile",
+      "link_count": 0,
+      "link_to": "Work Profile",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Daily Summary",
+      "link_count": 0,
+      "link_to": "Daily Summary",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "User Point Summary",
+      "link_count": 0,
+      "link_to": "User Point Summary",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Manager Reports",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Team Workload Overview",
+      "link_count": 0,
+      "link_to": "Team Workload Overview",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Project Progress vs OKR",
+      "link_count": 0,
+      "link_to": "Project Progress vs OKR",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Sprint Velocity",
+      "link_count": 0,
+      "link_to": "Sprint Velocity",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Blocked Tasks Escalation",
+      "link_count": 0,
+      "link_to": "Blocked Tasks Escalation",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Point Override Audit",
+      "link_count": 0,
+      "link_to": "Point Override Audit",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "KPI Achievement",
+      "link_count": 0,
+      "link_to": "KPI Achievement",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Settings",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Settings",
+      "link_count": 0,
+      "link_to": "VT Settings",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    }
+  ],
+  "modified": "2026-05-08 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Task",
+  "name": "Overview",
+  "owner": "Administrator",
+  "public": 1,
+  "restrict_to_domain": "",
+  "roles": [
+    {
+      "role": "VT Manager"
+    }
+  ],
+  "sequence_id": 3.0,
+  "shortcuts": [
+    {
+      "color": "Teal",
+      "icon": "users",
+      "label": "Team Workload",
+      "link_to": "Team Workload Overview",
+      "type": "Report"
+    },
+    {
+      "color": "Green",
+      "icon": "bar-chart",
+      "label": "KPI Achievement",
+      "link_to": "KPI Achievement",
+      "type": "Report"
+    },
+    {
+      "color": "Blue",
+      "icon": "pie-chart",
+      "label": "Project vs OKR",
+      "link_to": "Project Progress vs OKR",
+      "type": "Report"
+    },
+    {
+      "color": "Red",
+      "icon": "alert-circle",
+      "label": "Blocked Escalation",
+      "link_to": "Blocked Tasks Escalation",
+      "type": "Report"
+    },
+    {
+      "color": "Orange",
+      "icon": "edit-3",
+      "label": "Point Audit",
+      "link_to": "Point Override Audit",
+      "type": "Report"
+    },
+    {
+      "color": "Purple",
+      "icon": "trending-up",
+      "label": "Sprint Velocity",
+      "link_to": "Sprint Velocity",
+      "type": "Report"
+    },
+    {
+      "color": "Grey",
+      "icon": "folder",
+      "label": "All Projects",
+      "link_to": "VT Project",
+      "type": "DocType"
+    },
+    {
+      "color": "Teal",
+      "icon": "milestone",
+      "label": "Objectives",
+      "link_to": "Objective",
+      "type": "DocType"
+    }
+  ]
+}

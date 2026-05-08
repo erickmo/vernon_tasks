@@ -1,0 +1,190 @@
+{
+  "charts": [],
+  "content": "[{\"id\":\"hdr-sprint\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Sprint & Review</b>\",\"col\":12}},{\"id\":\"sc-sprints\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Active Sprints\",\"col\":3}},{\"id\":\"sc-projects\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Projects\",\"col\":3}},{\"id\":\"sc-blocked\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Blocked Escalation\",\"col\":3}},{\"id\":\"sc-workload\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Team Workload\",\"col\":3}},{\"id\":\"hdr-review\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Perlu Tindakan</b>\",\"col\":12}},{\"id\":\"card-review\",\"type\":\"card\",\"data\":{\"card_name\":\"Review Queue\",\"col\":12}},{\"id\":\"hdr-nav\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Navigasi</b>\",\"col\":12}},{\"id\":\"card-proj\",\"type\":\"card\",\"data\":{\"card_name\":\"Projects & Sprints\",\"col\":6}},{\"id\":\"card-rpt\",\"type\":\"card\",\"data\":{\"card_name\":\"Leader Reports\",\"col\":6}}]",
+  "creation": "2026-05-08 00:00:00.000000",
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "project",
+  "is_standard": 1,
+  "label": "My Projects",
+  "links": [
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Review Queue",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Task",
+      "link_count": 0,
+      "link_to": "VT Task",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Projects & Sprints",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Project",
+      "link_count": 0,
+      "link_to": "VT Project",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "VT Sprint",
+      "link_count": 0,
+      "link_to": "VT Sprint",
+      "link_type": "DocType",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Recurring Rule",
+      "link_count": 0,
+      "link_to": "Recurring Rule",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Leader Reports",
+      "link_count": 0,
+      "link_to": "",
+      "link_type": "",
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Team Workload Overview",
+      "link_count": 0,
+      "link_to": "Team Workload Overview",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Sprint Velocity",
+      "link_count": 0,
+      "link_to": "Sprint Velocity",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Blocked Tasks Escalation",
+      "link_count": 0,
+      "link_to": "Blocked Tasks Escalation",
+      "link_type": "Report",
+      "onboard": 1,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Project Progress vs OKR",
+      "link_count": 0,
+      "link_to": "Project Progress vs OKR",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "My Points Progress",
+      "link_count": 0,
+      "link_to": "My Points Progress",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    }
+  ],
+  "modified": "2026-05-08 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Project",
+  "name": "My Projects",
+  "owner": "Administrator",
+  "public": 1,
+  "restrict_to_domain": "",
+  "roles": [
+    {
+      "role": "VT Leader"
+    }
+  ],
+  "sequence_id": 2.0,
+  "shortcuts": [
+    {
+      "color": "Blue",
+      "icon": "recycle",
+      "label": "Active Sprints",
+      "link_to": "VT Sprint",
+      "type": "DocType"
+    },
+    {
+      "color": "Green",
+      "icon": "folder",
+      "label": "My Projects",
+      "link_to": "VT Project",
+      "type": "DocType"
+    },
+    {
+      "color": "Red",
+      "icon": "shield",
+      "label": "Blocked Escalation",
+      "link_to": "Blocked Tasks Escalation",
+      "type": "Report"
+    },
+    {
+      "color": "Purple",
+      "icon": "users",
+      "label": "Team Workload",
+      "link_to": "Team Workload Overview",
+      "type": "Report"
+    },
+    {
+      "color": "Orange",
+      "icon": "trending-up",
+      "label": "Sprint Velocity",
+      "link_to": "Sprint Velocity",
+      "type": "Report"
+    },
+    {
+      "color": "Grey",
+      "icon": "calendar",
+      "label": "Review Schedule",
+      "link_to": "What To Do Today",
+      "type": "Report"
+    }
+  ]
+}
