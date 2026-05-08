@@ -31,8 +31,10 @@ frappe.pages["my-work"].on_page_load = function (wrapper) {
         return `+${diff}d`;
     }
 
+    const esc = (s) => frappe.utils.escape_html(String(s || ""));
+
     function task_link(name, title) {
-        return `<a href="/app/vt-task/${name}" target="_blank">${title}</a>`;
+        return `<a href="/app/vt-task/${esc(name)}" target="_blank">${esc(title)}</a>`;
     }
 
     function make_section(id, title) {
@@ -77,7 +79,7 @@ frappe.pages["my-work"].on_page_load = function (wrapper) {
                 const rows = data.map(t => `
                     <tr>
                         <td>${task_link(t.name, t.title)}</td>
-                        <td>${t.project || "—"}</td>
+                        <td>${esc(t.project) || "—"}</td>
                         <td>${t.allocated_hours ? t.allocated_hours + "h" : "—"}</td>
                         <td>${status_pill(t.kanban_status)}</td>
                         <td>${action_btn(t.name, t.kanban_status)}</td>
@@ -113,9 +115,9 @@ frappe.pages["my-work"].on_page_load = function (wrapper) {
                 const rows = data.map(t => `
                     <tr>
                         <td>${task_link(t.name, t.title)}</td>
-                        <td>${t.project || "—"}</td>
+                        <td>${esc(t.project) || "—"}</td>
                         <td>${fmt_deadline(t.deadline)}</td>
-                        <td><span class="indicator-pill ${PRIORITY_COLOR[t.priority] || "gray"}">${t.priority}</span></td>
+                        <td><span class="indicator-pill ${PRIORITY_COLOR[t.priority] || "gray"}">${esc(t.priority)}</span></td>
                         <td>${action_btn(t.name, t.kanban_status)}</td>
                     </tr>
                 `).join("");
@@ -150,7 +152,7 @@ frappe.pages["my-work"].on_page_load = function (wrapper) {
                     <tr>
                         <td>${task_link(t.name, t.title)}</td>
                         <td>${task_link(t.blocker_name, t.blocker_title)}</td>
-                        <td>${t.blocker_assignee || "—"}</td>
+                        <td>${esc(t.blocker_assignee) || "—"}</td>
                         <td>${t.days_blocked || 0}d</td>
                     </tr>
                 `).join("");
