@@ -135,8 +135,7 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
         from vernon_tasks.task.page.leader_review.leader_review import get_team_workload
         result = get_team_workload()
         member_row = next((r for r in result if r["assigned_to"] == MEMBER_USER), None)
-        if member_row:
-            self.assertAlmostEqual(member_row["total_hours"], 0.0, places=1)
+        self.assertIsNone(member_row, "BACKLOG task should not appear in workload")
 
     # --- get_team_blocked_tasks ---
 

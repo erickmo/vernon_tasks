@@ -1,5 +1,4 @@
 import frappe
-from frappe.utils import today
 
 
 def _leader_project_names(user: str) -> list:
