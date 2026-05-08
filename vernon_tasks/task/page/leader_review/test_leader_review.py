@@ -252,6 +252,8 @@ class TestLeaderReviewWriteAPIs(unittest.TestCase):
         self.assertEqual(phase, "DO")
         note = frappe.db.get_value("VT Task", "LR-W1", "rejection_note")
         self.assertEqual(note, "Output tidak lengkap, perlu revisi bagian A")
+        revision_count = frappe.db.get_value("VT Task", "LR-W1", "revision_count")
+        self.assertEqual(revision_count, 1, "revision_count should be incremented on rejection")
 
     def test_reject_task_empty_reason_raises_validation_error(self):
         _make_task("LR-W2", MEMBER_USER, self.proj_name, pdca_phase="CHECK", kanban_status="In Review")

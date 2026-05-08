@@ -94,14 +94,22 @@ def get_team_blocked_tasks() -> list:
 @frappe.whitelist()
 def approve_task(task_name: str) -> dict:
     user = frappe.session.user
-    doc = frappe.get_doc("VT Task", task_name)
-    if not _is_leader_of_project(user, doc.project):
+    # Acquire row lock to prevent concurrent approvals
+    locked = frappe.db.sql(
+        "SELECT name, pdca_phase, project, kanban_status FROM `tabVT Task` WHERE name=%s FOR UPDATE",
+        task_name, as_dict=True
+    )
+    if not locked:
+        frappe.throw(f"Task {task_name} not found", frappe.DoesNotExistError)
+    row = locked[0]
+    if not _is_leader_of_project(user, row.project):
         frappe.throw("Not authorized to approve this task", frappe.PermissionError)
-    if doc.pdca_phase != "CHECK":
+    if row.pdca_phase != "CHECK":
         frappe.throw(
-            f"Task must be in CHECK phase to approve (current phase: {doc.pdca_phase})",
+            f"Task must be in CHECK phase to approve (current phase: {row.pdca_phase})",
             frappe.ValidationError,
         )
+    doc = frappe.get_doc("VT Task", task_name)
     doc.pdca_phase = "DONE"
     doc.save(ignore_permissions=True)
     doc.submit()
@@ -121,9 +129,11 @@ def reject_task(task_name: str, reason: str) -> dict:
             f"Task must be in CHECK phase to reject (current phase: {doc.pdca_phase})",
             frappe.ValidationError,
         )
+    current_revisions = frappe.db.get_value("VT Task", task_name, "revision_count") or 0
     frappe.db.set_value("VT Task", task_name, {
         "pdca_phase": "DO",
         "kanban_status": "In Progress",
         "rejection_note": reason.strip(),
+        "revision_count": current_revisions + 1,
     })
     return {"status": "ok"}
