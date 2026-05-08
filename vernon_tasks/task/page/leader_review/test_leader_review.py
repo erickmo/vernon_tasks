@@ -223,6 +223,8 @@ class TestLeaderReviewWriteAPIs(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         phase = frappe.db.get_value("VT Task", "LR-W1", "pdca_phase")
         self.assertEqual(phase, "DONE")
+        docstatus = frappe.db.get_value("VT Task", "LR-W1", "docstatus")
+        self.assertEqual(docstatus, 1, "Task should be submitted (docstatus=1) after approve")
 
     def test_approve_task_wrong_phase_raises_validation_error(self):
         _make_task("LR-W2", MEMBER_USER, self.proj_name, pdca_phase="DO", kanban_status="In Progress")

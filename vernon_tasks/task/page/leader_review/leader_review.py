@@ -95,13 +95,13 @@ def get_team_blocked_tasks() -> list:
 def approve_task(task_name: str) -> dict:
     user = frappe.session.user
     doc = frappe.get_doc("VT Task", task_name)
-    if doc.pdca_phase != "CHECK":
-        frappe.throw(
-            f"Task must be In Review to approve (current: {doc.kanban_status})",
-            frappe.ValidationError,
-        )
     if not _is_leader_of_project(user, doc.project):
         frappe.throw("Not authorized to approve this task", frappe.PermissionError)
+    if doc.pdca_phase != "CHECK":
+        frappe.throw(
+            f"Task must be in CHECK phase to approve (current phase: {doc.pdca_phase})",
+            frappe.ValidationError,
+        )
     doc.pdca_phase = "DONE"
     doc.save(ignore_permissions=True)
     doc.submit()
@@ -114,13 +114,13 @@ def reject_task(task_name: str, reason: str) -> dict:
     if not reason or not reason.strip():
         frappe.throw("Rejection reason is required", frappe.ValidationError)
     doc = frappe.get_doc("VT Task", task_name)
-    if doc.pdca_phase != "CHECK":
-        frappe.throw(
-            f"Task must be In Review to reject (current: {doc.kanban_status})",
-            frappe.ValidationError,
-        )
     if not _is_leader_of_project(user, doc.project):
         frappe.throw("Not authorized to reject this task", frappe.PermissionError)
+    if doc.pdca_phase != "CHECK":
+        frappe.throw(
+            f"Task must be in CHECK phase to reject (current phase: {doc.pdca_phase})",
+            frappe.ValidationError,
+        )
     frappe.db.set_value("VT Task", task_name, {
         "pdca_phase": "DO",
         "kanban_status": "In Progress",
