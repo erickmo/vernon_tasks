@@ -1,37 +1,44 @@
 import frappe
 from frappe.utils import today
 
+_DONE_PHASE = "DONE"
+_IN_REVIEW_STATUS = "In Review"
+_CHECK_PHASE = "CHECK"
+
 
 @frappe.whitelist()
 def get_leader_stats() -> dict:
+    _today = today()
+
     pending_review = frappe.db.sql("""
         SELECT COUNT(*) FROM `tabVT Task`
-        WHERE kanban_status = 'In Review'
-    """, as_list=True)[0][0]
+        WHERE kanban_status = %(in_review)s
+          AND pdca_phase = %(check_phase)s
+    """, {"in_review": _IN_REVIEW_STATUS, "check_phase": _CHECK_PHASE}, as_list=True)[0][0]
 
     month_done = frappe.db.sql("""
         SELECT COUNT(*) FROM `tabVT Task`
-        WHERE pdca_phase = 'DONE'
+        WHERE pdca_phase = %(done_phase)s
           AND YEAR(completion_date) = YEAR(%(today)s)
           AND MONTH(completion_date) = MONTH(%(today)s)
-    """, {"today": today()}, as_list=True)[0][0]
+    """, {"done_phase": _DONE_PHASE, "today": _today}, as_list=True)[0][0]
 
     approved = frappe.db.sql("""
         SELECT COUNT(*) FROM `tabVT Task`
-        WHERE pdca_phase = 'DONE'
+        WHERE pdca_phase = %(done_phase)s
           AND revision_count = 0
           AND YEAR(completion_date) = YEAR(%(today)s)
           AND MONTH(completion_date) = MONTH(%(today)s)
-    """, {"today": today()}, as_list=True)[0][0]
+    """, {"done_phase": _DONE_PHASE, "today": _today}, as_list=True)[0][0]
 
     approval_rate = round((int(approved) / int(month_done) * 100), 1) if int(month_done) > 0 else 0.0
 
     team_points_month = frappe.db.sql("""
         SELECT COALESCE(SUM(earned_points), 0) FROM `tabVT Task`
-        WHERE pdca_phase = 'DONE'
+        WHERE pdca_phase = %(done_phase)s
           AND YEAR(completion_date) = YEAR(%(today)s)
           AND MONTH(completion_date) = MONTH(%(today)s)
-    """, {"today": today()}, as_list=True)[0][0]
+    """, {"done_phase": _DONE_PHASE, "today": _today}, as_list=True)[0][0]
 
     return {
         "pending_review": int(pending_review),

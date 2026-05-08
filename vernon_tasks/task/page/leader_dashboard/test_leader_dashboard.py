@@ -134,6 +134,15 @@ class TestLeaderDashboardAPI(unittest.TestCase):
         self.assertGreaterEqual(result["approval_rate"], 0)
         self.assertLessEqual(result["approval_rate"], 100)
 
+    def test_approval_rate_non_zero_when_approved_task_exists(self):
+        self._track(_make_task("rate-approved", "Administrator",
+                               pdca_phase="DONE", kanban_status="Done",
+                               completion_date=today(), revision_count=0))
+        from vernon_tasks.task.page.leader_dashboard.leader_dashboard import get_leader_stats
+        result = get_leader_stats()
+        self.assertGreater(result["approval_rate"], 0)
+        self.assertLessEqual(result["approval_rate"], 100)
+
     # --- get_phase_distribution ---
 
     def test_get_phase_distribution_returns_list_of_dicts(self):
@@ -165,9 +174,9 @@ class TestLeaderDashboardAPI(unittest.TestCase):
                                earned_points=20.0, completion_date=today()))
         from vernon_tasks.task.page.leader_dashboard.leader_dashboard import get_team_leaderboard
         result = get_team_leaderboard()
-        if result:
-            self.assertIn("member", result[0])
-            self.assertIn("points", result[0])
+        self.assertGreaterEqual(len(result), 1)
+        self.assertIn("member", result[0])
+        self.assertIn("points", result[0])
 
     def test_get_team_leaderboard_max_10_results(self):
         from vernon_tasks.task.page.leader_dashboard.leader_dashboard import get_team_leaderboard
@@ -203,3 +212,12 @@ class TestLeaderDashboardAPI(unittest.TestCase):
         result = get_overdue_tasks()
         names = [r.get("task_name") for r in result]
         self.assertNotIn(done_task.name, names)
+
+    def test_get_overdue_tasks_excludes_act_tasks(self):
+        act_task = self._track(_make_task("overdue-act", "Administrator",
+                                          pdca_phase="ACT", kanban_status="Done",
+                                          deadline_offset=-3))
+        from vernon_tasks.task.page.leader_dashboard.leader_dashboard import get_overdue_tasks
+        result = get_overdue_tasks()
+        names = [r.get("task_name") for r in result]
+        self.assertNotIn(act_task.name, names)
