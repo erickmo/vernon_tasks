@@ -146,6 +146,13 @@
   "shortcuts": [
     {
       "color": "Blue",
+      "icon": "check-circle",
+      "label": "Leader Review",
+      "link_to": "leader-review",
+      "type": "Page"
+    },
+    {
+      "color": "Blue",
       "icon": "recycle",
       "label": "Active Sprints",
       "link_to": "VT Sprint",
