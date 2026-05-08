@@ -177,3 +177,97 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
         result = get_team_blocked_tasks()
         names = [r["name"] for r in result]
         self.assertNotIn("LR-T4", names)
+
+
+class TestLeaderReviewWriteAPIs(unittest.TestCase):
+
+    proj_name = None
+    proj2_name = None
+
+    @classmethod
+    def setUpClass(cls):
+        frappe.set_user("Administrator")
+        _ensure_user(MEMBER_USER)
+        proj = _make_project(LEADER_USER, members=[MEMBER_USER])
+        cls.proj_name = proj.name
+        # Project NOT led by LEADER_USER (led by Guest)
+        proj2 = _make_project("Guest", members=[])
+        cls.proj2_name = proj2.name
+
+    @classmethod
+    def tearDownClass(cls):
+        for name in [cls.proj_name, cls.proj2_name]:
+            if name and frappe.db.exists("VT Project", name):
+                frappe.delete_doc("VT Project", name, force=True)
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def tearDown(self):
+        for t in ["LR-W1", "LR-W2", "LR-W3", "LR-W4"]:
+            if frappe.db.exists("VT Task", t):
+                doc = frappe.get_doc("VT Task", t)
+                if doc.docstatus == 1:
+                    doc.cancel()
+                frappe.delete_doc("VT Task", t, force=True, ignore_permissions=True)
+        frappe.db.commit()
+
+    # --- approve_task ---
+
+    def test_approve_task_sets_done(self):
+        _make_task("LR-W1", MEMBER_USER, self.proj_name, pdca_phase="CHECK", kanban_status="In Review")
+
+        from vernon_tasks.task.page.leader_review.leader_review import approve_task
+        result = approve_task("LR-W1")
+        self.assertEqual(result["status"], "ok")
+        phase = frappe.db.get_value("VT Task", "LR-W1", "pdca_phase")
+        self.assertEqual(phase, "DONE")
+
+    def test_approve_task_wrong_phase_raises_validation_error(self):
+        _make_task("LR-W2", MEMBER_USER, self.proj_name, pdca_phase="DO", kanban_status="In Progress")
+
+        from vernon_tasks.task.page.leader_review.leader_review import approve_task
+        with self.assertRaises(frappe.ValidationError):
+            approve_task("LR-W2")
+
+    def test_approve_task_unauthorized_raises_permission_error(self):
+        _make_task("LR-W3", MEMBER_USER, self.proj2_name, pdca_phase="CHECK", kanban_status="In Review")
+
+        from vernon_tasks.task.page.leader_review.leader_review import approve_task
+        with self.assertRaises(frappe.PermissionError):
+            approve_task("LR-W3")
+
+    # --- reject_task ---
+
+    def test_reject_task_sets_do_and_saves_rejection_note(self):
+        _make_task("LR-W1", MEMBER_USER, self.proj_name, pdca_phase="CHECK", kanban_status="In Review")
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        result = reject_task("LR-W1", "Output tidak lengkap, perlu revisi bagian A")
+        self.assertEqual(result["status"], "ok")
+        phase = frappe.db.get_value("VT Task", "LR-W1", "pdca_phase")
+        self.assertEqual(phase, "DO")
+        note = frappe.db.get_value("VT Task", "LR-W1", "rejection_note")
+        self.assertEqual(note, "Output tidak lengkap, perlu revisi bagian A")
+
+    def test_reject_task_empty_reason_raises_validation_error(self):
+        _make_task("LR-W2", MEMBER_USER, self.proj_name, pdca_phase="CHECK", kanban_status="In Review")
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        with self.assertRaises(frappe.ValidationError):
+            reject_task("LR-W2", "")
+
+    def test_reject_task_whitespace_reason_raises_validation_error(self):
+        _make_task("LR-W3", MEMBER_USER, self.proj_name, pdca_phase="CHECK", kanban_status="In Review")
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        with self.assertRaises(frappe.ValidationError):
+            reject_task("LR-W3", "   ")
+
+    def test_reject_task_unauthorized_raises_permission_error(self):
+        _make_task("LR-W4", MEMBER_USER, self.proj2_name, pdca_phase="CHECK", kanban_status="In Review")
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        with self.assertRaises(frappe.PermissionError):
+            reject_task("LR-W4", "some reason")

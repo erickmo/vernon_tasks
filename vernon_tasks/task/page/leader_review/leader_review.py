@@ -89,3 +89,41 @@ def get_team_blocked_tasks() -> list:
           AND t.project IN ({placeholders})
         ORDER BY days_blocked DESC
     """, projects, as_dict=True)
+
+
+@frappe.whitelist()
+def approve_task(task_name: str) -> dict:
+    user = frappe.session.user
+    doc = frappe.get_doc("VT Task", task_name)
+    if doc.pdca_phase != "CHECK":
+        frappe.throw(
+            f"Task must be In Review to approve (current: {doc.kanban_status})",
+            frappe.ValidationError,
+        )
+    if not _is_leader_of_project(user, doc.project):
+        frappe.throw("Not authorized to approve this task", frappe.PermissionError)
+    doc.pdca_phase = "DONE"
+    doc.save(ignore_permissions=True)
+    doc.submit()
+    return {"status": "ok"}
+
+
+@frappe.whitelist()
+def reject_task(task_name: str, reason: str) -> dict:
+    user = frappe.session.user
+    if not reason or not reason.strip():
+        frappe.throw("Rejection reason is required", frappe.ValidationError)
+    doc = frappe.get_doc("VT Task", task_name)
+    if doc.pdca_phase != "CHECK":
+        frappe.throw(
+            f"Task must be In Review to reject (current: {doc.kanban_status})",
+            frappe.ValidationError,
+        )
+    if not _is_leader_of_project(user, doc.project):
+        frappe.throw("Not authorized to reject this task", frappe.PermissionError)
+    frappe.db.set_value("VT Task", task_name, {
+        "pdca_phase": "DO",
+        "kanban_status": "In Progress",
+        "rejection_note": reason.strip(),
+    })
+    return {"status": "ok"}
