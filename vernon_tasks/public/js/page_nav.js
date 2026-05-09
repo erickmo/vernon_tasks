@@ -22,7 +22,8 @@ window.vt_render_page_nav = function (page, links) {
         const icon_html = safe_icon
             ? `<svg class="icon icon-sm" style="margin-right:4px;"><use href="#icon-${safe_icon}"></use></svg>`
             : "";
-        const btn = $(`<button class="btn btn-xs btn-default">${icon_html}${__(link.label)}</button>`);
+        const safe_label = frappe.utils.escape_html(__(link.label));
+        const btn = $(`<button class="btn btn-xs btn-default">${icon_html}${safe_label}</button>`);
         btn.on("click", function () {
             frappe.set_route(link.route);
         });
