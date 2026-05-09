@@ -5,6 +5,11 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
         single_column: true,
     });
 
+    vt_render_page_nav(page, [
+        { label: "My Work", route: "my-work", icon: "book-open" },
+        { label: "My Tasks", route: "workspace/My Tasks", icon: "home" },
+    ]);
+
     page.add_button(__("Refresh"), () => render_all(), { icon: "refresh" });
 
     const container = $('<div class="my-dashboard-container" style="padding: 0 20px 40px;"></div>')
