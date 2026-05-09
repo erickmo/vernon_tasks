@@ -18,8 +18,9 @@ window.vt_render_page_nav = function (page, links) {
     });
 
     links.forEach(function (link) {
-        const icon_html = link.icon
-            ? `<svg class="icon icon-sm" style="margin-right:4px;"><use href="#icon-${link.icon}"></use></svg>`
+        const safe_icon = link.icon && /^[a-z0-9-]+$/.test(link.icon) ? link.icon : "";
+        const icon_html = safe_icon
+            ? `<svg class="icon icon-sm" style="margin-right:4px;"><use href="#icon-${safe_icon}"></use></svg>`
             : "";
         const btn = $(`<button class="btn btn-xs btn-default">${icon_html}${__(link.label)}</button>`);
         btn.on("click", function () {
