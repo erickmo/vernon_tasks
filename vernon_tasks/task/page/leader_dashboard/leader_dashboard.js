@@ -5,6 +5,11 @@ frappe.pages["leader-dashboard"].on_page_load = function (wrapper) {
         single_column: true,
     });
 
+    vt_render_page_nav(page, [
+        { label: "Leader Review", route: "leader-review", icon: "check-circle" },
+        { label: "My Projects", route: "workspace/My Projects", icon: "home" },
+    ]);
+
     page.add_button(__("Refresh"), () => render_all(), { icon: "refresh" });
 
     const container = $('<div class="leader-dashboard-container" style="padding: 0 20px 40px;"></div>')
