@@ -8,6 +8,8 @@ app_email = "dev@vernoncorp.com"
 app_license = "mit"
 app_version = app_version
 
+app_include_js = ["/assets/vernon_tasks/js/page_nav.js"]
+
 required_apps = []
 
 doc_events = {
