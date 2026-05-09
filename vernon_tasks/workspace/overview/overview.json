@@ -326,6 +326,13 @@
       "label": "Leader Dashboard",
       "link_to": "leader-dashboard",
       "type": "Page"
+    },
+    {
+      "color": "Blue",
+      "icon": "check-circle",
+      "label": "Leader Review",
+      "link_to": "leader-review",
+      "type": "Page"
     }
   ]
 }

@@ -192,6 +192,13 @@
       "label": "Review Schedule",
       "link_to": "What To Do Today",
       "type": "Report"
+    },
+    {
+      "color": "Orange",
+      "icon": "bar-chart",
+      "label": "Leader Dashboard",
+      "link_to": "leader-dashboard",
+      "type": "Page"
     }
   ]
 }
