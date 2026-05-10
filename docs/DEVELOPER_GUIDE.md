@@ -431,21 +431,38 @@ Review queue for tasks in `CHECK` phase awaiting leader approval. Leader can app
 
 ### `public/js/page_nav.js`
 
-Registered globally via `app_include_js`. Runs on every page load and injects a navigation bar at the top of the four Vernon Tasks pages.
+Registered globally via `app_include_js`. Exposes a single utility function `window.vt_render_page_nav` that each page calls manually during `on_page_load` to inject a navigation bar above its content.
 
-**Member nav links:** My Work → My Dashboard  
-**Leader nav links:** Leader Dashboard → Leader Review
-
-The script detects the current page route and highlights the active link. All user-facing labels are HTML-escaped before insertion to prevent XSS:
+**Signature:**
 
 ```javascript
-function escapeHtml(str) {
-    return str.replace(/[&<>"']/g, (c) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;',
-        '"': '&quot;', "'": '&#39;'
-    })[c]);
-}
+vt_render_page_nav(page, links)
 ```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | `object` | Frappe page object from `frappe.ui.make_app_page()` |
+| `links` | `Array<{label, route, icon}>` | Nav buttons to render. `route` is passed to `frappe.set_route()`. `icon` must match a Frappe SVG sprite name. |
+
+**Usage example (from `my_work.js`):**
+
+```javascript
+vt_render_page_nav(page, [
+    { label: "My Tasks",     route: "workspace/My Tasks", icon: "home" },
+    { label: "My Dashboard", route: "my-dashboard",       icon: "bar-chart" },
+]);
+```
+
+**Nav links per page:**
+
+| Page | Links |
+|------|-------|
+| My Work | My Tasks, My Dashboard |
+| My Dashboard | My Tasks, My Work |
+| Leader Dashboard | Leader Review, My Projects |
+| Leader Review | Leader Dashboard, My Projects |
+
+**Security:** Labels are escaped via `frappe.utils.escape_html()`. Icon names are validated against `/^[a-z0-9-]+$/` before being interpolated into SVG `href` — invalid names render no icon.
 
 ---
 
@@ -514,6 +531,8 @@ The app ships fixtures for:
 
 - **Roles:** `VT Manager`, `VT Leader`, `VT Member`
 - **Workspaces:** `My Tasks`, `My Projects`, `Overview`
+  - `My Projects` shortcuts: Active Sprints, My Projects, Blocked Escalation, Team Workload, Sprint Velocity, Review Schedule, **Leader Dashboard**, **Leader Review**
+  - `Overview` shortcuts: Team Workload, KPI Achievement, Project vs OKR, Blocked Escalation, Point Audit, Sprint Velocity, All Projects, Objectives, **Leader Dashboard**, **Leader Review**
 - **VT Settings:** default configuration values
 
 Fixtures are applied automatically on `bench migrate`. To re-export after changes:
