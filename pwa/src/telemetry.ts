@@ -21,7 +21,11 @@ export type TelemetryEvent =
   | "filter_applied"
   | "notif_view"
   | "notif_tap"
-  | "notif_mark_all_read";
+  | "notif_mark_all_read"
+  | "dashboard_view"
+  | "analytics_view"
+  | "analytics_period_change"
+  | "analytics_project_change";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api

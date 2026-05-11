@@ -24,6 +24,10 @@ ALLOWED_EVENTS = {
     "notif_view",
     "notif_tap",
     "notif_mark_all_read",
+    "dashboard_view",
+    "analytics_view",
+    "analytics_period_change",
+    "analytics_project_change",
 }
 
 RATE_LIMIT_PER_MINUTE = 60
