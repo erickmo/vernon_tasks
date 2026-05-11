@@ -47,6 +47,8 @@ class VTTask(Document):
                 )
 
     def _sync_kanban_status(self):
+        if self.kanban_status == "Blocked":
+            return
         self.kanban_status = PDCA_KANBAN_MAP.get(self.pdca_phase, self.kanban_status)
 
     def _validate_recurring(self):
