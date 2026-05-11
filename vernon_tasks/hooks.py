@@ -15,11 +15,17 @@ required_apps = []
 doc_events = {
     "VT Task": {
         "on_submit": "vernon_tasks.task.services.point_calculator.calculate_points",
-        "on_update": "vernon_tasks.task.services.scheduling_engine.on_task_update",
+        "on_update": [
+            "vernon_tasks.task.services.scheduling_engine.on_task_update",
+            "vernon_tasks.task.api.analytics.invalidate_project_cache",
+        ],
         "validate": "vernon_tasks.task.doctype.vt_task.vt_task.validate_permissions",
     },
     "VT Project": {
         "validate": "vernon_tasks.project.doctype.vt_project.vt_project.validate_team",
+    },
+    "VT Sprint": {
+        "on_update": "vernon_tasks.task.api.analytics.invalidate_project_cache",
     },
 }
 
