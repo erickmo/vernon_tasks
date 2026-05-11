@@ -34,6 +34,10 @@ ALLOWED_EVENTS = {
     "leader_sprint_view",
     "leader_exec_view",
     "leader_project_change",
+    "push_subscribe_attempt",
+    "push_subscribed",
+    "push_unsubscribed",
+    "push_received",
 }
 
 RATE_LIMIT_PER_MINUTE = 60

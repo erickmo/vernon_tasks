@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { logout, probeSession } from "../auth/session";
 import { useUnreadCount } from "../hooks/useUnreadCount";
+import { PushToggle } from "../components/PushToggle";
 import { t } from "../i18n";
 
 export function MePage() {
@@ -63,6 +64,8 @@ export function MePage() {
           →
         </span>
       </Link>
+
+      <PushToggle />
 
       <button onClick={doLogout} style={{ marginTop: 24, padding: 12 }}>
         {t("logout")}

@@ -48,6 +48,7 @@ export default defineConfig({
         cacheId: `vt-${swVersion}`,
         navigateFallback: "/m/index.html",
         navigateFallbackDenylist: [/^\/api\//, /^\/app\//, /^\/private\//],
+        importScripts: ["push-handler.js"],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith("/api/method/vernon_tasks."),
