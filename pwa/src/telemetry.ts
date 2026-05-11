@@ -28,7 +28,10 @@ export type TelemetryEvent =
   | "analytics_project_change"
   | "leader_review_view"
   | "leader_approve"
-  | "leader_reject";
+  | "leader_reject"
+  | "leader_sprint_view"
+  | "leader_exec_view"
+  | "leader_project_change";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api

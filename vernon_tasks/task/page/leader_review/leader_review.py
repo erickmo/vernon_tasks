@@ -137,3 +137,27 @@ def reject_task(task_name: str, reason: str) -> dict:
         "revision_count": current_revisions + 1,
     })
     return {"status": "ok"}
+
+
+@frappe.whitelist()
+def get_my_led_projects() -> list:
+    return _leader_project_names(frappe.session.user)
+
+
+@frappe.whitelist()
+def get_latest_sprint(project: str):
+    user = frappe.session.user
+    if not _is_leader_of_project(user, project):
+        frappe.throw("Not authorized", frappe.PermissionError)
+    row = frappe.db.sql(
+        """
+        SELECT name, title, start_date, end_date, status
+        FROM `tabVT Sprint`
+        WHERE project = %s
+        ORDER BY start_date DESC
+        LIMIT 1
+        """,
+        project,
+        as_dict=True,
+    )
+    return row[0] if row else None
