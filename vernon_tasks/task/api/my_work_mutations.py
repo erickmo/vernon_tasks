@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import add_days, getdate, today
+from vernon_tasks.task.api.security import rate_limit, max_str
 
 TASK_DOCTYPE = "VT Task"
 ALLOWED_SNOOZE_DAYS = (1, 3, 7)
@@ -20,6 +21,7 @@ def _check_access(task_id: str):
 
 @frappe.whitelist()
 def complete(task_id: str) -> dict:
+    rate_limit("complete", 30)
     doc = _check_access(task_id)
     if doc.kanban_status == "Done":
         return {"ok": True, "idempotent": True}
@@ -31,9 +33,11 @@ def complete(task_id: str) -> dict:
 
 @frappe.whitelist()
 def log_progress(task_id: str, hours, note: str = "") -> dict:
+    rate_limit("log_progress", 20)
     hours_f = float(hours)
     if hours_f <= 0 or hours_f > MAX_LOG_HOURS:
         frappe.throw(f"Hours must be in (0, {MAX_LOG_HOURS}]")
+    note = max_str(note, 1000)
     doc = _check_access(task_id)
     doc.actual_hours = (doc.actual_hours or 0) + hours_f
     doc.save()
@@ -50,6 +54,7 @@ def log_progress(task_id: str, hours, note: str = "") -> dict:
 
 @frappe.whitelist()
 def snooze(task_id: str, days) -> dict:
+    rate_limit("snooze", 10)
     days_i = int(days)
     if days_i not in ALLOWED_SNOOZE_DAYS:
         frappe.throw(f"Days must be one of {ALLOWED_SNOOZE_DAYS}")
