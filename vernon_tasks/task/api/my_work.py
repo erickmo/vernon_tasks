@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import today, add_days, getdate
+from vernon_tasks.task.api.security import require_login, max_str
 
 TASK_DOCTYPE = "VT Task"
 
@@ -61,6 +62,7 @@ def search(
     user = frappe.session.user
     if user == "Guest":
         frappe.throw("Login required", frappe.PermissionError)
+    query = max_str(query, 200)
 
     filters: list = [
         ["assigned_to", "=", user],
@@ -95,6 +97,7 @@ def search(
 
 @frappe.whitelist()
 def detail(task_id: str) -> dict:
+    require_login()
     user = frappe.session.user
     if not frappe.db.exists(TASK_DOCTYPE, task_id):
         frappe.throw("Not found", frappe.PermissionError)
