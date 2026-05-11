@@ -108,6 +108,15 @@ const STRINGS = {
   "push.unsupported": "Browser tidak mendukung push.",
   "push.failed": "Gagal mengubah status push.",
   "push.ios_hint": "iOS: install dulu ke layar utama agar push bekerja.",
+  "pref.title": "Pengaturan notifikasi",
+  "pref.subtitle": "Pilih jenis notifikasi yang ingin Anda terima.",
+  "pref.assignment": "Penugasan",
+  "pref.mention": "Disebut",
+  "pref.due": "Tenggat",
+  "pref.review": "Review",
+  "pref.saved": "Tersimpan",
+  "pref.failed": "Gagal menyimpan",
+  "pref.link": "Pengaturan",
 } as const;
 
 export type StringKey = keyof typeof STRINGS;

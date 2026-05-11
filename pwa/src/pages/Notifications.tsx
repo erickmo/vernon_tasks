@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listNotifications,
@@ -75,19 +75,35 @@ export function NotificationsPage() {
           }}
         >
           <h1 style={{ margin: 0 }}>{t("notif.title")}</h1>
-          <button
-            onClick={onMarkAll}
-            disabled={!q.data?.some((n) => n.read === 0)}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 8,
-              border: "1px solid var(--vt-border)",
-              background: "transparent",
-              color: "var(--vt-text)",
-            }}
-          >
-            {t("notif.mark_all")}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Link
+              to="/m/me/notifications/settings"
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid var(--vt-border)",
+                background: "transparent",
+                color: "var(--vt-text)",
+                textDecoration: "none",
+                fontSize: 13,
+              }}
+            >
+              {t("pref.link")}
+            </Link>
+            <button
+              onClick={onMarkAll}
+              disabled={!q.data?.some((n) => n.read === 0)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                border: "1px solid var(--vt-border)",
+                background: "transparent",
+                color: "var(--vt-text)",
+              }}
+            >
+              {t("notif.mark_all")}
+            </button>
+          </div>
         </header>
 
         {q.isLoading && (
