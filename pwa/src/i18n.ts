@@ -99,6 +99,15 @@ const STRINGS = {
   "reject.submit": "Tolak",
   "reject.cancel": "Batal",
   "reject.too_short": "Minimal 5 karakter",
+  "push.title": "Notifikasi push",
+  "push.status_on": "Aktif. Anda akan menerima notifikasi.",
+  "push.status_off": "Nonaktif. Aktifkan untuk dapat notifikasi instan.",
+  "push.status_denied": "Diblokir browser. Aktifkan dari pengaturan situs.",
+  "push.turn_on": "Aktifkan",
+  "push.turn_off": "Matikan",
+  "push.unsupported": "Browser tidak mendukung push.",
+  "push.failed": "Gagal mengubah status push.",
+  "push.ios_hint": "iOS: install dulu ke layar utama agar push bekerja.",
 } as const;
 
 export type StringKey = keyof typeof STRINGS;

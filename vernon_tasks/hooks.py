@@ -27,6 +27,9 @@ doc_events = {
     "VT Sprint": {
         "on_update": "vernon_tasks.task.api.analytics.invalidate_project_cache",
     },
+    "Notification Log": {
+        "after_insert": "vernon_tasks.task.services.push_sender.send_push_for_notification",
+    },
 }
 
 scheduler_events = {

@@ -1,0 +1,33 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-05-11 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["user", "endpoint", "p256dh", "auth", "user_agent", "last_seen"],
+ "fields": [
+  {"fieldname": "user", "fieldtype": "Link", "options": "User", "label": "User", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "endpoint", "fieldtype": "Long Text", "label": "Endpoint", "reqd": 1, "unique": 1},
+  {"fieldname": "p256dh", "fieldtype": "Data", "label": "p256dh", "reqd": 1, "length": 200},
+  {"fieldname": "auth", "fieldtype": "Data", "label": "auth", "reqd": 1, "length": 64},
+  {"fieldname": "user_agent", "fieldtype": "Data", "label": "User Agent", "length": 255},
+  {"fieldname": "last_seen", "fieldtype": "Datetime", "label": "Last Seen", "default": "now"}
+ ],
+ "hide_toolbar": 1,
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-05-11 00:00:00",
+ "modified_by": "Administrator",
+ "module": "VT Settings",
+ "name": "Vernon Push Subscription",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1}
+ ],
+ "sort_field": "last_seen",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
