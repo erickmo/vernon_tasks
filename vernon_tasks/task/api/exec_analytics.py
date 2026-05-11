@@ -5,6 +5,7 @@ from vernon_tasks.task.services.kpi_trend_service import (
     list_kpis as _list_kpis,
 )
 from vernon_tasks.task.services.health_score_service import get_health_score as _health
+from vernon_tasks.task.api.security import clamp_int
 
 _ALLOWED_ROLES = ("VT Manager", "System Manager")
 
@@ -29,7 +30,8 @@ def list_kpis():
 @frappe.whitelist()
 def get_kpi_trend(kpi_definition, periods=12):
     _guard()
-    return _kpi_trend(kpi_definition, int(periods))
+    periods = clamp_int(periods, 1, 24, "periods")
+    return _kpi_trend(kpi_definition, periods)
 
 
 @frappe.whitelist()

@@ -3,6 +3,7 @@ from vernon_tasks.task.services.burndown_service import get_burndown as _get_bur
 from vernon_tasks.task.services.velocity_service import get_velocity_trend as _get_velocity_trend
 from vernon_tasks.task.services.forecast_service import get_forecast as _get_forecast
 from vernon_tasks.task.services.risk_evaluator import evaluate_risks as _evaluate_risks
+from vernon_tasks.task.api.security import clamp_int
 
 _ALLOWED_ROLES = ("VT Leader", "VT Manager")
 _CACHE_TTL = 3600
@@ -31,8 +32,9 @@ def get_burndown(sprint):
 @frappe.whitelist()
 def get_velocity_trend(project, n=6):
     _guard()
+    n = clamp_int(n, 1, 24, "n")
     key = f"vt_velocity:{project}:{n}"
-    return _cache_get_or_set(key, lambda: _get_velocity_trend(project, int(n)))
+    return _cache_get_or_set(key, lambda: _get_velocity_trend(project, n))
 
 
 @frappe.whitelist()

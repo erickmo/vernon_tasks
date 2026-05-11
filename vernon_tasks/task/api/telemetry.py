@@ -45,6 +45,7 @@ ALLOWED_EVENTS = {
 
 RATE_LIMIT_PER_MINUTE = 60
 RETENTION_DAYS = 90
+_PROPS_MAX_BYTES = 2048
 
 
 @frappe.whitelist()
@@ -62,7 +63,12 @@ def log_event(event: str, props: dict | None = None) -> dict:
     if count > RATE_LIMIT_PER_MINUTE:
         frappe.throw("Telemetry rate limit exceeded")
 
-    props_str = json.dumps(props) if isinstance(props, dict) else (props or None)
+    if isinstance(props, dict):
+        props_str = json.dumps(props)
+        if len(props_str) > _PROPS_MAX_BYTES:
+            props_str = "{}"
+    else:
+        props_str = props or None
 
     doc = frappe.get_doc({
         "doctype": "Vernon Telemetry Event",
