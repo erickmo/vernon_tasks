@@ -7,6 +7,7 @@ import { MyWorkDetail } from "./pages/MyWork/Detail";
 import { Onboarding } from "./pages/Onboarding";
 import { Placeholder } from "./pages/Placeholder";
 import { MePage } from "./pages/Me";
+import { NotificationsPage } from "./pages/Notifications";
 import { t } from "./i18n";
 
 function OnboardingGate() {
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
           { path: "/m/dashboard", element: <Placeholder title={t("nav.dashboard")} /> },
           { path: "/m/analytics", element: <Placeholder title={t("nav.analytics")} /> },
           { path: "/m/me", element: <MePage /> },
+          { path: "/m/me/notifications", element: <NotificationsPage /> },
         ],
       },
     ],

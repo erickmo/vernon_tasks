@@ -3,6 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { fetchMyWork, MyWork, TaskCard as TaskCardT } from "../../api/tasks";
 import { completeTask, logProgress, snoozeTask, SnoozeDays } from "../../api/mutations";
+import {
+  fetchSearchResults,
+  filtersActive,
+  SearchFilters,
+} from "../../api/search";
 import { Skeleton } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { StaleBadge } from "../../components/StaleBadge";
@@ -11,9 +16,13 @@ import { SwipeRow } from "../../components/SwipeRow";
 import { TaskActions } from "../../components/TaskActions";
 import { LogProgressModal } from "../../components/LogProgressModal";
 import { InstallPrompt } from "../../components/InstallPrompt";
+import { SearchBar } from "../../components/SearchBar";
+import { FilterSheet } from "../../components/FilterSheet";
+import { ActiveFilterChips } from "../../components/ActiveFilterChips";
 import { useToast } from "../../components/Toast";
 import { useUndoableMutation } from "../../hooks/useUndoableMutation";
 import { useCompleteCounter } from "../../hooks/useCompleteCounter";
+import { useDebounce } from "../../hooks/useDebounce";
 import { greeting, fmtDate, t } from "../../i18n";
 import { logEvent } from "../../telemetry";
 
@@ -118,6 +127,33 @@ export function MyWorkList() {
   const [logTask, setLogTask] = useState<TaskCardT | null>(null);
   const offline = typeof navigator !== "undefined" && !navigator.onLine;
 
+  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<SearchFilters>({ due_range: "all" });
+  const [filterOpen, setFilterOpen] = useState(false);
+  const debouncedQuery = useDebounce(query, 300);
+  const combinedFilters: SearchFilters = { ...filters, query: debouncedQuery };
+  const searching = filtersActive(combinedFilters);
+
+  const searchQ = useQuery({
+    queryKey: ["my-work-search", combinedFilters],
+    queryFn: () => fetchSearchResults(combinedFilters),
+    enabled: searching,
+  });
+
+  function removeFilter(key: keyof SearchFilters, value?: string) {
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (key === "priority" && value) {
+        next.priority = (prev.priority ?? []).filter((p) => p !== value);
+      } else if (key === "project") {
+        next.project = undefined;
+      } else if (key === "due_range") {
+        next.due_range = "all";
+      }
+      return next;
+    });
+  }
+
   function removeFromCache(taskId: string): MyWork | undefined {
     const prev = qc.getQueryData<MyWork>(["my-work"]);
     if (!prev) return undefined;
@@ -213,7 +249,22 @@ export function MyWorkList() {
           </div>
         </header>
 
-        {q.isLoading && (
+        <SearchBar
+          value={query}
+          onChange={(v) => {
+            setQuery(v);
+            if (v.length > 0) logEvent("search_query", { query_length: v.length });
+          }}
+          onOpenFilter={() => setFilterOpen(true)}
+          filterActive={Boolean(
+            (filters.priority && filters.priority.length > 0) ||
+              filters.project ||
+              (filters.due_range && filters.due_range !== "all"),
+          )}
+        />
+        <ActiveFilterChips filters={combinedFilters} onRemove={removeFilter} />
+
+        {!searching && q.isLoading && (
           <>
             <Skeleton height={64} />
             <div style={{ height: 12 }} />
@@ -221,14 +272,15 @@ export function MyWorkList() {
           </>
         )}
 
-        {q.isError && !q.data && (
+        {!searching && q.isError && !q.data && (
           <EmptyState
             title={t("empty.no_offline")}
             cta={{ label: t("common.retry"), onClick: () => q.refetch() }}
           />
         )}
 
-        {q.data &&
+        {!searching &&
+          q.data &&
           (total === 0 ? (
             <EmptyState title={t("empty.no_tasks")} />
           ) : (
@@ -276,7 +328,57 @@ export function MyWorkList() {
               />
             </>
           ))}
+
+        {searching && searchQ.isLoading && (
+          <>
+            <Skeleton height={64} />
+            <div style={{ height: 12 }} />
+            <Skeleton height={64} />
+          </>
+        )}
+
+        {searching && searchQ.isError && (
+          <EmptyState
+            title={t("search.failed")}
+            cta={{ label: t("common.retry"), onClick: () => searchQ.refetch() }}
+          />
+        )}
+
+        {searching && searchQ.data && (
+          searchQ.data.results.length === 0 ? (
+            <EmptyState title={t("search.no_results")} />
+          ) : (
+            <div>
+              {searchQ.data.results.map((task) => (
+                <div key={task.id} style={{ marginBottom: "var(--vt-space-3)" }}>
+                  <TaskCardView
+                    task={task}
+                    onComplete={() => handleComplete(task)}
+                    onLog={() => setLogTask(task)}
+                    onSnooze={() => handleSnooze(task, 1)}
+                    disabled={offline}
+                  />
+                </div>
+              ))}
+            </div>
+          )
+        )}
       </div>
+
+      <FilterSheet
+        open={filterOpen}
+        initial={filters}
+        onApply={(f) => {
+          setFilters(f);
+          setFilterOpen(false);
+          logEvent("filter_applied", {
+            priority_count: f.priority?.length ?? 0,
+            has_project: !!f.project,
+            due_range: f.due_range ?? "all",
+          });
+        }}
+        onCancel={() => setFilterOpen(false)}
+      />
 
       <LogProgressModal
         open={logTask !== null}

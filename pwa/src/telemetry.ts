@@ -16,7 +16,12 @@ export type TelemetryEvent =
   | "install_prompt_shown"
   | "install_accepted"
   | "install_dismissed"
-  | "install_snoozed";
+  | "install_snoozed"
+  | "search_query"
+  | "filter_applied"
+  | "notif_view"
+  | "notif_tap"
+  | "notif_mark_all_read";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api

@@ -52,6 +52,48 @@ def list() -> dict:
 
 
 @frappe.whitelist()
+def search(
+    query: str = "",
+    priority: str = "",
+    project: str = "",
+    due_range: str = "all",
+) -> dict:
+    user = frappe.session.user
+    if user == "Guest":
+        frappe.throw("Login required", frappe.PermissionError)
+
+    filters: list = [
+        ["assigned_to", "=", user],
+        ["kanban_status", "!=", "Cancelled"],
+    ]
+    if query:
+        filters.append(["title", "like", f"%{query}%"])
+    if priority:
+        choices = [p.strip() for p in priority.split(",") if p.strip()]
+        if choices:
+            filters.append(["priority", "in", choices])
+    if project:
+        filters.append(["project", "=", project])
+    if due_range:
+        today_d = getdate(today())
+        if due_range == "today":
+            filters.append(["deadline", "=", today_d])
+        elif due_range == "week":
+            filters.append(["deadline", "between", [today_d, add_days(today_d, 7)]])
+        elif due_range == "overdue":
+            filters.append(["deadline", "<", today_d])
+
+    rows = frappe.get_all(
+        TASK_DOCTYPE,
+        filters=filters,
+        fields=["name", "title", "kanban_status", "priority", "deadline", "project", "sprint", "base_points"],
+        order_by="deadline asc",
+        limit_page_length=200,
+    )
+    return {"results": [_serialize(r) for r in rows], "total": len(rows)}
+
+
+@frappe.whitelist()
 def detail(task_id: str) -> dict:
     user = frappe.session.user
     if not frappe.db.exists(TASK_DOCTYPE, task_id):
