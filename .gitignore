@@ -11,3 +11,6 @@ htmlcov/
 vernon_tasks/www/m/
 !vernon_tasks/www/m.py
 !vernon_tasks/www/m.html
+node_modules/
+vernon_tasks/public/node_modules
+vernon_tasks/public/public
