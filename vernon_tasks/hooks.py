@@ -19,7 +19,7 @@ _PWA_SECURITY_HEADERS = {
 def add_pwa_security_headers(response):
     path = getattr(getattr(frappe, "local", None), "request", None)
     path = getattr(path, "path", "") if path else ""
-    if path.startswith("/m"):
+    if path == "/m" or path.startswith("/m/"):
         for key, val in _PWA_SECURITY_HEADERS.items():
             response.headers.setdefault(key, val)
     return response

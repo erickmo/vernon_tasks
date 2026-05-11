@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils import now_datetime
-from vernon_tasks.task.api.security import max_str, rate_limit
+from vernon_tasks.task.api.security import max_str, rate_limit, require_login
 
 
 @frappe.whitelist(allow_guest=True)
@@ -51,6 +51,7 @@ def subscribe(endpoint: str, p256dh: str, auth: str, user_agent: str = "") -> di
 
 @frappe.whitelist()
 def unsubscribe(endpoint: str) -> dict:
+    require_login()
     user = frappe.session.user
     name = frappe.db.get_value(
         "Vernon Push Subscription",
