@@ -10,7 +10,11 @@
     "late_penalty_rate",
     "revision_deduct_rate",
     "column_break_1",
-    "default_daily_target_hours"
+    "default_daily_target_hours",
+    "analytics_defaults_section",
+    "default_blocked_days_threshold",
+    "default_slip_pct_threshold",
+    "default_capacity_pct_threshold"
   ],
   "fields": [
     {
@@ -53,6 +57,29 @@
       "fieldtype": "Float",
       "label": "Default Daily Target Hours",
       "description": "Used when user has no Work Profile"
+    },
+    {
+      "fieldname": "analytics_defaults_section",
+      "fieldtype": "Section Break",
+      "label": "Analytics Defaults"
+    },
+    {
+      "default": "3",
+      "fieldname": "default_blocked_days_threshold",
+      "fieldtype": "Int",
+      "label": "Default Blocked Days Threshold"
+    },
+    {
+      "default": "20",
+      "fieldname": "default_slip_pct_threshold",
+      "fieldtype": "Percent",
+      "label": "Default Sprint Slip % Threshold"
+    },
+    {
+      "default": "120",
+      "fieldname": "default_capacity_pct_threshold",
+      "fieldtype": "Percent",
+      "label": "Default Capacity % Threshold"
     }
   ],
   "issingle": 1,

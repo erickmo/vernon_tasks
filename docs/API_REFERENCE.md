@@ -1506,3 +1506,247 @@ X-Frappe-CSRF-Token: abc123
 ```
 
 > **Note:** The standard Resource API uses a `data` envelope (not `message`) and respects the document's permission rules. PDCA phase transitions made through this API bypass the business logic guards in the custom endpoints — always prefer the whitelisted endpoints for phase transitions.
+
+---
+
+## Leader Analytics Endpoints (Sub-A)
+
+All endpoints in `vernon_tasks.task.api.analytics`. All `@frappe.whitelist()` and require role `VT Leader` or `VT Manager`. Non-authorized callers get `frappe.PermissionError`. Velocity and forecast results are cached for 1 hour, keyed by project; cache is invalidated on any `VT Sprint` or `VT Task` update.
+
+### `get_burndown(sprint)`
+
+Daily remaining-hours timeline for one sprint plus ideal linear line.
+
+**Request:**
+```
+POST /api/method/vernon_tasks.task.api.analytics.get_burndown
+{"sprint": "<sprint name>"}
+```
+
+**Response:**
+```json
+{
+  "message": {
+    "labels": ["2026-05-07", "2026-05-08", ...],
+    "ideal": [30.0, 22.5, 15.0, 7.5, 0.0],
+    "remaining": [30.0, 30.0, 20.0, 20.0, 10.0],
+    "unestimated_count": 1
+  }
+}
+```
+
+- `ideal[i]` is linear from total estimated hours at start to 0 at end.
+- `remaining[i]` sums `estimated_hours` of tasks where `completion_date` is null or later than that day.
+- Tasks with `estimated_hours == 0` are excluded from `ideal`/`remaining`; their count is surfaced as `unestimated_count`.
+
+### `get_velocity_trend(project, n=6)`
+
+Last N closed sprints' velocity (sum of `actual_hours` of DONE tasks) in ascending order.
+
+**Response:**
+```json
+{
+  "message": {
+    "sprints": ["SPR-001", "SPR-002", "SPR-003"],
+    "velocity": [15.0, 8.0, 12.0],
+    "avg": 11.666,
+    "trend_pct": -20.0
+  }
+}
+```
+
+- `trend_pct = (last - first) / first * 100`, returns `0.0` if fewer than 2 sprints or first velocity is 0.
+
+### `get_forecast(project)`
+
+Predicted project end date based on linear projection from velocity trend with a confidence band.
+
+**Response (sufficient data, ≥3 closed sprints):**
+```json
+{
+  "message": {
+    "insufficient_data": false,
+    "predicted_end": "2026-08-15",
+    "p_min": "2026-09-12",
+    "p_max": "2026-07-25",
+    "confidence": 0.83,
+    "remaining_hours": 120.0,
+    "avg_velocity": 12.0,
+    "sprints_used": 10
+  }
+}
+```
+
+**Response (insufficient data):**
+```json
+{
+  "message": {
+    "insufficient_data": true,
+    "sprints_needed": 2
+  }
+}
+```
+
+- `p_min` uses the mean of the worst third of historical velocities (later date).
+- `p_max` uses the mean of the best third (earlier date).
+- `confidence = 1 - (pstdev / avg)`, clamped to `[0, 1]`.
+- Sprint length used for date math is the median length of past closed sprints (default 14 days).
+
+### `get_risks(project)`
+
+Returns active risks for the project; empty list when none. Each risk is one dict.
+
+**Response:**
+```json
+{
+  "message": [
+    {"type": "blocked",  "severity": "med",  "target": "VT-TASK-00042", "detail": "Setup CI blocked 5d (assignee: alice@example.com)", "days": 5},
+    {"type": "slip",     "severity": "low",  "target": "VT-PROJ-00003", "detail": "Predicted end 2026-08-15 slips 9d past planned 2026-08-06 (22.5%)", "days": 9},
+    {"type": "overcap",  "severity": "high", "target": "bob@example.com", "detail": "bob@example.com has 280h of 80h available (350%)", "days": 0}
+  ]
+}
+```
+
+- `type ∈ {"blocked", "slip", "overcap"}`.
+- `severity` derived from how far the measured value exceeds threshold: `< 1×` = low, `1×–2×` = med, `≥ 2×` = high.
+- Thresholds resolved per-project: `VT Project.<key>_threshold` override → `VT Settings.default_<key>_threshold` → hardcoded fallback (blocked_days=3, slip_pct=20, capacity_pct=120).
+
+### Cache invalidation hook
+
+`vernon_tasks.task.api.analytics.invalidate_project_cache(doc, method=None)` is wired to `doc_events.on_update` for `VT Sprint` and `VT Task`. It clears `vt_velocity:<project>:<n>` and `vt_forecast:<project>` keys so the next read recomputes.
+
+---
+
+## IC Analytics Endpoints (Sub-B)
+
+All endpoints in `vernon_tasks.task.api.ic_analytics`. All `@frappe.whitelist()`. Roles allowed: `VT Member`, `VT Leader`, `VT Manager`. `get_personal_velocity` and `get_streak` always operate on `frappe.session.user` — the `user` argument is not accepted (no impersonation).
+
+### `get_leaderboard(period="month", limit=10)`
+
+Top users by `SUM(earned_points)` in the requested period, with `task_count` tie-break.
+
+**Request:**
+```
+POST /api/method/vernon_tasks.task.api.ic_analytics.get_leaderboard
+{"period": "month", "limit": 10}
+```
+
+**Response:**
+```json
+{
+  "message": [
+    {"user": "alice@example.com", "points": 120.0, "task_count": 8},
+    {"user": "bob@example.com",   "points":  95.0, "task_count": 6}
+  ]
+}
+```
+
+- `period ∈ {"week", "month", "quarter"}`. Invalid value → `ValueError`.
+- Period windows: `week` = ISO Monday–Sunday containing today; `month` = current calendar month; `quarter` = current 3-month block (Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec).
+- Filtered to `pdca_phase = 'DONE'` with `completion_date` inside the window.
+
+### `get_personal_velocity(project, n=6)`
+
+Caller's personal hours per closed sprint vs team average (sum of sprint hours / distinct assignees that sprint).
+
+**Response:**
+```json
+{
+  "message": {
+    "sprints": ["SPR-001", "SPR-002"],
+    "personal": [10.0, 6.0],
+    "team_avg": [15.0, 8.0],
+    "avg": 8.0,
+    "team_avg_total": 11.5
+  }
+}
+```
+
+### `get_streak(project)`
+
+Consecutive closed sprints (walking newest→oldest) where the caller had `actual_hours > 0` on at least one DONE task.
+
+**Response:**
+```json
+{
+  "message": {
+    "streak": 3,
+    "sprints_checked": 4
+  }
+}
+```
+
+Streak stops at the first sprint with zero personal hours.
+
+---
+
+## Executive Analytics Endpoints (Sub-C)
+
+All endpoints in `vernon_tasks.task.api.exec_analytics`. All `@frappe.whitelist()`. Roles allowed: `VT Manager`, `System Manager`.
+
+### `get_okr_rollup(period=None)`
+
+Active objectives with average key-result progress.
+
+**Response:**
+```json
+{
+  "message": [
+    {"objective": "OBJ-2026-00001", "title": "Ship analytics", "owner": "alice@example.com",
+     "status": "On Track", "progress": 72.5, "kr_count": 4}
+  ]
+}
+```
+
+- `period` (optional): filter by `Objective.period` exact match (e.g. `"2026-Q2"`).
+- Excludes objectives with `status = "Closed"`.
+- Sorted by `progress` DESC, then `title` ASC.
+
+### `list_kpis()`
+
+All KPI Definitions.
+
+**Response:**
+```json
+{"message": [{"name": "KPI-001", "kpi_name": "NPS", "unit": "score", "frequency": "Monthly"}]}
+```
+
+### `get_kpi_trend(kpi_definition, periods=12)`
+
+Last N entries for a KPI Definition, ordered ascending by date for charting.
+
+**Response:**
+```json
+{
+  "message": {
+    "labels": ["2026-01-31", "2026-02-28", "2026-03-31"],
+    "values": [42.0, 48.0, 55.0],
+    "unit": "score",
+    "kpi_name": "NPS"
+  }
+}
+```
+
+- Unknown `kpi_definition` raises `frappe.DoesNotExistError`.
+
+### `get_health_score()`
+
+Composite 0-100 company health score.
+
+**Response:**
+```json
+{
+  "message": {
+    "score": 67.2,
+    "okr_pct": 70.0,
+    "ontime_pct": 80.0,
+    "velocity_health": 50.0,
+    "breakdown": {"okr_weight": 0.5, "ontime_weight": 0.3, "velocity_weight": 0.2}
+  }
+}
+```
+
+- `okr_pct`: mean of per-objective average `Key Result.progress_percent` across non-Closed objectives.
+- `ontime_pct`: % of `VT Task` DONE in last 90 days with `completion_date <= deadline` (null deadline counts as on-time).
+- `velocity_health`: mean `trend_pct` across active projects (≥2 closed sprints each), mapped to 0-100 via `50 + clamp(mean, -50, 50)`. Defaults to 50 if no qualifying projects.
+- `score = okr_pct × 0.5 + ontime_pct × 0.3 + velocity_health × 0.2`.

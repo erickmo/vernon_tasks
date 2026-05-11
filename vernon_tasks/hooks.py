@@ -15,11 +15,17 @@ required_apps = []
 doc_events = {
     "VT Task": {
         "on_submit": "vernon_tasks.task.services.point_calculator.calculate_points",
-        "on_update": "vernon_tasks.task.services.scheduling_engine.on_task_update",
+        "on_update": [
+            "vernon_tasks.task.services.scheduling_engine.on_task_update",
+            "vernon_tasks.task.api.analytics.invalidate_project_cache",
+        ],
         "validate": "vernon_tasks.task.doctype.vt_task.vt_task.validate_permissions",
     },
     "VT Project": {
         "validate": "vernon_tasks.project.doctype.vt_project.vt_project.validate_team",
+    },
+    "VT Sprint": {
+        "on_update": "vernon_tasks.task.api.analytics.invalidate_project_cache",
     },
 }
 
@@ -28,11 +34,16 @@ scheduler_events = {
         "vernon_tasks.task.services.scheduling_engine.generate_recurring_tasks",
         "vernon_tasks.task.services.point_calculator.check_overdue_tasks",
         "vernon_tasks.workforce.doctype.daily_summary.daily_summary.generate_daily_summaries",
+        "vernon_tasks.task.api.telemetry.purge_old_telemetry",
     ],
     "hourly": [
         "vernon_tasks.task.services.scheduling_engine.check_deadline_notifications",
     ],
 }
+
+website_route_rules = [
+    {"from_route": "/m/<path:rest>", "to_route": "m"},
+]
 
 fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},

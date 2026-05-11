@@ -1,0 +1,12 @@
+{
+ "creation": "2026-05-11 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Task",
+ "name": "exec-analytics",
+ "page_name": "exec-analytics",
+ "roles": [
+  {"role": "VT Manager"},
+  {"role": "System Manager"}
+ ],
+ "title": "Executive Analytics"
+}

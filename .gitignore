@@ -8,3 +8,6 @@ build/
 htmlcov/
 *.egg
 .DS_Store
+vernon_tasks/www/m/
+!vernon_tasks/www/m.py
+!vernon_tasks/www/m.html

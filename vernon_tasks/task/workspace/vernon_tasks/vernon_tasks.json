@@ -338,6 +338,30 @@
    "label": "Objective",
    "link_to": "Objective",
    "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "is_query_report": 0,
+   "label": "Leader Analytics",
+   "link_to": "leader-analytics",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "is_query_report": 0,
+   "label": "My Analytics",
+   "link_to": "my-analytics",
+   "type": "Page"
+  },
+  {
+   "color": "Red",
+   "doc_view": "",
+   "is_query_report": 0,
+   "label": "Executive Analytics",
+   "link_to": "exec-analytics",
+   "type": "Page"
   }
  ],
  "title": "Vernon Tasks"

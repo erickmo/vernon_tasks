@@ -14,7 +14,7 @@
     {"fieldname": "assigned_to", "fieldtype": "Link", "label": "Assigned To", "options": "User", "in_list_view": 1},
     {"fieldname": "priority", "fieldtype": "Select", "label": "Priority", "options": "Low\nMedium\nHigh\nCritical", "default": "Medium", "in_list_view": 1},
     {"fieldname": "pdca_phase", "fieldtype": "Select", "label": "PDCA Phase", "options": "BACKLOG\nPLAN\nDO\nCHECK\nACT\nDONE", "default": "BACKLOG", "in_list_view": 1},
-    {"fieldname": "kanban_status", "fieldtype": "Select", "label": "Kanban Status", "options": "Backlog\nScheduled\nIn Progress\nIn Review\nRevision\nDone", "default": "Backlog", "in_list_view": 1},
+    {"fieldname": "kanban_status", "fieldtype": "Select", "label": "Kanban Status", "options": "Backlog\nScheduled\nIn Progress\nIn Review\nRevision\nDone\nBlocked", "default": "Backlog", "in_list_view": 1},
     {"fieldname": "time_section", "fieldtype": "Section Break", "label": "Time"},
     {"fieldname": "start_date", "fieldtype": "Date", "label": "Start Date"},
     {"fieldname": "deadline", "fieldtype": "Date", "label": "Deadline"},
