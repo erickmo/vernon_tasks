@@ -1614,3 +1614,66 @@ Returns active risks for the project; empty list when none. Each risk is one dic
 ### Cache invalidation hook
 
 `vernon_tasks.task.api.analytics.invalidate_project_cache(doc, method=None)` is wired to `doc_events.on_update` for `VT Sprint` and `VT Task`. It clears `vt_velocity:<project>:<n>` and `vt_forecast:<project>` keys so the next read recomputes.
+
+---
+
+## IC Analytics Endpoints (Sub-B)
+
+All endpoints in `vernon_tasks.task.api.ic_analytics`. All `@frappe.whitelist()`. Roles allowed: `VT Member`, `VT Leader`, `VT Manager`. `get_personal_velocity` and `get_streak` always operate on `frappe.session.user` — the `user` argument is not accepted (no impersonation).
+
+### `get_leaderboard(period="month", limit=10)`
+
+Top users by `SUM(earned_points)` in the requested period, with `task_count` tie-break.
+
+**Request:**
+```
+POST /api/method/vernon_tasks.task.api.ic_analytics.get_leaderboard
+{"period": "month", "limit": 10}
+```
+
+**Response:**
+```json
+{
+  "message": [
+    {"user": "alice@example.com", "points": 120.0, "task_count": 8},
+    {"user": "bob@example.com",   "points":  95.0, "task_count": 6}
+  ]
+}
+```
+
+- `period ∈ {"week", "month", "quarter"}`. Invalid value → `ValueError`.
+- Period windows: `week` = ISO Monday–Sunday containing today; `month` = current calendar month; `quarter` = current 3-month block (Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec).
+- Filtered to `pdca_phase = 'DONE'` with `completion_date` inside the window.
+
+### `get_personal_velocity(project, n=6)`
+
+Caller's personal hours per closed sprint vs team average (sum of sprint hours / distinct assignees that sprint).
+
+**Response:**
+```json
+{
+  "message": {
+    "sprints": ["SPR-001", "SPR-002"],
+    "personal": [10.0, 6.0],
+    "team_avg": [15.0, 8.0],
+    "avg": 8.0,
+    "team_avg_total": 11.5
+  }
+}
+```
+
+### `get_streak(project)`
+
+Consecutive closed sprints (walking newest→oldest) where the caller had `actual_hours > 0` on at least one DONE task.
+
+**Response:**
+```json
+{
+  "message": {
+    "streak": 3,
+    "sprints_checked": 4
+  }
+}
+```
+
+Streak stops at the first sprint with zero personal hours.

@@ -346,6 +346,14 @@
    "label": "Leader Analytics",
    "link_to": "leader-analytics",
    "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "is_query_report": 0,
+   "label": "My Analytics",
+   "link_to": "my-analytics",
+   "type": "Page"
   }
  ],
  "title": "Vernon Tasks"
