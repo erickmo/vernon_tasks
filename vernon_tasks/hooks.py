@@ -1,4 +1,29 @@
 from . import __version__ as app_version
+import frappe
+
+_PWA_SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "push=(self), notifications=(self)",
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'; "
+        "worker-src 'self';"
+    ),
+}
+
+
+def add_pwa_security_headers(response):
+    path = getattr(getattr(frappe, "local", None), "request", None)
+    path = getattr(path, "path", "") if path else ""
+    if path.startswith("/m"):
+        for key, val in _PWA_SECURITY_HEADERS.items():
+            response.headers.setdefault(key, val)
+    return response
+
 
 app_name = "vernon_tasks"
 app_title = "Vernon Tasks"
@@ -47,6 +72,8 @@ scheduler_events = {
 website_route_rules = [
     {"from_route": "/m/<path:rest>", "to_route": "m"},
 ]
+
+after_request = ["vernon_tasks.hooks.add_pwa_security_headers"]
 
 fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
