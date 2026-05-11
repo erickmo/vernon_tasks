@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { login } from "./session";
-import { t } from "@/i18n";
+import { t } from "../i18n";
 
 export function LoginPage() {
   const [usr, setUsr] = useState(() => localStorage.getItem("vt_last_user") ?? "");

@@ -1,8 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+import tsconfigPaths from "vite-tsconfig-paths";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const swVersion = (() => {
   try {
@@ -15,8 +19,11 @@ const swVersion = (() => {
 export default defineConfig({
   base: "/m/",
   define: { __SW_VERSION__: JSON.stringify(swVersion) },
-  resolve: { alias: { "@": path.resolve(__dirname, "src") } },
+  resolve: {
+    alias: [{ find: /^@\/(.*)$/, replacement: path.resolve(__dirname, "src") + "/$1" }],
+  },
   plugins: [
+    tsconfigPaths(),
     react(),
     VitePWA({
       strategies: "generateSW",
