@@ -19,6 +19,11 @@ ALLOWED_EVENTS = {
     "install_accepted",
     "install_dismissed",
     "install_snoozed",
+    "search_query",
+    "filter_applied",
+    "notif_view",
+    "notif_tap",
+    "notif_mark_all_read",
 }
 
 RATE_LIMIT_PER_MINUTE = 60
