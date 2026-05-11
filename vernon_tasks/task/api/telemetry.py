@@ -31,6 +31,9 @@ ALLOWED_EVENTS = {
     "leader_review_view",
     "leader_approve",
     "leader_reject",
+    "leader_sprint_view",
+    "leader_exec_view",
+    "leader_project_change",
 }
 
 RATE_LIMIT_PER_MINUTE = 60

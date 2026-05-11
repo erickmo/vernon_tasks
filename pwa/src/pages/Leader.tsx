@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchReviewQueue,
@@ -10,10 +10,15 @@ import { Skeleton } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
 import { PullToRefresh } from "../components/PullToRefresh";
 import { RejectModal } from "../components/RejectModal";
+import { Tabs } from "../components/Tabs";
 import { useToast } from "../components/Toast";
 import { useIsLeader } from "../hooks/useIsLeader";
+import { useIsManager } from "../hooks/useIsManager";
 import { fmtDate, t } from "../i18n";
 import { logEvent } from "../telemetry";
+
+const LeaderSprint = lazy(() => import("./LeaderSprint"));
+const LeaderExec = lazy(() => import("./LeaderExec"));
 
 const PRIORITY_COLOR: Record<string, string> = {
   Critical: "var(--vt-danger)",
@@ -89,12 +94,10 @@ function ReviewCard({
   );
 }
 
-export function LeaderPage() {
-  const isLeader = useIsLeader();
+function LeaderReviewTab() {
   const q = useQuery({
     queryKey: ["review-queue"],
     queryFn: fetchReviewQueue,
-    enabled: isLeader === true,
     staleTime: 30_000,
   });
   const qc = useQueryClient();
@@ -103,8 +106,8 @@ export function LeaderPage() {
   const offline = typeof navigator !== "undefined" && !navigator.onLine;
 
   useEffect(() => {
-    if (isLeader) logEvent("leader_review_view", {});
-  }, [isLeader]);
+    logEvent("leader_review_view", {});
+  }, []);
 
   function removeFromCache(name: string): ReviewItem[] | undefined {
     const prev = qc.getQueryData<ReviewItem[]>(["review-queue"]);
@@ -144,18 +147,9 @@ export function LeaderPage() {
     }
   }
 
-  if (isLeader === null) {
-    return <div style={{ padding: 24 }}>…</div>;
-  }
-  if (isLeader === false) {
-    return <EmptyState title={t("leader.no_access")} />;
-  }
-
   return (
     <PullToRefresh onRefresh={() => q.refetch().then(() => {})}>
-      <div style={{ padding: "var(--vt-space-4)" }}>
-        <h1 style={{ marginTop: 0 }}>{t("leader.title")}</h1>
-
+      <div>
         {q.isLoading && (
           <>
             <Skeleton height={120} />
@@ -184,14 +178,49 @@ export function LeaderPage() {
               disabled={offline}
             />
           ))}
-      </div>
 
-      <RejectModal
-        open={rejectTarget !== null}
-        taskTitle={rejectTarget?.title}
-        onSubmit={(reason) => rejectTarget && handleReject(rejectTarget, reason)}
-        onCancel={() => setRejectTarget(null)}
-      />
+        <RejectModal
+          open={rejectTarget !== null}
+          taskTitle={rejectTarget?.title}
+          onSubmit={(reason) => rejectTarget && handleReject(rejectTarget, reason)}
+          onCancel={() => setRejectTarget(null)}
+        />
+      </div>
     </PullToRefresh>
+  );
+}
+
+type TabKey = "review" | "sprint" | "exec";
+
+export function LeaderPage() {
+  const isLeader = useIsLeader();
+  const isManager = useIsManager();
+  const [tab, setTab] = useState<TabKey>("review");
+
+  if (isLeader === null) return <div style={{ padding: 24 }}>…</div>;
+  if (isLeader === false) return <EmptyState title={t("leader.no_access")} />;
+
+  const tabs = [
+    { key: "review", label: "Review" },
+    { key: "sprint", label: "Sprint" },
+    ...(isManager ? [{ key: "exec", label: "Exec" }] : []),
+  ];
+
+  return (
+    <div style={{ padding: "var(--vt-space-4)" }}>
+      <h1 style={{ marginTop: 0 }}>{t("leader.title")}</h1>
+      <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />
+      {tab === "review" && <LeaderReviewTab />}
+      {tab === "sprint" && (
+        <Suspense fallback={<Skeleton height={240} />}>
+          <LeaderSprint />
+        </Suspense>
+      )}
+      {tab === "exec" && isManager && (
+        <Suspense fallback={<Skeleton height={240} />}>
+          <LeaderExec />
+        </Suspense>
+      )}
+    </div>
   );
 }
