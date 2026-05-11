@@ -1677,3 +1677,76 @@ Consecutive closed sprints (walking newest→oldest) where the caller had `actua
 ```
 
 Streak stops at the first sprint with zero personal hours.
+
+---
+
+## Executive Analytics Endpoints (Sub-C)
+
+All endpoints in `vernon_tasks.task.api.exec_analytics`. All `@frappe.whitelist()`. Roles allowed: `VT Manager`, `System Manager`.
+
+### `get_okr_rollup(period=None)`
+
+Active objectives with average key-result progress.
+
+**Response:**
+```json
+{
+  "message": [
+    {"objective": "OBJ-2026-00001", "title": "Ship analytics", "owner": "alice@example.com",
+     "status": "On Track", "progress": 72.5, "kr_count": 4}
+  ]
+}
+```
+
+- `period` (optional): filter by `Objective.period` exact match (e.g. `"2026-Q2"`).
+- Excludes objectives with `status = "Closed"`.
+- Sorted by `progress` DESC, then `title` ASC.
+
+### `list_kpis()`
+
+All KPI Definitions.
+
+**Response:**
+```json
+{"message": [{"name": "KPI-001", "kpi_name": "NPS", "unit": "score", "frequency": "Monthly"}]}
+```
+
+### `get_kpi_trend(kpi_definition, periods=12)`
+
+Last N entries for a KPI Definition, ordered ascending by date for charting.
+
+**Response:**
+```json
+{
+  "message": {
+    "labels": ["2026-01-31", "2026-02-28", "2026-03-31"],
+    "values": [42.0, 48.0, 55.0],
+    "unit": "score",
+    "kpi_name": "NPS"
+  }
+}
+```
+
+- Unknown `kpi_definition` raises `frappe.DoesNotExistError`.
+
+### `get_health_score()`
+
+Composite 0-100 company health score.
+
+**Response:**
+```json
+{
+  "message": {
+    "score": 67.2,
+    "okr_pct": 70.0,
+    "ontime_pct": 80.0,
+    "velocity_health": 50.0,
+    "breakdown": {"okr_weight": 0.5, "ontime_weight": 0.3, "velocity_weight": 0.2}
+  }
+}
+```
+
+- `okr_pct`: mean of per-objective average `Key Result.progress_percent` across non-Closed objectives.
+- `ontime_pct`: % of `VT Task` DONE in last 90 days with `completion_date <= deadline` (null deadline counts as on-time).
+- `velocity_health`: mean `trend_pct` across active projects (≥2 closed sprints each), mapped to 0-100 via `50 + clamp(mean, -50, 50)`. Defaults to 50 if no qualifying projects.
+- `score = okr_pct × 0.5 + ontime_pct × 0.3 + velocity_health × 0.2`.

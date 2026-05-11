@@ -354,6 +354,14 @@
    "label": "My Analytics",
    "link_to": "my-analytics",
    "type": "Page"
+  },
+  {
+   "color": "Red",
+   "doc_view": "",
+   "is_query_report": 0,
+   "label": "Executive Analytics",
+   "link_to": "exec-analytics",
+   "type": "Page"
   }
  ],
  "title": "Vernon Tasks"
