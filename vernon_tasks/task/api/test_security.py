@@ -73,3 +73,7 @@ class TestSecurity(FrappeTestCase):
 
     def test_max_str_returns_empty_for_none(self):
         self.assertEqual(max_str(None, 200), "")
+
+    def test_max_str_handles_non_string_non_none(self):
+        self.assertEqual(max_str(0, 10), "0")
+        self.assertEqual(max_str(False, 10), "False")

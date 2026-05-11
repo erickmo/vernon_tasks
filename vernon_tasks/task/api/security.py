@@ -14,8 +14,11 @@ def rate_limit(endpoint: str, max_calls: int) -> None:
         return
     window = frappe.utils.now()[:16]  # "YYYY-MM-DD HH:MM" — 1-minute bucket
     key = f"vt:rl:{user}:{endpoint}:{window}"
-    count = frappe.cache().incrby(key, 1)
-    frappe.cache().expire(key, _RATE_LIMIT_TTL)
+    pipe = frappe.cache().pipeline()
+    pipe.incrby(key, 1)
+    pipe.expire(key, _RATE_LIMIT_TTL)
+    results = pipe.execute()
+    count = results[0]
     if count > max_calls:
         frappe.throw("Rate limit exceeded", frappe.ValidationError)
 
@@ -25,12 +28,13 @@ def clamp_int(val, lo: int, hi: int, name: str = "param") -> int:
         v = int(val)
     except (TypeError, ValueError):
         frappe.throw(f"{name} must be an integer", frappe.ValidationError)
+        return 0  # unreachable; satisfies type checker
     if v < lo or v > hi:
         frappe.throw(f"{name} must be between {lo} and {hi}", frappe.ValidationError)
     return v
 
 
 def max_str(val, limit: int) -> str:
-    if not val:
+    if val is None:
         return ""
     return str(val)[:limit]
