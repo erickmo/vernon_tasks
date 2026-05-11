@@ -1750,3 +1750,115 @@ Composite 0-100 company health score.
 - `ontime_pct`: % of `VT Task` DONE in last 90 days with `completion_date <= deadline` (null deadline counts as on-time).
 - `velocity_health`: mean `trend_pct` across active projects (≥2 closed sprints each), mapped to 0-100 via `50 + clamp(mean, -50, 50)`. Defaults to 50 if no qualifying projects.
 - `score = okr_pct × 0.5 + ontime_pct × 0.3 + velocity_health × 0.2`.
+
+---
+
+## Mobile PWA Endpoints
+
+All endpoints consumed by the React PWA at `/m/`. Use Frappe session
+cookie auth (same as Desk). Whitelisted via `@frappe.whitelist()`.
+
+### Boot
+
+`vernon_tasks.task.api.boot.boot` — allow_guest
+
+Returns current session metadata for SPA bootstrap. Always-available
+endpoint, no auth required.
+
+```json
+{ "user": "user@example.com", "csrf_token": "abc…", "roles": ["VT Member"] }
+```
+
+For guests: `{"user": null, "csrf_token": null, "roles": []}`.
+
+### My Work
+
+`vernon_tasks.task.api.my_work.list` — returns tasks for
+`frappe.session.user` grouped into `overdue` / `today` / `upcoming`
+(7-day window). Filters out `Cancelled`. Limit 500.
+
+`vernon_tasks.task.api.my_work.detail(task_id)` — single task incl.
+description + last 10 Comments as `activity`. Owner-only unless
+`has_permission("VT Task", "read")`.
+
+`vernon_tasks.task.api.my_work.search(query, priority, project, due_range)`
+— flat search. `query` LIKE on title. `priority` comma-separated list.
+`due_range` ∈ `{all, today, week, overdue}`. Returns
+`{results, total}`. Limit 200.
+
+### My Work Mutations
+
+`vernon_tasks.task.api.my_work_mutations.complete(task_id)` —
+idempotent. Sets `kanban_status="Done"`, `completion_date=today()`.
+Returns `{ok, idempotent?}`.
+
+`...my_work_mutations.log_progress(task_id, hours, note="")` — adds
+hours to `actual_hours`, appends Comment. Validates `hours ∈ (0, 24]`.
+
+`...my_work_mutations.snooze(task_id, days)` — shifts `deadline` by
+`days ∈ {1, 3, 7}`. Logs Comment.
+
+Permission gate: `assigned_to == frappe.session.user` OR
+`has_permission("VT Task", "write")`.
+
+### Dashboard
+
+`vernon_tasks.task.page.my_dashboard.my_dashboard.get_sprint_kanban` —
+active sprint tasks for current user, grouped by `kanban_status`
+(Backlog / Doing / Review / Done). Returns
+`{sprint: {name, title, start_date, end_date, progress_pct}, columns}`
+or `{sprint: null, columns: {…empty}}` if no active sprint.
+
+`...get_employee_stats`, `...get_daily_completions`, `...get_hours_summary`
+— see Desk page section above (also consumed by PWA).
+
+### Notifications
+
+`vernon_tasks.task.api.notifications.list(limit=50, offset=0, only_unread=0)`
+— Frappe `Notification Log` filtered by `for_user == session.user`,
+ordered DESC.
+
+`...notifications.mark_read(name)` — owner-only.
+
+`...notifications.mark_all_read()` — bulk update unread → read for
+current user. Invalidates count cache.
+
+`...notifications.count_unread()` — integer count. Cached in
+`frappe.cache` for 30s per user. Returns `{count}`.
+
+### Telemetry
+
+`vernon_tasks.task.api.telemetry.log_event(event, props=None)` —
+whitelisted event ingest. Rate-limited 60/min/user via cache counter.
+Allowlist enforced; unknown event → `ValidationError`.
+
+Allowed events:
+`pwa_boot`, `login_success`, `login_failure`, `page_view`, `task_view`,
+`offline_seen`, `error_boundary`, `sw_register_failed`,
+`task_complete`, `task_complete_undone`, `task_log`, `task_snooze`,
+`install_prompt_shown`, `install_accepted`, `install_dismissed`,
+`install_snoozed`, `search_query`, `filter_applied`, `notif_view`,
+`notif_tap`, `notif_mark_all_read`, `dashboard_view`, `analytics_view`,
+`analytics_period_change`, `analytics_project_change`,
+`leader_review_view`, `leader_approve`, `leader_reject`,
+`leader_sprint_view`, `leader_exec_view`, `leader_project_change`.
+
+Daily purge at 90-day retention via `scheduler_events.daily`.
+
+### Leader (PWA additions to existing `leader_review` module)
+
+`...leader_review.get_my_led_projects()` — list of project names where
+`session.user` is `project_leader` OR `Project Team Member` with
+`role="Leader"`.
+
+`...leader_review.get_latest_sprint(project)` — most recent sprint by
+`start_date` DESC. Requires leader of project (403 otherwise).
+
+Existing `get_review_queue`, `approve_task`, `reject_task` already
+documented in Leader Review section above.
+
+### SPA route
+
+`/m/<path:rest>` → served by `vernon_tasks/www/m.py` which inlines
+`vernon_tasks/www/m/index.html` (built by Vite). All other paths
+client-routed by react-router.
