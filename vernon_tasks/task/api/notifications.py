@@ -1,4 +1,5 @@
 import frappe
+from vernon_tasks.task.api.security import clamp_int
 
 CACHE_KEY_UNREAD = "vt:notif:unread:{user}"
 CACHE_TTL = 30
@@ -9,6 +10,9 @@ def list(limit: int = 50, offset: int = 0, only_unread: int = 0) -> dict:
     user = frappe.session.user
     if user == "Guest":
         frappe.throw("Login required", frappe.PermissionError)
+
+    limit = clamp_int(limit, 1, 100, "limit")
+    offset = clamp_int(offset, 0, 10_000, "offset")
 
     filters: dict = {"for_user": user}
     if int(only_unread):
@@ -28,8 +32,8 @@ def list(limit: int = 50, offset: int = 0, only_unread: int = 0) -> dict:
             "creation",
         ],
         order_by="creation desc",
-        limit_start=int(offset),
-        limit_page_length=int(limit),
+        limit_start=offset,
+        limit_page_length=limit,
     )
     return {"results": rows}
 

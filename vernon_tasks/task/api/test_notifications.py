@@ -6,6 +6,7 @@ from vernon_tasks.task.api.notifications import (
     mark_all_read,
     count_unread,
 )
+from vernon_tasks.task.api import notifications as notif_api
 
 
 class TestNotifications(FrappeTestCase):
@@ -68,3 +69,27 @@ class TestNotifications(FrappeTestCase):
         frappe.set_user(self.user_a)
         mark_all_read()
         self.assertEqual(count_unread()["count"], 0)
+
+
+class TestNotificationBounds(FrappeTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = "notif_bounds@test.local"
+        if not frappe.db.exists("User", cls.user):
+            frappe.get_doc(
+                {"doctype": "User", "email": cls.user, "first_name": "Bounds"}
+            ).insert(ignore_permissions=True)
+
+    def test_list_limit_zero_raises(self):
+        frappe.set_user(self.user)
+        self.assertRaises(frappe.ValidationError, notif_api.list, limit=0)
+
+    def test_list_limit_over_max_raises(self):
+        frappe.set_user(self.user)
+        self.assertRaises(frappe.ValidationError, notif_api.list, limit=101)
+
+    def test_list_limit_at_max_succeeds(self):
+        frappe.set_user(self.user)
+        result = notif_api.list(limit=100)
+        self.assertIn("results", result)

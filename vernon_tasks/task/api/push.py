@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils import now_datetime
+from vernon_tasks.task.api.security import max_str, rate_limit
 
 
 @frappe.whitelist(allow_guest=True)
@@ -13,6 +14,9 @@ def subscribe(endpoint: str, p256dh: str, auth: str, user_agent: str = "") -> di
     user = frappe.session.user
     if user == "Guest":
         frappe.throw("Login required", frappe.PermissionError)
+
+    rate_limit("push_subscribe", 5)
+    endpoint = max_str(endpoint, 2048)
 
     existing = frappe.db.get_value(
         "Vernon Push Subscription", {"endpoint": endpoint}, "name"

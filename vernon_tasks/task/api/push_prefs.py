@@ -1,4 +1,5 @@
 import frappe
+from vernon_tasks.task.api.security import rate_limit
 
 
 _FIELDS = ("event_assignment", "event_mention", "event_due", "event_review")
@@ -29,6 +30,8 @@ def update_prefs(
     user = frappe.session.user
     if user == "Guest":
         frappe.throw("Login required", frappe.PermissionError)
+
+    rate_limit("push_prefs", 20)
     values = {
         "event_assignment": int(event_assignment),
         "event_mention": int(event_mention),
