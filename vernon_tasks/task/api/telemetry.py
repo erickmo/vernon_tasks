@@ -28,6 +28,9 @@ ALLOWED_EVENTS = {
     "analytics_view",
     "analytics_period_change",
     "analytics_project_change",
+    "leader_review_view",
+    "leader_approve",
+    "leader_reject",
 }
 
 RATE_LIMIT_PER_MINUTE = 60

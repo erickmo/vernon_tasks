@@ -9,6 +9,7 @@ import { Onboarding } from "./pages/Onboarding";
 import { MePage } from "./pages/Me";
 import { NotificationsPage } from "./pages/Notifications";
 import { DashboardPage } from "./pages/Dashboard";
+import { LeaderPage } from "./pages/Leader";
 
 const AnalyticsPage = lazy(() =>
   import("./pages/Analytics").then((m) => ({ default: m.AnalyticsPage })),
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
           { path: "/m/analytics", element: <LazyAnalytics /> },
           { path: "/m/me", element: <MePage /> },
           { path: "/m/me/notifications", element: <NotificationsPage /> },
+          { path: "/m/leader", element: <LeaderPage /> },
         ],
       },
     ],

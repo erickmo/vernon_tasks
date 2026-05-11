@@ -1,16 +1,21 @@
 import { NavLink } from "react-router-dom";
 import { t } from "../i18n";
 import { useUnreadCount } from "../hooks/useUnreadCount";
+import { useIsLeader } from "../hooks/useIsLeader";
 
-const TABS = [
+const TABS_BASE = [
   { to: "/m/work", label: t("nav.tasks"), key: "tasks" },
   { to: "/m/dashboard", label: t("nav.dashboard"), key: "dashboard" },
   { to: "/m/analytics", label: t("nav.analytics"), key: "analytics" },
   { to: "/m/me", label: t("nav.me"), key: "me" },
 ] as const;
 
+const LEADER_TAB = { to: "/m/leader", label: t("nav.leader"), key: "leader" } as const;
+
 export function BottomNav() {
   const unread = useUnreadCount();
+  const isLeader = useIsLeader();
+  const tabs = isLeader ? [...TABS_BASE, LEADER_TAB] : TABS_BASE;
 
   return (
     <nav
@@ -24,11 +29,11 @@ export function BottomNav() {
         background: "var(--vt-bg)",
         borderTop: "1px solid var(--vt-border)",
         display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateColumns: `repeat(${tabs.length}, 1fr)`,
         zIndex: 40,
       }}
     >
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <NavLink
           key={tab.to}
           to={tab.to}
