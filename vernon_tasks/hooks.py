@@ -34,11 +34,16 @@ scheduler_events = {
         "vernon_tasks.task.services.scheduling_engine.generate_recurring_tasks",
         "vernon_tasks.task.services.point_calculator.check_overdue_tasks",
         "vernon_tasks.workforce.doctype.daily_summary.daily_summary.generate_daily_summaries",
+        "vernon_tasks.task.api.telemetry.purge_old_telemetry",
     ],
     "hourly": [
         "vernon_tasks.task.services.scheduling_engine.check_deadline_notifications",
     ],
 }
+
+website_route_rules = [
+    {"from_route": "/m/<path:rest>", "to_route": "m"},
+]
 
 fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
