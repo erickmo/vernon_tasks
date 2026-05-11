@@ -2,7 +2,7 @@
 // Adds push + notificationclick listeners. No bundling — plain JS.
 
 self.addEventListener("push", function (event) {
-  let data = {};
+  var data = {};
   try {
     data = event.data ? event.data.json() : {};
   } catch (e) {
@@ -12,9 +12,13 @@ self.addEventListener("push", function (event) {
   var options = {
     body: data.body || "",
     tag: data.tag,
-    data: { url: data.url || "/m/me/notifications" },
+    data: {
+      url: data.url || "/m/me/notifications",
+      task_id: data.task_id || null,
+    },
     icon: "/m/icons/icon-192.png",
     badge: "/m/icons/icon-192.png",
+    actions: Array.isArray(data.actions) ? data.actions : [],
   };
   event.waitUntil(
     self.registration.showNotification(title, options).then(function () {
@@ -30,7 +34,41 @@ self.addEventListener("push", function (event) {
 
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
-  var url = (event.notification.data && event.notification.data.url) || "/m/";
+  var data = event.notification.data || {};
+  var action = event.action;
+
+  if (action === "complete" && data.task_id) {
+    event.waitUntil(
+      fetch(
+        "/api/method/vernon_tasks.task.api.push_action.complete_from_notification",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ task_id: data.task_id }),
+        },
+      )
+        .then(function () {
+          return fetch(
+            "/api/method/vernon_tasks.task.api.telemetry.log_event",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({
+                event: "push_action_complete",
+                props: { task_id: data.task_id },
+              }),
+            },
+          );
+        })
+        .catch(function () {}),
+    );
+    return;
+  }
+
+  // action === "view" or default tap: open URL
+  var url = data.url || "/m/";
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })

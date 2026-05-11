@@ -1,0 +1,30 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:user",
+ "creation": "2026-05-11 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["user", "event_assignment", "event_mention", "event_due", "event_review"],
+ "fields": [
+  {"fieldname": "user", "fieldtype": "Link", "options": "User", "label": "User", "reqd": 1, "unique": 1, "in_list_view": 1},
+  {"fieldname": "event_assignment", "fieldtype": "Check", "default": "1", "label": "Penugasan", "in_list_view": 1},
+  {"fieldname": "event_mention", "fieldtype": "Check", "default": "1", "label": "Disebut", "in_list_view": 1},
+  {"fieldname": "event_due", "fieldtype": "Check", "default": "1", "label": "Tenggat", "in_list_view": 1},
+  {"fieldname": "event_review", "fieldtype": "Check", "default": "1", "label": "Review", "in_list_view": 1}
+ ],
+ "hide_toolbar": 1,
+ "links": [],
+ "modified": "2026-05-11 00:00:00",
+ "modified_by": "Administrator",
+ "module": "VT Settings",
+ "name": "Vernon Push Preference",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 0
+}

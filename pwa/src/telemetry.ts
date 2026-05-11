@@ -35,7 +35,10 @@ export type TelemetryEvent =
   | "push_subscribe_attempt"
   | "push_subscribed"
   | "push_unsubscribed"
-  | "push_received";
+  | "push_received"
+  | "push_pref_view"
+  | "push_pref_changed"
+  | "push_action_complete";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
