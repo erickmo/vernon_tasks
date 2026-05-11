@@ -11,6 +11,14 @@ ALLOWED_EVENTS = {
     "offline_seen",
     "error_boundary",
     "sw_register_failed",
+    "task_complete",
+    "task_complete_undone",
+    "task_log",
+    "task_snooze",
+    "install_prompt_shown",
+    "install_accepted",
+    "install_dismissed",
+    "install_snoozed",
 }
 
 RATE_LIMIT_PER_MINUTE = 60
