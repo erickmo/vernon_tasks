@@ -88,3 +88,64 @@ def get_hours_summary() -> dict:
         "actual_hours": float(row[0]["actual_hours"]),
         "estimated_hours": float(row[0]["estimated_hours"]),
     }
+
+
+_ACTIVE_SPRINT_STATUSES = ("Active", "In Progress", "Started")
+_KANBAN_COLUMNS = ("Backlog", "Doing", "Review", "Done")
+
+
+@frappe.whitelist()
+def get_sprint_kanban() -> dict:
+    user = frappe.session.user
+    if user == "Guest":
+        frappe.throw("Login required", frappe.PermissionError)
+
+    sprint = frappe.db.get_value(
+        "VT Sprint",
+        {"status": ["in", _ACTIVE_SPRINT_STATUSES]},
+        ["name", "title", "start_date", "end_date"],
+        as_dict=True,
+    )
+    if not sprint:
+        return {"sprint": None, "columns": {c: [] for c in _KANBAN_COLUMNS}}
+
+    rows = frappe.get_all(
+        "VT Task",
+        filters={
+            "sprint": sprint["name"],
+            "assigned_to": user,
+            "kanban_status": ["!=", "Cancelled"],
+        },
+        fields=[
+            "name",
+            "title",
+            "kanban_status",
+            "base_points",
+            "priority",
+            "deadline",
+        ],
+        order_by="kanban_status asc, deadline asc",
+        limit_page_length=200,
+    )
+
+    columns: dict = {c: [] for c in _KANBAN_COLUMNS}
+    for r in rows:
+        col = r.get("kanban_status") or "Backlog"
+        if col not in columns:
+            columns[col] = []
+        columns[col].append({
+            "id": r["name"],
+            "title": r["title"],
+            "points": float(r.get("base_points") or 0),
+            "priority": r.get("priority"),
+            "deadline": str(r["deadline"]) if r.get("deadline") else None,
+        })
+
+    total = sum(len(v) for v in columns.values())
+    done_count = len(columns.get("Done", []))
+    progress_pct = round(100 * done_count / total) if total else 0
+
+    return {
+        "sprint": {**sprint, "progress_pct": progress_pct},
+        "columns": columns,
+    }
