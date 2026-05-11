@@ -1,14 +1,17 @@
 import { NavLink } from "react-router-dom";
 import { t } from "../i18n";
+import { useUnreadCount } from "../hooks/useUnreadCount";
 
 const TABS = [
-  { to: "/m/work", label: t("nav.tasks") },
-  { to: "/m/dashboard", label: t("nav.dashboard") },
-  { to: "/m/analytics", label: t("nav.analytics") },
-  { to: "/m/me", label: t("nav.me") },
-];
+  { to: "/m/work", label: t("nav.tasks"), key: "tasks" },
+  { to: "/m/dashboard", label: t("nav.dashboard"), key: "dashboard" },
+  { to: "/m/analytics", label: t("nav.analytics"), key: "analytics" },
+  { to: "/m/me", label: t("nav.me"), key: "me" },
+] as const;
 
 export function BottomNav() {
+  const unread = useUnreadCount();
+
   return (
     <nav
       style={{
@@ -37,9 +40,26 @@ export function BottomNav() {
             textDecoration: "none",
             fontSize: 13,
             fontWeight: 600,
+            position: "relative",
           })}
         >
-          {tab.label}
+          <span style={{ position: "relative" }}>
+            {tab.label}
+            {tab.key === "me" && unread.data && unread.data > 0 ? (
+              <span
+                aria-label={`${unread.data} unread`}
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -10,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "var(--vt-danger)",
+                }}
+              />
+            ) : null}
+          </span>
         </NavLink>
       ))}
     </nav>
