@@ -1,11 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EmptyState } from "./EmptyState";
 import { OfflineBanner } from "./OfflineBanner";
 import { StaleBadge } from "./StaleBadge";
 import { BottomNav } from "./BottomNav";
 import { stamp } from "../cache/sync-time";
+
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { count: 0 } }), { status: 200 }),
+    ),
+  );
+});
 
 describe("components", () => {
   it("EmptyState renders title + cta", () => {
@@ -30,10 +40,13 @@ describe("components", () => {
   });
 
   it("BottomNav highlights active route", () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <MemoryRouter initialEntries={["/m/work"]}>
-        <BottomNav />
-      </MemoryRouter>,
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/m/work"]}>
+          <BottomNav />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     const tasks = screen.getByText("Tugas").closest("a");
     expect(tasks).toHaveAttribute("aria-current", "page");
