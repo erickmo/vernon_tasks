@@ -1,0 +1,31 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-05-11 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["timestamp", "user", "event", "props"],
+ "fields": [
+  {"fieldname": "timestamp", "fieldtype": "Datetime", "label": "Timestamp", "default": "now", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "user", "fieldtype": "Link", "options": "User", "label": "User", "default": "__user", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1},
+  {"fieldname": "event", "fieldtype": "Data", "label": "Event", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1, "length": 64},
+  {"fieldname": "props", "fieldtype": "Long Text", "label": "Props (JSON)"}
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-05-11 00:00:00",
+ "modified_by": "Administrator",
+ "module": "VT Settings",
+ "name": "Vernon Telemetry Event",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1}
+ ],
+ "sort_field": "timestamp",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0,
+ "hide_toolbar": 1
+}
