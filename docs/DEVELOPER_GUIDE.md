@@ -466,6 +466,123 @@ vt_render_page_nav(page, [
 
 ---
 
+## Mobile PWA
+
+Standalone React 18 + Vite 5 + TypeScript SPA at `/m/`, complements
+Desk pages. Source: `pwa/src/`. Build output `vernon_tasks/www/m/`
+(git-ignored). Served via `website_route_rules` →
+`vernon_tasks/www/m.py` SPA shell.
+
+### Stack
+
+- React 18 + react-router-dom 6 + @tanstack/react-query 5
+- Vite 5 + vite-plugin-pwa (workbox 7 generateSW)
+- TypeScript 5 strict, `tsc --noEmit` for type-check
+- Vitest + happy-dom + @testing-library/react (unit + component)
+- Playwright (e2e, gated by env vars)
+- recharts (lazy chunk shared by IC and Leader analytics)
+- idb-keyval (read-cache for offline tolerance)
+
+### Layout
+
+```
+pwa/
+  src/
+    api/          # fetch wrappers per domain (client, tasks, mutations,
+                  # search, notifications, dashboard, analytics, leader,
+                  # leaderExec, boot via session, telemetry)
+    auth/         # session probe, login, route guard
+    cache/        # idb + sync-time stamping
+    components/   # primitives (SwipeRow, Skeleton, etc.) + domain widgets
+    hooks/        # useDebounce, useUndoableMutation, useCompleteCounter,
+                  # useInstallPrompt, useUnreadCount, useUserProjects,
+                  # useLedProjects, useIsLeader, useIsManager
+    pages/        # MyWork/{List,Detail}, Dashboard, Analytics,
+                  # Notifications, Me, Onboarding, Leader,
+                  # LeaderSprint, LeaderExec
+    theme/        # CSS tokens (light + dark, safe-area, shimmer keyframe)
+    i18n.ts       # id-ID strings, fmtDate/fmtTime/fmtRelative/greeting
+    telemetry.ts  # logEvent wrapper
+    router.tsx    # createBrowserRouter, lazy splits
+    main.tsx      # SW register + QueryClient + RouterProvider
+  public/
+    icons/        # 192, 512, maskable-512 placeholders
+  vite.config.ts  # base=/m/, outDir=../vernon_tasks/www/m, VitePWA, vitest config
+```
+
+### Build commands
+
+```bash
+./pwa/build-pwa.sh       # npm install + tsc --noEmit + vite build
+cd pwa && npm run dev    # Vite dev server :5173 (proxy backend separately)
+cd pwa && npm test       # vitest run
+cd pwa && npm run e2e    # Playwright (set PWA_BASE_URL, PWA_TEST_USER, PWA_TEST_PASS)
+```
+
+### Conventions
+
+- **Imports use relative paths**, NOT `@/` alias. Vitest's resolver does
+  not pick up `@/` from transitively-imported files; using relative
+  paths sidesteps the issue. The alias is left in `tsconfig.json` for
+  IDE intellisense only.
+- **Backend DocType is `VT Task`** (not `Task`) with fields `title`,
+  `deadline`, `assigned_to`, `kanban_status`, `priority`,
+  `base_points`. The API client maps these to a UI-friendly `TaskCard`
+  shape in `pwa/src/api/tasks.ts`.
+- **All mutations are online-only** in P0.5–P1a. Components check
+  `navigator.onLine` and disable + toast when offline.
+- **Optimistic UI with 5s undo** for completes via
+  `useUndoableMutation` (setTimeout wrapper, NOT a real queue).
+- **Telemetry events are server-allowlisted**. Adding a new event
+  requires both `pwa/src/telemetry.ts` `TelemetryEvent` union and
+  `vernon_tasks/task/api/telemetry.py` `ALLOWED_EVENTS` set.
+- **Role gating is dual**: frontend hides tab via `useIsLeader` /
+  `useIsManager`; backend `_guard()` rejects unauthorized requests.
+
+### Service worker
+
+- workbox `generateSW` strategy
+- App shell precached (5 entries)
+- Runtime: `StaleWhileRevalidate` on `/api/method/vernon_tasks.*`,
+  cache name keyed by git SHA, 50 entries / 1-day expiry
+- SW version = git short SHA at build time, injected via
+  `__SW_VERSION__` define
+
+### Code split
+
+- `Analytics` page lazy via `React.lazy` (~23 KB)
+- `LeaderSprint` + `LeaderExec` lazy
+- Recharts ends up in its own chunk (~357 KB lazy) shared across
+  all analytics pages
+- Main bundle stable around 300 KB
+
+### Testing patterns
+
+- API client tests: stub `fetch` with `vi.stubGlobal`, assert URL +
+  body shape
+- Hook tests: `renderHook` + `act`, use `vi.useFakeTimers` for
+  setTimeout-based hooks
+- Component tests: wrap in `QueryClientProvider` + `MemoryRouter` for
+  router-aware components
+- Setup: `pwa/src/test-setup.ts` imports `@testing-library/jest-dom`
+  matchers + `fake-indexeddb/auto` polyfill
+
+### Telemetry pipeline
+
+1. `logEvent(event, props)` in pwa POSTs to
+   `/api/method/vernon_tasks.task.api.telemetry.log_event`
+2. Server validates event ∈ ALLOWED_EVENTS, enforces rate limit
+3. Persisted as `Vernon Telemetry Event` DocType row
+4. Daily purge at 90-day retention via `scheduler_events.daily`
+
+Use `Report Builder` on `Vernon Telemetry Event` for funnel analysis.
+
+### Rollout
+
+See `docs/rollout/pwa-pilot.md` for the pilot checklist + go/no-go gates.
+
+---
+
 ## Development Setup
 
 ### Prerequisites
