@@ -82,6 +82,23 @@ const STRINGS = {
   "notif.link": "Notifikasi",
   "notif.failed": "Gagal memuat notifikasi",
   "notif.task_missing": "Tugas tidak ditemukan",
+  "nav.leader": "Leader",
+  "leader.title": "Review Leader",
+  "leader.empty": "Tidak ada review tertunda",
+  "leader.no_access": "Akses leader diperlukan",
+  "leader.approve": "Setujui",
+  "leader.reject": "Tolak",
+  "leader.confirm_approve": "Setujui tugas?",
+  "leader.approved_toast": "Disetujui.",
+  "leader.rejected_toast": "Ditolak.",
+  "leader.approve_failed": "Gagal setujui",
+  "leader.reject_failed": "Gagal tolak",
+  "reject.title": "Alasan penolakan",
+  "reject.body": "Berikan alasan yang jelas agar bisa diperbaiki.",
+  "reject.placeholder": "Tulis alasan…",
+  "reject.submit": "Tolak",
+  "reject.cancel": "Batal",
+  "reject.too_short": "Minimal 5 karakter",
 } as const;
 
 export type StringKey = keyof typeof STRINGS;

@@ -3,6 +3,7 @@ import { api } from "../api/client";
 export interface Session {
   user: string | null;
   csrf_token: string | null;
+  roles?: string[];
 }
 
 export async function probeSession(): Promise<Session> {
