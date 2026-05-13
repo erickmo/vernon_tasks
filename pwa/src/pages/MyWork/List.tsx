@@ -26,6 +26,93 @@ import { useDebounce } from "../../hooks/useDebounce";
 import { greeting, fmtDate, t } from "../../i18n";
 import { logEvent } from "../../telemetry";
 
+const HEADER_H = 96;
+
+interface WorkListHeaderProps {
+  data: MyWork | undefined;
+  onResetFilters: () => void;
+}
+
+function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
+  return (
+    <header
+      style={{
+        background: "linear-gradient(135deg, #2d1540, #9561ab)",
+        padding: "var(--vt-space-4) var(--vt-space-4) var(--vt-space-3)",
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
+      }}
+    >
+      <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, marginBottom: 2 }}>
+        {fmtDate(new Date())}
+      </div>
+      <div style={{ color: "white", fontSize: 18, fontWeight: 700 }}>
+        {greeting()}
+      </div>
+
+      {/* Filter chips — display only */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginTop: 12,
+          overflowX: "auto",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        } as React.CSSProperties}
+      >
+        <button
+          onClick={onResetFilters}
+          style={{
+            background: "rgba(255,255,255,0.2)",
+            border: "none",
+            borderRadius: 20,
+            padding: "4px 12px",
+            color: "white",
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Semua
+        </button>
+        {data && data.overdue.length > 0 && (
+          <span
+            style={{
+              background: "rgba(212,53,28,0.25)",
+              border: "1px solid rgba(212,53,28,0.4)",
+              borderRadius: 20,
+              padding: "4px 12px",
+              color: "rgba(255,200,200,0.9)",
+              fontSize: 12,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {`Terlambat ${data.overdue.length}`}
+          </span>
+        )}
+        {data && data.today.length > 0 && (
+          <span
+            style={{
+              background: "rgba(255,255,255,0.1)",
+              borderRadius: 20,
+              padding: "4px 12px",
+              color: "rgba(255,255,255,0.8)",
+              fontSize: 12,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {`Hari ini ${data.today.length}`}
+          </span>
+        )}
+        <StaleBadge resource="my-work" />
+      </div>
+    </header>
+  );
+}
+
 function TaskCardView({
   task,
   accent,
@@ -236,81 +323,10 @@ export function MyWorkList() {
   return (
     <PullToRefresh onRefresh={() => q.refetch().then(() => {})}>
       {/* ── Sticky gradient header ── */}
-      <header
-        style={{
-          background: "linear-gradient(135deg, #2d1540, #9561ab)",
-          padding: "var(--vt-space-4) var(--vt-space-4) var(--vt-space-3)",
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-        }}
-      >
-        <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, marginBottom: 2 }}>
-          {fmtDate(new Date())}
-        </div>
-        <div style={{ color: "white", fontSize: 18, fontWeight: 700 }}>
-          {greeting()}
-        </div>
-
-        {/* Filter chips — display only */}
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            marginTop: 12,
-            overflowX: "auto",
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          } as React.CSSProperties}
-        >
-          <button
-            onClick={() => { setQuery(""); setFilters({ due_range: "all" }); }}
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              border: "none",
-              borderRadius: 20,
-              padding: "4px 12px",
-              color: "white",
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Semua
-          </button>
-          {q.data && q.data.overdue.length > 0 && (
-            <span
-              style={{
-                background: "rgba(212,53,28,0.25)",
-                border: "1px solid rgba(212,53,28,0.4)",
-                borderRadius: 20,
-                padding: "4px 12px",
-                color: "rgba(255,200,200,0.9)",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {`Terlambat ${q.data.overdue.length}`}
-            </span>
-          )}
-          {q.data && q.data.today.length > 0 && (
-            <span
-              style={{
-                background: "rgba(255,255,255,0.1)",
-                borderRadius: 20,
-                padding: "4px 12px",
-                color: "rgba(255,255,255,0.8)",
-                fontSize: 12,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {`Hari ini ${q.data.today.length}`}
-            </span>
-          )}
-          <StaleBadge resource="my-work" />
-        </div>
-      </header>
+      <WorkListHeader
+        data={q.data}
+        onResetFilters={() => { setQuery(""); setFilters({ due_range: "all" }); }}
+      />
 
       {/* ── Sticky search strip ── */}
       <div
@@ -319,7 +335,7 @@ export function MyWorkList() {
           padding: "var(--vt-space-2) var(--vt-space-4)",
           borderBottom: "1px solid var(--vt-primary-light)",
           position: "sticky",
-          top: 96,
+          top: HEADER_H,
           zIndex: 9,
         }}
       >
