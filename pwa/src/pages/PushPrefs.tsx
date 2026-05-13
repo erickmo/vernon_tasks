@@ -18,10 +18,12 @@ function ToggleRow({
   label,
   value,
   onChange,
+  isLast,
 }: {
   label: string;
   value: 0 | 1;
   onChange: (v: 0 | 1) => void;
+  isLast?: boolean;
 }) {
   return (
     <label
@@ -30,7 +32,7 @@ function ToggleRow({
         justifyContent: "space-between",
         alignItems: "center",
         padding: "var(--vt-space-4)",
-        borderBottom: "1px solid var(--vt-border)",
+        borderBottom: isLast ? "none" : "1px solid var(--vt-border)",
         cursor: "pointer",
       }}
     >
@@ -91,33 +93,78 @@ export function PushPrefsPage() {
   }
 
   return (
-    <div style={{ padding: "var(--vt-space-4)" }}>
-      <Link
-        to="/m/me/notifications"
-        style={{ color: "var(--vt-primary)", textDecoration: "none" }}
+    <div style={{ background: "var(--vt-primary-light)", minHeight: "100%" }}>
+      {/* Sticky gradient header */}
+      <header
+        style={{
+          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          padding: "var(--vt-space-4)",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+        }}
       >
-        ← {t("notif.title")}
-      </Link>
-      <h1 style={{ marginTop: 12 }}>{t("pref.title")}</h1>
-      <p style={{ color: "var(--vt-text-muted)" }}>{t("pref.subtitle")}</p>
+        <Link
+          to="/m/me/notifications"
+          style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: 20 }}
+        >
+          ←
+        </Link>
+        <h1 style={{ margin: 0, color: "white", fontSize: 20, fontWeight: 700 }}>
+          {t("pref.title")}
+        </h1>
+      </header>
 
-      {q.isLoading && (
-        <>
-          <Skeleton height={56} />
-          <div style={{ height: 4 }} />
-          <Skeleton height={56} />
-        </>
-      )}
+      {/* Content */}
+      <div style={{ padding: "var(--vt-space-4)" }}>
+        {/* Description card */}
+        <div
+          style={{
+            background: "white",
+            borderRadius: "var(--vt-radius)",
+            boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
+            padding: "var(--vt-space-4)",
+            marginBottom: "var(--vt-space-4)",
+          }}
+        >
+          <p style={{ margin: 0, color: "var(--vt-text-muted)", fontSize: 14 }}>
+            {t("pref.subtitle")}
+          </p>
+        </div>
 
-      {q.data &&
-        FIELDS.map((f) => (
-          <ToggleRow
-            key={f.key}
-            label={t(f.labelKey)}
-            value={(q.data[f.key] ? 1 : 0) as 0 | 1}
-            onChange={(v) => setField(f.key, v)}
-          />
-        ))}
+        {/* Toggle rows card */}
+        {q.isLoading && (
+          <>
+            <Skeleton height={56} />
+            <div style={{ height: 4 }} />
+            <Skeleton height={56} />
+          </>
+        )}
+
+        {q.data && (
+          <div
+            style={{
+              background: "white",
+              borderRadius: "var(--vt-radius)",
+              boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
+              overflow: "hidden",
+            }}
+          >
+            {FIELDS.map((f, idx) => (
+              <ToggleRow
+                key={f.key}
+                label={t(f.labelKey)}
+                value={(q.data[f.key] ? 1 : 0) as 0 | 1}
+                onChange={(v) => setField(f.key, v)}
+                isLast={idx === FIELDS.length - 1}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -65,25 +65,32 @@ export function NotificationsPage() {
 
   return (
     <PullToRefresh onRefresh={() => q.refetch().then(() => {})}>
-      <div style={{ padding: "var(--vt-space-4)" }}>
+      <div style={{ background: "var(--vt-primary-light)", minHeight: "100%" }}>
+        {/* Sticky gradient header */}
         <header
           style={{
+            background: "linear-gradient(135deg, #2d1540, #9561ab)",
+            padding: "var(--vt-space-4)",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "var(--vt-space-4)",
           }}
         >
-          <h1 style={{ margin: 0 }}>{t("notif.title")}</h1>
+          <h1 style={{ margin: 0, color: "white", fontSize: 20, fontWeight: 700 }}>
+            {t("notif.title")}
+          </h1>
           <div style={{ display: "flex", gap: 8 }}>
             <Link
               to="/m/me/notifications/settings"
               style={{
                 padding: "6px 12px",
                 borderRadius: 8,
-                border: "1px solid var(--vt-border)",
+                border: "1px solid rgba(255,255,255,0.5)",
                 background: "transparent",
-                color: "var(--vt-text)",
+                color: "white",
                 textDecoration: "none",
                 fontSize: 13,
               }}
@@ -96,9 +103,12 @@ export function NotificationsPage() {
               style={{
                 padding: "6px 12px",
                 borderRadius: 8,
-                border: "1px solid var(--vt-border)",
+                border: "1px solid rgba(255,255,255,0.5)",
                 background: "transparent",
-                color: "var(--vt-text)",
+                color: "white",
+                fontSize: 13,
+                cursor: "pointer",
+                opacity: !q.data?.some((n) => n.read === 0) ? 0.5 : 1,
               }}
             >
               {t("notif.mark_all")}
@@ -106,32 +116,42 @@ export function NotificationsPage() {
           </div>
         </header>
 
-        {q.isLoading && (
-          <>
-            <Skeleton height={64} />
-            <div style={{ height: 8 }} />
-            <Skeleton height={64} />
-            <div style={{ height: 8 }} />
-            <Skeleton height={64} />
-          </>
-        )}
+        {/* Content */}
+        <div style={{ padding: "var(--vt-space-4)" }}>
+          {q.isLoading && (
+            <>
+              <Skeleton height={64} />
+              <div style={{ height: 8 }} />
+              <Skeleton height={64} />
+              <div style={{ height: 8 }} />
+              <Skeleton height={64} />
+            </>
+          )}
 
-        {q.isError && (
-          <EmptyState
-            title={t("notif.failed")}
-            cta={{ label: t("common.retry"), onClick: () => q.refetch() }}
-          />
-        )}
+          {q.isError && (
+            <EmptyState
+              title={t("notif.failed")}
+              cta={{ label: t("common.retry"), onClick: () => q.refetch() }}
+            />
+          )}
 
-        {q.data && q.data.length === 0 && <EmptyState title={t("notif.empty")} />}
+          {q.data && q.data.length === 0 && <EmptyState title={t("notif.empty")} />}
 
-        {q.data && q.data.length > 0 && (
-          <div>
-            {q.data.map((n) => (
-              <NotificationRow key={n.name} notification={n} onClick={() => onTap(n)} />
-            ))}
-          </div>
-        )}
+          {q.data && q.data.length > 0 && (
+            <div
+              style={{
+                background: "white",
+                borderRadius: "var(--vt-radius)",
+                boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
+                overflow: "hidden",
+              }}
+            >
+              {q.data.map((n) => (
+                <NotificationRow key={n.name} notification={n} onClick={() => onTap(n)} />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </PullToRefresh>
   );

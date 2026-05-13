@@ -55,6 +55,7 @@ function PeriodChips({
               color: active ? "var(--vt-primary-contrast)" : "var(--vt-text)",
               fontWeight: 600,
               fontSize: 13,
+              cursor: "pointer",
             }}
           >
             {p.label}
@@ -178,8 +179,9 @@ function StreakTab() {
           <div
             style={{
               padding: "var(--vt-space-4)",
-              background: "var(--vt-surface)",
+              background: "white",
               borderRadius: "var(--vt-radius)",
+              boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
               textAlign: "center",
             }}
           >
@@ -189,8 +191,9 @@ function StreakTab() {
           <div
             style={{
               padding: "var(--vt-space-4)",
-              background: "var(--vt-surface)",
+              background: "white",
               borderRadius: "var(--vt-radius)",
+              boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
               textAlign: "center",
             }}
           >
@@ -216,12 +219,42 @@ export function AnalyticsPage() {
   }, [tab]);
 
   return (
-    <div style={{ padding: "var(--vt-space-4)" }}>
-      <h1 style={{ marginTop: 0 }}>{t("nav.analytics")}</h1>
-      <Tabs tabs={TABS} active={tab} onChange={(k) => setTab(k as TabKey)} />
-      {tab === "leaderboard" && <LeaderboardTab />}
-      {tab === "velocity" && <VelocityTab />}
-      {tab === "streak" && <StreakTab />}
+    <div style={{ background: "var(--vt-primary-light)", minHeight: "100%" }}>
+      {/* Sticky gradient header */}
+      <header
+        style={{
+          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          padding: "var(--vt-space-4)",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <h1 style={{ margin: 0, color: "white", fontSize: 20, fontWeight: 700 }}>
+          {t("nav.analytics")}
+        </h1>
+      </header>
+
+      {/* Tabs — sticky below header */}
+      <div
+        style={{
+          position: "sticky",
+          top: 64,
+          background: "white",
+          zIndex: 9,
+          borderBottom: "1px solid var(--vt-border)",
+          padding: "0 var(--vt-space-4)",
+        }}
+      >
+        <Tabs tabs={TABS} active={tab} onChange={(k) => setTab(k as TabKey)} />
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "var(--vt-space-4)" }}>
+        {tab === "leaderboard" && <LeaderboardTab />}
+        {tab === "velocity" && <VelocityTab />}
+        {tab === "streak" && <StreakTab />}
+      </div>
     </div>
   );
 }

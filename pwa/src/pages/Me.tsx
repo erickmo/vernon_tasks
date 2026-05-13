@@ -5,6 +5,16 @@ import { useUnreadCount } from "../hooks/useUnreadCount";
 import { PushToggle } from "../components/PushToggle";
 import { t } from "../i18n";
 
+function getInitials(name: string | null): string {
+  if (!name) return "?";
+  return name
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+
 export function MePage() {
   const [user, setUser] = useState<string | null>(null);
   const nav = useNavigate();
@@ -20,56 +30,140 @@ export function MePage() {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>{t("nav.me")}</h1>
-      <p style={{ color: "var(--vt-text-muted)" }}>{user ?? "—"}</p>
-
-      <Link
-        to="/m/me/notifications"
+    <div style={{ background: "var(--vt-primary-light)", minHeight: "100%" }}>
+      {/* Sticky gradient header */}
+      <header
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          background: "linear-gradient(135deg, #2d1540, #9561ab)",
           padding: "var(--vt-space-4)",
-          marginTop: "var(--vt-space-4)",
-          background: "var(--vt-surface)",
-          borderRadius: "var(--vt-radius)",
-          color: "var(--vt-text)",
-          textDecoration: "none",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
         }}
       >
-        <span>{t("notif.link")}</span>
-        <span
+        {/* Avatar circle */}
+        <div
           style={{
-            display: "inline-flex",
+            width: 64,
+            height: 64,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.2)",
+            display: "flex",
             alignItems: "center",
-            gap: 8,
-            color: "var(--vt-text-muted)",
+            justifyContent: "center",
+            fontSize: 22,
+            fontWeight: 700,
+            color: "white",
+            flexShrink: 0,
+            border: "2px solid rgba(255,255,255,0.35)",
           }}
         >
-          {unread.data && unread.data > 0 ? (
+          {getInitials(user)}
+        </div>
+        <div>
+          <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>
+            {user ?? "—"}
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+            Akun
+          </div>
+        </div>
+      </header>
+
+      {/* Content */}
+      <div style={{ padding: "var(--vt-space-4)" }}>
+        {/* Settings card */}
+        <div
+          style={{
+            background: "white",
+            borderRadius: "var(--vt-radius)",
+            boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
+            overflow: "hidden",
+            marginBottom: "var(--vt-space-4)",
+          }}
+        >
+          {/* Section label */}
+          <div
+            style={{
+              padding: "var(--vt-space-2) var(--vt-space-4)",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "var(--vt-primary)",
+              textTransform: "uppercase",
+              letterSpacing: 0.8,
+              borderBottom: "1px solid var(--vt-border)",
+            }}
+          >
+            Notifikasi
+          </div>
+
+          {/* Notification link row */}
+          <Link
+            to="/m/me/notifications"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "var(--vt-space-4)",
+              borderBottom: "1px solid var(--vt-border)",
+              color: "var(--vt-text)",
+              textDecoration: "none",
+            }}
+          >
+            <span>{t("notif.link")}</span>
             <span
               style={{
-                background: "var(--vt-danger)",
-                color: "white",
-                fontSize: 12,
-                fontWeight: 600,
-                padding: "2px 8px",
-                borderRadius: 999,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--vt-text-muted)",
               }}
             >
-              {unread.data}
+              {unread.data && unread.data > 0 ? (
+                <span
+                  style={{
+                    background: "var(--vt-danger)",
+                    color: "white",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                  }}
+                >
+                  {unread.data}
+                </span>
+              ) : null}
+              →
             </span>
-          ) : null}
-          →
-        </span>
-      </Link>
+          </Link>
 
-      <PushToggle />
+          {/* PushToggle row */}
+          <div style={{ padding: "var(--vt-space-4)" }}>
+            <PushToggle />
+          </div>
+        </div>
 
-      <button onClick={doLogout} style={{ marginTop: 24, padding: 12 }}>
-        {t("logout")}
-      </button>
+        {/* Logout button */}
+        <button
+          onClick={doLogout}
+          style={{
+            width: "100%",
+            padding: "var(--vt-space-4)",
+            background: "white",
+            color: "var(--vt-danger)",
+            border: "1px solid var(--vt-danger)",
+            borderRadius: "var(--vt-radius)",
+            fontWeight: 600,
+            fontSize: 15,
+            cursor: "pointer",
+          }}
+        >
+          {t("logout")}
+        </button>
+      </div>
     </div>
   );
 }

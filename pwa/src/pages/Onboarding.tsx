@@ -29,18 +29,38 @@ export function Onboarding() {
         display: "flex",
         flexDirection: "column",
         height: "100vh",
+        background: "linear-gradient(160deg, #2d1540 0%, #4a2870 40%, #9561ab 100%)",
         padding: 24,
         paddingTop: "calc(var(--safe-top) + 24px)",
       }}
     >
-      <div style={{ flex: 1, display: "grid", placeItems: "center", textAlign: "center" }}>
-        <div>
-          <h1>{slide.title}</h1>
-          <p style={{ color: "var(--vt-text-muted)", maxWidth: 320, margin: "0 auto" }}>
-            {slide.body}
-          </p>
+      {/* Slide card */}
+      <div style={{ flex: 1, display: "grid", placeItems: "center" }}>
+        <div
+          style={{
+            background: "rgba(255,255,255,0.12)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            borderRadius: 24,
+            border: "1px solid rgba(255,255,255,0.2)",
+            padding: "40px 28px",
+            textAlign: "center",
+            width: "100%",
+            maxWidth: 360,
+          }}
+        >
+          <h1 style={{ color: "white", margin: "0 0 16px", fontSize: 26, fontWeight: 800 }}>
+            {slide.title}
+          </h1>
+          {slide.body && (
+            <p style={{ color: "rgba(255,255,255,0.8)", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>
+              {slide.body}
+            </p>
+          )}
         </div>
       </div>
+
+      {/* Dot indicators */}
       <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 24 }}>
         {SLIDES.map((_, idx) => (
           <span
@@ -49,19 +69,26 @@ export function Onboarding() {
               width: 8,
               height: 8,
               borderRadius: "50%",
-              background: idx === i ? "var(--vt-primary)" : "var(--vt-border)",
+              background: idx === i ? "white" : "rgba(255,255,255,0.35)",
+              transition: "background 0.2s",
             }}
           />
         ))}
       </div>
+
+      {/* CTA button */}
       <button
         onClick={next}
         style={{
           padding: 16,
-          background: "var(--vt-primary)",
-          color: "var(--vt-primary-contrast)",
+          background: "#9561ab",
+          color: "white",
           border: 0,
           borderRadius: "var(--vt-radius)",
+          fontWeight: 700,
+          fontSize: 16,
+          cursor: "pointer",
+          boxShadow: "0 4px 16px rgba(149,97,171,0.4)",
         }}
       >
         {slide.cta}
