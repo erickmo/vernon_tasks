@@ -55,8 +55,9 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-export function MyWorkDetail() {
-  const { id } = useParams<{ id: string }>();
+export function MyWorkDetail({ desktopId }: { desktopId?: string } = {}) {
+  const params = useParams<{ id: string }>();
+  const id = desktopId ?? params.id ?? "";
   const q = useQuery({
     queryKey: ["task", id],
     queryFn: () => fetchTaskDetail(id!),

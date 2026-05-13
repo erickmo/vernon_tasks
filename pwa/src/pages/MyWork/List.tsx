@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { MyWorkDetail } from "./Detail";
 import { fetchMyWork, MyWork, TaskCard as TaskCardT } from "../../api/tasks";
 import { completeTask, logProgress, snoozeTask, SnoozeDays } from "../../api/mutations";
 import {
@@ -119,6 +121,7 @@ function TaskCardView({
   onComplete,
   onLog,
   onSnooze,
+  onSelect,
   disabled,
 }: {
   task: TaskCardT;
@@ -126,6 +129,7 @@ function TaskCardView({
   onComplete: () => void;
   onLog: () => void;
   onSnooze: () => void;
+  onSelect?: () => void;
   disabled: boolean;
 }) {
   return (
@@ -160,16 +164,29 @@ function TaskCardView({
           aria-label="complete"
           style={{ width: 22, height: 22, accentColor: "var(--vt-primary)" }}
         />
-        <Link
-          to={`/m/work/${encodeURIComponent(task.id)}`}
-          style={{ flex: 1, color: "var(--vt-text)", textDecoration: "none" }}
-        >
-          <div style={{ fontWeight: 600, fontSize: 14 }}>{task.title}</div>
-          <div style={{ fontSize: 12, color: "var(--vt-text-muted)", marginTop: 3 }}>
-            {[task.project, task.priority].filter(Boolean).join(" · ")}
-            {task.points ? ` · +${task.points} pts` : ""}
+        {onSelect ? (
+          <div
+            onClick={onSelect}
+            style={{ flex: 1, color: "var(--vt-text)", cursor: "pointer" }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{task.title}</div>
+            <div style={{ fontSize: 12, color: "var(--vt-text-muted)", marginTop: 3 }}>
+              {[task.project, task.priority].filter(Boolean).join(" · ")}
+              {task.points ? ` · +${task.points} pts` : ""}
+            </div>
           </div>
-        </Link>
+        ) : (
+          <Link
+            to={`/m/work/${encodeURIComponent(task.id)}`}
+            style={{ flex: 1, color: "var(--vt-text)", textDecoration: "none" }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{task.title}</div>
+            <div style={{ fontSize: 12, color: "var(--vt-text-muted)", marginTop: 3 }}>
+              {[task.project, task.priority].filter(Boolean).join(" · ")}
+              {task.points ? ` · +${task.points} pts` : ""}
+            </div>
+          </Link>
+        )}
       </div>
     </SwipeRow>
   );
@@ -217,6 +234,8 @@ export function MyWorkList() {
   const { increment, ready } = useCompleteCounter();
   const [logTask, setLogTask] = useState<TaskCardT | null>(null);
   const offline = typeof navigator !== "undefined" && !navigator.onLine;
+  const isDesktop = useMediaQuery(768);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<SearchFilters>({ due_range: "all" });
@@ -322,6 +341,15 @@ export function MyWorkList() {
     (q.data?.upcoming.length ?? 0);
 
   return (
+    <div style={{ display: "flex", height: "100%", minHeight: "100vh" }}>
+      {/* List panel */}
+      <div style={{
+        width: isDesktop ? 380 : "100%",
+        minWidth: isDesktop ? 380 : undefined,
+        flexShrink: 0,
+        borderRight: isDesktop ? "1px solid var(--vt-border)" : undefined,
+        overflowY: "auto",
+      }}>
     <PullToRefresh onRefresh={() => q.refetch().then(() => {})}>
       {/* ── Sticky gradient header ── */}
       <WorkListHeader
@@ -390,6 +418,7 @@ export function MyWorkList() {
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
+                    onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
                     disabled={offline}
                   />
                 )}
@@ -405,6 +434,7 @@ export function MyWorkList() {
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
+                    onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
                     disabled={offline}
                   />
                 )}
@@ -420,6 +450,7 @@ export function MyWorkList() {
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
+                    onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
                     disabled={offline}
                   />
                 )}
@@ -455,6 +486,7 @@ export function MyWorkList() {
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
+                    onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
                     disabled={offline}
                   />
                 </div>
@@ -487,5 +519,28 @@ export function MyWorkList() {
 
       <InstallPrompt visible={ready} />
     </PullToRefresh>
+      </div>
+
+      {/* Detail panel — desktop only */}
+      {isDesktop && (
+        <div style={{ flex: 1, overflowY: "auto", background: "var(--vt-bg)" }}>
+          {selectedId ? (
+            <MyWorkDetail desktopId={selectedId} />
+          ) : (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              minHeight: 400,
+              color: "var(--vt-text-muted)",
+              fontSize: 14,
+            }}>
+              Pilih task untuk melihat detail
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
