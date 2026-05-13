@@ -29,11 +29,3 @@ const displayMode = window.matchMedia("(display-mode: standalone)").matches
   ? "standalone"
   : "browser";
 logEvent("pwa_boot", { version: __SW_VERSION__, display_mode: displayMode });
-
-if (
-  !localStorage.getItem("vt_pwa_onboarded") &&
-  !location.pathname.startsWith("/m/login") &&
-  !location.pathname.startsWith("/m/onboarding")
-) {
-  history.replaceState(null, "", "/m/onboarding");
-}

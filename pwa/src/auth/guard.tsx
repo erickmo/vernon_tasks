@@ -13,9 +13,15 @@ export function AuthGuard() {
   }, []);
 
   if (state === "loading") return <div style={{ padding: 24 }}>…</div>;
+
   if (state === "guest") {
     const next = encodeURIComponent(loc.pathname + loc.search);
     return <Navigate to={`/m/login?next=${next}`} replace />;
   }
+
+  if (!localStorage.getItem("vt_pwa_onboarded") && loc.pathname !== "/m/onboarding") {
+    return <Navigate to="/m/onboarding" replace />;
+  }
+
   return <Outlet />;
 }
