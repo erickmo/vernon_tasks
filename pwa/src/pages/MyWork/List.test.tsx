@@ -43,4 +43,65 @@ describe("MyWorkList", () => {
     wrap(<MyWorkList />);
     await waitFor(() => expect(screen.getByText(/Nikmati waktumu/i)).toBeInTheDocument());
   });
+
+  it("renders greeting text in header", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { overdue: [], today: [], upcoming: [] } }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(<MyWorkList />);
+    // greeting() returns locale-based greeting string
+    await waitFor(() => {
+      const header = document.querySelector("header");
+      expect(header).toBeInTheDocument();
+    });
+  });
+
+  it("shows overdue count chip when overdue tasks exist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: {
+              overdue: [{ id: "T1", title: "Overdue task" }],
+              today: [],
+              upcoming: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(<MyWorkList />);
+    await waitFor(() => expect(screen.getByText(/Terlambat 1/)).toBeInTheDocument());
+  });
+
+  it("shows today count chip when today tasks exist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: {
+              overdue: [],
+              today: [
+                { id: "T2", title: "Today task 1" },
+                { id: "T3", title: "Today task 2" },
+              ],
+              upcoming: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(<MyWorkList />);
+    await waitFor(() => expect(screen.getByText(/Hari ini 2/)).toBeInTheDocument());
+  });
 });

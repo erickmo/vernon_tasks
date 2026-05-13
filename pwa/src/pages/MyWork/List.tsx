@@ -90,10 +90,12 @@ function TaskCardView({
 function Section({
   title,
   items,
+  accent,
   render,
 }: {
   title: string;
   items: TaskCardT[];
+  accent?: string;
   render: (task: TaskCardT) => React.ReactNode;
 }) {
   if (items.length === 0) return null;
@@ -101,11 +103,12 @@ function Section({
     <section style={{ marginBottom: "var(--vt-space-5)" }}>
       <h3
         style={{
-          fontSize: 14,
-          color: "var(--vt-text-muted)",
-          margin: "0 0 var(--vt-space-3)",
+          fontSize: 11,
+          color: accent ?? "var(--vt-text-muted)",
+          margin: "0 0 var(--vt-space-2)",
           textTransform: "uppercase",
-          letterSpacing: 0.5,
+          letterSpacing: 0.8,
+          fontWeight: 700,
         }}
       >
         {title}
@@ -232,23 +235,94 @@ export function MyWorkList() {
 
   return (
     <PullToRefresh onRefresh={() => q.refetch().then(() => {})}>
-      <div style={{ padding: "var(--vt-space-4)" }}>
-        <header style={{ marginBottom: "var(--vt-space-4)" }}>
-          <h1 style={{ margin: 0 }}>{greeting()}</h1>
-          <div
+      {/* ── Sticky gradient header ── */}
+      <header
+        style={{
+          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          padding: "var(--vt-space-4) var(--vt-space-4) var(--vt-space-3)",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, marginBottom: 2 }}>
+          {fmtDate(new Date())}
+        </div>
+        <div style={{ color: "white", fontSize: 18, fontWeight: 700 }}>
+          {greeting()}
+        </div>
+
+        {/* Filter chips — display only */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginTop: 12,
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
+          } as React.CSSProperties}
+        >
+          <button
+            onClick={() => { setQuery(""); setFilters({ due_range: "all" }); }}
             style={{
-              color: "var(--vt-text-muted)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginTop: 4,
+              background: "rgba(255,255,255,0.2)",
+              border: "none",
+              borderRadius: 20,
+              padding: "4px 12px",
+              color: "white",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
           >
-            <span>{fmtDate(new Date())}</span>
-            <StaleBadge resource="my-work" />
-          </div>
-        </header>
+            Semua
+          </button>
+          {q.data && q.data.overdue.length > 0 && (
+            <span
+              style={{
+                background: "rgba(212,53,28,0.25)",
+                border: "1px solid rgba(212,53,28,0.4)",
+                borderRadius: 20,
+                padding: "4px 12px",
+                color: "rgba(255,200,200,0.9)",
+                fontSize: 12,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {`Terlambat ${q.data.overdue.length}`}
+            </span>
+          )}
+          {q.data && q.data.today.length > 0 && (
+            <span
+              style={{
+                background: "rgba(255,255,255,0.1)",
+                borderRadius: 20,
+                padding: "4px 12px",
+                color: "rgba(255,255,255,0.8)",
+                fontSize: 12,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {`Hari ini ${q.data.today.length}`}
+            </span>
+          )}
+          <StaleBadge resource="my-work" />
+        </div>
+      </header>
 
+      {/* ── Sticky search strip ── */}
+      <div
+        style={{
+          background: "white",
+          padding: "var(--vt-space-2) var(--vt-space-4)",
+          borderBottom: "1px solid var(--vt-primary-light)",
+          position: "sticky",
+          top: 96,
+          zIndex: 9,
+        }}
+      >
         <SearchBar
           value={query}
           onChange={(v) => {
@@ -263,7 +337,10 @@ export function MyWorkList() {
           )}
         />
         <ActiveFilterChips filters={combinedFilters} onRemove={removeFilter} />
+      </div>
 
+      {/* ── Task content ── */}
+      <div style={{ padding: "var(--vt-space-4)", background: "var(--vt-primary-light)", minHeight: "100%" }}>
         {!searching && q.isLoading && (
           <>
             <Skeleton height={64} />
@@ -288,6 +365,7 @@ export function MyWorkList() {
               <Section
                 title={t("tasks.section.overdue")}
                 items={q.data.overdue}
+                accent="var(--vt-danger)"
                 render={(task) => (
                   <TaskCardView
                     task={task}
@@ -302,6 +380,7 @@ export function MyWorkList() {
               <Section
                 title={t("tasks.section.today")}
                 items={q.data.today}
+                accent="var(--vt-primary)"
                 render={(task) => (
                   <TaskCardView
                     task={task}
@@ -316,9 +395,11 @@ export function MyWorkList() {
               <Section
                 title={t("tasks.section.upcoming")}
                 items={q.data.upcoming}
+                accent="var(--vt-border)"
                 render={(task) => (
                   <TaskCardView
                     task={task}
+                    accent="var(--vt-border)"
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
@@ -353,6 +434,7 @@ export function MyWorkList() {
                 <div key={task.id} style={{ marginBottom: "var(--vt-space-3)" }}>
                   <TaskCardView
                     task={task}
+                    accent="var(--vt-border)"
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
