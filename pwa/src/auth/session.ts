@@ -1,9 +1,15 @@
 import { api } from "../api/client";
 
+export interface LoginBranding {
+  headline: string;
+  subtext: string;
+}
+
 export interface Session {
   user: string | null;
   csrf_token: string | null;
   roles?: string[];
+  login_branding?: LoginBranding;
 }
 
 export async function probeSession(): Promise<Session> {

@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { login } from "./session";
+import { login, probeSession, type LoginBranding } from "./session";
 import { t } from "../i18n";
+
+const DEFAULT_BRANDING: LoginBranding = {
+  headline: "Kelola tugas tim dengan lebih cerdas.",
+  subtext:
+    "Sprint, kanban, dan analitik dalam satu tempat — dirancang untuk tim yang bergerak cepat.",
+};
 
 const FOCUS_RING = "0 0 0 2px rgba(124,77,171,0.5)";
 
@@ -210,9 +216,16 @@ export function LoginPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [branding, setBranding] = useState<LoginBranding>(DEFAULT_BRANDING);
   const nav = useNavigate();
   const [params] = useSearchParams();
   const next = params.get("next") ?? "/m/work";
+
+  useEffect(() => {
+    probeSession().then((s) => {
+      if (s.login_branding) setBranding(s.login_branding);
+    }).catch(() => {});
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -243,12 +256,8 @@ export function LoginPage() {
         </div>
 
         <div style={S.leftCenter}>
-          <h2 style={S.leftHeadline}>
-            Kelola tugas tim dengan lebih cerdas.
-          </h2>
-          <p style={S.leftSub}>
-            Sprint, kanban, dan analitik dalam satu tempat — dirancang untuk tim yang bergerak cepat.
-          </p>
+          <h2 style={S.leftHeadline}>{branding.headline}</h2>
+          <p style={S.leftSub}>{branding.subtext}</p>
         </div>
 
         <div style={S.leftStats}>
