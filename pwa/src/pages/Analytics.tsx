@@ -231,14 +231,14 @@ export function AnalyticsPage() {
       {/* Sticky gradient header */}
       <header
         style={{
-          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          background: "var(--vt-primary-light)",
           padding: "var(--vt-space-4)",
           position: "sticky",
           top: 0,
           zIndex: 10,
         }}
       >
-        <h1 style={{ margin: 0, color: "white", fontSize: 20, fontWeight: 700 }}>
+        <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 20, fontWeight: 700 }}>
           {t("nav.analytics")}
         </h1>
       </header>

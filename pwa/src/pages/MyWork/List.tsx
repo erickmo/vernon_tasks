@@ -39,17 +39,17 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
   return (
     <header
       style={{
-        background: "linear-gradient(135deg, #2d1540, #9561ab)",
+        background: "var(--vt-primary-light)",
         padding: "var(--vt-space-4) var(--vt-space-4) var(--vt-space-3)",
         position: "sticky",
         top: 0,
         zIndex: 10,
       }}
     >
-      <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, marginBottom: 2 }}>
+      <div style={{ color: "var(--vt-text-muted)", fontSize: 12, marginBottom: 2 }}>
         {fmtDate(new Date())}
       </div>
-      <div style={{ color: "white", fontSize: 18, fontWeight: 700 }}>
+      <div style={{ color: "var(--vt-primary-dark)", fontSize: 18, fontWeight: 700 }}>
         {greeting()}
       </div>
 
@@ -67,11 +67,11 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
         <button
           onClick={onResetFilters}
           style={{
-            background: "rgba(255,255,255,0.2)",
+            background: "rgba(149,97,171,0.12)",
             border: "none",
             borderRadius: 20,
             padding: "4px 12px",
-            color: "white",
+            color: "var(--vt-primary)",
             fontSize: 12,
             fontWeight: 600,
             cursor: "pointer",
@@ -98,10 +98,10 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
         {data && data.today.length > 0 && (
           <span
             style={{
-              background: "rgba(255,255,255,0.1)",
+              background: "rgba(149,97,171,0.08)",
               borderRadius: 20,
               padding: "4px 12px",
-              color: "rgba(255,255,255,0.8)",
+              color: "var(--vt-primary)",
               fontSize: 12,
               whiteSpace: "nowrap",
             }}

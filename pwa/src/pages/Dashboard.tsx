@@ -85,15 +85,15 @@ function GlowBar({ pct }: { pct: number }) {
 function MiniCard({ item, accent }: { item: KanbanItem; accent: string }) {
   return (
     <div style={{
-      background: "rgba(255,255,255,0.04)",
-      border: "1px solid rgba(255,255,255,0.07)",
+      background: "var(--vt-surface)",
+      border: "1px solid var(--vt-border)",
       borderRadius: 12,
       padding: "10px 12px",
       marginBottom: 8,
     }}>
       <div style={{
         fontSize: 13, fontWeight: 600,
-        color: "rgba(255,255,255,0.88)",
+        color: "var(--vt-text)",
         lineHeight: 1.4, marginBottom: 4,
       }}>
         {item.title}
@@ -226,7 +226,7 @@ export function DashboardPage() {
                   </div>
                   <div style={{
                     fontSize: 18, fontWeight: 800,
-                    letterSpacing: "-0.02em", color: "#fff",
+                    letterSpacing: "-0.02em", color: "var(--vt-text)",
                     marginBottom: 16,
                   }}>
                     {kanban.data.sprint.title}
@@ -267,7 +267,7 @@ export function DashboardPage() {
                         minWidth: 210,
                         flex: "0 0 auto",
                         background: GLASS,
-                        border: "1px solid rgba(255,255,255,0.07)",
+                        border: "1px solid var(--vt-border)",
                         borderTop: `2px solid ${acc.color}`,
                         borderRadius: 18,
                         padding: 14,
@@ -293,7 +293,7 @@ export function DashboardPage() {
 
                         {items.length === 0 && (
                           <div style={{
-                            fontSize: 12, color: "rgba(255,255,255,0.18)",
+                            fontSize: 12, color: "var(--vt-text-muted)",
                             textAlign: "center", padding: "16px 0",
                           }}>
                             —
