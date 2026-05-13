@@ -12,11 +12,11 @@ import { fmtDate, t } from "../i18n";
 import { logEvent } from "../telemetry";
 
 /* ── Design tokens (dashboard-local) ─────────────────────── */
-const BG       = "#08010f";
-const HERO_TOP = "#15023a";
-const GLASS    = "rgba(255,255,255,0.05)";
-const GLASS_BD = "rgba(255,255,255,0.08)";
-const DIM      = "rgba(255,255,255,0.35)";
+const BG       = "var(--vt-bg)";
+const HERO_TOP = "#2d1540";
+const GLASS    = "rgba(149,97,171,0.07)";
+const GLASS_BD = "rgba(149,97,171,0.15)";
+const DIM      = "rgba(0,0,0,0.45)";
 const FONT     = "'Outfit', system-ui, sans-serif";
 
 const STAT_META = [
@@ -58,7 +58,7 @@ function StatCard({
         pointerEvents: "none",
       }} />
       <div style={{ fontSize: 14, color, marginBottom: 6, fontWeight: 700 }}>{icon}</div>
-      <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: "#fff", marginBottom: 6 }}>
+      <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: "var(--vt-text)", marginBottom: 6 }}>
         {value}
       </div>
       <div style={{ fontSize: 11, color: DIM, lineHeight: 1.4 }}>{label}</div>
@@ -69,7 +69,7 @@ function StatCard({
 function GlowBar({ pct }: { pct: number }) {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
-    <div style={{ height: 10, background: "rgba(255,255,255,0.07)", borderRadius: 99, overflow: "hidden" }}>
+    <div style={{ height: 10, background: "var(--vt-border)", borderRadius: 99, overflow: "hidden" }}>
       <div style={{
         height: "100%",
         width: `${clamped}%`,
@@ -133,7 +133,7 @@ export function DashboardPage() {
 
   return (
     <PullToRefresh onRefresh={refresh}>
-      <div style={{ background: BG, minHeight: "100%", fontFamily: FONT, color: "#f4f5f7" }}>
+      <div style={{ background: BG, minHeight: "100%", fontFamily: FONT, color: "var(--vt-text)" }}>
 
         {/* ── Hero section ── */}
         <div style={{

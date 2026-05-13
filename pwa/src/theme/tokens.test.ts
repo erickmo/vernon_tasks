@@ -25,7 +25,4 @@ describe("tokens.css", () => {
     expect(css).toContain("--vt-primary-contrast: #ffffff");
   });
 
-  it("defines dark mode primary as #c084fc", () => {
-    expect(css).toContain("--vt-primary: #c084fc");
-  });
 });

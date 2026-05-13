@@ -74,8 +74,8 @@ export function TopNav() {
           left: 0,
           right: 0,
           height: "var(--top-nav1-h)",
-          background: "#08010f",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "var(--vt-bg)",
+          borderBottom: "1px solid var(--vt-border)",
           display: "flex",
           alignItems: "center",
           zIndex: 50,
@@ -86,7 +86,7 @@ export function TopNav() {
             padding: "0 24px",
             fontSize: 16,
             fontWeight: 800,
-            color: "#a855f7",
+            color: "var(--vt-primary)",
             letterSpacing: "-0.02em",
             whiteSpace: "nowrap",
             userSelect: "none",
@@ -115,10 +115,10 @@ export function TopNav() {
                   padding: "0 14px",
                   fontSize: 14,
                   fontWeight: 600,
-                  color: isActive ? "#a855f7" : "rgba(255,255,255,0.45)",
+                  color: isActive ? "var(--vt-primary)" : "var(--vt-text-muted)",
                   textDecoration: "none",
                   position: "relative",
-                  borderBottom: isActive ? "2px solid #a855f7" : "2px solid transparent",
+                  borderBottom: isActive ? "2px solid var(--vt-primary)" : "2px solid transparent",
                   transition: "color 0.15s, border-color 0.15s",
                   boxSizing: "border-box",
                 }}
@@ -133,8 +133,8 @@ export function TopNav() {
                       width: 8,
                       height: 8,
                       borderRadius: "50%",
-                      background: "#ffffff",
-                      boxShadow: "0 0 0 2px #08010f",
+                      background: "#ef4444",
+                      boxShadow: "0 0 0 2px var(--vt-bg)",
                     }}
                   />
                 ) : null}
@@ -151,8 +151,8 @@ export function TopNav() {
           left: 0,
           right: 0,
           height: "var(--top-nav2-h)",
-          background: "rgba(255,255,255,0.03)",
-          borderBottom: submenus.length > 0 ? "1px solid rgba(255,255,255,0.06)" : "none",
+          background: "var(--vt-surface)",
+          borderBottom: submenus.length > 0 ? "1px solid var(--vt-border)" : "none",
           display: "flex",
           alignItems: "center",
           zIndex: 49,
@@ -174,7 +174,7 @@ export function TopNav() {
               border: "none",
               cursor: "pointer",
               background: activeTab === item.tab ? "rgba(168,85,247,0.18)" : "transparent",
-              color: activeTab === item.tab ? "#a855f7" : "rgba(255,255,255,0.45)",
+              color: activeTab === item.tab ? "var(--vt-primary)" : "var(--vt-text-muted)",
               transition: "background 0.15s, color 0.15s",
             }}
           >
