@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchLeaderboard,
@@ -212,7 +213,11 @@ function StreakTab() {
 }
 
 export function AnalyticsPage() {
-  const [tab, setTab] = useState<TabKey>("leaderboard");
+  const [params, setParams] = useSearchParams();
+  const tab = (params.get("tab") as TabKey) ?? "leaderboard";
+  function setTab(k: TabKey) {
+    setParams({ tab: k }, { replace: true });
+  }
 
   useEffect(() => {
     logEvent("analytics_view", { tab });

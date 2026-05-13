@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchReviewQueue,
@@ -195,7 +196,11 @@ type TabKey = "review" | "sprint" | "exec";
 export function LeaderPage() {
   const isLeader = useIsLeader();
   const isManager = useIsManager();
-  const [tab, setTab] = useState<TabKey>("review");
+  const [params, setParams] = useSearchParams();
+  const tab = (params.get("tab") as TabKey) ?? "review";
+  function setTab(k: TabKey) {
+    setParams({ tab: k }, { replace: true });
+  }
 
   if (isLeader === null) return <div style={{ padding: 24 }}>…</div>;
   if (isLeader === false) return <EmptyState title={t("leader.no_access")} />;
