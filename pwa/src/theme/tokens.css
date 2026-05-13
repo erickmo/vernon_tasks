@@ -27,6 +27,18 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --bottom-nav-h: 64px;
+  --top-nav1-h: 0px;
+  --top-nav2-h: 0px;
+  --top-nav-total-h: 0px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --top-nav1-h: 52px;
+    --top-nav2-h: 40px;
+    --top-nav-total-h: calc(var(--top-nav1-h) + var(--top-nav2-h));
+    --bottom-nav-h: 0px;
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -44,6 +56,16 @@
 @keyframes vt-shimmer {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
+}
+
+@keyframes vt-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vt-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 * { box-sizing: border-box; }
