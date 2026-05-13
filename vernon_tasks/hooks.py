@@ -69,9 +69,7 @@ scheduler_events = {
     ],
 }
 
-website_redirect_routes = [
-    {"source": r"^/$", "target": "/m", "redirect_http_status": 302},
-]
+home_page = "m"
 
 website_route_rules = [
     {"from_route": "/m/<path:rest>", "to_route": "m"},
