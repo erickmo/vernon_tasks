@@ -13,9 +13,8 @@ import { logEvent } from "../telemetry";
 
 /* ── Design tokens (dashboard-local) ─────────────────────── */
 const BG       = "var(--vt-bg)";
-const HERO_TOP = "#2d1540";
-const GLASS    = "rgba(149,97,171,0.07)";
-const GLASS_BD = "rgba(149,97,171,0.15)";
+const GLASS    = "var(--vt-surface)";
+const GLASS_BD = "var(--vt-border)";
 const DIM      = "rgba(0,0,0,0.45)";
 const FONT     = "'Outfit', system-ui, sans-serif";
 
@@ -137,25 +136,14 @@ export function DashboardPage() {
 
         {/* ── Hero section ── */}
         <div style={{
-          background: `linear-gradient(160deg, ${HERO_TOP} 0%, ${BG} 65%)`,
+          background: "var(--vt-primary-light)",
           padding: "20px 20px 0",
           position: "relative",
           overflow: "hidden",
         }}>
-          <div style={{
-            position: "absolute", top: -50, right: -50, width: 200, height: 200,
-            background: "radial-gradient(circle, rgba(168,85,247,0.28) 0%, transparent 70%)",
-            borderRadius: "50%", pointerEvents: "none",
-          }} />
-          <div style={{
-            position: "absolute", top: 30, left: -40, width: 140, height: 140,
-            background: "radial-gradient(circle, rgba(109,40,217,0.18) 0%, transparent 70%)",
-            borderRadius: "50%", pointerEvents: "none",
-          }} />
-
           <p style={{
             margin: "0 0 2px", fontSize: 11,
-            color: "rgba(192,132,252,0.65)",
+            color: "var(--vt-primary)",
             letterSpacing: "0.1em", textTransform: "uppercase",
             animation: "vt-fade-in 0.4s ease both",
           }}>
@@ -163,7 +151,7 @@ export function DashboardPage() {
           </p>
           <h1 style={{
             margin: "0 0 20px", fontSize: 28, fontWeight: 800,
-            letterSpacing: "-0.03em", color: "#fff",
+            letterSpacing: "-0.03em", color: "var(--vt-primary-dark)",
             animation: "vt-fade-in 0.4s ease 0.05s both",
           }}>
             Dashboard
