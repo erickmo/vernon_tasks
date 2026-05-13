@@ -9,6 +9,8 @@ const STRINGS = {
   "login.password": "Kata Sandi",
   "login.submit": "Masuk",
   "login.error": "Email atau kata sandi salah.",
+  "login.processing": "Memproses…",
+  "login.footer": "Hanya untuk karyawan Vernon Corp",
   "logout": "Keluar",
   "common.retry": "Coba lagi",
   "common.refresh": "Muat ulang",
@@ -117,8 +119,6 @@ const STRINGS = {
   "pref.saved": "Tersimpan",
   "pref.failed": "Gagal menyimpan",
   "pref.link": "Pengaturan",
-  "login.processing": "Memproses…",
-  "login.footer": "Hanya untuk karyawan Vernon Corp",
 } as const;
 
 export type StringKey = keyof typeof STRINGS;
