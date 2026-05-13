@@ -76,7 +76,7 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
             whiteSpace: "nowrap",
           }}
         >
-          Semua
+          {t("header.filter.all")}
         </button>
         {data && data.overdue.length > 0 && (
           <span
@@ -90,7 +90,7 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
               whiteSpace: "nowrap",
             }}
           >
-            {`Terlambat ${data.overdue.length}`}
+            {`${t("header.filter.overdue")} ${data.overdue.length}`}
           </span>
         )}
         {data && data.today.length > 0 && (
@@ -104,7 +104,7 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
               whiteSpace: "nowrap",
             }}
           >
-            {`Hari ini ${data.today.length}`}
+            {`${t("header.filter.today")} ${data.today.length}`}
           </span>
         )}
         <StaleBadge resource="my-work" />
@@ -146,7 +146,7 @@ function TaskCardView({
           alignItems: "center",
           gap: 12,
           padding: "var(--vt-space-3) var(--vt-space-4)",
-          background: "white",
+          background: "var(--vt-surface)",
           borderRadius: "var(--vt-radius)",
           borderLeft: accent ? `3px solid ${accent}` : undefined,
           boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
@@ -332,7 +332,7 @@ export function MyWorkList() {
       {/* ── Sticky search strip ── */}
       <div
         style={{
-          background: "white",
+          background: "var(--vt-surface)",
           padding: "var(--vt-space-2) var(--vt-space-4)",
           borderBottom: "1px solid var(--vt-primary-light)",
           position: "sticky",

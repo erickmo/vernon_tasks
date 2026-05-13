@@ -179,14 +179,14 @@ export function LoginPage() {
 
   return (
     <div style={styles.root}>
-      <div style={styles.circle1} />
-      <div style={styles.circle2} />
-      <div style={styles.circle3} />
+      <div style={styles.circle1} aria-hidden="true" />
+      <div style={styles.circle2} aria-hidden="true" />
+      <div style={styles.circle3} aria-hidden="true" />
 
       <div style={styles.logoWrap}>
         <div style={styles.logoBox}>✓</div>
         <h1 style={styles.appName}>Vernon Tasks</h1>
-        <p style={styles.subtitle}>Selamat datang kembali</p>
+        <p style={styles.subtitle}>{t("login.subtitle")}</p>
       </div>
 
       <div style={styles.card}>
