@@ -212,9 +212,12 @@ function StreakTab() {
   );
 }
 
+const VALID_TABS: TabKey[] = ["leaderboard", "velocity", "streak"];
+
 export function AnalyticsPage() {
   const [params, setParams] = useSearchParams();
-  const tab = (params.get("tab") as TabKey) ?? "leaderboard";
+  const rawTab = params.get("tab") as TabKey;
+  const tab = VALID_TABS.includes(rawTab) ? rawTab : "leaderboard";
   function setTab(k: TabKey) {
     setParams({ tab: k }, { replace: true });
   }

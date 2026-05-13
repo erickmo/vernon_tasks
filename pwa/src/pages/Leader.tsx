@@ -193,11 +193,14 @@ function LeaderReviewTab() {
 
 type TabKey = "review" | "sprint" | "exec";
 
+const VALID_LEADER_TABS: TabKey[] = ["review", "sprint", "exec"];
+
 export function LeaderPage() {
   const isLeader = useIsLeader();
   const isManager = useIsManager();
   const [params, setParams] = useSearchParams();
-  const tab = (params.get("tab") as TabKey) ?? "review";
+  const rawLeaderTab = params.get("tab") as TabKey;
+  const tab = VALID_LEADER_TABS.includes(rawLeaderTab) ? rawLeaderTab : "review";
   function setTab(k: TabKey) {
     setParams({ tab: k }, { replace: true });
   }

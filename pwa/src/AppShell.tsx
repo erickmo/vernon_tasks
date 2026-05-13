@@ -11,11 +11,13 @@ import { useMediaQuery } from "./hooks/useMediaQuery";
 import { onAuthChallenge } from "./api/client";
 import { logEvent } from "./telemetry";
 
+const DESKTOP_BREAKPOINT_PX = 768;
+
 export function AppShell() {
   const [reloginOpen, setReloginOpen] = useState(false);
   const [resolver, setResolver] = useState<((ok: boolean) => void) | null>(null);
   const loc = useLocation();
-  const isDesktop = useMediaQuery(768);
+  const isDesktop = useMediaQuery(DESKTOP_BREAKPOINT_PX);
 
   useEffect(() => {
     onAuthChallenge(

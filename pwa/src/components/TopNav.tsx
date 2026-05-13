@@ -128,12 +128,13 @@ export function TopNav() {
                   <span
                     style={{
                       position: "absolute",
-                      top: 10,
-                      right: 6,
-                      width: 6,
-                      height: 6,
+                      top: 8,
+                      right: 4,
+                      width: 8,
+                      height: 8,
                       borderRadius: "50%",
-                      background: "#a855f7",
+                      background: "#ffffff",
+                      boxShadow: "0 0 0 2px #08010f",
                     }}
                   />
                 ) : null}
@@ -143,44 +144,44 @@ export function TopNav() {
         </div>
       </nav>
 
-      {submenus.length > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            top: "var(--top-nav1-h)",
-            left: 0,
-            right: 0,
-            height: "var(--top-nav2-h)",
-            background: "rgba(255,255,255,0.03)",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-            display: "flex",
-            alignItems: "center",
-            zIndex: 49,
-            padding: "0 16px",
-            gap: 4,
-          }}
-        >
-          {submenus.map((item) => (
-            <button
-              key={item.tab}
-              onClick={() => handleNav2Click(item)}
-              style={{
-                padding: "4px 12px",
-                fontSize: 13,
-                fontWeight: 600,
-                borderRadius: 999,
-                border: "none",
-                cursor: "pointer",
-                background: activeTab === item.tab ? "rgba(168,85,247,0.18)" : "transparent",
-                color: activeTab === item.tab ? "#a855f7" : "rgba(255,255,255,0.45)",
-                transition: "background 0.15s, color 0.15s",
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div
+        style={{
+          position: "fixed",
+          top: "var(--top-nav1-h)",
+          left: 0,
+          right: 0,
+          height: "var(--top-nav2-h)",
+          background: "rgba(255,255,255,0.03)",
+          borderBottom: submenus.length > 0 ? "1px solid rgba(255,255,255,0.06)" : "none",
+          display: "flex",
+          alignItems: "center",
+          zIndex: 49,
+          padding: "0 16px",
+          gap: 4,
+          visibility: submenus.length > 0 ? "visible" : "hidden",
+          pointerEvents: submenus.length > 0 ? "auto" : "none",
+        }}
+      >
+        {submenus.map((item) => (
+          <button
+            key={item.tab}
+            onClick={() => handleNav2Click(item)}
+            style={{
+              padding: "4px 12px",
+              fontSize: 13,
+              fontWeight: 600,
+              borderRadius: 999,
+              border: "none",
+              cursor: "pointer",
+              background: activeTab === item.tab ? "rgba(168,85,247,0.18)" : "transparent",
+              color: activeTab === item.tab ? "#a855f7" : "rgba(255,255,255,0.45)",
+              transition: "background 0.15s, color 0.15s",
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
     </>
   );
 }

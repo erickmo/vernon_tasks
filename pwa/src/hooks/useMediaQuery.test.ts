@@ -34,4 +34,36 @@ describe("useMediaQuery", () => {
     });
     expect(result.current).toBe(true);
   });
+
+  it("returns true when matchMedia initially matches", () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: true,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    const { result } = renderHook(() => useMediaQuery(768));
+    expect(result.current).toBe(true);
+  });
+
+  it("cleans up listener on unmount", () => {
+    const removeEventListenerSpy = vi.fn();
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: removeEventListenerSpy,
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    const { unmount } = renderHook(() => useMediaQuery(768));
+    unmount();
+    expect(removeEventListenerSpy).toHaveBeenCalledWith("change", expect.any(Function));
+  });
 });
