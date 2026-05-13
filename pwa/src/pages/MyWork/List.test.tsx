@@ -104,4 +104,31 @@ describe("MyWorkList", () => {
     wrap(<MyWorkList />);
     await waitFor(() => expect(screen.getByText(/Hari ini 2/)).toBeInTheDocument());
   });
+
+  it("overdue task card has red left border", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: {
+              overdue: [{ id: "T-OVR", title: "Past due task" }],
+              today: [],
+              upcoming: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(<MyWorkList />);
+    await waitFor(() => screen.getByText("Past due task"));
+    const card = screen.getByText("Past due task").closest("[data-testid='task-card']") as HTMLElement;
+    expect(card).toBeDefined();
+    // Verify the card has the data-testid attribute
+    expect(card.getAttribute("data-testid")).toBe("task-card");
+    // Verify borderLeft is applied (happy-dom may expand shorthand styles)
+    expect(card.style.borderLeft).toBeDefined();
+    expect(card.style.borderLeft).toContain("var(--vt-danger)");
+  });
 });

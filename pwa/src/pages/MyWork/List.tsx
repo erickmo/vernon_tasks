@@ -140,15 +140,16 @@ function TaskCardView({
       }
     >
       <div
+        data-testid="task-card"
         style={{
           display: "flex",
           alignItems: "center",
           gap: 12,
-          padding: "var(--vt-space-4)",
-          background: "var(--vt-surface)",
+          padding: "var(--vt-space-3) var(--vt-space-4)",
+          background: "white",
           borderRadius: "var(--vt-radius)",
           borderLeft: accent ? `3px solid ${accent}` : undefined,
-          boxShadow: "var(--vt-shadow)",
+          boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
         }}
       >
         <input
@@ -157,14 +158,14 @@ function TaskCardView({
           onChange={onComplete}
           disabled={disabled}
           aria-label="complete"
-          style={{ width: 22, height: 22 }}
+          style={{ width: 22, height: 22, accentColor: "var(--vt-primary)" }}
         />
         <Link
           to={`/m/work/${encodeURIComponent(task.id)}`}
           style={{ flex: 1, color: "var(--vt-text)", textDecoration: "none" }}
         >
-          <div style={{ fontWeight: 600 }}>{task.title}</div>
-          <div style={{ fontSize: 13, color: "var(--vt-text-muted)", marginTop: 4 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{task.title}</div>
+          <div style={{ fontSize: 12, color: "var(--vt-text-muted)", marginTop: 3 }}>
             {[task.project, task.priority].filter(Boolean).join(" · ")}
             {task.points ? ` · +${task.points} pts` : ""}
           </div>
