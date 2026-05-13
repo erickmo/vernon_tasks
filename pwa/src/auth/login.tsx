@@ -152,7 +152,7 @@ const styles = {
 const FOCUS_RING = "0 0 0 2px rgba(149,97,171,0.8)";
 
 export function LoginPage() {
-  const [usr, setUsr] = useState(() => localStorage.getItem("vt_last_user") ?? "");
+  const [usr, setUsr] = useState(() => localStorage.getItem("vt_last_user") ?? "Administrator");
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
