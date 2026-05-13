@@ -69,6 +69,8 @@ scheduler_events = {
     ],
 }
 
+home_page = "m"
+
 website_route_rules = [
     {"from_route": "/m/<path:rest>", "to_route": "m"},
 ]
