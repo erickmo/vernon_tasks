@@ -72,7 +72,16 @@ scheduler_events = {
 home_page = "m"
 
 website_route_rules = [
-    {"from_route": "/m/<path:rest>", "to_route": "m"},
+    {"from_route": "/m/login", "to_route": "m"},
+    {"from_route": "/m/onboarding", "to_route": "m"},
+    {"from_route": "/m/work", "to_route": "m"},
+    {"from_route": "/m/work/<path:id>", "to_route": "m"},
+    {"from_route": "/m/dashboard", "to_route": "m"},
+    {"from_route": "/m/analytics", "to_route": "m"},
+    {"from_route": "/m/me", "to_route": "m"},
+    {"from_route": "/m/me/notifications", "to_route": "m"},
+    {"from_route": "/m/me/notifications/settings", "to_route": "m"},
+    {"from_route": "/m/leader", "to_route": "m"},
 ]
 
 after_request = ["vernon_tasks.hooks.add_pwa_security_headers"]
