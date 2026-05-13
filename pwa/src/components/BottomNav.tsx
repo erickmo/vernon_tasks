@@ -43,7 +43,7 @@ export function BottomNav() {
             justifyContent: "center",
             color: isActive ? "var(--vt-primary)" : "var(--vt-text-muted)",
             textDecoration: "none",
-            fontSize: 13,
+            fontSize: 11,
             fontWeight: 600,
             position: "relative",
           })}

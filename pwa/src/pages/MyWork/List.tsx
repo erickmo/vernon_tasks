@@ -46,10 +46,10 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
         zIndex: 10,
       }}
     >
-      <div style={{ color: "var(--vt-text-muted)", fontSize: 12, marginBottom: 2 }}>
+      <div style={{ color: "var(--vt-text-muted)", fontSize: 11, marginBottom: 2 }}>
         {fmtDate(new Date())}
       </div>
-      <div style={{ color: "var(--vt-primary-dark)", fontSize: 18, fontWeight: 700 }}>
+      <div style={{ color: "var(--vt-primary-dark)", fontSize: 15, fontWeight: 600 }}>
         {greeting()}
       </div>
 

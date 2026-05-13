@@ -16,7 +16,7 @@ const BG       = "var(--vt-bg)";
 const GLASS    = "var(--vt-surface)";
 const GLASS_BD = "var(--vt-border)";
 const DIM      = "rgba(0,0,0,0.45)";
-const FONT     = "'Outfit', system-ui, sans-serif";
+const FONT     = "Inter, system-ui, sans-serif";
 
 const STAT_META = [
   { key: "done_today",   icon: "✓", label: "Selesai hari ini", color: "#10b981", glow: "rgba(16,185,129,0.22)",  round: false },
@@ -43,8 +43,8 @@ function StatCard({
     <div style={{
       background: GLASS,
       border: `1px solid ${GLASS_BD}`,
-      borderRadius: 18,
-      padding: "14px 12px",
+      borderRadius: 8,
+      padding: "12px 10px",
       position: "relative",
       overflow: "hidden",
       animation: `vt-fade-up 0.45s ease ${delay}s both`,
@@ -56,11 +56,11 @@ function StatCard({
         borderRadius: "50%",
         pointerEvents: "none",
       }} />
-      <div style={{ fontSize: 14, color, marginBottom: 6, fontWeight: 700 }}>{icon}</div>
-      <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: "var(--vt-text)", marginBottom: 6 }}>
+      <div style={{ fontSize: 12, color, marginBottom: 6, fontWeight: 700 }}>{icon}</div>
+      <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: "var(--vt-text)", marginBottom: 6 }}>
         {value}
       </div>
-      <div style={{ fontSize: 11, color: DIM, lineHeight: 1.4 }}>{label}</div>
+      <div style={{ fontSize: 10, color: DIM, lineHeight: 1.4 }}>{label}</div>
     </div>
   );
 }
@@ -86,12 +86,12 @@ function MiniCard({ item, accent }: { item: KanbanItem; accent: string }) {
     <div style={{
       background: "var(--vt-surface)",
       border: "1px solid var(--vt-border)",
-      borderRadius: 12,
-      padding: "10px 12px",
+      borderRadius: 8,
+      padding: "8px 10px",
       marginBottom: 8,
     }}>
       <div style={{
-        fontSize: 13, fontWeight: 600,
+        fontSize: 12, fontWeight: 600,
         color: "var(--vt-text)",
         lineHeight: 1.4, marginBottom: 4,
       }}>
@@ -142,7 +142,7 @@ export function DashboardPage() {
           overflow: "hidden",
         }}>
           <p style={{
-            margin: "0 0 2px", fontSize: 11,
+            margin: "0 0 2px", fontSize: 10,
             color: "var(--vt-primary)",
             letterSpacing: "0.1em", textTransform: "uppercase",
             animation: "vt-fade-in 0.4s ease both",
@@ -150,7 +150,7 @@ export function DashboardPage() {
             {todayStr}
           </p>
           <h1 style={{
-            margin: "0 0 20px", fontSize: 28, fontWeight: 800,
+            margin: "0 0 20px", fontSize: 20, fontWeight: 700,
             letterSpacing: "-0.03em", color: "var(--vt-primary-dark)",
             animation: "vt-fade-in 0.4s ease 0.05s both",
           }}>
@@ -200,7 +200,7 @@ export function DashboardPage() {
                 <section style={{
                   background: GLASS,
                   border: "1px solid rgba(168,85,247,0.22)",
-                  borderRadius: 20,
+                  borderRadius: 8,
                   padding: 20,
                   marginBottom: 20,
                   animation: "vt-fade-up 0.45s ease 0.28s both",
@@ -257,15 +257,15 @@ export function DashboardPage() {
                         background: GLASS,
                         border: "1px solid var(--vt-border)",
                         borderTop: `2px solid ${acc.color}`,
-                        borderRadius: 18,
-                        padding: 14,
+                        borderRadius: 8,
+                        padding: 12,
                       }}>
                         <div style={{
                           display: "flex", justifyContent: "space-between",
                           alignItems: "center", marginBottom: 12,
                         }}>
                           <span style={{
-                            fontSize: 11, fontWeight: 700, color: acc.color,
+                            fontSize: 10, fontWeight: 700, color: acc.color,
                             textTransform: "uppercase", letterSpacing: "0.08em",
                           }}>
                             {col}

@@ -84,8 +84,8 @@ export function TopNav() {
         <span
           style={{
             padding: "0 24px",
-            fontSize: 16,
-            fontWeight: 800,
+            fontSize: 13,
+            fontWeight: 700,
             color: "var(--vt-primary)",
             letterSpacing: "-0.02em",
             whiteSpace: "nowrap",
@@ -112,8 +112,8 @@ export function TopNav() {
                   display: "flex",
                   alignItems: "center",
                   height: "100%",
-                  padding: "0 14px",
-                  fontSize: 14,
+                  padding: "0 12px",
+                  fontSize: 12,
                   fontWeight: 600,
                   color: isActive ? "var(--vt-primary)" : "var(--vt-text-muted)",
                   textDecoration: "none",
@@ -156,7 +156,7 @@ export function TopNav() {
           display: "flex",
           alignItems: "center",
           zIndex: 49,
-          padding: "0 16px",
+          padding: "0 12px",
           gap: 4,
           visibility: submenus.length > 0 ? "visible" : "hidden",
           pointerEvents: submenus.length > 0 ? "auto" : "none",
@@ -167,8 +167,8 @@ export function TopNav() {
             key={item.tab}
             onClick={() => handleNav2Click(item)}
             style={{
-              padding: "4px 12px",
-              fontSize: 13,
+              padding: "3px 10px",
+              fontSize: 11,
               fontWeight: 600,
               borderRadius: 999,
               border: "none",

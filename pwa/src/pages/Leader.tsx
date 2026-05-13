@@ -216,7 +216,7 @@ export function LeaderPage() {
 
   return (
     <div style={{ padding: "var(--vt-space-4)" }}>
-      <h1 style={{ marginTop: 0 }}>{t("leader.title")}</h1>
+      <h1 style={{ marginTop: 0, fontSize: 18, fontWeight: 600 }}>{t("leader.title")}</h1>
       <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />
       {tab === "review" && <LeaderReviewTab />}
       {tab === "sprint" && (

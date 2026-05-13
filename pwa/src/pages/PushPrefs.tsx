@@ -113,7 +113,7 @@ export function PushPrefsPage() {
         >
           ←
         </Link>
-        <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 20, fontWeight: 700 }}>
+        <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 14, fontWeight: 600 }}>
           {t("pref.title")}
         </h1>
       </header>

@@ -79,7 +79,7 @@ export function NotificationsPage() {
             alignItems: "center",
           }}
         >
-          <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 20, fontWeight: 700 }}>
+          <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 14, fontWeight: 600 }}>
             {t("notif.title")}
           </h1>
           <div style={{ display: "flex", gap: 8 }}>

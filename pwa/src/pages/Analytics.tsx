@@ -238,7 +238,7 @@ export function AnalyticsPage() {
           zIndex: 10,
         }}
       >
-        <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 20, fontWeight: 700 }}>
+        <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 15, fontWeight: 600 }}>
           {t("nav.analytics")}
         </h1>
       </header>

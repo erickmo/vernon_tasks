@@ -54,7 +54,7 @@ export function MePage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 22,
+            fontSize: 18,
             fontWeight: 700,
             color: "var(--vt-primary-dark)",
             flexShrink: 0,
@@ -64,10 +64,10 @@ export function MePage() {
           {getInitials(user)}
         </div>
         <div>
-          <div style={{ color: "var(--vt-primary-dark)", fontWeight: 700, fontSize: 18 }}>
+          <div style={{ color: "var(--vt-primary-dark)", fontWeight: 600, fontSize: 15 }}>
             {user ?? "—"}
           </div>
-          <div style={{ color: "var(--vt-text-muted)", fontSize: 13 }}>
+          <div style={{ color: "var(--vt-text-muted)", fontSize: 12 }}>
             Akun
           </div>
         </div>
