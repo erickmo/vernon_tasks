@@ -117,6 +117,8 @@ const STRINGS = {
   "pref.saved": "Tersimpan",
   "pref.failed": "Gagal menyimpan",
   "pref.link": "Pengaturan",
+  "login.processing": "Memproses…",
+  "login.footer": "Hanya untuk karyawan Vernon Corp",
 } as const;
 
 export type StringKey = keyof typeof STRINGS;

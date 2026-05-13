@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { login } from "./session";
-
-const FOOTER_TEXT = "Hanya untuk karyawan Vernon Corp";
+import { t } from "../i18n";
 
 const styles = {
   root: {
@@ -150,11 +149,14 @@ const styles = {
   },
 };
 
+const FOCUS_RING = "0 0 0 2px rgba(149,97,171,0.8)";
+
 export function LoginPage() {
   const [usr, setUsr] = useState(() => localStorage.getItem("vt_last_user") ?? "");
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const nav = useNavigate();
   const [params] = useSearchParams();
   const next = params.get("next") ?? "/m/work";
@@ -169,7 +171,7 @@ export function LoginPage() {
       localStorage.setItem("vt_last_user", usr);
       nav(next, { replace: true });
     } catch {
-      setErr("Username atau password salah. Coba lagi.");
+      setErr(t("login.error"));
     } finally {
       setBusy(false);
     }
@@ -190,25 +192,35 @@ export function LoginPage() {
       <div style={styles.card}>
         <form onSubmit={onSubmit} noValidate>
           <div style={styles.fieldWrap}>
-            <label htmlFor="vt-usr" style={styles.label}>Username / Email</label>
+            <label htmlFor="vt-usr" style={styles.label}>{t("login.username")}</label>
             <input
               id="vt-usr"
-              style={styles.input}
+              style={{
+                ...styles.input,
+                boxShadow: focusedId === "vt-usr" ? FOCUS_RING : undefined,
+              }}
               value={usr}
               onChange={(e) => setUsr(e.target.value)}
+              onFocus={() => setFocusedId("vt-usr")}
+              onBlur={() => setFocusedId(null)}
               autoComplete="username"
               required
               autoCapitalize="none"
             />
           </div>
           <div style={{ ...styles.fieldWrap, marginBottom: 24 }}>
-            <label htmlFor="vt-pwd" style={styles.label}>Password</label>
+            <label htmlFor="vt-pwd" style={styles.label}>{t("login.password")}</label>
             <input
               id="vt-pwd"
               type="password"
-              style={styles.input}
+              style={{
+                ...styles.input,
+                boxShadow: focusedId === "vt-pwd" ? FOCUS_RING : undefined,
+              }}
               value={pwd}
               onChange={(e) => setPwd(e.target.value)}
+              onFocus={() => setFocusedId("vt-pwd")}
+              onBlur={() => setFocusedId(null)}
               autoComplete="current-password"
               required
             />
@@ -223,12 +235,12 @@ export function LoginPage() {
             disabled={busy}
             style={{ ...styles.button, ...(busy ? styles.buttonDisabled : {}) }}
           >
-            {busy ? "Memproses…" : "Masuk"}
+            {busy ? t("login.processing") : t("login.submit")}
           </button>
         </form>
       </div>
 
-      <p style={styles.footer}>{FOOTER_TEXT}</p>
+      <p style={styles.footer}>{t("login.footer")}</p>
     </div>
   );
 }
