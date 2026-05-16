@@ -97,7 +97,7 @@ export function PushPrefsPage() {
       {/* Sticky gradient header */}
       <header
         style={{
-          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          background: "var(--vt-primary-light)",
           padding: "var(--vt-space-4)",
           position: "sticky",
           top: 0,
@@ -109,11 +109,11 @@ export function PushPrefsPage() {
       >
         <Link
           to="/m/me/notifications"
-          style={{ color: "rgba(255,255,255,0.8)", textDecoration: "none", fontSize: 20 }}
+          style={{ color: "var(--vt-text-muted)", textDecoration: "none", fontSize: 20 }}
         >
           ←
         </Link>
-        <h1 style={{ margin: 0, color: "white", fontSize: 20, fontWeight: 700 }}>
+        <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 14, fontWeight: 600 }}>
           {t("pref.title")}
         </h1>
       </header>

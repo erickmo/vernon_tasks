@@ -6,6 +6,7 @@ import { LoginPage } from "./login";
 // Mock session module
 vi.mock("./session", () => ({
   login: vi.fn(),
+  probeSession: vi.fn().mockResolvedValue({ user: null, csrf_token: null, roles: [] }),
 }));
 
 import { login as mockLogin } from "./session";

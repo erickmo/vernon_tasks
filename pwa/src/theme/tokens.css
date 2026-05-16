@@ -1,56 +1,67 @@
 :root {
-  --vt-font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --vt-radius: 12px;
-  --vt-radius-sm: 8px;
+  --vt-font: "Inter", system-ui, -apple-system, sans-serif;
+  --vt-radius: 8px;
+  --vt-radius-sm: 4px;
   --vt-space-1: 4px;
   --vt-space-2: 8px;
-  --vt-space-3: 12px;
-  --vt-space-4: 16px;
-  --vt-space-5: 24px;
-  --vt-space-6: 32px;
+  --vt-space-3: 10px;
+  --vt-space-4: 14px;
+  --vt-space-5: 20px;
+  --vt-space-6: 28px;
   --vt-bg: #ffffff;
-  --vt-surface: #f6f7f9;
-  --vt-text: #0b0b10;
-  --vt-text-muted: #5b6472;
-  --vt-border: #e3e6ec;
-  --vt-primary: #9561ab;
-  --vt-primary-dark: #2d1540;
-  --vt-primary-mid: #4a2870;
-  --vt-primary-light: #f5f0f8;
+  --vt-surface: #fafafa;
+  --vt-text: #111318;
+  --vt-text-muted: #6b7280;
+  --vt-border: #eef0f3;
+  --vt-primary: #7c4dab;
+  --vt-primary-dark: #3d1f6e;
+  --vt-primary-mid: #5a2d8c;
+  --vt-primary-light: #f4f0f9;
   --vt-primary-contrast: #ffffff;
-  --vt-danger: #d4351c;
-  --vt-warn: #e89c1f;
-  --vt-success: #18a957;
-  --vt-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --vt-danger: #dc2626;
+  --vt-warn: #d97706;
+  --vt-success: #16a34a;
+  --vt-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.03);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  --bottom-nav-h: 64px;
+  --bottom-nav-h: 56px;
+  --top-nav1-h: 0px;
+  --top-nav2-h: 0px;
+  --top-nav-total-h: 0px;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (min-width: 768px) {
   :root {
-    --vt-bg: #0b0b10;
-    --vt-surface: #15151c;
-    --vt-text: #f4f5f7;
-    --vt-text-muted: #9aa0aa;
-    --vt-border: #2a2b34;
-    --vt-primary: #c084fc;
-    --vt-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.35);
+    --top-nav1-h: 44px;
+    --top-nav2-h: 36px;
+    --top-nav-total-h: calc(var(--top-nav1-h) + var(--top-nav2-h));
+    --bottom-nav-h: 0px;
   }
 }
+
 
 @keyframes vt-shimmer {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
 
+@keyframes vt-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vt-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: var(--vt-font);
-  font-size: 15px;
+  font-size: 13px;
   color: var(--vt-text);
   background: var(--vt-bg);
   -webkit-tap-highlight-color: transparent;

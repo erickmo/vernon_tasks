@@ -1,155 +1,214 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { login } from "./session";
+import { login, probeSession, type LoginBranding } from "./session";
 import { t } from "../i18n";
 
-const styles = {
+const DEFAULT_BRANDING: LoginBranding = {
+  headline: "Kelola tugas tim dengan lebih cerdas.",
+  subtext:
+    "Sprint, kanban, dan analitik dalam satu tempat — dirancang untuk tim yang bergerak cepat.",
+};
+
+const FOCUS_RING = "0 0 0 2px rgba(124,77,171,0.5)";
+
+const S = {
   root: {
     height: "100svh",
     display: "flex",
+  } as React.CSSProperties,
+
+  left: {
+    flex: "3 0 0",
+    background: "linear-gradient(145deg, #1e0a3c 0%, #3d1f6e 50%, #5a2d8c 100%)",
+    display: "flex",
     flexDirection: "column" as const,
-    alignItems: "center",
-    justifyContent: "center",
-    background: "linear-gradient(160deg, #2d1540 0%, #4a2870 40%, #9561ab 100%)",
+    justifyContent: "space-between",
+    padding: "48px 52px",
     position: "relative" as const,
     overflow: "hidden",
   },
-  circle1: {
-    position: "absolute" as const,
-    top: -40,
-    right: -40,
-    width: 180,
-    height: 180,
-    borderRadius: "50%",
-    background: "rgba(149,97,171,0.25)",
-    pointerEvents: "none" as const,
-  },
-  circle2: {
-    position: "absolute" as const,
-    bottom: -50,
-    left: -20,
-    width: 140,
-    height: 140,
-    borderRadius: "50%",
-    background: "rgba(149,97,171,0.15)",
-    pointerEvents: "none" as const,
-  },
-  circle3: {
-    position: "absolute" as const,
-    top: "30%",
-    left: -30,
-    width: 80,
-    height: 80,
-    borderRadius: "50%",
-    background: "rgba(255,255,255,0.05)",
-    pointerEvents: "none" as const,
-  },
-  logoWrap: {
+
+  leftTop: {
     display: "flex",
-    flexDirection: "column" as const,
     alignItems: "center",
-    marginBottom: 28,
-    position: "relative" as const,
-    zIndex: 1,
+    gap: 10,
   },
-  logoBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.15)",
-    border: "1px solid rgba(255,255,255,0.25)",
+  leftLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    background: "rgba(255,255,255,0.12)",
+    border: "1px solid rgba(255,255,255,0.15)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    fontSize: 26,
-    marginBottom: 12,
+    fontSize: 14,
+    color: "#fff",
   },
-  appName: {
-    color: "white",
-    fontSize: 20,
+  leftBrand: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 14,
+    fontWeight: 600,
+    letterSpacing: "-0.2px",
+  },
+
+  leftCenter: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column" as const,
+    justifyContent: "center",
+    paddingBottom: 40,
+  },
+  leftHeadline: {
+    color: "#fff",
+    fontSize: 32,
     fontWeight: 700,
-    letterSpacing: "-0.3px",
+    lineHeight: 1.25,
+    letterSpacing: "-0.5px",
+    margin: "0 0 16px",
+    maxWidth: 360,
+  },
+  leftSub: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 14,
+    lineHeight: 1.6,
+    maxWidth: 320,
     margin: 0,
   },
-  subtitle: {
-    color: "rgba(255,255,255,0.55)",
+
+  leftStats: {
+    display: "flex",
+    gap: 32,
+  },
+  stat: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 3,
+  },
+  statNum: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: 700,
+    letterSpacing: "-0.5px",
+  },
+  statLabel: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 11,
+    fontWeight: 500,
+    letterSpacing: "0.3px",
+  },
+
+  // decorative blobs
+  blob1: {
+    position: "absolute" as const,
+    top: -80,
+    right: -80,
+    width: 300,
+    height: 300,
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.04)",
+    pointerEvents: "none" as const,
+  },
+  blob2: {
+    position: "absolute" as const,
+    bottom: -60,
+    right: 60,
+    width: 200,
+    height: 200,
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.03)",
+    pointerEvents: "none" as const,
+  },
+
+  // Right panel
+  right: {
+    flex: "2 0 0",
+    background: "var(--vt-bg)",
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "40px 48px",
+    borderLeft: "1px solid var(--vt-border)",
+  },
+
+  formWrap: {
+    width: "100%",
+    maxWidth: 320,
+  },
+
+  formTitle: {
+    color: "var(--vt-text)",
+    fontSize: 18,
+    fontWeight: 700,
+    letterSpacing: "-0.3px",
+    margin: "0 0 6px",
+  },
+  formSub: {
+    color: "var(--vt-text-muted)",
     fontSize: 13,
-    marginTop: 4,
+    margin: "0 0 28px",
   },
-  card: {
-    background: "rgba(255,255,255,0.1)",
-    backdropFilter: "blur(16px)",
-    WebkitBackdropFilter: "blur(16px)",
-    border: "1px solid rgba(255,255,255,0.2)",
-    borderRadius: 20,
-    padding: 28,
-    width: 320,
-    maxWidth: "calc(100vw - 48px)",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-    position: "relative" as const,
-    zIndex: 1,
-  },
+
   fieldWrap: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   label: {
     display: "block",
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 12,
+    color: "var(--vt-text-muted)",
+    fontSize: 11,
     fontWeight: 600,
-    letterSpacing: "0.5px",
+    letterSpacing: "0.4px",
     textTransform: "uppercase" as const,
-    marginBottom: 6,
+    marginBottom: 5,
   },
   input: {
     display: "block",
     width: "100%",
-    background: "rgba(255,255,255,0.12)",
-    border: "1px solid rgba(255,255,255,0.2)",
-    borderRadius: 10,
-    padding: "11px 14px",
-    color: "white",
-    fontSize: 14,
+    background: "var(--vt-bg)",
+    border: "1px solid var(--vt-border)",
+    borderRadius: "var(--vt-radius-sm)",
+    padding: "9px 12px",
+    color: "var(--vt-text)",
+    fontSize: 13,
     outline: "none",
     boxSizing: "border-box" as const,
+    transition: "border-color 0.15s",
   },
   errorBox: {
-    background: "rgba(239,68,68,0.2)",
-    border: "1px solid rgba(239,68,68,0.4)",
-    borderRadius: 8,
-    padding: "10px 14px",
-    marginBottom: 16,
-    color: "rgba(255,200,200,0.9)",
-    fontSize: 13,
+    background: "rgba(220,38,38,0.06)",
+    border: "1px solid rgba(220,38,38,0.2)",
+    borderRadius: "var(--vt-radius-sm)",
+    padding: "8px 12px",
+    marginBottom: 14,
+    color: "var(--vt-danger)",
+    fontSize: 12,
   },
   button: {
     width: "100%",
-    background: "#9561ab",
+    background: "var(--vt-primary)",
     color: "white",
     border: "none",
-    borderRadius: 12,
-    padding: 13,
-    fontSize: 15,
+    borderRadius: "var(--vt-radius-sm)",
+    padding: "10px",
+    fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
-    boxShadow: "0 4px 16px rgba(149,97,171,0.5)",
     letterSpacing: "0.2px",
-    marginTop: 8,
+    marginTop: 6,
+    transition: "opacity 0.15s",
   },
   buttonDisabled: {
     opacity: 0.6,
     cursor: "not-allowed" as const,
   },
   footer: {
-    color: "rgba(255,255,255,0.35)",
-    fontSize: 12,
-    marginTop: 20,
-    position: "relative" as const,
-    zIndex: 1,
+    color: "var(--vt-text-muted)",
+    fontSize: 11,
+    marginTop: 24,
+    textAlign: "center" as const,
   },
 };
-
-const FOCUS_RING = "0 0 0 2px rgba(149,97,171,0.8)";
 
 export function LoginPage() {
   const [usr, setUsr] = useState(() => localStorage.getItem("vt_last_user") ?? "Administrator");
@@ -157,9 +216,16 @@ export function LoginPage() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [branding, setBranding] = useState<LoginBranding>(DEFAULT_BRANDING);
   const nav = useNavigate();
   const [params] = useSearchParams();
   const next = params.get("next") ?? "/m/work";
+
+  useEffect(() => {
+    probeSession().then((s) => {
+      if (s.login_branding) setBranding(s.login_branding);
+    }).catch(() => {});
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -178,69 +244,96 @@ export function LoginPage() {
   }
 
   return (
-    <div style={styles.root}>
-      <div style={styles.circle1} aria-hidden="true" />
-      <div style={styles.circle2} aria-hidden="true" />
-      <div style={styles.circle3} aria-hidden="true" />
+    <div style={S.root}>
+      {/* ── Left panel ── */}
+      <div style={S.left}>
+        <div style={S.blob1} aria-hidden="true" />
+        <div style={S.blob2} aria-hidden="true" />
 
-      <div style={styles.logoWrap}>
-        <div style={styles.logoBox}>✓</div>
-        <h1 style={styles.appName}>Vernon Tasks</h1>
-        <p style={styles.subtitle}>{t("login.subtitle")}</p>
+        <div style={S.leftTop}>
+          <div style={S.leftLogo}>◆</div>
+          <span style={S.leftBrand}>Vernon Tasks</span>
+        </div>
+
+        <div style={S.leftCenter}>
+          <h2 style={S.leftHeadline}>{branding.headline}</h2>
+          <p style={S.leftSub}>{branding.subtext}</p>
+        </div>
+
+        <div style={S.leftStats}>
+          <div style={S.stat}>
+            <span style={S.statNum}>Sprint</span>
+            <span style={S.statLabel}>Tracking</span>
+          </div>
+          <div style={S.stat}>
+            <span style={S.statNum}>Kanban</span>
+            <span style={S.statLabel}>Visual board</span>
+          </div>
+          <div style={S.stat}>
+            <span style={S.statNum}>Analitik</span>
+            <span style={S.statLabel}>Real-time</span>
+          </div>
+        </div>
       </div>
 
-      <div style={styles.card}>
-        <form onSubmit={onSubmit} noValidate>
-          <div style={styles.fieldWrap}>
-            <label htmlFor="vt-usr" style={styles.label}>{t("login.username")}</label>
-            <input
-              id="vt-usr"
-              style={{
-                ...styles.input,
-                boxShadow: focusedId === "vt-usr" ? FOCUS_RING : undefined,
-              }}
-              value={usr}
-              onChange={(e) => setUsr(e.target.value)}
-              onFocus={() => setFocusedId("vt-usr")}
-              onBlur={() => setFocusedId(null)}
-              autoComplete="username"
-              required
-              autoCapitalize="none"
-            />
-          </div>
-          <div style={{ ...styles.fieldWrap, marginBottom: 24 }}>
-            <label htmlFor="vt-pwd" style={styles.label}>{t("login.password")}</label>
-            <input
-              id="vt-pwd"
-              type="password"
-              style={{
-                ...styles.input,
-                boxShadow: focusedId === "vt-pwd" ? FOCUS_RING : undefined,
-              }}
-              value={pwd}
-              onChange={(e) => setPwd(e.target.value)}
-              onFocus={() => setFocusedId("vt-pwd")}
-              onBlur={() => setFocusedId(null)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
+      {/* ── Right panel ── */}
+      <div style={S.right}>
+        <div style={S.formWrap}>
+          <h1 style={S.formTitle}>Masuk</h1>
+          <p style={S.formSub}>Masukkan kredensial akun Anda</p>
 
-          {err && (
-            <div role="alert" style={styles.errorBox}>{err}</div>
-          )}
+          <form onSubmit={onSubmit} noValidate>
+            <div style={S.fieldWrap}>
+              <label htmlFor="vt-usr" style={S.label}>{t("login.username")}</label>
+              <input
+                id="vt-usr"
+                style={{
+                  ...S.input,
+                  boxShadow: focusedId === "vt-usr" ? FOCUS_RING : undefined,
+                  borderColor: focusedId === "vt-usr" ? "var(--vt-primary)" : undefined,
+                }}
+                value={usr}
+                onChange={(e) => setUsr(e.target.value)}
+                onFocus={() => setFocusedId("vt-usr")}
+                onBlur={() => setFocusedId(null)}
+                autoComplete="username"
+                required
+                autoCapitalize="none"
+              />
+            </div>
+            <div style={{ ...S.fieldWrap, marginBottom: 20 }}>
+              <label htmlFor="vt-pwd" style={S.label}>{t("login.password")}</label>
+              <input
+                id="vt-pwd"
+                type="password"
+                style={{
+                  ...S.input,
+                  boxShadow: focusedId === "vt-pwd" ? FOCUS_RING : undefined,
+                  borderColor: focusedId === "vt-pwd" ? "var(--vt-primary)" : undefined,
+                }}
+                value={pwd}
+                onChange={(e) => setPwd(e.target.value)}
+                onFocus={() => setFocusedId("vt-pwd")}
+                onBlur={() => setFocusedId(null)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={busy}
-            style={{ ...styles.button, ...(busy ? styles.buttonDisabled : {}) }}
-          >
-            {busy ? t("login.processing") : t("login.submit")}
-          </button>
-        </form>
+            {err && <div role="alert" style={S.errorBox}>{err}</div>}
+
+            <button
+              type="submit"
+              disabled={busy}
+              style={{ ...S.button, ...(busy ? S.buttonDisabled : {}) }}
+            >
+              {busy ? t("login.processing") : t("login.submit")}
+            </button>
+          </form>
+
+          <p style={S.footer}>{t("login.footer")}</p>
+        </div>
       </div>
-
-      <p style={styles.footer}>{t("login.footer")}</p>
     </div>
   );
 }

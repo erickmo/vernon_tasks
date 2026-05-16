@@ -69,7 +69,7 @@ export function NotificationsPage() {
         {/* Sticky gradient header */}
         <header
           style={{
-            background: "linear-gradient(135deg, #2d1540, #9561ab)",
+            background: "var(--vt-primary-light)",
             padding: "var(--vt-space-4)",
             position: "sticky",
             top: 0,
@@ -79,7 +79,7 @@ export function NotificationsPage() {
             alignItems: "center",
           }}
         >
-          <h1 style={{ margin: 0, color: "white", fontSize: 20, fontWeight: 700 }}>
+          <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 14, fontWeight: 600 }}>
             {t("notif.title")}
           </h1>
           <div style={{ display: "flex", gap: 8 }}>
@@ -88,9 +88,9 @@ export function NotificationsPage() {
               style={{
                 padding: "6px 12px",
                 borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.5)",
+                border: "1px solid var(--vt-border)",
                 background: "transparent",
-                color: "white",
+                color: "var(--vt-text)",
                 textDecoration: "none",
                 fontSize: 13,
               }}
@@ -103,9 +103,9 @@ export function NotificationsPage() {
               style={{
                 padding: "6px 12px",
                 borderRadius: 8,
-                border: "1px solid rgba(255,255,255,0.5)",
+                border: "1px solid var(--vt-border)",
                 background: "transparent",
-                color: "white",
+                color: "var(--vt-text)",
                 fontSize: 13,
                 cursor: "pointer",
                 opacity: !q.data?.some((n) => n.read === 0) ? 0.5 : 1,

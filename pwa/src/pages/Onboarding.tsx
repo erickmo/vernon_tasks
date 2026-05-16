@@ -29,7 +29,7 @@ export function Onboarding() {
         display: "flex",
         flexDirection: "column",
         height: "100vh",
-        background: "linear-gradient(160deg, #2d1540 0%, #4a2870 40%, #9561ab 100%)",
+        background: "var(--vt-bg)",
         padding: 24,
         paddingTop: "calc(var(--safe-top) + 24px)",
       }}
@@ -38,22 +38,20 @@ export function Onboarding() {
       <div style={{ flex: 1, display: "grid", placeItems: "center" }}>
         <div
           style={{
-            background: "rgba(255,255,255,0.12)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
+            background: "var(--vt-surface)",
             borderRadius: 24,
-            border: "1px solid rgba(255,255,255,0.2)",
+            border: "1px solid var(--vt-border)",
             padding: "40px 28px",
             textAlign: "center",
             width: "100%",
             maxWidth: 360,
           }}
         >
-          <h1 style={{ color: "white", margin: "0 0 16px", fontSize: 26, fontWeight: 800 }}>
+          <h1 style={{ color: "var(--vt-primary-dark)", margin: "0 0 16px", fontSize: 26, fontWeight: 800 }}>
             {slide.title}
           </h1>
           {slide.body && (
-            <p style={{ color: "rgba(255,255,255,0.8)", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>
+            <p style={{ color: "var(--vt-text-muted)", maxWidth: 280, margin: "0 auto", lineHeight: 1.6 }}>
               {slide.body}
             </p>
           )}
@@ -69,7 +67,7 @@ export function Onboarding() {
               width: 8,
               height: 8,
               borderRadius: "50%",
-              background: idx === i ? "white" : "rgba(255,255,255,0.35)",
+              background: idx === i ? "var(--vt-primary)" : "var(--vt-border)",
               transition: "background 0.2s",
             }}
           />

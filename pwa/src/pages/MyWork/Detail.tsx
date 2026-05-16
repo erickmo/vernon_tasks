@@ -55,8 +55,9 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-export function MyWorkDetail() {
-  const { id } = useParams<{ id: string }>();
+export function MyWorkDetail({ desktopId }: { desktopId?: string } = {}) {
+  const params = useParams<{ id: string }>();
+  const id = desktopId ?? params.id ?? "";
   const q = useQuery({
     queryKey: ["task", id],
     queryFn: () => fetchTaskDetail(id!),
@@ -119,7 +120,7 @@ export function MyWorkDetail() {
   if (q.isLoading) {
     return (
       <div style={{ background: "var(--vt-primary-light)", minHeight: "100%" }}>
-        <div style={{ height: 72, background: "linear-gradient(135deg, #2d1540, #9561ab)" }} />
+        <div style={{ height: 72, background: "var(--vt-primary-light)" }} />
         <div style={{ padding: 16 }}>
           <Skeleton height={28} width="60%" />
           <div style={{ height: 12 }} />
@@ -145,7 +146,7 @@ export function MyWorkDetail() {
       {/* Sticky gradient header */}
       <header
         style={{
-          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          background: "var(--vt-primary-light)",
           padding: "var(--vt-space-4)",
           position: "sticky",
           top: 0,
@@ -154,14 +155,14 @@ export function MyWorkDetail() {
       >
         <Link
           to="/m/work"
-          style={{ color: "rgba(255,255,255,0.75)", textDecoration: "none", fontSize: 14 }}
+          style={{ color: "var(--vt-text-muted)", textDecoration: "none", fontSize: 14 }}
         >
           ← {t("nav.tasks")}
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
           <div
             style={{
-              color: "white",
+              color: "var(--vt-primary-dark)",
               fontWeight: 700,
               fontSize: 17,
               flex: 1,

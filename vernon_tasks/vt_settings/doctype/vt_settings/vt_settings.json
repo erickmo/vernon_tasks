@@ -17,7 +17,10 @@
     "default_capacity_pct_threshold",
     "push_section",
     "push_vapid_public_key",
-    "push_vapid_private_key"
+    "push_vapid_private_key",
+    "login_branding_section",
+    "login_headline",
+    "login_subtext"
   ],
   "fields": [
     {
@@ -100,6 +103,25 @@
       "fieldtype": "Password",
       "label": "VAPID Private Key",
       "description": "Server-only. Never exposed to client."
+    },
+    {
+      "fieldname": "login_branding_section",
+      "fieldtype": "Section Break",
+      "label": "Login Page Branding"
+    },
+    {
+      "fieldname": "login_headline",
+      "fieldtype": "Small Text",
+      "label": "Login Headline",
+      "description": "Judul besar di panel kiri halaman login. Kosongkan untuk pakai teks default.",
+      "default": "Kelola tugas tim dengan lebih cerdas."
+    },
+    {
+      "fieldname": "login_subtext",
+      "fieldtype": "Small Text",
+      "label": "Login Subtext",
+      "description": "Teks deskripsi di bawah headline. Kosongkan untuk pakai teks default.",
+      "default": "Sprint, kanban, dan analitik dalam satu tempat — dirancang untuk tim yang bergerak cepat."
     }
   ],
   "issingle": 1,

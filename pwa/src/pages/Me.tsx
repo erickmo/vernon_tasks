@@ -34,7 +34,7 @@ export function MePage() {
       {/* Sticky gradient header */}
       <header
         style={{
-          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          background: "var(--vt-primary-light)",
           padding: "var(--vt-space-4)",
           position: "sticky",
           top: 0,
@@ -50,24 +50,24 @@ export function MePage() {
             width: 64,
             height: 64,
             borderRadius: "50%",
-            background: "rgba(255,255,255,0.2)",
+            background: "rgba(149,97,171,0.15)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: 22,
+            fontSize: 18,
             fontWeight: 700,
-            color: "white",
+            color: "var(--vt-primary-dark)",
             flexShrink: 0,
-            border: "2px solid rgba(255,255,255,0.35)",
+            border: "2px solid var(--vt-primary)",
           }}
         >
           {getInitials(user)}
         </div>
         <div>
-          <div style={{ color: "white", fontWeight: 700, fontSize: 18 }}>
+          <div style={{ color: "var(--vt-primary-dark)", fontWeight: 600, fontSize: 15 }}>
             {user ?? "—"}
           </div>
-          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+          <div style={{ color: "var(--vt-text-muted)", fontSize: 12 }}>
             Akun
           </div>
         </div>

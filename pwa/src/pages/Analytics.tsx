@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchLeaderboard,
@@ -211,8 +212,15 @@ function StreakTab() {
   );
 }
 
+const VALID_TABS: TabKey[] = ["leaderboard", "velocity", "streak"];
+
 export function AnalyticsPage() {
-  const [tab, setTab] = useState<TabKey>("leaderboard");
+  const [params, setParams] = useSearchParams();
+  const rawTab = params.get("tab") as TabKey;
+  const tab = VALID_TABS.includes(rawTab) ? rawTab : "leaderboard";
+  function setTab(k: TabKey) {
+    setParams({ tab: k }, { replace: true });
+  }
 
   useEffect(() => {
     logEvent("analytics_view", { tab });
@@ -223,14 +231,14 @@ export function AnalyticsPage() {
       {/* Sticky gradient header */}
       <header
         style={{
-          background: "linear-gradient(135deg, #2d1540, #9561ab)",
+          background: "var(--vt-primary-light)",
           padding: "var(--vt-space-4)",
           position: "sticky",
           top: 0,
           zIndex: 10,
         }}
       >
-        <h1 style={{ margin: 0, color: "white", fontSize: 20, fontWeight: 700 }}>
+        <h1 style={{ margin: 0, color: "var(--vt-primary-dark)", fontSize: 15, fontWeight: 600 }}>
           {t("nav.analytics")}
         </h1>
       </header>
