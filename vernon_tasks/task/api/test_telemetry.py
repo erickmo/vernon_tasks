@@ -5,7 +5,9 @@ from vernon_tasks.task.api.telemetry import log_event, purge_old_telemetry
 
 class TestTelemetry(FrappeTestCase):
     def setUp(self):
+        frappe.set_user("Administrator")
         frappe.db.delete("Vernon Telemetry Event")
+        frappe.cache().delete_keys("vt:tel:")
 
     def test_log_event_persists(self):
         log_event(event="pwa_boot", props={"version": "abc"})

@@ -57,7 +57,7 @@ def log_event(event: str, props: dict | None = None) -> dict:
     if user == "Guest":
         return {"ok": False, "reason": "guest"}
 
-    cache_key = f"vt:tel:{user}:{frappe.utils.now()[:16]}"
+    cache_key = frappe.cache().make_key(f"vt:tel:{user}:{frappe.utils.now()[:16]}")
     count = frappe.cache().incrby(cache_key, 1)
     frappe.cache().expire(cache_key, 90)
     if count > RATE_LIMIT_PER_MINUTE:

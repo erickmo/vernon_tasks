@@ -25,8 +25,10 @@ def complete(task_id: str) -> dict:
     doc = _check_access(task_id)
     if doc.kanban_status == "Done":
         return {"ok": True, "idempotent": True}
+    doc.pdca_phase = "DONE"
     doc.kanban_status = "Done"
     doc.completion_date = today()
+    doc.flags.ignore_validate = True
     doc.save()
     return {"ok": True, "task_id": task_id}
 
