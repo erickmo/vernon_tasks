@@ -12,27 +12,35 @@ class TestMyWorkMutations(FrappeTestCase):
         cls.user_b = "p1a_user_b@test.local"
         for u in (cls.user_a, cls.user_b):
             if not frappe.db.exists("User", u):
-                frappe.get_doc({"doctype": "User", "email": u, "first_name": u}).insert(
-                    ignore_permissions=True
-                )
+                frappe.get_doc({
+                    "doctype": "User", "email": u, "first_name": u,
+                    "roles": [{"role": "VT Member"}],
+                }).insert(ignore_permissions=True)
         if not frappe.db.exists("VT Project", "TEST-P1A-PROJ"):
-            frappe.get_doc({
+            proj = frappe.get_doc({
                 "doctype": "VT Project",
                 "name": "TEST-P1A-PROJ",
                 "title": "P1a Test Project",
                 "project_owner": "Administrator",
                 "start_date": today(),
                 "end_date": add_days(today(), 30),
-            }).insert(ignore_permissions=True)
+            })
+            proj.flags.name_set = True
+            proj.insert(ignore_permissions=True)
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
 
     def _make_task(self, owner, title="T"):
-        return frappe.get_doc({
+        doc = frappe.get_doc({
             "doctype": "VT Task",
             "title": title,
             "deadline": today(),
             "assigned_to": owner,
             "project": "TEST-P1A-PROJ",
-        }).insert(ignore_permissions=True)
+        })
+        doc.flags.ignore_links = True
+        return doc.insert(ignore_permissions=True)
 
     def test_complete_marks_done(self):
         frappe.set_user(self.user_a)

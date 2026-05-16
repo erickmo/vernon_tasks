@@ -86,6 +86,8 @@ website_route_rules = [
 
 after_request = ["vernon_tasks.hooks.add_pwa_security_headers"]
 
+before_tests = "vernon_tasks.test_setup.before_tests"
+
 fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
     {"dt": "Workspace", "filters": [["name", "in", ["My Tasks", "My Projects", "Overview"]]]},

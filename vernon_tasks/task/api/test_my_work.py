@@ -8,14 +8,16 @@ _FIXTURE_PROJECT = "TEST-MY-WORK-PROJ"
 
 def _ensure_project():
     if not frappe.db.exists("VT Project", _FIXTURE_PROJECT):
-        frappe.get_doc({
+        p = frappe.get_doc({
             "doctype": "VT Project",
             "name": _FIXTURE_PROJECT,
             "title": "Test Project (my_work fixtures)",
             "project_owner": "Administrator",
             "start_date": "2025-01-01",
             "end_date": "2025-12-31",
-        }).insert(ignore_permissions=True)
+        })
+        p.flags.name_set = True
+        p.insert(ignore_permissions=True)
     return _FIXTURE_PROJECT
 
 
@@ -36,18 +38,21 @@ class TestMyWork(FrappeTestCase):
         self.user_a = _ensure_user("a-mywork@test.local")
         self.user_b = _ensure_user("b-mywork@test.local")
         self.project = _ensure_project()
+        frappe.db.delete("VT Task", {"project": self.project})
 
     def tearDown(self):
         frappe.set_user("Administrator")
 
     def _make_task(self, owner, deadline, title="T"):
-        return frappe.get_doc({
+        doc = frappe.get_doc({
             "doctype": "VT Task",
             "title": title,
             "deadline": deadline,
             "assigned_to": owner,
             "project": self.project,
-        }).insert(ignore_permissions=True)
+        })
+        doc.flags.ignore_links = True
+        return doc.insert(ignore_permissions=True)
 
     def test_list_groups_correctly(self):
         frappe.set_user(self.user_a)

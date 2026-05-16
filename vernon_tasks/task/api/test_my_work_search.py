@@ -10,37 +10,37 @@ class TestMyWorkSearch(FrappeTestCase):
         super().setUpClass()
         cls.user = "p1b_search_user@test.local"
         if not frappe.db.exists("User", cls.user):
-            frappe.get_doc({"doctype": "User", "email": cls.user, "first_name": cls.user}).insert(
-                ignore_permissions=True
-            )
-        if not frappe.db.exists("VT Project", "TEST-P1B-PROJ-A"):
             frappe.get_doc({
-                "doctype": "VT Project",
-                "name": "TEST-P1B-PROJ-A",
-                "title": "Search Test A",
-                "project_owner": "Administrator",
-                "start_date": today(),
-                "end_date": add_days(today(), 30),
+                "doctype": "User", "email": cls.user, "first_name": cls.user,
+                "roles": [{"role": "VT Member"}],
             }).insert(ignore_permissions=True)
-        if not frappe.db.exists("VT Project", "TEST-P1B-PROJ-B"):
-            frappe.get_doc({
-                "doctype": "VT Project",
-                "name": "TEST-P1B-PROJ-B",
-                "title": "Search Test B",
-                "project_owner": "Administrator",
-                "start_date": today(),
-                "end_date": add_days(today(), 30),
-            }).insert(ignore_permissions=True)
+        for proj_name, proj_title in [("TEST-P1B-PROJ-A", "Search Test A"), ("TEST-P1B-PROJ-B", "Search Test B")]:
+            if not frappe.db.exists("VT Project", proj_name):
+                p = frappe.get_doc({
+                    "doctype": "VT Project",
+                    "name": proj_name,
+                    "title": proj_title,
+                    "project_owner": "Administrator",
+                    "start_date": today(),
+                    "end_date": add_days(today(), 30),
+                })
+                p.flags.name_set = True
+                p.insert(ignore_permissions=True)
 
-    def _make_task(self, title, project="TEST-P1B-PROJ-A", priority="Sedang", deadline=None):
-        return frappe.get_doc({
+    def tearDown(self):
+        frappe.set_user("Administrator")
+
+    def _make_task(self, title, project="TEST-P1B-PROJ-A", priority="Medium", deadline=None):
+        doc = frappe.get_doc({
             "doctype": "VT Task",
             "title": title,
             "deadline": deadline or today(),
             "assigned_to": self.user,
             "project": project,
             "priority": priority,
-        }).insert(ignore_permissions=True)
+        })
+        doc.flags.ignore_links = True
+        return doc.insert(ignore_permissions=True)
 
     def test_query_matches_title_like(self):
         frappe.set_user(self.user)
@@ -53,12 +53,12 @@ class TestMyWorkSearch(FrappeTestCase):
 
     def test_priority_in_list(self):
         frappe.set_user(self.user)
-        self._make_task("A", priority="Tinggi")
-        self._make_task("B", priority="Rendah")
-        r = search(priority="Tinggi,Sedang")
+        self._make_task("A", priority="High")
+        self._make_task("B", priority="Low")
+        r = search(priority="High,Medium")
         prios = {x["priority"] for x in r["results"]}
-        self.assertIn("Tinggi", prios)
-        self.assertNotIn("Rendah", prios)
+        self.assertIn("High", prios)
+        self.assertNotIn("Low", prios)
 
     def test_project_filter(self):
         frappe.set_user(self.user)
