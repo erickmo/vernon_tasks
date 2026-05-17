@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PageLayout } from "../layouts/PageLayout";
 import { FiltersBar } from "./FiltersBar";
@@ -8,6 +8,7 @@ import { BulkActions } from "./BulkActions";
 import { useProjects } from "./hooks/useProjects";
 import { EmptyState } from "../../components/EmptyState";
 import { PageSkeleton } from "../../components/PageSkeleton";
+import * as telemetry from "../../telemetry";
 import type { ListFilters } from "./api/types";
 
 function filtersFromParams(p: URLSearchParams): ListFilters {
@@ -28,6 +29,19 @@ export function ProjectList() {
   const filters = filtersFromParams(params);
   const list = useProjects(filters);
   const activeName = params.get("proj");
+
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  useEffect(() => {
+    const count = [
+      filters.period_start,
+      filters.period_end,
+      ...(filters.statuses ?? []),
+      ...(filters.pdca_phases ?? []),
+      ...(filters.leaders ?? []),
+    ].filter(Boolean).length;
+    telemetry.trackProjectsListView(count);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   return (
     <PageLayout title="Projects" actions={<Link to="/portal/projects/new">+ New Project</Link>}>

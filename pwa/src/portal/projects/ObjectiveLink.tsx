@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useObjective } from "../okr/hooks/useObjective";
+import * as telemetry from "../../telemetry";
 
 export interface ObjectiveLinkProps {
   projectName: string;
@@ -27,6 +28,7 @@ export function ObjectiveLink({ projectName, objectiveName }: ObjectiveLinkProps
       to={`/portal/okr?obj=${encodeURIComponent(objectiveName)}`}
       className="objective-link"
       data-project={projectName}
+      onClick={() => telemetry.trackProjectsObjectiveLinkClick(projectName, objectiveName)}
     >
       <div className="objective-link__card">
         <strong>{String(o.title ?? "")}</strong>

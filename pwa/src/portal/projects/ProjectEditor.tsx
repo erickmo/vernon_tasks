@@ -7,6 +7,7 @@ import { PageLayout } from "../layouts/PageLayout";
 import * as projApi from "./api/projects";
 import { useProject } from "./hooks/useProject";
 import { PROJECT_STATUSES } from "./lib/projectStatus";
+import * as telemetry from "../../telemetry";
 
 const PDCA_OPTIONS = ["PLAN", "DO", "CHECK", "ACT", "CLOSED"] as const;
 
@@ -83,9 +84,11 @@ export function ProjectEditor({ mode }: ProjectEditorProps) {
     if (mode === "create") {
       const res = (await projApi.createProject(values)) as any;
       const newName = res?.data?.name;
+      if (newName) telemetry.trackProjectsCreate(newName);
       nav(newName ? `/portal/projects?proj=${encodeURIComponent(newName)}` : "/portal/projects");
     } else if (id) {
       await projApi.updateProject(id, values);
+      telemetry.trackProjectsEdit(id);
       nav(`/portal/projects?proj=${encodeURIComponent(id)}`);
     }
   }

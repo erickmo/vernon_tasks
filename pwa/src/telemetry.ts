@@ -50,7 +50,16 @@ export type TelemetryEvent =
   | "okr.objective_create"
   | "okr.objective_edit"
   | "okr.bulk_pdca_advance"
-  | "okr.permission_denied";
+  | "okr.permission_denied"
+  | "projects.list_view"
+  | "projects.detail_view"
+  | "projects.create"
+  | "projects.edit"
+  | "projects.bulk_pdca_advance"
+  | "projects.bulk_status_set"
+  | "projects.inline_status_change"
+  | "projects.objective_link_click"
+  | "projects.permission_denied";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -93,4 +102,32 @@ export function trackOkrBulkPdca(count: number, from_to_pairs: [string, string][
 }
 export function trackOkrPermissionDenied(path: string, action: string) {
   self.logEvent("okr.permission_denied", { path, action });
+}
+
+export function trackProjectsListView(filters_count: number) {
+  self.logEvent("projects.list_view", { filters_count });
+}
+export function trackProjectsDetailView(name: string) {
+  self.logEvent("projects.detail_view", { name });
+}
+export function trackProjectsCreate(name: string) {
+  self.logEvent("projects.create", { name });
+}
+export function trackProjectsEdit(name: string) {
+  self.logEvent("projects.edit", { name });
+}
+export function trackProjectsBulkPdca(count: number, from_to_pairs: [string, string][]) {
+  self.logEvent("projects.bulk_pdca_advance", { count, from_to_pairs });
+}
+export function trackProjectsBulkStatusSet(count: number, target_status: string) {
+  self.logEvent("projects.bulk_status_set", { count, target_status });
+}
+export function trackProjectsInlineStatusChange(name: string, from: string, to: string) {
+  self.logEvent("projects.inline_status_change", { name, from, to });
+}
+export function trackProjectsObjectiveLinkClick(project: string, objective: string) {
+  self.logEvent("projects.objective_link_click", { project, objective });
+}
+export function trackProjectsPermissionDenied(path: string, action: string) {
+  self.logEvent("projects.permission_denied", { path, action });
 }

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useProject } from "./hooks/useProject";
 import { useProjectsBulk } from "./hooks/useProjectsBulk";
@@ -6,6 +7,7 @@ import { ObjectiveLink } from "./ObjectiveLink";
 import { EmptyState } from "../../components/EmptyState";
 import { PageSkeleton } from "../../components/PageSkeleton";
 import { PROJECT_STATUSES } from "./lib/projectStatus";
+import * as telemetry from "../../telemetry";
 
 export interface ProjectDetailProps { name: string | null }
 
@@ -14,6 +16,10 @@ export function ProjectDetail({ name }: ProjectDetailProps) {
   const mut = useProjectsBulk();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission("project.write");
+
+  useEffect(() => {
+    if (name && query.data) telemetry.trackProjectsDetailView(name);
+  }, [name, query.data]);
 
   if (!name) return <EmptyState title="Select a Project" description="Pick a row to view details." />;
   if (query.isLoading) return <PageSkeleton />;
@@ -24,6 +30,8 @@ export function ProjectDetail({ name }: ProjectDetailProps) {
   const counts = query.data.counts;
 
   async function onStatusChange(next: string) {
+    const from = String(p.status ?? "");
+    telemetry.trackProjectsInlineStatusChange(name as string, from, next);
     await mut.mutateAsync({ names: [name as string], payload: { status: next as any } });
   }
   async function onAdvancePdca() {

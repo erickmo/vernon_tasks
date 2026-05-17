@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useProjectsBulk } from "./hooks/useProjectsBulk";
 import { PROJECT_STATUSES, type ProjectStatus } from "./lib/projectStatus";
+import * as telemetry from "../../telemetry";
 
 export interface BulkActionsProps { selected: Set<string> }
 
@@ -17,9 +18,17 @@ export function BulkActions({ selected }: BulkActionsProps) {
   async function confirm() {
     const names = Array.from(selected);
     if (mode === "pdca") {
-      await mut.mutateAsync({ names, payload: { pdca_phase: "__next__" } });
+      const res = await mut.mutateAsync({ names, payload: { pdca_phase: "__next__" } });
+      telemetry.trackProjectsBulkPdca(
+        res.updated.length,
+        res.updated.map((u) => [
+          String(u.changes.pdca_phase ?? ""),
+          String(u.changes.pdca_phase ?? ""),
+        ]),
+      );
     } else if (mode === "status" && target) {
-      await mut.mutateAsync({ names, payload: { status: target } });
+      const res = await mut.mutateAsync({ names, payload: { status: target } });
+      telemetry.trackProjectsBulkStatusSet(res.updated.length, target);
     }
     setMode(null);
     setTarget(null);
