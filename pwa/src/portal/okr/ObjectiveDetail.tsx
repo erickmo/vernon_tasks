@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useObjective } from "./hooks/useObjective";
 import { KRRow } from "./KRRow";
 import { EmptyState } from "../../components/EmptyState";
 import { PageSkeleton } from "../../components/PageSkeleton";
+import * as telemetry from "../../telemetry";
 
 export interface ObjectiveDetailProps {
   name: string | null;
@@ -10,6 +12,10 @@ export interface ObjectiveDetailProps {
 
 export function ObjectiveDetail({ name }: ObjectiveDetailProps) {
   const query = useObjective(name);
+
+  useEffect(() => {
+    if (name && query.data) telemetry.trackOkrDetailView(name);
+  }, [name, query.data]);
 
   if (!name)
     return (

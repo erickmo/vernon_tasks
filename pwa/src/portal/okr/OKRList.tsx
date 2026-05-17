@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PageLayout } from "../layouts/PageLayout";
 import { FiltersBar } from "./FiltersBar";
@@ -8,6 +8,7 @@ import { BulkActions } from "./BulkActions";
 import { useObjectives } from "./hooks/useObjectives";
 import { EmptyState } from "../../components/EmptyState";
 import { PageSkeleton } from "../../components/PageSkeleton";
+import * as telemetry from "../../telemetry";
 import type { ListFilters } from "./api/types";
 
 function filtersFromParams(p: URLSearchParams): ListFilters {
@@ -26,6 +27,19 @@ export function OKRList() {
   const filters = filtersFromParams(params);
   const list = useObjectives(filters);
   const activeName = params.get("obj");
+
+  const filtersKey = JSON.stringify(filters);
+  useEffect(() => {
+    const count = [
+      filters.period_start,
+      filters.period_end,
+      ...(filters.owners ?? []),
+      ...(filters.statuses ?? []),
+      ...(filters.pdca_phases ?? []),
+    ].filter(Boolean).length;
+    telemetry.trackOkrListView(count);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtersKey]);
 
   return (
     <PageLayout title="OKR" actions={<Link to="/portal/okr/new">+ New Objective</Link>}>

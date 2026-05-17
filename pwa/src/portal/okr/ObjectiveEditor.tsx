@@ -7,6 +7,7 @@ import { PageLayout } from "../layouts/PageLayout";
 import { parsePeriod } from "./lib/periodParser";
 import * as objApi from "./api/objectives";
 import { useObjective } from "./hooks/useObjective";
+import * as telemetry from "../../telemetry";
 
 const schema = z
   .object({
@@ -82,9 +83,11 @@ export function ObjectiveEditor({ mode }: ObjectiveEditorProps) {
     if (mode === "create") {
       const res = (await objApi.createObjective(values)) as { data?: { name?: string } } | undefined;
       const newName = res?.data?.name;
+      if (newName) telemetry.trackOkrObjectiveCreate(newName);
       nav(newName ? `/portal/okr?obj=${encodeURIComponent(newName)}` : "/portal/okr");
     } else if (id) {
       await objApi.updateObjective(id, values);
+      telemetry.trackOkrObjectiveEdit(id);
       nav(`/portal/okr?obj=${encodeURIComponent(id)}`);
     }
   }

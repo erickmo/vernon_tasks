@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePdcaTransition } from "./hooks/usePdcaTransition";
+import * as telemetry from "../../telemetry";
 
 export interface BulkActionsProps {
   selected: Set<string>;
@@ -26,7 +27,11 @@ export function BulkActions({ selected }: BulkActionsProps) {
           <button
             type="button"
             onClick={async () => {
-              await mut.mutateAsync(Array.from(selected));
+              const res = await mut.mutateAsync(Array.from(selected));
+              telemetry.trackOkrBulkPdca(
+                res.advanced.length,
+                res.advanced.map((a) => [a.from, a.to] as [string, string]),
+              );
               setOpen(false);
             }}
           >

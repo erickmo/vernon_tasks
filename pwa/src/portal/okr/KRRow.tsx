@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as krApi from "./api/keyResults";
 import { okrKeys } from "./hooks/keys";
+import * as telemetry from "../../telemetry";
 import type { KeyResult } from "./api/types";
 
 export interface KRRowProps {
@@ -31,6 +32,7 @@ export function KRRow({ kr, objectiveName }: KRRowProps) {
           current_value: nextValue,
           _modified: kr.modified,
         });
+        telemetry.trackOkrKrUpdate(kr.name, nextValue - kr.current_value);
         setState("saved");
         qc.invalidateQueries({ queryKey: okrKeys.detail(objectiveName) });
         qc.invalidateQueries({ queryKey: okrKeys.lists() });
