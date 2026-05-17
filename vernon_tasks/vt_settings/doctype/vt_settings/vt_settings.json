@@ -20,7 +20,8 @@
     "push_vapid_private_key",
     "login_branding_section",
     "login_headline",
-    "login_subtext"
+    "login_subtext",
+    "portal_enabled"
   ],
   "fields": [
     {
@@ -122,6 +123,13 @@
       "label": "Login Subtext",
       "description": "Teks deskripsi di bawah headline. Kosongkan untuk pakai teks default.",
       "default": "Sprint, kanban, dan analitik dalam satu tempat — dirancang untuk tim yang bergerak cepat."
+    },
+    {
+      "fieldname": "portal_enabled",
+      "label": "Enable Desktop Portal (/app)",
+      "fieldtype": "Check",
+      "default": "0",
+      "description": "When enabled, /app/* serves the desktop portal. When disabled, requests to /app/* redirect to /m/."
     }
   ],
   "issingle": 1,
