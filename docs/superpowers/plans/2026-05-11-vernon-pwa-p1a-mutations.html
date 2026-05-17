@@ -1,0 +1,1962 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks PWA — P1a Mutations + Install Prompt Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks PWA — P1a Mutations + Install Prompt Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-11-vernon-pwa-p1a-mutations.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-pwa-p1a-mutations-install-prompt-implementation-plan">Vernon Tasks PWA — P1a Mutations + Install Prompt Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Ship task mutations (Complete / Log progress / Snooze) with 5-second undo and a custom install prompt, building on P0.5 foundation.</p>
+<p><strong>Architecture:</strong> Three Frappe whitelisted endpoints in <code>my_work_mutations.py</code> gated by <code>_check_access</code>. Frontend mutations live in <code>pwa/src/api/mutations.ts</code>. UI primitives: <code>SwipeRow</code> (generic), <code>TaskActions</code> (3-button reveal), <code>LogProgressModal</code>. Undo handled by <code>useUndoableMutation</code> (5s setTimeout wrap around react-query). Install prompt fires after 2nd complete via <code>useCompleteCounter</code> + <code>useInstallPrompt</code>; iOS path shows instructions modal.</p>
+<p><strong>Tech Stack:</strong> Frappe v15, React 18, react-query 5, TypeScript 5, Vite 5, Vitest, Playwright.</p>
+<p><strong>Reference spec:</strong> <code>docs/superpowers/specs/2026-05-11-vernon-pwa-p1a-mutations-design.md</code>
+<strong>Predecessor PR:</strong> #1 (P0.5 foundation)</p>
+<hr />
+<h2 id="pre-flight">Pre-flight</h2>
+<ul>
+<li>[ ] <strong>Step 0.1: Verify branch</strong></li>
+</ul>
+<pre><code class="language-bash">cd /Users/erickmo/Desktop/Project/frappe/apps/vernon_tasks
+git branch --show-current
+</code></pre>
+<p>Expected: <code>feat/pwa-p1a-mutations</code>. If not, <code>git checkout -b feat/pwa-p1a-mutations</code>.</p>
+<ul>
+<li>[ ] <strong>Step 0.2: Confirm P0.5 already merged on master</strong></li>
+</ul>
+<pre><code class="language-bash">git log --oneline master -3
+</code></pre>
+<p>Expected: top commit is <code>feat(pwa): foundation + My Work read-only (P0.5) (#1)</code>.</p>
+<hr />
+<h2 id="task-1-backend-mutations-api">Task 1: Backend — mutations API</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/api/my_work_mutations.py</code>
+- Create: <code>vernon_tasks/task/api/test_my_work_mutations.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1.1: Failing test</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/test_my_work_mutations.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from frappe.utils import today, add_days
+from vernon_tasks.task.api.my_work_mutations import complete, log_progress, snooze
+
+
+class TestMyWorkMutations(FrappeTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user_a = &quot;p1a_user_a@test.local&quot;
+        cls.user_b = &quot;p1a_user_b@test.local&quot;
+        for u in (cls.user_a, cls.user_b):
+            if not frappe.db.exists(&quot;User&quot;, u):
+                frappe.get_doc({&quot;doctype&quot;: &quot;User&quot;, &quot;email&quot;: u, &quot;first_name&quot;: u}).insert(
+                    ignore_permissions=True
+                )
+        if not frappe.db.exists(&quot;VT Project&quot;, &quot;TEST-P1A-PROJ&quot;):
+            frappe.get_doc({
+                &quot;doctype&quot;: &quot;VT Project&quot;,
+                &quot;name&quot;: &quot;TEST-P1A-PROJ&quot;,
+                &quot;title&quot;: &quot;P1a Test Project&quot;,
+                &quot;project_owner&quot;: &quot;Administrator&quot;,
+                &quot;start_date&quot;: today(),
+                &quot;end_date&quot;: add_days(today(), 30),
+            }).insert(ignore_permissions=True)
+
+    def _make_task(self, owner, title=&quot;T&quot;):
+        return frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Task&quot;,
+            &quot;title&quot;: title,
+            &quot;deadline&quot;: today(),
+            &quot;assigned_to&quot;: owner,
+            &quot;project&quot;: &quot;TEST-P1A-PROJ&quot;,
+        }).insert(ignore_permissions=True)
+
+    def test_complete_marks_done(self):
+        frappe.set_user(self.user_a)
+        t = self._make_task(self.user_a)
+        r = complete(t.name)
+        self.assertTrue(r[&quot;ok&quot;])
+        doc = frappe.get_doc(&quot;VT Task&quot;, t.name)
+        self.assertEqual(doc.kanban_status, &quot;Done&quot;)
+        self.assertEqual(str(doc.completion_date), today())
+
+    def test_complete_idempotent(self):
+        frappe.set_user(self.user_a)
+        t = self._make_task(self.user_a)
+        complete(t.name)
+        r = complete(t.name)
+        self.assertTrue(r.get(&quot;idempotent&quot;))
+
+    def test_log_appends_hours_and_comment(self):
+        frappe.set_user(self.user_a)
+        t = self._make_task(self.user_a)
+        log_progress(t.name, hours=1.5, note=&quot;part one&quot;)
+        log_progress(t.name, hours=2.0, note=&quot;part two&quot;)
+        doc = frappe.get_doc(&quot;VT Task&quot;, t.name)
+        self.assertEqual(doc.actual_hours, 3.5)
+        comments = frappe.get_all(
+            &quot;Comment&quot;,
+            filters={&quot;reference_doctype&quot;: &quot;VT Task&quot;, &quot;reference_name&quot;: t.name},
+        )
+        self.assertEqual(len(comments), 2)
+
+    def test_log_rejects_invalid_hours(self):
+        frappe.set_user(self.user_a)
+        t = self._make_task(self.user_a)
+        for bad in (0, -1, 25):
+            with self.assertRaises(frappe.ValidationError):
+                log_progress(t.name, hours=bad)
+
+    def test_snooze_shifts_deadline(self):
+        frappe.set_user(self.user_a)
+        t = self._make_task(self.user_a)
+        original = today()
+        for days in (1, 3, 7):
+            t2 = self._make_task(self.user_a)
+            r = snooze(t2.name, days=days)
+            self.assertEqual(r[&quot;deadline&quot;], str(add_days(original, days)))
+
+    def test_snooze_rejects_invalid_days(self):
+        frappe.set_user(self.user_a)
+        t = self._make_task(self.user_a)
+        for bad in (2, 14, 0):
+            with self.assertRaises(frappe.ValidationError):
+                snooze(t.name, days=bad)
+
+    def test_other_user_forbidden(self):
+        frappe.set_user(self.user_a)
+        t = self._make_task(self.user_a)
+        frappe.set_user(self.user_b)
+        for fn in (lambda: complete(t.name),
+                   lambda: log_progress(t.name, hours=1),
+                   lambda: snooze(t.name, days=1)):
+            with self.assertRaises(frappe.PermissionError):
+                fn()
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 1.2: Run to confirm fail</strong></li>
+</ul>
+<p>Cannot run here (no bench site). Hand-off note: executor should run
+<code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module "vernon_tasks.task.api.test_my_work_mutations"</code>
+and expect ImportError on <code>my_work_mutations</code>.</p>
+<ul>
+<li>[ ] <strong>Step 1.3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/my_work_mutations.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.utils import add_days, getdate, today
+
+TASK_DOCTYPE = &quot;VT Task&quot;
+ALLOWED_SNOOZE_DAYS = (1, 3, 7)
+MAX_LOG_HOURS = 24
+
+
+def _check_access(task_id: str):
+    if not frappe.db.exists(TASK_DOCTYPE, task_id):
+        frappe.throw(&quot;Not found&quot;, frappe.PermissionError)
+    doc = frappe.get_doc(TASK_DOCTYPE, task_id)
+    user = frappe.session.user
+    if doc.get(&quot;assigned_to&quot;) != user and not frappe.has_permission(
+        TASK_DOCTYPE, &quot;write&quot;, doc=doc
+    ):
+        frappe.throw(&quot;Forbidden&quot;, frappe.PermissionError)
+    return doc
+
+
+@frappe.whitelist()
+def complete(task_id: str) -&gt; dict:
+    doc = _check_access(task_id)
+    if doc.kanban_status == &quot;Done&quot;:
+        return {&quot;ok&quot;: True, &quot;idempotent&quot;: True}
+    doc.kanban_status = &quot;Done&quot;
+    doc.completion_date = today()
+    doc.save()
+    return {&quot;ok&quot;: True, &quot;task_id&quot;: task_id}
+
+
+@frappe.whitelist()
+def log_progress(task_id: str, hours, note: str = &quot;&quot;) -&gt; dict:
+    hours_f = float(hours)
+    if hours_f &lt;= 0 or hours_f &gt; MAX_LOG_HOURS:
+        frappe.throw(f&quot;Hours must be in (0, {MAX_LOG_HOURS}]&quot;)
+    doc = _check_access(task_id)
+    doc.actual_hours = (doc.actual_hours or 0) + hours_f
+    doc.save()
+    if note:
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;Comment&quot;,
+            &quot;comment_type&quot;: &quot;Comment&quot;,
+            &quot;reference_doctype&quot;: TASK_DOCTYPE,
+            &quot;reference_name&quot;: task_id,
+            &quot;content&quot;: f&quot;[Log {hours_f}h] {note}&quot;,
+        }).insert(ignore_permissions=True)
+    else:
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;Comment&quot;,
+            &quot;comment_type&quot;: &quot;Info&quot;,
+            &quot;reference_doctype&quot;: TASK_DOCTYPE,
+            &quot;reference_name&quot;: task_id,
+            &quot;content&quot;: f&quot;[Log {hours_f}h]&quot;,
+        }).insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True, &quot;actual_hours&quot;: doc.actual_hours}
+
+
+@frappe.whitelist()
+def snooze(task_id: str, days) -&gt; dict:
+    days_i = int(days)
+    if days_i not in ALLOWED_SNOOZE_DAYS:
+        frappe.throw(f&quot;Days must be one of {ALLOWED_SNOOZE_DAYS}&quot;)
+    doc = _check_access(task_id)
+    base = getdate(doc.deadline or today())
+    new_deadline = add_days(base, days_i)
+    doc.deadline = new_deadline
+    doc.save()
+    frappe.get_doc({
+        &quot;doctype&quot;: &quot;Comment&quot;,
+        &quot;comment_type&quot;: &quot;Info&quot;,
+        &quot;reference_doctype&quot;: TASK_DOCTYPE,
+        &quot;reference_name&quot;: task_id,
+        &quot;content&quot;: f&quot;Snoozed +{days_i}d → {new_deadline}&quot;,
+    }).insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True, &quot;deadline&quot;: str(new_deadline)}
+</code></pre>
+<p>Note ordering: validation comes BEFORE <code>_check_access</code> for <code>log_progress</code> and <code>snooze</code> so that bad input raises <code>ValidationError</code> even before the perm check. Test <code>test_log_rejects_invalid_hours</code> verifies this with owner user.</p>
+<ul>
+<li>[ ] <strong>Step 1.4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/my_work_mutations.py vernon_tasks/task/api/test_my_work_mutations.py
+git commit -m &quot;feat(api): task mutations (complete/log/snooze) + tests&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-backend-telemetry-events-extension">Task 2: Backend — telemetry events extension</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/api/telemetry.py:5-14</code></p>
+<ul>
+<li>[ ] <strong>Step 2.1: Append events</strong></li>
+</ul>
+<p>Edit <code>ALLOWED_EVENTS</code> set, add 8 new entries while keeping existing 8:</p>
+<pre><code class="language-python">ALLOWED_EVENTS = {
+    &quot;pwa_boot&quot;,
+    &quot;login_success&quot;,
+    &quot;login_failure&quot;,
+    &quot;page_view&quot;,
+    &quot;task_view&quot;,
+    &quot;offline_seen&quot;,
+    &quot;error_boundary&quot;,
+    &quot;sw_register_failed&quot;,
+    &quot;task_complete&quot;,
+    &quot;task_complete_undone&quot;,
+    &quot;task_log&quot;,
+    &quot;task_snooze&quot;,
+    &quot;install_prompt_shown&quot;,
+    &quot;install_accepted&quot;,
+    &quot;install_dismissed&quot;,
+    &quot;install_snoozed&quot;,
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2.2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/telemetry.py
+git commit -m &quot;feat(telemetry): allowlist P1a mutation + install events&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-frontend-mutationsts-api-client">Task 3: Frontend — <code>mutations.ts</code> API client</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/api/mutations.ts</code>
+- Create: <code>pwa/src/api/mutations.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 3.1: Failing test</strong></li>
+</ul>
+<p><code>pwa/src/api/mutations.test.ts</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect, vi, beforeEach } from &quot;vitest&quot;;
+import { completeTask, logProgress, snoozeTask } from &quot;./mutations&quot;;
+
+beforeEach(() =&gt; vi.restoreAllMocks());
+
+describe(&quot;mutations&quot;, () =&gt; {
+  it(&quot;completeTask POSTs correct URL + body&quot;, async () =&gt; {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { ok: true } }), { status: 200 }),
+    );
+    vi.stubGlobal(&quot;fetch&quot;, fetchMock);
+    await completeTask(&quot;T1&quot;);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(&quot;/api/method/vernon_tasks.task.api.my_work_mutations.complete&quot;);
+    expect(init.method).toBe(&quot;POST&quot;);
+    expect(JSON.parse(init.body)).toEqual({ task_id: &quot;T1&quot; });
+  });
+
+  it(&quot;logProgress passes hours and note&quot;, async () =&gt; {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { ok: true, actual_hours: 1 } }), { status: 200 }),
+    );
+    vi.stubGlobal(&quot;fetch&quot;, fetchMock);
+    await logProgress(&quot;T1&quot;, 1.5, &quot;x&quot;);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      task_id: &quot;T1&quot;,
+      hours: 1.5,
+      note: &quot;x&quot;,
+    });
+  });
+
+  it(&quot;snoozeTask passes days&quot;, async () =&gt; {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { ok: true, deadline: &quot;2026-05-12&quot; } }), { status: 200 }),
+    );
+    vi.stubGlobal(&quot;fetch&quot;, fetchMock);
+    await snoozeTask(&quot;T1&quot;, 3);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      task_id: &quot;T1&quot;,
+      days: 3,
+    });
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3.2: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; ./node_modules/.bin/vitest run src/api/mutations.test.ts
+</code></pre>
+<p>Expected: module missing.</p>
+<ul>
+<li>[ ] <strong>Step 3.3: Implement</strong></li>
+</ul>
+<p><code>pwa/src/api/mutations.ts</code>:</p>
+<pre><code class="language-typescript">import { api } from &quot;./client&quot;;
+
+const BASE = &quot;/api/method/vernon_tasks.task.api.my_work_mutations&quot;;
+
+export interface CompleteResult {
+  ok: boolean;
+  idempotent?: boolean;
+  task_id?: string;
+}
+export interface LogResult {
+  ok: boolean;
+  actual_hours: number;
+}
+export interface SnoozeResult {
+  ok: boolean;
+  deadline: string;
+}
+
+export type SnoozeDays = 1 | 3 | 7;
+
+export function completeTask(task_id: string): Promise&lt;CompleteResult&gt; {
+  return api.post&lt;CompleteResult&gt;(`${BASE}.complete`, { task_id });
+}
+
+export function logProgress(
+  task_id: string,
+  hours: number,
+  note: string,
+): Promise&lt;LogResult&gt; {
+  return api.post&lt;LogResult&gt;(`${BASE}.log_progress`, { task_id, hours, note });
+}
+
+export function snoozeTask(task_id: string, days: SnoozeDays): Promise&lt;SnoozeResult&gt; {
+  return api.post&lt;SnoozeResult&gt;(`${BASE}.snooze`, { task_id, days });
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3.4: Re-run — PASS</strong></li>
+</ul>
+<p>Expected: 3 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 3.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/api/mutations.ts pwa/src/api/mutations.test.ts
+git commit -m &quot;feat(pwa): mutation API client (complete/log/snooze)&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-frontend-useundoablemutation-hook">Task 4: Frontend — <code>useUndoableMutation</code> hook</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/hooks/useUndoableMutation.ts</code>
+- Create: <code>pwa/src/hooks/useUndoableMutation.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 4.1: Failing test</strong></li>
+</ul>
+<pre><code class="language-typescript">import { describe, it, expect, vi, beforeEach } from &quot;vitest&quot;;
+import { renderHook, act } from &quot;@testing-library/react&quot;;
+import { useUndoableMutation } from &quot;./useUndoableMutation&quot;;
+
+beforeEach(() =&gt; vi.useFakeTimers());
+afterEach(() =&gt; vi.useRealTimers());
+
+describe(&quot;useUndoableMutation&quot;, () =&gt; {
+  it(&quot;fires mutation after window expires&quot;, async () =&gt; {
+    const mut = vi.fn().mockResolvedValue(&quot;ok&quot;);
+    const { result } = renderHook(() =&gt; useUndoableMutation(mut, 5000));
+    act(() =&gt; result.current.trigger(&quot;arg&quot;));
+    expect(mut).not.toHaveBeenCalled();
+    await act(async () =&gt; {
+      vi.advanceTimersByTime(5001);
+      await Promise.resolve();
+    });
+    expect(mut).toHaveBeenCalledWith(&quot;arg&quot;);
+  });
+
+  it(&quot;cancel prevents mutation from firing&quot;, async () =&gt; {
+    const mut = vi.fn();
+    const { result } = renderHook(() =&gt; useUndoableMutation(mut, 5000));
+    act(() =&gt; result.current.trigger(&quot;arg&quot;));
+    act(() =&gt; result.current.cancel());
+    await act(async () =&gt; {
+      vi.advanceTimersByTime(6000);
+      await Promise.resolve();
+    });
+    expect(mut).not.toHaveBeenCalled();
+  });
+
+  it(&quot;second trigger replaces first (latest wins)&quot;, async () =&gt; {
+    const mut = vi.fn().mockResolvedValue(&quot;ok&quot;);
+    const { result } = renderHook(() =&gt; useUndoableMutation(mut, 5000));
+    act(() =&gt; result.current.trigger(&quot;a&quot;));
+    act(() =&gt; result.current.trigger(&quot;b&quot;));
+    await act(async () =&gt; {
+      vi.advanceTimersByTime(5001);
+      await Promise.resolve();
+    });
+    expect(mut).toHaveBeenCalledTimes(1);
+    expect(mut).toHaveBeenCalledWith(&quot;b&quot;);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4.2: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">./node_modules/.bin/vitest run src/hooks/useUndoableMutation.test.ts
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4.3: Implement</strong></li>
+</ul>
+<p><code>pwa/src/hooks/useUndoableMutation.ts</code>:</p>
+<pre><code class="language-typescript">import { useCallback, useEffect, useRef } from &quot;react&quot;;
+
+export interface UndoableMutationApi&lt;TArgs&gt; {
+  trigger: (args: TArgs) =&gt; void;
+  cancel: () =&gt; void;
+}
+
+export function useUndoableMutation&lt;TArgs&gt;(
+  mutationFn: (args: TArgs) =&gt; Promise&lt;unknown&gt;,
+  windowMs: number,
+): UndoableMutationApi&lt;TArgs&gt; {
+  const timer = useRef&lt;ReturnType&lt;typeof setTimeout&gt; | null&gt;(null);
+
+  const cancel = useCallback(() =&gt; {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, []);
+
+  const trigger = useCallback(
+    (args: TArgs) =&gt; {
+      cancel();
+      timer.current = setTimeout(() =&gt; {
+        timer.current = null;
+        mutationFn(args);
+      }, windowMs);
+    },
+    [cancel, mutationFn, windowMs],
+  );
+
+  useEffect(() =&gt; cancel, [cancel]);
+
+  return { trigger, cancel };
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4.4: Re-run — PASS</strong></li>
+</ul>
+<p>Expected: 3 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 4.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/hooks/useUndoableMutation.ts pwa/src/hooks/useUndoableMutation.test.ts
+git commit -m &quot;feat(pwa): useUndoableMutation hook (5s undo wrapper)&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-frontend-usecompletecounter-hook">Task 5: Frontend — <code>useCompleteCounter</code> hook</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/hooks/useCompleteCounter.ts</code>
+- Create: <code>pwa/src/hooks/useCompleteCounter.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 5.1: Failing test</strong></li>
+</ul>
+<pre><code class="language-typescript">import { describe, it, expect, beforeEach } from &quot;vitest&quot;;
+import { renderHook, act } from &quot;@testing-library/react&quot;;
+import { useCompleteCounter } from &quot;./useCompleteCounter&quot;;
+
+beforeEach(() =&gt; localStorage.clear());
+
+describe(&quot;useCompleteCounter&quot;, () =&gt; {
+  it(&quot;starts at 0&quot;, () =&gt; {
+    const { result } = renderHook(() =&gt; useCompleteCounter());
+    expect(result.current.count).toBe(0);
+    expect(result.current.ready).toBe(false);
+  });
+
+  it(&quot;increment persists across hook re-runs&quot;, () =&gt; {
+    const { result, rerender } = renderHook(() =&gt; useCompleteCounter());
+    act(() =&gt; result.current.increment());
+    act(() =&gt; result.current.increment());
+    rerender();
+    expect(result.current.count).toBe(2);
+    expect(result.current.ready).toBe(true);
+  });
+
+  it(&quot;reset zeros the counter&quot;, () =&gt; {
+    const { result } = renderHook(() =&gt; useCompleteCounter());
+    act(() =&gt; result.current.increment());
+    act(() =&gt; result.current.reset());
+    expect(result.current.count).toBe(0);
+  });
+});
+</code></pre>
+<ul>
+<li>
+<p>[ ] <strong>Step 5.2: Run — fail</strong></p>
+</li>
+<li>
+<p>[ ] <strong>Step 5.3: Implement</strong></p>
+</li>
+</ul>
+<p><code>pwa/src/hooks/useCompleteCounter.ts</code>:</p>
+<pre><code class="language-typescript">import { useCallback, useState } from &quot;react&quot;;
+
+const KEY = &quot;vt_complete_count&quot;;
+const READY_AT = 2;
+
+function read(): number {
+  const v = localStorage.getItem(KEY);
+  return v ? Number(v) : 0;
+}
+
+export function useCompleteCounter() {
+  const [count, setCount] = useState&lt;number&gt;(() =&gt; read());
+
+  const increment = useCallback(() =&gt; {
+    const next = read() + 1;
+    localStorage.setItem(KEY, String(next));
+    setCount(next);
+  }, []);
+
+  const reset = useCallback(() =&gt; {
+    localStorage.removeItem(KEY);
+    setCount(0);
+  }, []);
+
+  return { count, ready: count &gt;= READY_AT, increment, reset };
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.4: Re-run — PASS</strong></li>
+</ul>
+<p>Expected: 3 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 5.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/hooks/useCompleteCounter.ts pwa/src/hooks/useCompleteCounter.test.ts
+git commit -m &quot;feat(pwa): useCompleteCounter for install prompt gating&quot;
+</code></pre>
+<hr />
+<h2 id="task-6-frontend-useinstallprompt-hook">Task 6: Frontend — <code>useInstallPrompt</code> hook</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/hooks/useInstallPrompt.ts</code>
+- Create: <code>pwa/src/hooks/useInstallPrompt.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 6.1: Failing test</strong></li>
+</ul>
+<pre><code class="language-typescript">import { describe, it, expect, beforeEach } from &quot;vitest&quot;;
+import { renderHook, act } from &quot;@testing-library/react&quot;;
+import { useInstallPrompt, detectPlatform } from &quot;./useInstallPrompt&quot;;
+
+beforeEach(() =&gt; localStorage.clear());
+
+describe(&quot;detectPlatform&quot;, () =&gt; {
+  it(&quot;identifies iOS Safari&quot;, () =&gt; {
+    expect(detectPlatform(&quot;Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) AppleWebKit/605.1.15&quot;))
+      .toBe(&quot;ios&quot;);
+  });
+  it(&quot;identifies Android Chrome&quot;, () =&gt; {
+    expect(detectPlatform(&quot;Mozilla/5.0 (Linux; Android 13; Pixel 7) Chrome/120&quot;))
+      .toBe(&quot;android&quot;);
+  });
+  it(&quot;falls back to other&quot;, () =&gt; {
+    expect(detectPlatform(&quot;Mozilla/5.0 (X11; Linux x86_64) Firefox/120&quot;)).toBe(&quot;other&quot;);
+  });
+});
+
+describe(&quot;useInstallPrompt&quot;, () =&gt; {
+  it(&quot;captures beforeinstallprompt&quot;, () =&gt; {
+    const { result } = renderHook(() =&gt; useInstallPrompt());
+    expect(result.current.canPrompt).toBe(false);
+    const ev = new Event(&quot;beforeinstallprompt&quot;) as Event &amp; {
+      prompt: () =&gt; Promise&lt;void&gt;;
+      userChoice: Promise&lt;{ outcome: string }&gt;;
+    };
+    ev.prompt = () =&gt; Promise.resolve();
+    ev.userChoice = Promise.resolve({ outcome: &quot;accepted&quot; });
+    act(() =&gt; {
+      window.dispatchEvent(ev);
+    });
+    expect(result.current.canPrompt).toBe(true);
+  });
+
+  it(&quot;snooze persists future suppression&quot;, () =&gt; {
+    const { result } = renderHook(() =&gt; useInstallPrompt());
+    act(() =&gt; result.current.snooze());
+    expect(result.current.suppressed).toBe(true);
+  });
+});
+</code></pre>
+<ul>
+<li>
+<p>[ ] <strong>Step 6.2: Run — fail</strong></p>
+</li>
+<li>
+<p>[ ] <strong>Step 6.3: Implement</strong></p>
+</li>
+</ul>
+<p><code>pwa/src/hooks/useInstallPrompt.ts</code>:</p>
+<pre><code class="language-typescript">import { useCallback, useEffect, useState } from &quot;react&quot;;
+
+const KEY_CHOICE = &quot;vt_install_choice&quot;;
+const KEY_SNOOZE_UNTIL = &quot;vt_install_snooze_until&quot;;
+const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export type Platform = &quot;android&quot; | &quot;ios&quot; | &quot;other&quot;;
+export type Choice = &quot;accepted&quot; | &quot;dismissed&quot; | null;
+
+interface BIPEvent extends Event {
+  prompt(): Promise&lt;void&gt;;
+  userChoice: Promise&lt;{ outcome: &quot;accepted&quot; | &quot;dismissed&quot; }&gt;;
+}
+
+export function detectPlatform(ua: string = navigator.userAgent): Platform {
+  if (/iPhone|iPad|iPod/.test(ua)) return &quot;ios&quot;;
+  if (/Android/.test(ua)) return &quot;android&quot;;
+  return &quot;other&quot;;
+}
+
+function isStandalone(): boolean {
+  return window.matchMedia(&quot;(display-mode: standalone)&quot;).matches;
+}
+
+function suppressedNow(): boolean {
+  const choice = localStorage.getItem(KEY_CHOICE);
+  if (choice === &quot;accepted&quot; || choice === &quot;dismissed&quot;) return true;
+  const until = Number(localStorage.getItem(KEY_SNOOZE_UNTIL) ?? &quot;0&quot;);
+  return until &gt; Date.now();
+}
+
+export function useInstallPrompt() {
+  const [deferred, setDeferred] = useState&lt;BIPEvent | null&gt;(null);
+  const [suppressed, setSuppressed] = useState&lt;boolean&gt;(() =&gt; suppressedNow());
+
+  useEffect(() =&gt; {
+    const handler = (e: Event) =&gt; {
+      e.preventDefault();
+      setDeferred(e as BIPEvent);
+    };
+    window.addEventListener(&quot;beforeinstallprompt&quot;, handler);
+    return () =&gt; window.removeEventListener(&quot;beforeinstallprompt&quot;, handler);
+  }, []);
+
+  const prompt = useCallback(async (): Promise&lt;Choice&gt; =&gt; {
+    if (!deferred) return null;
+    await deferred.prompt();
+    const { outcome } = await deferred.userChoice;
+    localStorage.setItem(KEY_CHOICE, outcome);
+    setSuppressed(true);
+    setDeferred(null);
+    return outcome;
+  }, [deferred]);
+
+  const snooze = useCallback(() =&gt; {
+    localStorage.setItem(KEY_SNOOZE_UNTIL, String(Date.now() + SNOOZE_MS));
+    setSuppressed(true);
+  }, []);
+
+  const dismissForever = useCallback(() =&gt; {
+    localStorage.setItem(KEY_CHOICE, &quot;dismissed&quot;);
+    setSuppressed(true);
+  }, []);
+
+  const platform = detectPlatform();
+  const canPrompt =
+    !suppressed &amp;&amp;
+    !isStandalone() &amp;&amp;
+    (deferred !== null || platform === &quot;ios&quot;);
+
+  return { canPrompt, platform, deferred, prompt, snooze, dismissForever, suppressed };
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6.4: Re-run — PASS</strong></li>
+</ul>
+<p>Expected: 5 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 6.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/hooks/useInstallPrompt.ts pwa/src/hooks/useInstallPrompt.test.ts
+git commit -m &quot;feat(pwa): useInstallPrompt + platform detection&quot;
+</code></pre>
+<hr />
+<h2 id="task-7-frontend-swiperow-primitive">Task 7: Frontend — <code>SwipeRow</code> primitive</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/components/SwipeRow.tsx</code>
+- Create: <code>pwa/src/components/SwipeRow.test.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 7.1: Failing test</strong></li>
+</ul>
+<pre><code class="language-typescript">import { describe, it, expect } from &quot;vitest&quot;;
+import { render, screen, fireEvent } from &quot;@testing-library/react&quot;;
+import { SwipeRow } from &quot;./SwipeRow&quot;;
+
+describe(&quot;SwipeRow&quot;, () =&gt; {
+  it(&quot;renders children&quot;, () =&gt; {
+    render(&lt;SwipeRow actions={&lt;button&gt;A&lt;/button&gt;}&gt;row&lt;/SwipeRow&gt;);
+    expect(screen.getByText(&quot;row&quot;)).toBeInTheDocument();
+  });
+
+  it(&quot;reveals actions after pan past threshold&quot;, () =&gt; {
+    render(
+      &lt;SwipeRow actions={&lt;button data-testid=&quot;act&quot;&gt;A&lt;/button&gt;}&gt;row&lt;/SwipeRow&gt;,
+    );
+    const row = screen.getByText(&quot;row&quot;).parentElement!;
+    fireEvent.pointerDown(row, { clientX: 300, pointerId: 1 });
+    fireEvent.pointerMove(row, { clientX: 200, pointerId: 1 });
+    fireEvent.pointerUp(row, { clientX: 200, pointerId: 1 });
+    const act = screen.getByTestId(&quot;act&quot;);
+    expect(act).toBeInTheDocument();
+    expect(act.closest(&quot;[data-revealed=\&quot;true\&quot;]&quot;)).not.toBeNull();
+  });
+
+  it(&quot;snaps back if released under threshold&quot;, () =&gt; {
+    render(
+      &lt;SwipeRow actions={&lt;button data-testid=&quot;act&quot;&gt;A&lt;/button&gt;}&gt;row&lt;/SwipeRow&gt;,
+    );
+    const row = screen.getByText(&quot;row&quot;).parentElement!;
+    fireEvent.pointerDown(row, { clientX: 300, pointerId: 1 });
+    fireEvent.pointerMove(row, { clientX: 280, pointerId: 1 });
+    fireEvent.pointerUp(row, { clientX: 280, pointerId: 1 });
+    const wrapper = screen.getByTestId(&quot;act&quot;).closest(&quot;[data-revealed]&quot;);
+    expect(wrapper?.getAttribute(&quot;data-revealed&quot;)).toBe(&quot;false&quot;);
+  });
+});
+</code></pre>
+<ul>
+<li>
+<p>[ ] <strong>Step 7.2: Run — fail</strong></p>
+</li>
+<li>
+<p>[ ] <strong>Step 7.3: Implement</strong></p>
+</li>
+</ul>
+<p><code>pwa/src/components/SwipeRow.tsx</code>:</p>
+<pre><code class="language-typescript">import { ReactNode, useRef, useState, PointerEvent } from &quot;react&quot;;
+
+const THRESHOLD_PX = 80;
+
+interface Props {
+  children: ReactNode;
+  actions: ReactNode;
+  actionsWidth?: number;
+}
+
+export function SwipeRow({ children, actions, actionsWidth = 200 }: Props) {
+  const startX = useRef&lt;number | null&gt;(null);
+  const [dx, setDx] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+
+  function onPointerDown(e: PointerEvent) {
+    startX.current = e.clientX;
+  }
+  function onPointerMove(e: PointerEvent) {
+    if (startX.current == null) return;
+    const delta = e.clientX - startX.current;
+    if (delta &lt; 0) setDx(Math.max(delta, -actionsWidth));
+  }
+  function onPointerUp() {
+    if (startX.current == null) return;
+    const willReveal = Math.abs(dx) &gt;= THRESHOLD_PX;
+    setRevealed(willReveal);
+    setDx(willReveal ? -actionsWidth : 0);
+    startX.current = null;
+  }
+
+  return (
+    &lt;div
+      style={{ position: &quot;relative&quot;, overflow: &quot;hidden&quot;, touchAction: &quot;pan-y&quot; }}
+      data-revealed={revealed ? &quot;true&quot; : &quot;false&quot;}
+    &gt;
+      &lt;div
+        style={{
+          position: &quot;absolute&quot;,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: actionsWidth,
+          display: &quot;flex&quot;,
+          alignItems: &quot;stretch&quot;,
+        }}
+      &gt;
+        {actions}
+      &lt;/div&gt;
+      &lt;div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: startX.current ? &quot;none&quot; : &quot;transform 0.2s&quot;,
+          background: &quot;var(--vt-bg)&quot;,
+          position: &quot;relative&quot;,
+        }}
+      &gt;
+        {children}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7.4: Re-run — PASS</strong></li>
+</ul>
+<p>Expected: 3 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 7.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/components/SwipeRow.tsx pwa/src/components/SwipeRow.test.tsx
+git commit -m &quot;feat(pwa): SwipeRow primitive (pointer-based reveal)&quot;
+</code></pre>
+<hr />
+<h2 id="task-8-frontend-taskactions-component">Task 8: Frontend — <code>TaskActions</code> component</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/components/TaskActions.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 8.1: Implement</strong></li>
+</ul>
+<pre><code class="language-typescript">import { t } from &quot;../i18n&quot;;
+
+interface Props {
+  onComplete: () =&gt; void;
+  onLog: () =&gt; void;
+  onSnooze: () =&gt; void;
+  disabled?: boolean;
+}
+
+const BTN_STYLE: React.CSSProperties = {
+  flex: 1,
+  border: 0,
+  color: &quot;white&quot;,
+  fontSize: 13,
+  fontWeight: 600,
+};
+
+export function TaskActions({ onComplete, onLog, onSnooze, disabled }: Props) {
+  return (
+    &lt;div style={{ display: &quot;flex&quot;, width: &quot;100%&quot; }}&gt;
+      &lt;button
+        onClick={onComplete}
+        disabled={disabled}
+        style={{ ...BTN_STYLE, background: &quot;var(--vt-success)&quot; }}
+      &gt;
+        {t(&quot;actions.complete&quot;)}
+      &lt;/button&gt;
+      &lt;button
+        onClick={onLog}
+        disabled={disabled}
+        style={{ ...BTN_STYLE, background: &quot;var(--vt-primary)&quot; }}
+      &gt;
+        {t(&quot;actions.log&quot;)}
+      &lt;/button&gt;
+      &lt;button
+        onClick={onSnooze}
+        disabled={disabled}
+        style={{ ...BTN_STYLE, background: &quot;var(--vt-warn)&quot; }}
+      &gt;
+        {t(&quot;actions.snooze&quot;)}
+      &lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 8.2: Add i18n keys</strong></li>
+</ul>
+<p>Append to <code>STRINGS</code> in <code>pwa/src/i18n.ts</code>:</p>
+<pre><code class="language-typescript">  &quot;actions.complete&quot;: &quot;Selesai&quot;,
+  &quot;actions.log&quot;: &quot;Log&quot;,
+  &quot;actions.snooze&quot;: &quot;Tunda&quot;,
+  &quot;actions.snooze_1d&quot;: &quot;+1 hari&quot;,
+  &quot;actions.snooze_3d&quot;: &quot;+3 hari&quot;,
+  &quot;actions.snooze_7d&quot;: &quot;+7 hari&quot;,
+  &quot;actions.completed_toast&quot;: &quot;Selesai. Batalkan?&quot;,
+  &quot;actions.snoozed_toast&quot;: &quot;Ditunda. Batalkan?&quot;,
+  &quot;actions.logged_toast&quot;: &quot;Log tersimpan. Batalkan?&quot;,
+  &quot;actions.offline&quot;: &quot;Sambungkan internet dulu&quot;,
+  &quot;actions.forbidden&quot;: &quot;Tidak ada akses&quot;,
+  &quot;actions.failed&quot;: &quot;Gagal. Coba lagi&quot;,
+  &quot;log.title&quot;: &quot;Catat progres&quot;,
+  &quot;log.hours&quot;: &quot;Jam&quot;,
+  &quot;log.note&quot;: &quot;Catatan (opsional)&quot;,
+  &quot;log.submit&quot;: &quot;Simpan&quot;,
+  &quot;log.cancel&quot;: &quot;Batal&quot;,
+  &quot;install.title&quot;: &quot;Pasang Vernon&quot;,
+  &quot;install.body&quot;: &quot;Akses lebih cepat lewat ikon di layar utama.&quot;,
+  &quot;install.cta&quot;: &quot;Pasang&quot;,
+  &quot;install.later&quot;: &quot;Nanti&quot;,
+  &quot;install.ios.title&quot;: &quot;Tambah ke Layar Utama&quot;,
+  &quot;install.ios.step1&quot;: &quot;Tekan tombol Bagikan di Safari&quot;,
+  &quot;install.ios.step2&quot;: &quot;Pilih ‘Tambahkan ke Layar Utama’&quot;,
+  &quot;install.ios.step3&quot;: &quot;Tekan ‘Tambah’ di pojok kanan atas&quot;,
+  &quot;install.ios.close&quot;: &quot;Mengerti&quot;,
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 8.3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/components/TaskActions.tsx pwa/src/i18n.ts
+git commit -m &quot;feat(pwa): TaskActions panel + i18n keys&quot;
+</code></pre>
+<hr />
+<h2 id="task-9-frontend-logprogressmodal">Task 9: Frontend — <code>LogProgressModal</code></h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/components/LogProgressModal.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 9.1: Implement</strong></li>
+</ul>
+<pre><code class="language-typescript">import { useState } from &quot;react&quot;;
+import { t } from &quot;../i18n&quot;;
+
+interface Props {
+  open: boolean;
+  onSubmit: (hours: number, note: string) =&gt; void;
+  onCancel: () =&gt; void;
+}
+
+const MIN = 0.25;
+const MAX = 8;
+
+export function LogProgressModal({ open, onSubmit, onCancel }: Props) {
+  const [hours, setHours] = useState(&quot;1&quot;);
+  const [note, setNote] = useState(&quot;&quot;);
+  const [err, setErr] = useState&lt;string | null&gt;(null);
+
+  if (!open) return null;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const h = Number(hours);
+    if (!Number.isFinite(h) || h &lt; MIN || h &gt; MAX) {
+      setErr(`${MIN}–${MAX}`);
+      return;
+    }
+    onSubmit(h, note.trim());
+  }
+
+  return (
+    &lt;div
+      onClick={onCancel}
+      style={{
+        position: &quot;fixed&quot;,
+        inset: 0,
+        background: &quot;rgba(0,0,0,0.5)&quot;,
+        display: &quot;grid&quot;,
+        placeItems: &quot;end center&quot;,
+        zIndex: 100,
+        paddingBottom: &quot;calc(var(--bottom-nav-h) + var(--safe-bottom))&quot;,
+      }}
+    &gt;
+      &lt;form
+        onClick={(e) =&gt; e.stopPropagation()}
+        onSubmit={submit}
+        style={{
+          background: &quot;var(--vt-bg)&quot;,
+          color: &quot;var(--vt-text)&quot;,
+          width: &quot;100%&quot;,
+          maxWidth: 480,
+          padding: 24,
+          borderRadius: &quot;16px 16px 0 0&quot;,
+        }}
+      &gt;
+        &lt;h3 style={{ marginTop: 0 }}&gt;{t(&quot;log.title&quot;)}&lt;/h3&gt;
+        &lt;label style={{ display: &quot;block&quot;, marginBottom: 12 }}&gt;
+          {t(&quot;log.hours&quot;)}
+          &lt;input
+            type=&quot;number&quot;
+            step={0.25}
+            min={MIN}
+            max={MAX}
+            value={hours}
+            onChange={(e) =&gt; setHours(e.target.value)}
+            autoFocus
+            required
+            style={{ display: &quot;block&quot;, width: &quot;100%&quot;, padding: 12, marginTop: 4 }}
+          /&gt;
+        &lt;/label&gt;
+        &lt;label style={{ display: &quot;block&quot;, marginBottom: 12 }}&gt;
+          {t(&quot;log.note&quot;)}
+          &lt;textarea
+            value={note}
+            onChange={(e) =&gt; setNote(e.target.value)}
+            rows={3}
+            style={{ display: &quot;block&quot;, width: &quot;100%&quot;, padding: 12, marginTop: 4 }}
+          /&gt;
+        &lt;/label&gt;
+        {err &amp;&amp; &lt;p style={{ color: &quot;var(--vt-danger)&quot; }}&gt;{err}&lt;/p&gt;}
+        &lt;div style={{ display: &quot;flex&quot;, gap: 8, justifyContent: &quot;flex-end&quot; }}&gt;
+          &lt;button type=&quot;button&quot; onClick={onCancel}&gt;
+            {t(&quot;log.cancel&quot;)}
+          &lt;/button&gt;
+          &lt;button type=&quot;submit&quot;&gt;{t(&quot;log.submit&quot;)}&lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/form&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 9.2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/components/LogProgressModal.tsx
+git commit -m &quot;feat(pwa): LogProgressModal (hours + note form)&quot;
+</code></pre>
+<hr />
+<h2 id="task-10-frontend-installprompt-iosinstallmodal">Task 10: Frontend — <code>InstallPrompt</code> + <code>IOSInstallModal</code></h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/components/InstallPrompt.tsx</code>
+- Create: <code>pwa/src/components/IOSInstallModal.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 10.1: <code>IOSInstallModal.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { t } from &quot;../i18n&quot;;
+
+interface Props {
+  open: boolean;
+  onClose: () =&gt; void;
+}
+
+export function IOSInstallModal({ open, onClose }: Props) {
+  if (!open) return null;
+  return (
+    &lt;div
+      onClick={onClose}
+      style={{
+        position: &quot;fixed&quot;,
+        inset: 0,
+        background: &quot;rgba(0,0,0,0.6)&quot;,
+        display: &quot;grid&quot;,
+        placeItems: &quot;center&quot;,
+        zIndex: 110,
+        padding: 16,
+      }}
+    &gt;
+      &lt;div
+        onClick={(e) =&gt; e.stopPropagation()}
+        style={{
+          background: &quot;var(--vt-bg)&quot;,
+          color: &quot;var(--vt-text)&quot;,
+          padding: 24,
+          borderRadius: 16,
+          maxWidth: 420,
+          width: &quot;100%&quot;,
+        }}
+      &gt;
+        &lt;h3 style={{ marginTop: 0 }}&gt;{t(&quot;install.ios.title&quot;)}&lt;/h3&gt;
+        &lt;ol style={{ paddingLeft: 20, lineHeight: 1.6 }}&gt;
+          &lt;li&gt;{t(&quot;install.ios.step1&quot;)}&lt;/li&gt;
+          &lt;li&gt;{t(&quot;install.ios.step2&quot;)}&lt;/li&gt;
+          &lt;li&gt;{t(&quot;install.ios.step3&quot;)}&lt;/li&gt;
+        &lt;/ol&gt;
+        &lt;button
+          onClick={onClose}
+          style={{
+            width: &quot;100%&quot;,
+            padding: 12,
+            marginTop: 12,
+            background: &quot;var(--vt-primary)&quot;,
+            color: &quot;var(--vt-primary-contrast)&quot;,
+            border: 0,
+            borderRadius: &quot;var(--vt-radius)&quot;,
+          }}
+        &gt;
+          {t(&quot;install.ios.close&quot;)}
+        &lt;/button&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 10.2: <code>InstallPrompt.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { useState } from &quot;react&quot;;
+import { useInstallPrompt } from &quot;../hooks/useInstallPrompt&quot;;
+import { IOSInstallModal } from &quot;./IOSInstallModal&quot;;
+import { logEvent } from &quot;../telemetry&quot;;
+import { t } from &quot;../i18n&quot;;
+
+export function InstallPrompt({ visible }: { visible: boolean }) {
+  const { canPrompt, platform, prompt, snooze, dismissForever } = useInstallPrompt();
+  const [iosOpen, setIosOpen] = useState(false);
+  const [shownOnce, setShownOnce] = useState(false);
+
+  if (!visible || !canPrompt) return null;
+  if (!shownOnce) {
+    logEvent(&quot;install_prompt_shown&quot;, { platform });
+    setShownOnce(true);
+  }
+
+  async function onInstall() {
+    if (platform === &quot;ios&quot;) {
+      setIosOpen(true);
+      return;
+    }
+    const choice = await prompt();
+    if (choice === &quot;accepted&quot;) logEvent(&quot;install_accepted&quot;, { platform });
+    else if (choice === &quot;dismissed&quot;) logEvent(&quot;install_dismissed&quot;, { platform });
+  }
+
+  function onLater() {
+    snooze();
+    logEvent(&quot;install_snoozed&quot;, { platform });
+  }
+
+  function onClose() {
+    dismissForever();
+    logEvent(&quot;install_dismissed&quot;, { platform });
+  }
+
+  return (
+    &lt;&gt;
+      &lt;div
+        style={{
+          position: &quot;fixed&quot;,
+          left: 12,
+          right: 12,
+          bottom: &quot;calc(var(--bottom-nav-h) + var(--safe-bottom) + 12px)&quot;,
+          background: &quot;var(--vt-primary)&quot;,
+          color: &quot;var(--vt-primary-contrast)&quot;,
+          padding: 16,
+          borderRadius: &quot;var(--vt-radius)&quot;,
+          boxShadow: &quot;var(--vt-shadow)&quot;,
+          zIndex: 55,
+        }}
+      &gt;
+        &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;start&quot;, gap: 12 }}&gt;
+          &lt;div&gt;
+            &lt;strong&gt;{t(&quot;install.title&quot;)}&lt;/strong&gt;
+            &lt;div style={{ fontSize: 13, opacity: 0.9, marginTop: 4 }}&gt;{t(&quot;install.body&quot;)}&lt;/div&gt;
+          &lt;/div&gt;
+          &lt;button
+            onClick={onClose}
+            aria-label=&quot;close&quot;
+            style={{ background: &quot;transparent&quot;, border: 0, color: &quot;inherit&quot;, fontSize: 18 }}
+          &gt;
+            ×
+          &lt;/button&gt;
+        &lt;/div&gt;
+        &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginTop: 12 }}&gt;
+          &lt;button
+            onClick={onLater}
+            style={{ flex: 1, background: &quot;transparent&quot;, border: &quot;1px solid currentColor&quot;, color: &quot;inherit&quot;, padding: 8, borderRadius: 8 }}
+          &gt;
+            {t(&quot;install.later&quot;)}
+          &lt;/button&gt;
+          &lt;button
+            onClick={onInstall}
+            style={{ flex: 1, background: &quot;white&quot;, color: &quot;var(--vt-primary)&quot;, border: 0, padding: 8, borderRadius: 8, fontWeight: 600 }}
+          &gt;
+            {t(&quot;install.cta&quot;)}
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;IOSInstallModal open={iosOpen} onClose={() =&gt; setIosOpen(false)} /&gt;
+    &lt;/&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 10.3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/components/InstallPrompt.tsx pwa/src/components/IOSInstallModal.tsx
+git commit -m &quot;feat(pwa): InstallPrompt banner + iOS instructions modal&quot;
+</code></pre>
+<hr />
+<h2 id="task-11-frontend-wire-mutations-into-myworklist">Task 11: Frontend — wire mutations into <code>MyWork/List</code></h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/MyWork/List.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 11.1: Replace <code>TaskCardView</code> with mutation-aware version</strong></li>
+</ul>
+<p>Full replacement of <code>pwa/src/pages/MyWork/List.tsx</code>:</p>
+<pre><code class="language-typescript">import { useState } from &quot;react&quot;;
+import { useQuery, useQueryClient } from &quot;@tanstack/react-query&quot;;
+import { Link } from &quot;react-router-dom&quot;;
+import { fetchMyWork, MyWork, TaskCard as TaskCardT } from &quot;../../api/tasks&quot;;
+import { completeTask, logProgress, snoozeTask, SnoozeDays } from &quot;../../api/mutations&quot;;
+import { Skeleton } from &quot;../../components/Skeleton&quot;;
+import { EmptyState } from &quot;../../components/EmptyState&quot;;
+import { StaleBadge } from &quot;../../components/StaleBadge&quot;;
+import { PullToRefresh } from &quot;../../components/PullToRefresh&quot;;
+import { SwipeRow } from &quot;../../components/SwipeRow&quot;;
+import { TaskActions } from &quot;../../components/TaskActions&quot;;
+import { LogProgressModal } from &quot;../../components/LogProgressModal&quot;;
+import { InstallPrompt } from &quot;../../components/InstallPrompt&quot;;
+import { useToast } from &quot;../../components/Toast&quot;;
+import { useUndoableMutation } from &quot;../../hooks/useUndoableMutation&quot;;
+import { useCompleteCounter } from &quot;../../hooks/useCompleteCounter&quot;;
+import { greeting, fmtDate, t } from &quot;../../i18n&quot;;
+import { logEvent } from &quot;../../telemetry&quot;;
+
+function TaskCardView({
+  task,
+  accent,
+  onComplete,
+  onLog,
+  onSnooze,
+  disabled,
+}: {
+  task: TaskCardT;
+  accent?: string;
+  onComplete: () =&gt; void;
+  onLog: () =&gt; void;
+  onSnooze: () =&gt; void;
+  disabled: boolean;
+}) {
+  return (
+    &lt;SwipeRow
+      actions={
+        &lt;TaskActions
+          onComplete={onComplete}
+          onLog={onLog}
+          onSnooze={onSnooze}
+          disabled={disabled}
+        /&gt;
+      }
+    &gt;
+      &lt;div
+        style={{
+          display: &quot;flex&quot;,
+          alignItems: &quot;center&quot;,
+          gap: 12,
+          padding: &quot;var(--vt-space-4)&quot;,
+          background: &quot;var(--vt-surface)&quot;,
+          borderRadius: &quot;var(--vt-radius)&quot;,
+          borderLeft: accent ? `3px solid ${accent}` : undefined,
+          boxShadow: &quot;var(--vt-shadow)&quot;,
+        }}
+      &gt;
+        &lt;input
+          type=&quot;checkbox&quot;
+          checked={false}
+          onChange={onComplete}
+          disabled={disabled}
+          aria-label=&quot;complete&quot;
+          style={{ width: 22, height: 22 }}
+        /&gt;
+        &lt;Link
+          to={`/m/work/${encodeURIComponent(task.id)}`}
+          style={{ flex: 1, color: &quot;var(--vt-text)&quot;, textDecoration: &quot;none&quot; }}
+        &gt;
+          &lt;div style={{ fontWeight: 600 }}&gt;{task.title}&lt;/div&gt;
+          &lt;div style={{ fontSize: 13, color: &quot;var(--vt-text-muted)&quot;, marginTop: 4 }}&gt;
+            {[task.project, task.priority].filter(Boolean).join(&quot; · &quot;)}
+            {task.points ? ` · +${task.points} pts` : &quot;&quot;}
+          &lt;/div&gt;
+        &lt;/Link&gt;
+      &lt;/div&gt;
+    &lt;/SwipeRow&gt;
+  );
+}
+
+function Section({
+  title,
+  items,
+  accent,
+  render,
+}: {
+  title: string;
+  items: TaskCardT[];
+  accent?: string;
+  render: (task: TaskCardT) =&gt; React.ReactNode;
+}) {
+  if (items.length === 0) return null;
+  return (
+    &lt;section style={{ marginBottom: &quot;var(--vt-space-5)&quot; }}&gt;
+      &lt;h3
+        style={{
+          fontSize: 14,
+          color: &quot;var(--vt-text-muted)&quot;,
+          margin: &quot;0 0 var(--vt-space-3)&quot;,
+          textTransform: &quot;uppercase&quot;,
+          letterSpacing: 0.5,
+        }}
+      &gt;
+        {title}
+      &lt;/h3&gt;
+      {items.map((task) =&gt; (
+        &lt;div key={task.id} style={{ marginBottom: &quot;var(--vt-space-3)&quot; }}&gt;
+          {render(task)}
+        &lt;/div&gt;
+      ))}
+    &lt;/section&gt;
+  );
+}
+
+export function MyWorkList() {
+  const q = useQuery({ queryKey: [&quot;my-work&quot;], queryFn: fetchMyWork });
+  const qc = useQueryClient();
+  const { show } = useToast();
+  const { increment, ready } = useCompleteCounter();
+  const [logTask, setLogTask] = useState&lt;TaskCardT | null&gt;(null);
+  const offline = typeof navigator !== &quot;undefined&quot; &amp;&amp; !navigator.onLine;
+
+  function removeFromCache(taskId: string): MyWork | undefined {
+    const prev = qc.getQueryData&lt;MyWork&gt;([&quot;my-work&quot;]);
+    if (!prev) return undefined;
+    const next: MyWork = {
+      overdue: prev.overdue.filter((x) =&gt; x.id !== taskId),
+      today: prev.today.filter((x) =&gt; x.id !== taskId),
+      upcoming: prev.upcoming.filter((x) =&gt; x.id !== taskId),
+    };
+    qc.setQueryData([&quot;my-work&quot;], next);
+    return prev;
+  }
+
+  const completeUndoable = useUndoableMutation(async (taskId: string) =&gt; {
+    try {
+      await completeTask(taskId);
+      logEvent(&quot;task_complete&quot;, { task_id: taskId });
+      increment();
+      qc.invalidateQueries({ queryKey: [&quot;my-work&quot;] });
+    } catch {
+      qc.invalidateQueries({ queryKey: [&quot;my-work&quot;] });
+      show(t(&quot;actions.failed&quot;));
+    }
+  }, 5000);
+
+  function handleComplete(task: TaskCardT) {
+    if (offline) {
+      show(t(&quot;actions.offline&quot;));
+      return;
+    }
+    const prev = removeFromCache(task.id);
+    show(t(&quot;actions.completed_toast&quot;), {
+      label: t(&quot;common.retry&quot;),
+      onClick: () =&gt; {
+        completeUndoable.cancel();
+        if (prev) qc.setQueryData([&quot;my-work&quot;], prev);
+        logEvent(&quot;task_complete_undone&quot;, { task_id: task.id });
+      },
+    });
+    completeUndoable.trigger(task.id);
+  }
+
+  async function handleLog(task: TaskCardT, hours: number, note: string) {
+    setLogTask(null);
+    if (offline) {
+      show(t(&quot;actions.offline&quot;));
+      return;
+    }
+    try {
+      await logProgress(task.id, hours, note);
+      logEvent(&quot;task_log&quot;, { task_id: task.id, hours });
+      show(t(&quot;actions.logged_toast&quot;));
+    } catch {
+      show(t(&quot;actions.failed&quot;));
+    }
+  }
+
+  async function handleSnooze(task: TaskCardT, days: SnoozeDays) {
+    if (offline) {
+      show(t(&quot;actions.offline&quot;));
+      return;
+    }
+    try {
+      await snoozeTask(task.id, days);
+      logEvent(&quot;task_snooze&quot;, { task_id: task.id, days });
+      show(t(&quot;actions.snoozed_toast&quot;));
+      qc.invalidateQueries({ queryKey: [&quot;my-work&quot;] });
+    } catch {
+      show(t(&quot;actions.failed&quot;));
+    }
+  }
+
+  const total =
+    (q.data?.overdue.length ?? 0) +
+    (q.data?.today.length ?? 0) +
+    (q.data?.upcoming.length ?? 0);
+
+  return (
+    &lt;PullToRefresh onRefresh={() =&gt; q.refetch().then(() =&gt; {})}&gt;
+      &lt;div style={{ padding: &quot;var(--vt-space-4)&quot; }}&gt;
+        &lt;header style={{ marginBottom: &quot;var(--vt-space-4)&quot; }}&gt;
+          &lt;h1 style={{ margin: 0 }}&gt;{greeting()}&lt;/h1&gt;
+          &lt;div
+            style={{
+              color: &quot;var(--vt-text-muted)&quot;,
+              display: &quot;flex&quot;,
+              justifyContent: &quot;space-between&quot;,
+              alignItems: &quot;center&quot;,
+              marginTop: 4,
+            }}
+          &gt;
+            &lt;span&gt;{fmtDate(new Date())}&lt;/span&gt;
+            &lt;StaleBadge resource=&quot;my-work&quot; /&gt;
+          &lt;/div&gt;
+        &lt;/header&gt;
+
+        {q.isLoading &amp;&amp; (
+          &lt;&gt;
+            &lt;Skeleton height={64} /&gt;
+            &lt;div style={{ height: 12 }} /&gt;
+            &lt;Skeleton height={64} /&gt;
+          &lt;/&gt;
+        )}
+
+        {q.isError &amp;&amp; !q.data &amp;&amp; (
+          &lt;EmptyState
+            title={t(&quot;empty.no_offline&quot;)}
+            cta={{ label: t(&quot;common.retry&quot;), onClick: () =&gt; q.refetch() }}
+          /&gt;
+        )}
+
+        {q.data &amp;&amp;
+          (total === 0 ? (
+            &lt;EmptyState title={t(&quot;empty.no_tasks&quot;)} /&gt;
+          ) : (
+            &lt;&gt;
+              &lt;Section
+                title={t(&quot;tasks.section.overdue&quot;)}
+                items={q.data.overdue}
+                accent=&quot;var(--vt-danger)&quot;
+                render={(task) =&gt; (
+                  &lt;TaskCardView
+                    task={task}
+                    accent=&quot;var(--vt-danger)&quot;
+                    onComplete={() =&gt; handleComplete(task)}
+                    onLog={() =&gt; setLogTask(task)}
+                    onSnooze={() =&gt; handleSnooze(task, 1)}
+                    disabled={offline}
+                  /&gt;
+                )}
+              /&gt;
+              &lt;Section
+                title={t(&quot;tasks.section.today&quot;)}
+                items={q.data.today}
+                accent=&quot;var(--vt-primary)&quot;
+                render={(task) =&gt; (
+                  &lt;TaskCardView
+                    task={task}
+                    accent=&quot;var(--vt-primary)&quot;
+                    onComplete={() =&gt; handleComplete(task)}
+                    onLog={() =&gt; setLogTask(task)}
+                    onSnooze={() =&gt; handleSnooze(task, 1)}
+                    disabled={offline}
+                  /&gt;
+                )}
+              /&gt;
+              &lt;Section
+                title={t(&quot;tasks.section.upcoming&quot;)}
+                items={q.data.upcoming}
+                render={(task) =&gt; (
+                  &lt;TaskCardView
+                    task={task}
+                    onComplete={() =&gt; handleComplete(task)}
+                    onLog={() =&gt; setLogTask(task)}
+                    onSnooze={() =&gt; handleSnooze(task, 1)}
+                    disabled={offline}
+                  /&gt;
+                )}
+              /&gt;
+            &lt;/&gt;
+          ))}
+      &lt;/div&gt;
+
+      &lt;LogProgressModal
+        open={logTask !== null}
+        onSubmit={(h, n) =&gt; logTask &amp;&amp; handleLog(logTask, h, n)}
+        onCancel={() =&gt; setLogTask(null)}
+      /&gt;
+
+      &lt;InstallPrompt visible={ready} /&gt;
+    &lt;/PullToRefresh&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.2: Build + test smoke</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run build &amp;&amp; ./node_modules/.bin/vitest run
+</code></pre>
+<p>Expected: build green; existing 23 tests + new tests from prior tasks pass.</p>
+<ul>
+<li>[ ] <strong>Step 11.3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/MyWork/List.tsx
+git commit -m &quot;feat(pwa): wire mutations + install prompt into My Work list&quot;
+</code></pre>
+<hr />
+<h2 id="task-12-frontend-wire-mutations-into-myworkdetail">Task 12: Frontend — wire mutations into <code>MyWork/Detail</code></h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/MyWork/Detail.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 12.1: Replace action-bar placeholder</strong></li>
+</ul>
+<p>Replace the placeholder block at the bottom of <code>Detail.tsx</code> (currently
+<code>{t("tasks.detail.action_disabled")}</code>) with a working action bar.</p>
+<p>Full file replacement of <code>pwa/src/pages/MyWork/Detail.tsx</code>:</p>
+<pre><code class="language-typescript">import { useEffect, useState } from &quot;react&quot;;
+import { useParams, Link, useNavigate } from &quot;react-router-dom&quot;;
+import { useQuery, useQueryClient } from &quot;@tanstack/react-query&quot;;
+import { fetchTaskDetail } from &quot;../../api/tasks&quot;;
+import { completeTask, logProgress, snoozeTask, SnoozeDays } from &quot;../../api/mutations&quot;;
+import { Skeleton } from &quot;../../components/Skeleton&quot;;
+import { EmptyState } from &quot;../../components/EmptyState&quot;;
+import { TaskActions } from &quot;../../components/TaskActions&quot;;
+import { LogProgressModal } from &quot;../../components/LogProgressModal&quot;;
+import { useToast } from &quot;../../components/Toast&quot;;
+import { useCompleteCounter } from &quot;../../hooks/useCompleteCounter&quot;;
+import { fmtDate, fmtTime, t } from &quot;../../i18n&quot;;
+import { logEvent } from &quot;../../telemetry&quot;;
+
+export function MyWorkDetail() {
+  const { id } = useParams&lt;{ id: string }&gt;();
+  const q = useQuery({
+    queryKey: [&quot;task&quot;, id],
+    queryFn: () =&gt; fetchTaskDetail(id!),
+    enabled: !!id,
+  });
+  const qc = useQueryClient();
+  const nav = useNavigate();
+  const { show } = useToast();
+  const { increment } = useCompleteCounter();
+  const [logOpen, setLogOpen] = useState(false);
+  const offline = typeof navigator !== &quot;undefined&quot; &amp;&amp; !navigator.onLine;
+
+  useEffect(() =&gt; {
+    if (id) logEvent(&quot;task_view&quot;, { task_id: id });
+  }, [id]);
+
+  async function doComplete() {
+    if (!id || offline) return show(t(&quot;actions.offline&quot;));
+    try {
+      await completeTask(id);
+      logEvent(&quot;task_complete&quot;, { task_id: id });
+      increment();
+      qc.invalidateQueries({ queryKey: [&quot;my-work&quot;] });
+      show(t(&quot;actions.completed_toast&quot;));
+      nav(&quot;/m/work&quot;);
+    } catch {
+      show(t(&quot;actions.failed&quot;));
+    }
+  }
+
+  async function doLog(hours: number, note: string) {
+    setLogOpen(false);
+    if (!id || offline) return show(t(&quot;actions.offline&quot;));
+    try {
+      await logProgress(id, hours, note);
+      logEvent(&quot;task_log&quot;, { task_id: id, hours });
+      show(t(&quot;actions.logged_toast&quot;));
+      qc.invalidateQueries({ queryKey: [&quot;task&quot;, id] });
+    } catch {
+      show(t(&quot;actions.failed&quot;));
+    }
+  }
+
+  async function doSnooze(days: SnoozeDays) {
+    if (!id || offline) return show(t(&quot;actions.offline&quot;));
+    try {
+      await snoozeTask(id, days);
+      logEvent(&quot;task_snooze&quot;, { task_id: id, days });
+      show(t(&quot;actions.snoozed_toast&quot;));
+      qc.invalidateQueries({ queryKey: [&quot;task&quot;, id] });
+      qc.invalidateQueries({ queryKey: [&quot;my-work&quot;] });
+    } catch {
+      show(t(&quot;actions.failed&quot;));
+    }
+  }
+
+  if (q.isLoading) {
+    return (
+      &lt;div style={{ padding: 16 }}&gt;
+        &lt;Skeleton height={28} width=&quot;60%&quot; /&gt;
+        &lt;div style={{ height: 12 }} /&gt;
+        &lt;Skeleton height={120} /&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (q.isError || !q.data) {
+    return (
+      &lt;EmptyState
+        title={t(&quot;empty.no_offline&quot;)}
+        cta={{ label: t(&quot;common.retry&quot;), onClick: () =&gt; q.refetch() }}
+      /&gt;
+    );
+  }
+  const d = q.data;
+  return (
+    &lt;div style={{ padding: 16 }}&gt;
+      &lt;Link to=&quot;/m/work&quot; style={{ color: &quot;var(--vt-primary)&quot;, textDecoration: &quot;none&quot; }}&gt;
+        ← {t(&quot;nav.tasks&quot;)}
+      &lt;/Link&gt;
+      &lt;h1 style={{ marginTop: 12 }}&gt;{d.title}&lt;/h1&gt;
+      &lt;div
+        style={{
+          display: &quot;flex&quot;,
+          gap: 8,
+          flexWrap: &quot;wrap&quot;,
+          color: &quot;var(--vt-text-muted)&quot;,
+          marginBottom: 16,
+        }}
+      &gt;
+        {d.status &amp;&amp; &lt;span&gt;{d.status}&lt;/span&gt;}
+        {d.priority &amp;&amp; &lt;span&gt;· {d.priority}&lt;/span&gt;}
+        {d.due_date &amp;&amp; &lt;span&gt;· {fmtDate(d.due_date)}&lt;/span&gt;}
+        {d.points ? &lt;span&gt;· +{d.points} pts&lt;/span&gt; : null}
+      &lt;/div&gt;
+      {d.description &amp;&amp; (
+        &lt;div
+          style={{
+            background: &quot;var(--vt-surface)&quot;,
+            padding: 16,
+            borderRadius: &quot;var(--vt-radius)&quot;,
+            whiteSpace: &quot;pre-wrap&quot;,
+            marginBottom: 16,
+          }}
+        &gt;
+          {d.description}
+        &lt;/div&gt;
+      )}
+      &lt;h3&gt;Aktivitas&lt;/h3&gt;
+      {d.activity.length === 0 &amp;&amp; &lt;p style={{ color: &quot;var(--vt-text-muted)&quot; }}&gt;—&lt;/p&gt;}
+      {d.activity.map((a, idx) =&gt; (
+        &lt;div key={idx} style={{ padding: 12, borderTop: &quot;1px solid var(--vt-border)&quot; }}&gt;
+          &lt;div style={{ fontSize: 12, color: &quot;var(--vt-text-muted)&quot; }}&gt;
+            {a.owner} · {fmtDate(a.creation)} {fmtTime(a.creation)}
+          &lt;/div&gt;
+          &lt;div&gt;{a.content}&lt;/div&gt;
+        &lt;/div&gt;
+      ))}
+
+      &lt;div
+        style={{
+          position: &quot;sticky&quot;,
+          bottom: &quot;calc(var(--bottom-nav-h) + var(--safe-bottom))&quot;,
+          marginTop: 24,
+          padding: 12,
+          background: &quot;var(--vt-bg)&quot;,
+          borderTop: &quot;1px solid var(--vt-border)&quot;,
+        }}
+      &gt;
+        &lt;TaskActions
+          onComplete={doComplete}
+          onLog={() =&gt; setLogOpen(true)}
+          onSnooze={() =&gt; doSnooze(1)}
+          disabled={offline}
+        /&gt;
+      &lt;/div&gt;
+
+      &lt;LogProgressModal
+        open={logOpen}
+        onSubmit={(h, n) =&gt; doLog(h, n)}
+        onCancel={() =&gt; setLogOpen(false)}
+      /&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 12.2: Build smoke</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run build
+</code></pre>
+<p>Expected: build green.</p>
+<ul>
+<li>[ ] <strong>Step 12.3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/MyWork/Detail.tsx
+git commit -m &quot;feat(pwa): wire mutations into My Work detail (replace placeholder)&quot;
+</code></pre>
+<hr />
+<h2 id="task-13-frontend-extend-toast-for-action-buttons-used-in-undo">Task 13: Frontend — extend Toast for action buttons (used in undo)</h2>
+<p><strong>Files:</strong>
+- Verify: <code>pwa/src/components/Toast.tsx</code> (already supports <code>action</code> per P0.5)</p>
+<ul>
+<li>[ ] <strong>Step 13.1: Verify</strong></li>
+</ul>
+<pre><code class="language-bash">grep -n &quot;action&quot; pwa/src/components/Toast.tsx | head
+</code></pre>
+<p>Expected: existing P0.5 implementation already accepts <code>{ label, onClick }</code>. No changes.</p>
+<ul>
+<li>[ ] <strong>Step 13.2: Mark task complete (no commit needed)</strong></li>
+</ul>
+<hr />
+<h2 id="task-14-frontend-telemetryevent-type-extension">Task 14: Frontend — TelemetryEvent type extension</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/telemetry.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 14.1: Update type union</strong></li>
+</ul>
+<p>Replace <code>TelemetryEvent</code> in <code>pwa/src/telemetry.ts</code>:</p>
+<pre><code class="language-typescript">export type TelemetryEvent =
+  | &quot;pwa_boot&quot;
+  | &quot;login_success&quot;
+  | &quot;login_failure&quot;
+  | &quot;page_view&quot;
+  | &quot;task_view&quot;
+  | &quot;offline_seen&quot;
+  | &quot;error_boundary&quot;
+  | &quot;sw_register_failed&quot;
+  | &quot;task_complete&quot;
+  | &quot;task_complete_undone&quot;
+  | &quot;task_log&quot;
+  | &quot;task_snooze&quot;
+  | &quot;install_prompt_shown&quot;
+  | &quot;install_accepted&quot;
+  | &quot;install_dismissed&quot;
+  | &quot;install_snoozed&quot;;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 14.2: Build</strong></li>
+</ul>
+<pre><code class="language-bash">npm run build
+</code></pre>
+<p>Expected: TS check passes.</p>
+<ul>
+<li>[ ] <strong>Step 14.3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/telemetry.ts
+git commit -m &quot;feat(pwa): extend TelemetryEvent type for P1a&quot;
+</code></pre>
+<hr />
+<h2 id="task-15-playwright-smoke-complete-flow">Task 15: Playwright smoke — complete flow</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/e2e/smoke.spec.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 15.1: Append test</strong></li>
+</ul>
+<p>Add to existing file:</p>
+<pre><code class="language-typescript">test(&quot;complete a task via swipe action&quot;, async ({ page }) =&gt; {
+  test.skip(!process.env.PWA_E2E_FULL, &quot;Set PWA_E2E_FULL=1 to enable mutation test&quot;);
+
+  await page.goto(&quot;/m/work&quot;);
+  await page.fill('input[autocomplete=&quot;username&quot;]', USER);
+  await page.fill('input[type=&quot;password&quot;]', PASS);
+  await page.click('button[type=&quot;submit&quot;]');
+  await page.waitForSelector('h1:has-text(/selamat/i)', { timeout: 10_000 });
+
+  const card = page.locator('[data-revealed]').first();
+  await card.dispatchEvent(&quot;pointerdown&quot;, { clientX: 300 });
+  await card.dispatchEvent(&quot;pointermove&quot;, { clientX: 100 });
+  await card.dispatchEvent(&quot;pointerup&quot;, { clientX: 100 });
+
+  await page.click('button:has-text(&quot;Selesai&quot;)');
+  await expect(page.getByText(/Batalkan/i)).toBeVisible();
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 15.2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/e2e/smoke.spec.ts
+git commit -m &quot;test(pwa): playwright smoke for complete flow (gated)&quot;
+</code></pre>
+<hr />
+<h2 id="task-16-final-integration-pr">Task 16: Final integration + PR</h2>
+<ul>
+<li>[ ] <strong>Step 16.1: Run all frontend tests</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; ./node_modules/.bin/vitest run
+</code></pre>
+<p>Expected: all green (P0.5 baseline 23 + P1a additions).</p>
+<ul>
+<li>[ ] <strong>Step 16.2: Build</strong></li>
+</ul>
+<pre><code class="language-bash">npm run build
+</code></pre>
+<p>Expected: green.</p>
+<ul>
+<li>[ ] <strong>Step 16.3: Lint</strong></li>
+</ul>
+<pre><code class="language-bash">npm run lint
+</code></pre>
+<p>Expected: no errors.</p>
+<ul>
+<li>[ ] <strong>Step 16.4: Push + PR</strong></li>
+</ul>
+<pre><code class="language-bash">cd ..
+git push -u origin feat/pwa-p1a-mutations
+gh pr create --title &quot;feat(pwa): P1a mutations + install prompt&quot; --body &quot;$(cat &lt;&lt;'EOF'
+## Summary
+- Task mutations: Complete / Log progress / Snooze
+- Swipe-reveal actions + checkbox primary tap
+- 5-second undo via toast
+- Online-only enforcement (disabled UI + toast when offline)
+- Custom install prompt after 2nd successful complete
+- iOS Safari fallback: instructions modal
+- 8 new telemetry events for funnel analysis
+
+## Test plan
+- [ ] `cd pwa &amp;&amp; npm test` — green (vitest)
+- [ ] `bench --site &lt;site&gt; run-tests --app vernon_tasks --module &quot;vernon_tasks.task.api.test_my_work_mutations&quot;` — green
+- [ ] Manual: complete task → 5s toast → wait → task removed
+- [ ] Manual: complete task → tap Batalkan → task restored
+- [ ] Manual: airplane mode → action buttons disabled, toast shown
+- [ ] Manual: complete 2 tasks in Android Chrome → install banner shown
+- [ ] Manual: iOS Safari → install banner shows instructions modal
+- [ ] Manual: log progress → actual_hours increments in Desk
+
+## References
+- Spec: `docs/superpowers/specs/2026-05-11-vernon-pwa-p1a-mutations-design.md`
+- Plan: `docs/superpowers/plans/2026-05-11-vernon-pwa-p1a-mutations.md`
+- Predecessor: PR #1 (P0.5 foundation)
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)&quot;
+</code></pre>
+<hr />
+<h2 id="self-review">Self-Review</h2>
+<p><strong>Spec coverage:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Spec section</th>
+<th>Task(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Backend mutations API (complete/log/snooze)</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Permission gate (_check_access)</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Idempotency on complete</td>
+<td>1 (test)</td>
+</tr>
+<tr>
+<td>Hours validation (0, 24]</td>
+<td>1 (test)</td>
+</tr>
+<tr>
+<td 1_3_7="1,3,7">Snooze days ∈</td>
+<td>1 (test)</td>
+</tr>
+<tr>
+<td>Telemetry allowlist extension</td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>mutations.ts</code> API client</td>
+<td>3</td>
+</tr>
+<tr>
+<td><code>useUndoableMutation</code> 5s wrapper</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>useCompleteCounter</code> localStorage</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>useInstallPrompt</code> + platform detect</td>
+<td>6</td>
+</tr>
+<tr>
+<td><code>SwipeRow</code> primitive</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>TaskActions</code> 3-button panel + i18n</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>LogProgressModal</code> form</td>
+<td>9</td>
+</tr>
+<tr>
+<td><code>InstallPrompt</code> banner + iOS modal</td>
+<td>10</td>
+</tr>
+<tr>
+<td>Wire into List (swipe + checkbox + install)</td>
+<td>11</td>
+</tr>
+<tr>
+<td>Wire into Detail (replace placeholder)</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Toast undo action (already supports)</td>
+<td>13</td>
+</tr>
+<tr>
+<td>TelemetryEvent type union</td>
+<td>14</td>
+</tr>
+<tr>
+<td>Playwright smoke</td>
+<td>15</td>
+</tr>
+<tr>
+<td>Final + PR</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Online-only (<code>navigator.onLine</code> checks)</td>
+<td>11, 12</td>
+</tr>
+<tr>
+<td>Optimistic UI + rollback</td>
+<td>11 (removeFromCache + invalidate on error)</td>
+</tr>
+<tr>
+<td>Error handling matrix</td>
+<td>11, 12</td>
+</tr>
+<tr>
+<td>Rollout (feature flag)</td>
+<td>Deferred to runtime config — not part of code</td>
+</tr>
+</tbody>
+</table>
+<p>All spec sections covered.</p>
+<p><strong>Placeholder scan:</strong> No TBD / generic "handle errors" patterns.</p>
+<p><strong>Type consistency:</strong> <code>SnoozeDays</code>, <code>MyWork</code>, <code>TaskCard</code>, <code>CompleteResult</code> / <code>LogResult</code> / <code>SnoozeResult</code>, <code>TelemetryEvent</code> consistent across files.</p>
+<p>Plan ready.</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-11-vernon-pwa-p1a-mutations.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

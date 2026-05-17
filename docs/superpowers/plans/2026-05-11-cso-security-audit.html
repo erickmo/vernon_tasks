@@ -1,0 +1,1184 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — CSO Security Audit — PWA APIs Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>CSO Security Audit — PWA APIs Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-11-cso-security-audit.md</span>
+  </div>
+</header>
+
+<h1 id="cso-security-audit-pwa-apis-implementation-plan">CSO Security Audit — PWA APIs Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Harden Vernon Tasks PWA APIs with rate limiting, input bounds validation, and security response headers before company-wide rollout.</p>
+<p><strong>Architecture:</strong> A new <code>security.py</code> guard module provides four helpers (<code>require_login</code>, <code>rate_limit</code>, <code>clamp_int</code>, <code>max_str</code>); each API file imports only what it needs. Security headers for <code>/m/*</code> responses are injected via an <code>after_request</code> hook registered in <code>hooks.py</code>.</p>
+<p><strong>Tech Stack:</strong> Python 3.11, Frappe v15, Redis via <code>frappe.cache()</code>, FrappeTestCase</p>
+<hr />
+<h2 id="file-map">File Map</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vernon_tasks/task/api/security.py</code></td>
+<td><strong>Create</strong> — 4 guard helpers</td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/test_security.py</code></td>
+<td><strong>Create</strong> — 12 unit tests</td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/my_work.py</code></td>
+<td><strong>Modify</strong> — <code>require_login</code> in <code>detail()</code>, <code>max_str</code> on <code>query</code> in <code>search()</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/my_work_mutations.py</code></td>
+<td><strong>Modify</strong> — <code>rate_limit</code> on all 3 mutations, <code>max_str</code> on <code>note</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/notifications.py</code></td>
+<td><strong>Modify</strong> — <code>clamp_int</code> on <code>limit</code> / <code>offset</code> in <code>list()</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/push.py</code></td>
+<td><strong>Modify</strong> — <code>max_str</code> on <code>endpoint</code>, <code>rate_limit</code> in <code>subscribe()</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/push_prefs.py</code></td>
+<td><strong>Modify</strong> — <code>rate_limit</code> in <code>update_prefs()</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/analytics.py</code></td>
+<td><strong>Modify</strong> — <code>clamp_int</code> on <code>n</code> in <code>get_velocity_trend()</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/exec_analytics.py</code></td>
+<td><strong>Modify</strong> — <code>clamp_int</code> on <code>periods</code> in <code>get_kpi_trend()</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/api/telemetry.py</code></td>
+<td><strong>Modify</strong> — props size cap in <code>log_event()</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/hooks.py</code></td>
+<td><strong>Modify</strong> — add <code>after_request</code> + <code>add_pwa_security_headers</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="task-1-guard-module-securitypy-tdd">Task 1: Guard Module (<code>security.py</code>) — TDD</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/api/security.py</code>
+- Create: <code>vernon_tasks/task/api/test_security.py</code></p>
+<blockquote>
+<p>Frappe tests require a running site. Replace <code>&lt;site&gt;</code> in all <code>bench</code> commands with your site name (e.g. <code>site1.localhost</code>).</p>
+</blockquote>
+<ul>
+<li>[ ] <strong>Step 1: Write the failing tests</strong></li>
+</ul>
+<p>Create <code>vernon_tasks/task/api/test_security.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from vernon_tasks.task.api.security import require_login, rate_limit, clamp_int, max_str
+
+
+class TestSecurity(FrappeTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = &quot;security_test@test.local&quot;
+        if not frappe.db.exists(&quot;User&quot;, cls.user):
+            frappe.get_doc(
+                {&quot;doctype&quot;: &quot;User&quot;, &quot;email&quot;: cls.user, &quot;first_name&quot;: &quot;Security&quot;}
+            ).insert(ignore_permissions=True)
+
+    # --- require_login ---
+
+    def test_require_login_raises_for_guest(self):
+        frappe.set_user(&quot;Guest&quot;)
+        self.assertRaises(frappe.PermissionError, require_login)
+
+    def test_require_login_passes_for_authenticated_user(self):
+        frappe.set_user(self.user)
+        require_login()  # must not raise
+
+    # --- rate_limit ---
+
+    def test_rate_limit_allows_calls_under_limit(self):
+        frappe.set_user(self.user)
+        ep = f&quot;test_under_{frappe.utils.now_datetime().microsecond}&quot;
+        for _ in range(3):
+            rate_limit(ep, 5)  # 3 &lt; 5, no raise
+
+    def test_rate_limit_raises_when_limit_exceeded(self):
+        frappe.set_user(self.user)
+        ep = f&quot;test_over_{frappe.utils.now_datetime().microsecond}&quot;
+        for _ in range(5):
+            rate_limit(ep, 5)  # 5th call == max, still OK
+        # 6th call exceeds
+        self.assertRaises(frappe.ValidationError, rate_limit, ep, 5)
+
+    def test_rate_limit_skips_for_guest(self):
+        frappe.set_user(&quot;Guest&quot;)
+        ep = f&quot;test_guest_{frappe.utils.now_datetime().microsecond}&quot;
+        # max=0 but Guest session → must NOT raise
+        rate_limit(ep, 0)
+
+    # --- clamp_int ---
+
+    def test_clamp_int_returns_value_in_range(self):
+        self.assertEqual(clamp_int(50, 1, 100, &quot;x&quot;), 50)
+        self.assertEqual(clamp_int(&quot;10&quot;, 1, 100, &quot;x&quot;), 10)
+        self.assertEqual(clamp_int(1, 1, 100, &quot;x&quot;), 1)    # lo boundary
+        self.assertEqual(clamp_int(100, 1, 100, &quot;x&quot;), 100)  # hi boundary
+
+    def test_clamp_int_raises_below_lo(self):
+        self.assertRaises(frappe.ValidationError, clamp_int, 0, 1, 100, &quot;x&quot;)
+
+    def test_clamp_int_raises_above_hi(self):
+        self.assertRaises(frappe.ValidationError, clamp_int, 101, 1, 100, &quot;x&quot;)
+
+    def test_clamp_int_raises_for_non_integer_string(self):
+        self.assertRaises(frappe.ValidationError, clamp_int, &quot;abc&quot;, 1, 100, &quot;x&quot;)
+
+    # --- max_str ---
+
+    def test_max_str_truncates_at_limit(self):
+        result = max_str(&quot;a&quot; * 300, 200)
+        self.assertEqual(len(result), 200)
+
+    def test_max_str_preserves_string_under_limit(self):
+        self.assertEqual(max_str(&quot;hello&quot;, 200), &quot;hello&quot;)
+
+    def test_max_str_returns_empty_for_none(self):
+        self.assertEqual(max_str(None, 200), &quot;&quot;)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run tests — verify they fail (ImportError)</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_security
+</code></pre>
+<p>Expected: <code>ImportError: cannot import name 'require_login' from 'vernon_tasks.task.api.security'</code> or <code>ModuleNotFoundError</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement <code>security.py</code></strong></li>
+</ul>
+<p>Create <code>vernon_tasks/task/api/security.py</code>:</p>
+<pre><code class="language-python">import frappe
+
+_RATE_LIMIT_TTL = 90  # seconds — bucket expires 90s after first hit
+
+
+def require_login() -&gt; None:
+    if frappe.session.user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+
+def rate_limit(endpoint: str, max_calls: int) -&gt; None:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return
+    window = frappe.utils.now()[:16]  # &quot;YYYY-MM-DD HH:MM&quot; — 1-minute bucket
+    key = f&quot;vt:rl:{user}:{endpoint}:{window}&quot;
+    count = frappe.cache().incrby(key, 1)
+    frappe.cache().expire(key, _RATE_LIMIT_TTL)
+    if count &gt; max_calls:
+        frappe.throw(&quot;Rate limit exceeded&quot;, frappe.ValidationError)
+
+
+def clamp_int(val, lo: int, hi: int, name: str = &quot;param&quot;) -&gt; int:
+    try:
+        v = int(val)
+    except (TypeError, ValueError):
+        frappe.throw(f&quot;{name} must be an integer&quot;, frappe.ValidationError)
+    if v &lt; lo or v &gt; hi:
+        frappe.throw(f&quot;{name} must be between {lo} and {hi}&quot;, frappe.ValidationError)
+    return v
+
+
+def max_str(val, limit: int) -&gt; str:
+    if not val:
+        return &quot;&quot;
+    return str(val)[:limit]
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run tests — verify all 12 pass</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_security
+</code></pre>
+<p>Expected: <code>12 tests passed, 0 failures</code></p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/security.py vernon_tasks/task/api/test_security.py
+git commit -m &quot;feat(security): add guard module with require_login, rate_limit, clamp_int, max_str&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-harden-my_workpy">Task 2: Harden <code>my_work.py</code></h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/api/my_work.py</code></p>
+<p><strong>Changes:</strong>
+- <code>detail()</code>: add <code>require_login()</code> before any DB call (Guest blocks before permission check)
+- <code>search()</code>: truncate <code>query</code> to 200 chars</p>
+<ul>
+<li>[ ] <strong>Step 1: Replace <code>detail()</code> and <code>search()</code> in <code>my_work.py</code></strong></li>
+</ul>
+<p>Replace the entire file content with:</p>
+<pre><code class="language-python">import frappe
+from frappe.utils import today, add_days, getdate
+from vernon_tasks.task.api.security import require_login, max_str
+
+TASK_DOCTYPE = &quot;VT Task&quot;
+
+
+def _serialize(row: dict) -&gt; dict:
+    return {
+        &quot;id&quot;: row[&quot;name&quot;],
+        &quot;title&quot;: row.get(&quot;title&quot;),
+        &quot;status&quot;: row.get(&quot;kanban_status&quot;),
+        &quot;priority&quot;: row.get(&quot;priority&quot;),
+        &quot;due_date&quot;: row.get(&quot;deadline&quot;),
+        &quot;project&quot;: row.get(&quot;project&quot;),
+        &quot;sprint&quot;: row.get(&quot;sprint&quot;),
+        &quot;points&quot;: row.get(&quot;base_points&quot;) or 0,
+    }
+
+
+@frappe.whitelist()
+def list() -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+    rows = frappe.get_all(
+        TASK_DOCTYPE,
+        filters=[
+            [&quot;assigned_to&quot;, &quot;=&quot;, user],
+            [&quot;kanban_status&quot;, &quot;!=&quot;, &quot;Cancelled&quot;],
+        ],
+        fields=[&quot;name&quot;, &quot;title&quot;, &quot;kanban_status&quot;, &quot;priority&quot;, &quot;deadline&quot;, &quot;project&quot;, &quot;sprint&quot;, &quot;base_points&quot;],
+        order_by=&quot;deadline asc&quot;,
+        limit_page_length=500,
+    )
+
+    today_d = getdate(today())
+    upcoming_cap = add_days(today_d, 7)
+    overdue, today_list, upcoming = [], [], []
+    for r in rows:
+        d = getdate(r[&quot;deadline&quot;]) if r[&quot;deadline&quot;] else None
+        item = _serialize(r)
+        if d is None or d &gt; getdate(upcoming_cap):
+            continue
+        if d &lt; today_d:
+            overdue.append(item)
+        elif d == today_d:
+            today_list.append(item)
+        else:
+            upcoming.append(item)
+    return {&quot;overdue&quot;: overdue, &quot;today&quot;: today_list, &quot;upcoming&quot;: upcoming}
+
+
+@frappe.whitelist()
+def search(
+    query: str = &quot;&quot;,
+    priority: str = &quot;&quot;,
+    project: str = &quot;&quot;,
+    due_range: str = &quot;all&quot;,
+) -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+    query = max_str(query, 200)
+
+    filters: list = [
+        [&quot;assigned_to&quot;, &quot;=&quot;, user],
+        [&quot;kanban_status&quot;, &quot;!=&quot;, &quot;Cancelled&quot;],
+    ]
+    if query:
+        filters.append([&quot;title&quot;, &quot;like&quot;, f&quot;%{query}%&quot;])
+    if priority:
+        choices = [p.strip() for p in priority.split(&quot;,&quot;) if p.strip()]
+        if choices:
+            filters.append([&quot;priority&quot;, &quot;in&quot;, choices])
+    if project:
+        filters.append([&quot;project&quot;, &quot;=&quot;, project])
+    if due_range:
+        today_d = getdate(today())
+        if due_range == &quot;today&quot;:
+            filters.append([&quot;deadline&quot;, &quot;=&quot;, today_d])
+        elif due_range == &quot;week&quot;:
+            filters.append([&quot;deadline&quot;, &quot;between&quot;, [today_d, add_days(today_d, 7)]])
+        elif due_range == &quot;overdue&quot;:
+            filters.append([&quot;deadline&quot;, &quot;&lt;&quot;, today_d])
+
+    rows = frappe.get_all(
+        TASK_DOCTYPE,
+        filters=filters,
+        fields=[&quot;name&quot;, &quot;title&quot;, &quot;kanban_status&quot;, &quot;priority&quot;, &quot;deadline&quot;, &quot;project&quot;, &quot;sprint&quot;, &quot;base_points&quot;],
+        order_by=&quot;deadline asc&quot;,
+        limit_page_length=200,
+    )
+    return {&quot;results&quot;: [_serialize(r) for r in rows], &quot;total&quot;: len(rows)}
+
+
+@frappe.whitelist()
+def detail(task_id: str) -&gt; dict:
+    require_login()
+
+    if not frappe.db.exists(TASK_DOCTYPE, task_id):
+        frappe.throw(&quot;Not found&quot;, frappe.PermissionError)
+
+    user = frappe.session.user
+    doc = frappe.get_doc(TASK_DOCTYPE, task_id)
+    if doc.get(&quot;assigned_to&quot;) != user and not frappe.has_permission(TASK_DOCTYPE, &quot;read&quot;, doc=doc):
+        frappe.throw(&quot;Forbidden&quot;, frappe.PermissionError)
+
+    activity = frappe.get_all(
+        &quot;Comment&quot;,
+        filters={&quot;reference_doctype&quot;: TASK_DOCTYPE, &quot;reference_name&quot;: task_id},
+        fields=[&quot;content&quot;, &quot;comment_type&quot;, &quot;creation&quot;, &quot;owner&quot;],
+        order_by=&quot;creation desc&quot;,
+        limit_page_length=10,
+    )
+    return {
+        **_serialize(doc.as_dict()),
+        &quot;description&quot;: None,
+        &quot;activity&quot;: activity,
+    }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run existing my_work tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_my_work
+</code></pre>
+<p>Expected: all previously passing tests still pass.</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/my_work.py
+git commit -m &quot;fix(security): require_login in detail(), max_str on search query&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-harden-my_work_mutationspy">Task 3: Harden <code>my_work_mutations.py</code></h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/api/my_work_mutations.py</code></p>
+<p><strong>Changes:</strong>
+- <code>complete()</code>: <code>rate_limit("complete", 30)</code> — 30 completions/min is well above real usage
+- <code>log_progress()</code>: <code>rate_limit("log_progress", 20)</code>, <code>max_str(note, 1000)</code>
+- <code>snooze()</code>: <code>rate_limit("snooze", 10)</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Replace entire file</strong></li>
+</ul>
+<pre><code class="language-python">import frappe
+from frappe.utils import add_days, getdate, today
+from vernon_tasks.task.api.security import rate_limit, max_str
+
+TASK_DOCTYPE = &quot;VT Task&quot;
+ALLOWED_SNOOZE_DAYS = (1, 3, 7)
+MAX_LOG_HOURS = 24
+
+
+def _check_access(task_id: str):
+    if not frappe.db.exists(TASK_DOCTYPE, task_id):
+        frappe.throw(&quot;Not found&quot;, frappe.PermissionError)
+    doc = frappe.get_doc(TASK_DOCTYPE, task_id)
+    user = frappe.session.user
+    if doc.get(&quot;assigned_to&quot;) != user and not frappe.has_permission(
+        TASK_DOCTYPE, &quot;write&quot;, doc=doc
+    ):
+        frappe.throw(&quot;Forbidden&quot;, frappe.PermissionError)
+    return doc
+
+
+@frappe.whitelist()
+def complete(task_id: str) -&gt; dict:
+    rate_limit(&quot;complete&quot;, 30)
+    doc = _check_access(task_id)
+    if doc.kanban_status == &quot;Done&quot;:
+        return {&quot;ok&quot;: True, &quot;idempotent&quot;: True}
+    doc.kanban_status = &quot;Done&quot;
+    doc.completion_date = today()
+    doc.save()
+    return {&quot;ok&quot;: True, &quot;task_id&quot;: task_id}
+
+
+@frappe.whitelist()
+def log_progress(task_id: str, hours, note: str = &quot;&quot;) -&gt; dict:
+    rate_limit(&quot;log_progress&quot;, 20)
+    hours_f = float(hours)
+    if hours_f &lt;= 0 or hours_f &gt; MAX_LOG_HOURS:
+        frappe.throw(f&quot;Hours must be in (0, {MAX_LOG_HOURS}]&quot;)
+    note = max_str(note, 1000)
+    doc = _check_access(task_id)
+    doc.actual_hours = (doc.actual_hours or 0) + hours_f
+    doc.save()
+    content = f&quot;[Log {hours_f}h] {note}&quot; if note else f&quot;[Log {hours_f}h]&quot;
+    frappe.get_doc({
+        &quot;doctype&quot;: &quot;Comment&quot;,
+        &quot;comment_type&quot;: &quot;Comment&quot; if note else &quot;Info&quot;,
+        &quot;reference_doctype&quot;: TASK_DOCTYPE,
+        &quot;reference_name&quot;: task_id,
+        &quot;content&quot;: content,
+    }).insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True, &quot;actual_hours&quot;: doc.actual_hours}
+
+
+@frappe.whitelist()
+def snooze(task_id: str, days) -&gt; dict:
+    rate_limit(&quot;snooze&quot;, 10)
+    days_i = int(days)
+    if days_i not in ALLOWED_SNOOZE_DAYS:
+        frappe.throw(f&quot;Days must be one of {ALLOWED_SNOOZE_DAYS}&quot;)
+    doc = _check_access(task_id)
+    base = getdate(doc.deadline or today())
+    new_deadline = add_days(base, days_i)
+    doc.deadline = new_deadline
+    doc.save()
+    frappe.get_doc({
+        &quot;doctype&quot;: &quot;Comment&quot;,
+        &quot;comment_type&quot;: &quot;Info&quot;,
+        &quot;reference_doctype&quot;: TASK_DOCTYPE,
+        &quot;reference_name&quot;: task_id,
+        &quot;content&quot;: f&quot;Snoozed +{days_i}d → {new_deadline}&quot;,
+    }).insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True, &quot;deadline&quot;: str(new_deadline)}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run existing mutation tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_my_work_mutations
+</code></pre>
+<p>Expected: all previously passing tests still pass.</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/my_work_mutations.py
+git commit -m &quot;fix(security): rate_limit on complete/log_progress/snooze, max_str on note&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-harden-notificationspy-pushpy-push_prefspy">Task 4: Harden <code>notifications.py</code>, <code>push.py</code>, <code>push_prefs.py</code></h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/api/notifications.py</code>
+- Modify: <code>vernon_tasks/task/api/push.py</code>
+- Modify: <code>vernon_tasks/task/api/push_prefs.py</code></p>
+<p><strong>Changes:</strong>
+- <code>notifications.list()</code>: <code>clamp_int(limit, 1, 100)</code>, <code>clamp_int(offset, 0, 10000)</code>
+- <code>push.subscribe()</code>: <code>max_str(endpoint, 2048)</code>, <code>rate_limit("push_subscribe", 5)</code>
+- <code>push_prefs.update_prefs()</code>: <code>rate_limit("push_prefs", 20)</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Replace <code>notifications.py</code></strong></li>
+</ul>
+<pre><code class="language-python">import frappe
+from vernon_tasks.task.api.security import clamp_int
+
+CACHE_KEY_UNREAD = &quot;vt:notif:unread:{user}&quot;
+CACHE_TTL = 30
+
+
+@frappe.whitelist()
+def list(limit: int = 50, offset: int = 0, only_unread: int = 0) -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+    limit = clamp_int(limit, 1, 100, &quot;limit&quot;)
+    offset = clamp_int(offset, 0, 10_000, &quot;offset&quot;)
+
+    filters: dict = {&quot;for_user&quot;: user}
+    if int(only_unread):
+        filters[&quot;read&quot;] = 0
+
+    rows = frappe.get_all(
+        &quot;Notification Log&quot;,
+        filters=filters,
+        fields=[
+            &quot;name&quot;,
+            &quot;subject&quot;,
+            &quot;email_content&quot;,
+            &quot;type&quot;,
+            &quot;document_type&quot;,
+            &quot;document_name&quot;,
+            &quot;read&quot;,
+            &quot;creation&quot;,
+        ],
+        order_by=&quot;creation desc&quot;,
+        limit_start=offset,
+        limit_page_length=limit,
+    )
+    return {&quot;results&quot;: rows}
+
+
+@frappe.whitelist()
+def mark_read(name: str) -&gt; dict:
+    user = frappe.session.user
+    doc = frappe.get_doc(&quot;Notification Log&quot;, name)
+    if doc.for_user != user:
+        frappe.throw(&quot;Forbidden&quot;, frappe.PermissionError)
+    doc.read = 1
+    doc.save(ignore_permissions=True)
+    _invalidate_unread_cache(user)
+    return {&quot;ok&quot;: True}
+
+
+@frappe.whitelist()
+def mark_all_read() -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+    frappe.db.set_value(
+        &quot;Notification Log&quot;,
+        {&quot;for_user&quot;: user, &quot;read&quot;: 0},
+        &quot;read&quot;,
+        1,
+        update_modified=False,
+    )
+    _invalidate_unread_cache(user)
+    return {&quot;ok&quot;: True}
+
+
+@frappe.whitelist()
+def count_unread() -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return {&quot;count&quot;: 0}
+    key = CACHE_KEY_UNREAD.format(user=user)
+    cached = frappe.cache().get_value(key)
+    if cached is not None:
+        return {&quot;count&quot;: int(cached)}
+    count = frappe.db.count(&quot;Notification Log&quot;, {&quot;for_user&quot;: user, &quot;read&quot;: 0})
+    frappe.cache().set_value(key, count, expires_in_sec=CACHE_TTL)
+    return {&quot;count&quot;: count}
+
+
+def _invalidate_unread_cache(user: str) -&gt; None:
+    frappe.cache().delete_value(CACHE_KEY_UNREAD.format(user=user))
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Replace <code>push.py</code></strong></li>
+</ul>
+<pre><code class="language-python">import frappe
+from frappe.utils import now_datetime
+from vernon_tasks.task.api.security import max_str, rate_limit
+
+
+@frappe.whitelist(allow_guest=True)
+def get_public_key() -&gt; dict:
+    key = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;push_vapid_public_key&quot;) or &quot;&quot;
+    return {&quot;public_key&quot;: key}
+
+
+@frappe.whitelist()
+def subscribe(endpoint: str, p256dh: str, auth: str, user_agent: str = &quot;&quot;) -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+    rate_limit(&quot;push_subscribe&quot;, 5)
+    endpoint = max_str(endpoint, 2048)
+
+    existing = frappe.db.get_value(
+        &quot;Vernon Push Subscription&quot;, {&quot;endpoint&quot;: endpoint}, &quot;name&quot;
+    )
+    if existing:
+        frappe.db.set_value(
+            &quot;Vernon Push Subscription&quot;,
+            existing,
+            {
+                &quot;user&quot;: user,
+                &quot;p256dh&quot;: p256dh,
+                &quot;auth&quot;: auth,
+                &quot;user_agent&quot;: user_agent,
+                &quot;last_seen&quot;: now_datetime(),
+            },
+        )
+        return {&quot;ok&quot;: True, &quot;renewed&quot;: True}
+
+    frappe.get_doc(
+        {
+            &quot;doctype&quot;: &quot;Vernon Push Subscription&quot;,
+            &quot;user&quot;: user,
+            &quot;endpoint&quot;: endpoint,
+            &quot;p256dh&quot;: p256dh,
+            &quot;auth&quot;: auth,
+            &quot;user_agent&quot;: user_agent,
+            &quot;last_seen&quot;: now_datetime(),
+        }
+    ).insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True, &quot;renewed&quot;: False}
+
+
+@frappe.whitelist()
+def unsubscribe(endpoint: str) -&gt; dict:
+    user = frappe.session.user
+    name = frappe.db.get_value(
+        &quot;Vernon Push Subscription&quot;,
+        {&quot;endpoint&quot;: endpoint, &quot;user&quot;: user},
+        &quot;name&quot;,
+    )
+    if name:
+        frappe.delete_doc(&quot;Vernon Push Subscription&quot;, name, ignore_permissions=True)
+    return {&quot;ok&quot;: True}
+
+
+@frappe.whitelist()
+def is_subscribed(endpoint: str) -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return {&quot;subscribed&quot;: False}
+    return {
+        &quot;subscribed&quot;: bool(
+            frappe.db.exists(
+                &quot;Vernon Push Subscription&quot;,
+                {&quot;endpoint&quot;: endpoint, &quot;user&quot;: user},
+            )
+        ),
+    }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Replace <code>push_prefs.py</code></strong></li>
+</ul>
+<pre><code class="language-python">import frappe
+from vernon_tasks.task.api.security import rate_limit
+
+_FIELDS = (&quot;event_assignment&quot;, &quot;event_mention&quot;, &quot;event_due&quot;, &quot;event_review&quot;)
+_DEFAULTS = {f: 1 for f in _FIELDS}
+
+
+@frappe.whitelist()
+def get_prefs() -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+    name = frappe.db.exists(&quot;Vernon Push Preference&quot;, {&quot;user&quot;: user})
+    if not name:
+        return dict(_DEFAULTS)
+    row = frappe.db.get_value(
+        &quot;Vernon Push Preference&quot;, name, list(_FIELDS), as_dict=True
+    )
+    return {f: int(row[f] or 0) for f in _FIELDS}
+
+
+@frappe.whitelist()
+def update_prefs(
+    event_assignment: int = 1,
+    event_mention: int = 1,
+    event_due: int = 1,
+    event_review: int = 1,
+) -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+    rate_limit(&quot;push_prefs&quot;, 20)
+    values = {
+        &quot;event_assignment&quot;: int(event_assignment),
+        &quot;event_mention&quot;: int(event_mention),
+        &quot;event_due&quot;: int(event_due),
+        &quot;event_review&quot;: int(event_review),
+    }
+    name = frappe.db.exists(&quot;Vernon Push Preference&quot;, {&quot;user&quot;: user})
+    if name:
+        frappe.db.set_value(&quot;Vernon Push Preference&quot;, name, values)
+    else:
+        frappe.get_doc(
+            {
+                &quot;doctype&quot;: &quot;Vernon Push Preference&quot;,
+                &quot;user&quot;: user,
+                **values,
+            }
+        ).insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run existing notification and push tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_notifications
+bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_push
+bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_push_prefs
+</code></pre>
+<p>Expected: all previously passing tests still pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Add integration assertions to <code>test_notifications.py</code></strong></li>
+</ul>
+<p>Open <code>vernon_tasks/task/api/test_notifications.py</code> and add this test class at the end of the file.</p>
+<p>Add the import at the top of that file (use module import to avoid shadowing the builtin <code>list</code>):</p>
+<pre><code class="language-python">from vernon_tasks.task.api import notifications as notif_api
+</code></pre>
+<p>Then append the class:</p>
+<pre><code class="language-python">class TestNotificationBounds(FrappeTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = &quot;notif_bounds@test.local&quot;
+        if not frappe.db.exists(&quot;User&quot;, cls.user):
+            frappe.get_doc(
+                {&quot;doctype&quot;: &quot;User&quot;, &quot;email&quot;: cls.user, &quot;first_name&quot;: &quot;Bounds&quot;}
+            ).insert(ignore_permissions=True)
+
+    def test_list_limit_zero_raises(self):
+        frappe.set_user(self.user)
+        self.assertRaises(frappe.ValidationError, notif_api.list, limit=0)
+
+    def test_list_limit_over_max_raises(self):
+        frappe.set_user(self.user)
+        self.assertRaises(frappe.ValidationError, notif_api.list, limit=101)
+
+    def test_list_limit_at_max_succeeds(self):
+        frappe.set_user(self.user)
+        result = notif_api.list(limit=100)
+        self.assertIn(&quot;results&quot;, result)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Run notification bounds tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_notifications
+</code></pre>
+<p>Expected: all tests pass including the 3 new bounds tests.</p>
+<ul>
+<li>[ ] <strong>Step 7: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/notifications.py \
+        vernon_tasks/task/api/push.py \
+        vernon_tasks/task/api/push_prefs.py \
+        vernon_tasks/task/api/test_notifications.py
+git commit -m &quot;fix(security): clamp limit/offset in notifications, rate_limit+max_str in push&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-harden-analyticspy-exec_analyticspy-telemetrypy">Task 5: Harden <code>analytics.py</code>, <code>exec_analytics.py</code>, <code>telemetry.py</code></h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/api/analytics.py</code>
+- Modify: <code>vernon_tasks/task/api/exec_analytics.py</code>
+- Modify: <code>vernon_tasks/task/api/telemetry.py</code></p>
+<p><strong>Changes:</strong>
+- <code>get_velocity_trend(project, n)</code>: <code>n = clamp_int(n, 1, 24, "n")</code>
+- <code>get_kpi_trend(kpi_definition, periods)</code>: <code>periods = clamp_int(periods, 1, 24, "periods")</code>
+- <code>log_event(event, props)</code>: truncate <code>props</code> if serialized JSON &gt; 2048 chars</p>
+<ul>
+<li>[ ] <strong>Step 1: Modify <code>analytics.py</code> — add clamp_int to get_velocity_trend</strong></li>
+</ul>
+<p>Replace only <code>get_velocity_trend</code>:</p>
+<pre><code class="language-python">@frappe.whitelist()
+def get_velocity_trend(project, n=6):
+    _guard()
+    n = clamp_int(n, 1, 24, &quot;n&quot;)
+    key = f&quot;vt_velocity:{project}:{n}&quot;
+    return _cache_get_or_set(key, lambda: _get_velocity_trend(project, n))
+</code></pre>
+<p>Add import at top of file (after existing imports):</p>
+<pre><code class="language-python">from vernon_tasks.task.api.security import clamp_int
+</code></pre>
+<p>Full updated <code>analytics.py</code>:</p>
+<pre><code class="language-python">import frappe
+from vernon_tasks.task.services.burndown_service import get_burndown as _get_burndown
+from vernon_tasks.task.services.velocity_service import get_velocity_trend as _get_velocity_trend
+from vernon_tasks.task.services.forecast_service import get_forecast as _get_forecast
+from vernon_tasks.task.services.risk_evaluator import evaluate_risks as _evaluate_risks
+from vernon_tasks.task.api.security import clamp_int
+
+_ALLOWED_ROLES = (&quot;VT Leader&quot;, &quot;VT Manager&quot;)
+_CACHE_TTL = 3600
+
+
+def _guard():
+    if not set(frappe.get_roles()) &amp; set(_ALLOWED_ROLES):
+        frappe.throw(&quot;Not authorized&quot;, frappe.PermissionError)
+
+
+def _cache_get_or_set(key, fn):
+    cached = frappe.cache().get_value(key)
+    if cached is not None:
+        return cached
+    val = fn()
+    frappe.cache().set_value(key, val, expires_in_sec=_CACHE_TTL)
+    return val
+
+
+@frappe.whitelist()
+def get_burndown(sprint):
+    _guard()
+    return _get_burndown(sprint)
+
+
+@frappe.whitelist()
+def get_velocity_trend(project, n=6):
+    _guard()
+    n = clamp_int(n, 1, 24, &quot;n&quot;)
+    key = f&quot;vt_velocity:{project}:{n}&quot;
+    return _cache_get_or_set(key, lambda: _get_velocity_trend(project, n))
+
+
+@frappe.whitelist()
+def get_forecast(project):
+    _guard()
+    key = f&quot;vt_forecast:{project}&quot;
+    return _cache_get_or_set(key, lambda: _get_forecast(project))
+
+
+@frappe.whitelist()
+def get_risks(project):
+    _guard()
+    return _evaluate_risks(project)
+
+
+def invalidate_project_cache(doc, method=None):
+    &quot;&quot;&quot;Hook target — clears velocity + forecast cache for a project.&quot;&quot;&quot;
+    project = getattr(doc, &quot;project&quot;, None) or getattr(doc, &quot;name&quot;, None)
+    if not project:
+        return
+    for n in (3, 6, 12):
+        frappe.cache().delete_value(f&quot;vt_velocity:{project}:{n}&quot;)
+    frappe.cache().delete_value(f&quot;vt_forecast:{project}&quot;)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Modify <code>exec_analytics.py</code> — add clamp_int to get_kpi_trend</strong></li>
+</ul>
+<p>Full updated <code>exec_analytics.py</code>:</p>
+<pre><code class="language-python">import frappe
+from vernon_tasks.task.services.okr_rollup_service import get_okr_rollup as _okr
+from vernon_tasks.task.services.kpi_trend_service import (
+    get_kpi_trend as _kpi_trend,
+    list_kpis as _list_kpis,
+)
+from vernon_tasks.task.services.health_score_service import get_health_score as _health
+from vernon_tasks.task.api.security import clamp_int
+
+_ALLOWED_ROLES = (&quot;VT Manager&quot;, &quot;System Manager&quot;)
+
+
+def _guard():
+    if not set(frappe.get_roles()) &amp; set(_ALLOWED_ROLES):
+        frappe.throw(&quot;Not authorized&quot;, frappe.PermissionError)
+
+
+@frappe.whitelist()
+def get_okr_rollup(period=None):
+    _guard()
+    return _okr(period)
+
+
+@frappe.whitelist()
+def list_kpis():
+    _guard()
+    return _list_kpis()
+
+
+@frappe.whitelist()
+def get_kpi_trend(kpi_definition, periods=12):
+    _guard()
+    periods = clamp_int(periods, 1, 24, &quot;periods&quot;)
+    return _kpi_trend(kpi_definition, periods)
+
+
+@frappe.whitelist()
+def get_health_score():
+    _guard()
+    return _health()
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Modify <code>telemetry.py</code> — add props size cap</strong></li>
+</ul>
+<p>Full updated <code>telemetry.py</code>:</p>
+<pre><code class="language-python">import json
+import frappe
+from frappe.utils import add_days, now_datetime
+
+ALLOWED_EVENTS = {
+    &quot;pwa_boot&quot;,
+    &quot;login_success&quot;,
+    &quot;login_failure&quot;,
+    &quot;page_view&quot;,
+    &quot;task_view&quot;,
+    &quot;offline_seen&quot;,
+    &quot;error_boundary&quot;,
+    &quot;sw_register_failed&quot;,
+    &quot;task_complete&quot;,
+    &quot;task_complete_undone&quot;,
+    &quot;task_log&quot;,
+    &quot;task_snooze&quot;,
+    &quot;install_prompt_shown&quot;,
+    &quot;install_accepted&quot;,
+    &quot;install_dismissed&quot;,
+    &quot;install_snoozed&quot;,
+    &quot;search_query&quot;,
+    &quot;filter_applied&quot;,
+    &quot;notif_view&quot;,
+    &quot;notif_tap&quot;,
+    &quot;notif_mark_all_read&quot;,
+    &quot;dashboard_view&quot;,
+    &quot;analytics_view&quot;,
+    &quot;analytics_period_change&quot;,
+    &quot;analytics_project_change&quot;,
+    &quot;leader_review_view&quot;,
+    &quot;leader_approve&quot;,
+    &quot;leader_reject&quot;,
+    &quot;leader_sprint_view&quot;,
+    &quot;leader_exec_view&quot;,
+    &quot;leader_project_change&quot;,
+    &quot;push_subscribe_attempt&quot;,
+    &quot;push_subscribed&quot;,
+    &quot;push_unsubscribed&quot;,
+    &quot;push_received&quot;,
+    &quot;push_pref_view&quot;,
+    &quot;push_pref_changed&quot;,
+    &quot;push_action_complete&quot;,
+}
+
+RATE_LIMIT_PER_MINUTE = 60
+RETENTION_DAYS = 90
+_PROPS_MAX_BYTES = 2048
+
+
+@frappe.whitelist()
+def log_event(event: str, props: dict | None = None) -&gt; dict:
+    if event not in ALLOWED_EVENTS:
+        frappe.throw(f&quot;Unknown telemetry event: {event}&quot;)
+
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return {&quot;ok&quot;: False, &quot;reason&quot;: &quot;guest&quot;}
+
+    cache_key = f&quot;vt:tel:{user}:{frappe.utils.now()[:16]}&quot;
+    count = frappe.cache().incrby(cache_key, 1)
+    frappe.cache().expire(cache_key, 90)
+    if count &gt; RATE_LIMIT_PER_MINUTE:
+        frappe.throw(&quot;Telemetry rate limit exceeded&quot;)
+
+    if isinstance(props, dict):
+        props_str = json.dumps(props)
+        if len(props_str) &gt; _PROPS_MAX_BYTES:
+            props_str = &quot;{}&quot;
+    else:
+        props_str = props or None
+
+    doc = frappe.get_doc({
+        &quot;doctype&quot;: &quot;Vernon Telemetry Event&quot;,
+        &quot;event&quot;: event,
+        &quot;user&quot;: user,
+        &quot;timestamp&quot;: now_datetime(),
+        &quot;props&quot;: props_str,
+    })
+    doc.insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True}
+
+
+def purge_old_telemetry() -&gt; None:
+    cutoff = add_days(now_datetime(), -RETENTION_DAYS)
+    frappe.db.delete(&quot;Vernon Telemetry Event&quot;, {&quot;timestamp&quot;: [&quot;&lt;&quot;, cutoff]})
+    frappe.db.commit()
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run existing analytics and telemetry tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_analytics
+bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_telemetry
+</code></pre>
+<p>Expected: all previously passing tests still pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/analytics.py \
+        vernon_tasks/task/api/exec_analytics.py \
+        vernon_tasks/task/api/telemetry.py
+git commit -m &quot;fix(security): clamp n/periods in analytics, cap props size in telemetry&quot;
+</code></pre>
+<hr />
+<h2 id="task-6-security-headers-via-after_request-hook">Task 6: Security Headers via <code>after_request</code> Hook</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/hooks.py</code></p>
+<p><strong>Context:</strong> Frappe v15 calls <code>after_request</code> hooks with the Werkzeug <code>Response</code> object after every request. We add headers only when the path starts with <code>/m</code> to scope them to the PWA shell.</p>
+<ul>
+<li>[ ] <strong>Step 1: Add header constant and hook function to <code>hooks.py</code></strong></li>
+</ul>
+<p>Add the following block <strong>at the top of <code>hooks.py</code></strong>, after the existing imports (after <code>from . import __version__ as app_version</code>):</p>
+<pre><code class="language-python">import frappe
+
+_PWA_SECURITY_HEADERS = {
+    &quot;X-Frame-Options&quot;: &quot;DENY&quot;,
+    &quot;X-Content-Type-Options&quot;: &quot;nosniff&quot;,
+    &quot;Referrer-Policy&quot;: &quot;strict-origin-when-cross-origin&quot;,
+    &quot;Permissions-Policy&quot;: &quot;push=(self), notifications=(self)&quot;,
+    &quot;Content-Security-Policy&quot;: (
+        &quot;default-src 'self'; &quot;
+        &quot;script-src 'self' 'unsafe-inline'; &quot;
+        &quot;style-src 'self' 'unsafe-inline'; &quot;
+        &quot;connect-src 'self'; &quot;
+        &quot;worker-src 'self';&quot;
+    ),
+}
+
+
+def add_pwa_security_headers(response):
+    path = getattr(getattr(frappe, &quot;local&quot;, None), &quot;request&quot;, None)
+    path = getattr(path, &quot;path&quot;, &quot;&quot;) if path else &quot;&quot;
+    if path.startswith(&quot;/m&quot;):
+        for key, val in _PWA_SECURITY_HEADERS.items():
+            response.headers.setdefault(key, val)
+    return response
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Register <code>after_request</code> in <code>hooks.py</code></strong></li>
+</ul>
+<p>Add this line <strong>after</strong> the <code>website_route_rules</code> block in <code>hooks.py</code>:</p>
+<pre><code class="language-python">after_request = [&quot;vernon_tasks.hooks.add_pwa_security_headers&quot;]
+</code></pre>
+<p>Full updated <code>hooks.py</code>:</p>
+<pre><code class="language-python">from . import __version__ as app_version
+import frappe
+
+_PWA_SECURITY_HEADERS = {
+    &quot;X-Frame-Options&quot;: &quot;DENY&quot;,
+    &quot;X-Content-Type-Options&quot;: &quot;nosniff&quot;,
+    &quot;Referrer-Policy&quot;: &quot;strict-origin-when-cross-origin&quot;,
+    &quot;Permissions-Policy&quot;: &quot;push=(self), notifications=(self)&quot;,
+    &quot;Content-Security-Policy&quot;: (
+        &quot;default-src 'self'; &quot;
+        &quot;script-src 'self' 'unsafe-inline'; &quot;
+        &quot;style-src 'self' 'unsafe-inline'; &quot;
+        &quot;connect-src 'self'; &quot;
+        &quot;worker-src 'self';&quot;
+    ),
+}
+
+
+def add_pwa_security_headers(response):
+    path = getattr(getattr(frappe, &quot;local&quot;, None), &quot;request&quot;, None)
+    path = getattr(path, &quot;path&quot;, &quot;&quot;) if path else &quot;&quot;
+    if path.startswith(&quot;/m&quot;):
+        for key, val in _PWA_SECURITY_HEADERS.items():
+            response.headers.setdefault(key, val)
+    return response
+
+
+app_name = &quot;vernon_tasks&quot;
+app_title = &quot;Vernon Tasks&quot;
+app_publisher = &quot;Vernon Corp&quot;
+app_description = &quot;Task and project management system with OKR, PDCA, and Agile&quot;
+app_email = &quot;dev@vernoncorp.com&quot;
+app_license = &quot;mit&quot;
+app_version = app_version
+
+app_include_js = [&quot;/assets/vernon_tasks/js/page_nav.js&quot;]
+
+required_apps = []
+
+doc_events = {
+    &quot;VT Task&quot;: {
+        &quot;on_submit&quot;: &quot;vernon_tasks.task.services.point_calculator.calculate_points&quot;,
+        &quot;on_update&quot;: [
+            &quot;vernon_tasks.task.services.scheduling_engine.on_task_update&quot;,
+            &quot;vernon_tasks.task.api.analytics.invalidate_project_cache&quot;,
+        ],
+        &quot;validate&quot;: &quot;vernon_tasks.task.doctype.vt_task.vt_task.validate_permissions&quot;,
+    },
+    &quot;VT Project&quot;: {
+        &quot;validate&quot;: &quot;vernon_tasks.project.doctype.vt_project.vt_project.validate_team&quot;,
+    },
+    &quot;VT Sprint&quot;: {
+        &quot;on_update&quot;: &quot;vernon_tasks.task.api.analytics.invalidate_project_cache&quot;,
+    },
+    &quot;Notification Log&quot;: {
+        &quot;after_insert&quot;: &quot;vernon_tasks.task.services.push_sender.send_push_for_notification&quot;,
+    },
+}
+
+scheduler_events = {
+    &quot;daily&quot;: [
+        &quot;vernon_tasks.task.services.scheduling_engine.generate_recurring_tasks&quot;,
+        &quot;vernon_tasks.task.services.point_calculator.check_overdue_tasks&quot;,
+        &quot;vernon_tasks.workforce.doctype.daily_summary.daily_summary.generate_daily_summaries&quot;,
+        &quot;vernon_tasks.task.api.telemetry.purge_old_telemetry&quot;,
+    ],
+    &quot;hourly&quot;: [
+        &quot;vernon_tasks.task.services.scheduling_engine.check_deadline_notifications&quot;,
+    ],
+}
+
+website_route_rules = [
+    {&quot;from_route&quot;: &quot;/m/&lt;path:rest&gt;&quot;, &quot;to_route&quot;: &quot;m&quot;},
+]
+
+after_request = [&quot;vernon_tasks.hooks.add_pwa_security_headers&quot;]
+
+fixtures = [
+    {&quot;dt&quot;: &quot;Role&quot;, &quot;filters&quot;: [[&quot;name&quot;, &quot;in&quot;, [&quot;VT Manager&quot;, &quot;VT Leader&quot;, &quot;VT Member&quot;]]]},
+    {&quot;dt&quot;: &quot;Workspace&quot;, &quot;filters&quot;: [[&quot;name&quot;, &quot;in&quot;, [&quot;My Tasks&quot;, &quot;My Projects&quot;, &quot;Overview&quot;]]]},
+]
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Verify headers appear on a live request</strong></li>
+</ul>
+<p>With your bench site running:</p>
+<pre><code class="language-bash">curl -s -I http://&lt;site&gt;:8000/m/ | grep -iE &quot;x-frame|x-content|referrer|permissions|content-security&quot;
+</code></pre>
+<p>Expected output (all 5 headers present):</p>
+<pre><code>X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: push=(self), notifications=(self)
+Content-Security-Policy: default-src 'self'; ...
+</code></pre>
+<p>If headers are missing, Frappe's <code>after_request</code> hook may not fire for website pages on this version. Alternative: set headers in <code>www/m.py</code> via:</p>
+<pre><code class="language-python"># In get_context(), after building context.spa_html:
+for key, val in _PWA_SECURITY_HEADERS.items():
+    frappe.local.response[key] = val
+</code></pre>
+<p>(Import <code>_PWA_SECURITY_HEADERS</code> from hooks or redefine the dict locally in <code>www/m.py</code>.)</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/hooks.py
+git commit -m &quot;fix(security): add PWA security headers via after_request hook&quot;
+</code></pre>
+<hr />
+<h2 id="task-7-run-full-test-suite-open-pr">Task 7: Run Full Test Suite + Open PR</h2>
+<ul>
+<li>[ ] <strong>Step 1: Run all Vernon Tasks tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks
+</code></pre>
+<p>Expected: all tests pass (0 failures). Fix any failures before proceeding.</p>
+<ul>
+<li>[ ] <strong>Step 2: Open PR</strong></li>
+</ul>
+<pre><code class="language-bash">git push origin HEAD
+gh pr create \
+  --title &quot;fix(security): CSO hardening — rate limiting, input bounds, security headers&quot; \
+  --body &quot;$(cat &lt;&lt;'EOF'
+## Summary
+- New `security.py` guard module: `require_login`, `rate_limit`, `clamp_int`, `max_str`
+- Rate limiting on all mutation endpoints (complete/log_progress/snooze/subscribe/push_prefs)
+- Input bounds on `notifications.list` limit/offset, `get_velocity_trend` n, `get_kpi_trend` periods
+- Props size cap in `telemetry.log_event`
+- Security headers (X-Frame-Options, CSP, etc.) injected on all /m/* responses
+
+## Test plan
+- [ ] `bench run-tests --module test_security` — 12 unit tests pass
+- [ ] `bench run-tests --module test_notifications` — bounds tests pass
+- [ ] All existing tests pass
+- [ ] `curl -I /m/` shows 5 security headers
+EOF
+)&quot;
+</code></pre>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-11-cso-security-audit.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

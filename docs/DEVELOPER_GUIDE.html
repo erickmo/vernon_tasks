@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks — Developer Guide</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script defer src="assets/layout.js"></script>
+</head>
+<body data-root="./" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks — Developer Guide</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/DEVELOPER_GUIDE.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-developer-guide">Vernon Tasks — Developer Guide</h1>
+<p><strong>App name:</strong> <code>vernon_tasks</code><br />
+<strong>Framework:</strong> Frappe v15+<br />
+<strong>Last updated:</strong> 2026-05-09</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#modules">Modules</a></li>
+<li><a href="#roles--permissions">Roles &amp; Permissions</a></li>
+<li><a href="#doctypes-reference">Doctypes Reference</a></li>
+<li><a href="#pdca-state-machines">PDCA State Machines</a></li>
+<li><a href="#point-calculation-system">Point Calculation System</a></li>
+<li><a href="#scheduling-engine">Scheduling Engine</a></li>
+<li><a href="#hooks--events">Hooks &amp; Events</a></li>
+<li><a href="#pages">Pages</a></li>
+<li><a href="#reports">Reports</a></li>
+<li><a href="#frontend">Frontend</a></li>
+<li><a href="#development-setup">Development Setup</a></li>
+<li><a href="#coding-conventions">Coding Conventions</a></li>
+</ol>
+<hr />
+<h2 id="overview">Overview</h2>
+<p>Vernon Tasks is a Frappe custom app for task and project management. It combines three methodologies:</p>
+<ul>
+<li><strong>PDCA</strong> (Plan-Do-Check-Act) — lifecycle phases for tasks and projects</li>
+<li><strong>OKR</strong> (Objectives and Key Results) — goal alignment and measurement</li>
+<li><strong>Agile Sprints</strong> — iterative delivery with velocity tracking</li>
+</ul>
+<p>The app is role-gated across three actor types (Manager, Leader, Member) and includes a gamified point system that rewards on-time delivery and penalizes late completion and revisions.</p>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<pre><code>vernon_tasks/
+├── task/                   # Core task management
+│   ├── doctype/
+│   │   ├── vt_task/
+│   │   ├── task_dependency/
+│   │   ├── task_schedule_entry/
+│   │   ├── task_point_log/
+│   │   └── recurring_rule/
+│   ├── services/
+│   │   ├── point_calculator.py
+│   │   └── scheduling_engine.py
+│   └── report/
+│       ├── blocked_tasks_escalation/
+│       ├── leader_review_schedule/
+│       └── point_override_audit/
+├── project/                # Project and sprint management
+│   ├── doctype/
+│   │   ├── vt_project/
+│   │   ├── project_team_member/
+│   │   ├── vt_sprint/
+│   │   ├── sprint_task/
+│   │   ├── project_milestone/
+│   │   └── project_documentation/
+│   └── report/
+│       ├── project_progress_vs_okr/
+│       └── sprint_velocity/
+├── okr/                    # Objectives and Key Results
+│   └── doctype/
+│       ├── objective/
+│       ├── key_result/
+│       ├── kpi_definition/
+│       └── kpi_entry/
+├── workforce/              # Work profiles and summaries
+│   ├── doctype/
+│   │   ├── work_profile/
+│   │   ├── work_schedule_day/
+│   │   ├── user_point_summary/
+│   │   └── daily_summary/
+│   └── report/
+│       ├── my_points_progress/
+│       └── team_workload_overview/
+├── vt_settings/            # App-wide configuration
+│   └── doctype/
+│       └── vt_settings/
+├── public/
+│   └── js/
+│       └── page_nav.js
+└── hooks.py
+</code></pre>
+<p><strong>Key design principle:</strong> Business logic lives exclusively in <code>task/services/</code> and equivalent service modules — never in controller (<code>*.py</code>) files or page handlers.</p>
+<hr />
+<h2 id="modules">Modules</h2>
+<h3 id="task">task/</h3>
+<p>Core of the app. Handles the full lifecycle of a <code>VT Task</code> from backlog to done, including PDCA phase transitions, Kanban status sync, dependency blocking, scheduled hour distribution, point calculation, and recurring task generation.</p>
+<h3 id="project">project/</h3>
+<p>Manages <code>VT Project</code> documents, team membership, and sprint planning. Projects have their own PDCA lifecycle. Sprints group tasks into time-boxed iterations.</p>
+<h3 id="okr">okr/</h3>
+<p>Stores OKR Objectives and measurable Key Results. Projects and tasks can be linked to Objectives for alignment tracking. KPI Definitions and KPI Entries support metric logging.</p>
+<h3 id="workforce">workforce/</h3>
+<p>Tracks individual work profiles (working days, daily capacity), aggregates daily and monthly summaries, and maintains point totals per user per month in <code>User Point Summary</code>.</p>
+<h3 id="vt_settings">vt_settings/</h3>
+<p>Single doctype. App-wide configuration for point multipliers, bonus/penalty rates, and default working hours. All services read settings from here rather than using hardcoded values.</p>
+<hr />
+<h2 id="roles-permissions">Roles &amp; Permissions</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VT Manager</code></td>
+<td>Full admin access — all doctypes, reports, pages</td>
+</tr>
+<tr>
+<td><code>VT Leader</code></td>
+<td>Leads projects, reviews tasks, can override points</td>
+</tr>
+<tr>
+<td><code>VT Member</code></td>
+<td>Regular team member — creates and works on assigned tasks</td>
+</tr>
+</tbody>
+</table>
+<p>All three roles are auto-created on app install via fixtures.</p>
+<h3 id="authorization-pattern">Authorization Pattern</h3>
+<p>Whitelisted API functions must validate authorization explicitly:</p>
+<pre><code class="language-python">def get_my_tasks():
+    if not frappe.has_role(&quot;VT Member&quot;):
+        frappe.throw(&quot;Not permitted&quot;, frappe.PermissionError)
+    # ...
+</code></pre>
+<p>Do not rely on doctype-level permissions alone for page API endpoints.</p>
+<hr />
+<h2 id="doctypes-reference">Doctypes Reference</h2>
+<h3 id="task-module">Task Module</h3>
+<table>
+<thead>
+<tr>
+<th>Doctype</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VT Task</code></td>
+<td>Document</td>
+<td>Main task. Holds PDCA phase, Kanban status, weight, deadlines, assigned user</td>
+</tr>
+<tr>
+<td><code>Task Dependency</code></td>
+<td>Child Table</td>
+<td>Links blocking tasks to a <code>VT Task</code>. Parent: <code>VT Task</code></td>
+</tr>
+<tr>
+<td><code>Task Schedule Entry</code></td>
+<td>Child Table</td>
+<td>Scheduled hours per calendar day. Parent: <code>VT Task</code></td>
+</tr>
+<tr>
+<td><code>Task Point Log</code></td>
+<td>Document</td>
+<td>Immutable audit log of every point transaction</td>
+</tr>
+<tr>
+<td><code>Recurring Rule</code></td>
+<td>Document</td>
+<td>Defines recurrence pattern (daily/weekly/monthly) for tasks</td>
+</tr>
+</tbody>
+</table>
+<h3 id="project-module">Project Module</h3>
+<table>
+<thead>
+<tr>
+<th>Doctype</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VT Project</code></td>
+<td>Document</td>
+<td>Project with PDCA phase, linked sprints, team, milestones</td>
+</tr>
+<tr>
+<td><code>Project Team Member</code></td>
+<td>Child Table</td>
+<td>Team member + role within the project. Parent: <code>VT Project</code></td>
+</tr>
+<tr>
+<td><code>VT Sprint</code></td>
+<td>Document</td>
+<td>Sprint period with start/end dates</td>
+</tr>
+<tr>
+<td><code>Sprint Task</code></td>
+<td>Child Table</td>
+<td>Task entries within a sprint. Parent: <code>VT Sprint</code></td>
+</tr>
+<tr>
+<td><code>Project Milestone</code></td>
+<td>Document</td>
+<td>Named milestone with target date</td>
+</tr>
+<tr>
+<td><code>Project Documentation</code></td>
+<td>Document</td>
+<td>Documents attached to a project</td>
+</tr>
+</tbody>
+</table>
+<h3 id="okr-module">OKR Module</h3>
+<table>
+<thead>
+<tr>
+<th>Doctype</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Objective</code></td>
+<td>Document</td>
+<td>OKR objective with PDCA phase and owner</td>
+</tr>
+<tr>
+<td><code>Key Result</code></td>
+<td>Document</td>
+<td>Measurable result: target value, current value, unit</td>
+</tr>
+<tr>
+<td><code>KPI Definition</code></td>
+<td>Document</td>
+<td>Defines a KPI metric</td>
+</tr>
+<tr>
+<td><code>KPI Entry</code></td>
+<td>Document</td>
+<td>Single KPI data point (value + date)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workforce-module">Workforce Module</h3>
+<table>
+<thead>
+<tr>
+<th>Doctype</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Work Profile</code></td>
+<td>Document</td>
+<td>Per-user work schedule and daily target hours</td>
+</tr>
+<tr>
+<td><code>Work Schedule Day</code></td>
+<td>Child Table</td>
+<td>Working day config (Mon–Sun flags). Parent: <code>Work Profile</code></td>
+</tr>
+<tr>
+<td><code>User Point Summary</code></td>
+<td>Document</td>
+<td>Monthly point totals per user</td>
+</tr>
+<tr>
+<td><code>Daily Summary</code></td>
+<td>Document</td>
+<td>Daily activity summary (hours logged, tasks completed)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="settings">Settings</h3>
+<table>
+<thead>
+<tr>
+<th>Doctype</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VT Settings</code></td>
+<td>Single</td>
+<td>App config: multiplier, rates, default hours</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="pdca-state-machines">PDCA State Machines</h2>
+<h3 id="vt-task">VT Task</h3>
+<pre><code>BACKLOG → PLAN → DO → CHECK → DONE
+                        ↓
+                       ACT → DO
+</code></pre>
+<p><strong>Valid transitions:</strong></p>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To (allowed)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BACKLOG</code></td>
+<td><code>PLAN</code></td>
+</tr>
+<tr>
+<td><code>PLAN</code></td>
+<td><code>DO</code></td>
+</tr>
+<tr>
+<td><code>DO</code></td>
+<td><code>CHECK</code></td>
+</tr>
+<tr>
+<td><code>CHECK</code></td>
+<td><code>ACT</code>, <code>DONE</code>, <code>DO</code></td>
+</tr>
+<tr>
+<td><code>ACT</code></td>
+<td><code>DO</code></td>
+</tr>
+<tr>
+<td><code>DONE</code></td>
+<td><em>(terminal)</em></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Kanban status mapping:</strong></p>
+<table>
+<thead>
+<tr>
+<th>PDCA Phase</th>
+<th>Kanban Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BACKLOG</code></td>
+<td>Backlog</td>
+</tr>
+<tr>
+<td><code>PLAN</code></td>
+<td>Scheduled</td>
+</tr>
+<tr>
+<td><code>DO</code></td>
+<td>In Progress</td>
+</tr>
+<tr>
+<td><code>CHECK</code></td>
+<td>In Review</td>
+</tr>
+<tr>
+<td><code>ACT</code></td>
+<td>Revision</td>
+</tr>
+<tr>
+<td><code>DONE</code></td>
+<td>Done</td>
+</tr>
+</tbody>
+</table>
+<p>Kanban status is updated automatically when PDCA phase changes. To bypass PDCA validation during internal state changes (e.g., revision flow), use <code>db_set()</code>:</p>
+<pre><code class="language-python">task.db_set(&quot;pdca_phase&quot;, &quot;ACT&quot;, update_modified=False)
+</code></pre>
+<p>The constant maps are defined in the controller — never hardcode status strings elsewhere:</p>
+<pre><code class="language-python">PDCA_KANBAN_MAP = {
+    &quot;BACKLOG&quot;: &quot;Backlog&quot;,
+    &quot;PLAN&quot;: &quot;Scheduled&quot;,
+    &quot;DO&quot;: &quot;In Progress&quot;,
+    &quot;CHECK&quot;: &quot;In Review&quot;,
+    &quot;ACT&quot;: &quot;Revision&quot;,
+    &quot;DONE&quot;: &quot;Done&quot;,
+}
+
+VALID_PDCA_TRANSITIONS = {
+    &quot;BACKLOG&quot;: [&quot;PLAN&quot;],
+    &quot;PLAN&quot;: [&quot;DO&quot;],
+    &quot;DO&quot;: [&quot;CHECK&quot;],
+    &quot;CHECK&quot;: [&quot;ACT&quot;, &quot;DONE&quot;, &quot;DO&quot;],
+    &quot;ACT&quot;: [&quot;DO&quot;],
+    &quot;DONE&quot;: [],
+}
+</code></pre>
+<h3 id="vt-project">VT Project</h3>
+<table>
+<thead>
+<tr>
+<th>From</th>
+<th>To (allowed)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PLAN</code></td>
+<td><code>DO</code></td>
+</tr>
+<tr>
+<td><code>DO</code></td>
+<td><code>CHECK</code></td>
+</tr>
+<tr>
+<td><code>CHECK</code></td>
+<td><code>ACT</code>, <code>CLOSED</code></td>
+</tr>
+<tr>
+<td><code>ACT</code></td>
+<td><code>PLAN</code>, <code>DO</code></td>
+</tr>
+<tr>
+<td><code>CLOSED</code></td>
+<td><em>(terminal)</em></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="point-calculation-system">Point Calculation System</h2>
+<p><strong>Module:</strong> <code>task/services/point_calculator.py</code><br />
+<strong>Trigger:</strong> <code>VT Task.on_submit</code></p>
+<h3 id="formula">Formula</h3>
+<pre><code>base               = weight × weight_multiplier
+early_bonus        = base × early_bonus_rate × days_early       (if deadline not breached)
+late_penalty       = base × late_penalty_rate × |days_late|     (if deadline breached)
+revision_deduction = revision_deduct_rate × base × revision_count
+
+earned = base + early_bonus − late_penalty − revision_deduction
+</code></pre>
+<h3 id="default-rates-vt-settings">Default Rates (VT Settings)</h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>weight_multiplier</code></td>
+<td>10</td>
+<td>Base points per weight unit</td>
+</tr>
+<tr>
+<td><code>early_bonus_rate</code></td>
+<td>0.05</td>
+<td>5% of base per day early</td>
+</tr>
+<tr>
+<td><code>late_penalty_rate</code></td>
+<td>0.08</td>
+<td>8% of base per day late</td>
+</tr>
+<tr>
+<td><code>revision_deduct_rate</code></td>
+<td>0.10</td>
+<td>10% of base per revision</td>
+</tr>
+</tbody>
+</table>
+<p>All rates are configurable in <code>VT Settings</code>. Services always read from settings — never hardcode rates.</p>
+<h3 id="transaction-types-in-task-point-log">Transaction Types in Task Point Log</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>earned</code></td>
+<td>Base points on task completion</td>
+</tr>
+<tr>
+<td><code>early_bonus</code></td>
+<td>Bonus for completing before deadline</td>
+</tr>
+<tr>
+<td><code>late_penalty</code></td>
+<td>Penalty for completing after deadline</td>
+</tr>
+<tr>
+<td><code>revision_deduction</code></td>
+<td>Penalty per revision cycle</td>
+</tr>
+<tr>
+<td><code>leader_override</code></td>
+<td>Manual point adjustment by a Leader</td>
+</tr>
+</tbody>
+</table>
+<p>Monthly totals are aggregated in <code>User Point Summary</code> (one document per user per month). The calculator upserts this document after each point transaction.</p>
+<h3 id="leader-override">Leader Override</h3>
+<p>Leaders can manually adjust points via the <code>leader_override</code> transaction type. This creates a <code>Task Point Log</code> entry and re-aggregates the monthly summary. Override actions are surfaced in the <code>point_override_audit</code> report.</p>
+<hr />
+<h2 id="scheduling-engine">Scheduling Engine</h2>
+<p><strong>Module:</strong> <code>task/services/scheduling_engine.py</code></p>
+<h3 id="functions">Functions</h3>
+<h4 id="distribute_task_scheduletask_name"><code>distribute_task_schedule(task_name)</code></h4>
+<p>Distributes a task's <code>estimated_hours</code> evenly across working days between <code>start_date</code> and <code>deadline</code>. Respects the assigned user's <code>Work Profile</code> (which days they work). Populates <code>Task Schedule Entry</code> child rows.</p>
+<p>Call this when a task is saved with a new date range or when estimated hours change.</p>
+<h4 id="override_schedule_entrytask_name-day-new_hours"><code>override_schedule_entry(task_name, day, new_hours)</code></h4>
+<p>Overrides a specific day's scheduled hours, then rebalances the remaining hours across other days in the schedule. Use when a member manually adjusts their daily plan.</p>
+<h4 id="generate_recurring_tasks"><code>generate_recurring_tasks()</code></h4>
+<p>Daily scheduler job. Reads all active <code>Recurring Rule</code> documents and creates new <code>VT Task</code> instances for rules that are due today. New tasks start in <code>BACKLOG</code> phase.</p>
+<h4 id="check_deadline_notifications"><code>check_deadline_notifications()</code></h4>
+<p>Hourly scheduler job. Queries tasks due tomorrow and sends an email notification to the assigned user. Email sending is wrapped in <code>try/except</code> — if no outgoing mail server is configured, the error is silently swallowed.</p>
+<h4 id="check_capacity_conflictuser-day-hours"><code>check_capacity_conflict(user, day, hours)</code></h4>
+<p>Returns <code>True</code> if adding <code>hours</code> to <code>user</code>'s schedule on <code>day</code> would exceed their daily target from <code>Work Profile</code>. Call this before saving schedule overrides or assigning new tasks.</p>
+<hr />
+<h2 id="hooks-events">Hooks &amp; Events</h2>
+<h3 id="doc-events-hookspy">Doc Events (<code>hooks.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Doctype</th>
+<th>Event</th>
+<th>Handler</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>VT Task</code></td>
+<td><code>on_submit</code></td>
+<td><code>point_calculator.calculate_points</code></td>
+</tr>
+<tr>
+<td><code>VT Task</code></td>
+<td><code>on_update</code></td>
+<td><code>scheduling_engine.on_task_update</code></td>
+</tr>
+<tr>
+<td><code>VT Task</code></td>
+<td><code>validate</code></td>
+<td><code>vt_task.validate_permissions</code></td>
+</tr>
+<tr>
+<td><code>VT Project</code></td>
+<td><code>validate</code></td>
+<td><code>vt_project.validate_team</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="scheduler-events">Scheduler Events</h3>
+<table>
+<thead>
+<tr>
+<th>Frequency</th>
+<th>Handler</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Daily</td>
+<td><code>scheduling_engine.generate_recurring_tasks</code></td>
+</tr>
+<tr>
+<td>Daily</td>
+<td><code>task.services.overdue.check_overdue_tasks</code></td>
+</tr>
+<tr>
+<td>Daily</td>
+<td><code>daily_summary.generate_daily_summaries</code></td>
+</tr>
+<tr>
+<td>Hourly</td>
+<td><code>scheduling_engine.check_deadline_notifications</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="app-includes">App Includes</h3>
+<pre><code class="language-python">app_include_js = [&quot;assets/vernon_tasks/js/page_nav.js&quot;]
+</code></pre>
+<p>Loaded on every Frappe page. The script self-identifies the current page and injects the nav bar only on member and leader pages.</p>
+<hr />
+<h2 id="pages">Pages</h2>
+<p>Four Frappe Pages with Python-backed whitelisted API methods:</p>
+<h3 id="my_work"><code>my_work</code></h3>
+<p><strong>Audience:</strong> VT Member<br />
+Member's daily work view. Shows today's scheduled tasks from <code>Task Schedule Entry</code>, hours planned vs. logged, and quick-action buttons for PDCA transitions.</p>
+<h3 id="my_dashboard"><code>my_dashboard</code></h3>
+<p><strong>Audience:</strong> VT Member<br />
+Stats overview: cumulative points, task completion rate, current sprint progress. Includes charts rendered on the client side using data fetched from whitelisted methods.</p>
+<h3 id="leader_dashboard"><code>leader_dashboard</code></h3>
+<p><strong>Audience:</strong> VT Leader, VT Manager<br />
+Team-level view: sprint board, member workload, blocked tasks, and OKR alignment summary.</p>
+<h3 id="leader_review"><code>leader_review</code></h3>
+<p><strong>Audience:</strong> VT Leader, VT Manager<br />
+Review queue for tasks in <code>CHECK</code> phase awaiting leader approval. Leader can approve (move to <code>DONE</code>), reject (move to <code>ACT</code>/Revision), or override points directly from this page.</p>
+<hr />
+<h2 id="reports">Reports</h2>
+<h3 id="task-module_1">Task Module</h3>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>blocked_tasks_escalation</code></td>
+<td>Lists tasks blocked by unresolved dependencies, grouped by assignee</td>
+</tr>
+<tr>
+<td><code>leader_review_schedule</code></td>
+<td>Tasks currently in <code>CHECK</code> phase with time-in-review metric</td>
+</tr>
+<tr>
+<td><code>point_override_audit</code></td>
+<td>Audit trail of all <code>leader_override</code> point transactions</td>
+</tr>
+</tbody>
+</table>
+<h3 id="project-module_1">Project Module</h3>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>project_progress_vs_okr</code></td>
+<td>Compares project completion percentage against linked OKR progress</td>
+</tr>
+<tr>
+<td><code>sprint_velocity</code></td>
+<td>Sprint-by-sprint velocity (story points completed per sprint)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="workforce-module_1">Workforce Module</h3>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>my_points_progress</code></td>
+<td>Individual point history over time (chart-ready data)</td>
+</tr>
+<tr>
+<td><code>team_workload_overview</code></td>
+<td>Team capacity: scheduled vs. available hours per member</td>
+</tr>
+</tbody>
+</table>
+<h3 id="okr-module_1">OKR Module</h3>
+<table>
+<thead>
+<tr>
+<th>Report</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kpi_achievement</code></td>
+<td>KPI target vs. actual for a given period</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="frontend">Frontend</h2>
+<h3 id="publicjspage_navjs"><code>public/js/page_nav.js</code></h3>
+<p>Registered globally via <code>app_include_js</code>. Exposes a single utility function <code>window.vt_render_page_nav</code> that each page calls manually during <code>on_page_load</code> to inject a navigation bar above its content.</p>
+<p><strong>Signature:</strong></p>
+<pre><code class="language-javascript">vt_render_page_nav(page, links)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>page</code></td>
+<td><code>object</code></td>
+<td>Frappe page object from <code>frappe.ui.make_app_page()</code></td>
+</tr>
+<tr>
+<td><code>links</code></td>
+<td><code>Array&lt;{label, route, icon}&gt;</code></td>
+<td>Nav buttons to render. <code>route</code> is passed to <code>frappe.set_route()</code>. <code>icon</code> must match a Frappe SVG sprite name.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Usage example (from <code>my_work.js</code>):</strong></p>
+<pre><code class="language-javascript">vt_render_page_nav(page, [
+    { label: &quot;My Tasks&quot;,     route: &quot;workspace/My Tasks&quot;, icon: &quot;home&quot; },
+    { label: &quot;My Dashboard&quot;, route: &quot;my-dashboard&quot;,       icon: &quot;bar-chart&quot; },
+]);
+</code></pre>
+<p><strong>Nav links per page:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>Links</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>My Work</td>
+<td>My Tasks, My Dashboard</td>
+</tr>
+<tr>
+<td>My Dashboard</td>
+<td>My Tasks, My Work</td>
+</tr>
+<tr>
+<td>Leader Dashboard</td>
+<td>Leader Review, My Projects</td>
+</tr>
+<tr>
+<td>Leader Review</td>
+<td>Leader Dashboard, My Projects</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Security:</strong> Labels are escaped via <code>frappe.utils.escape_html()</code>. Icon names are validated against <code>/^[a-z0-9-]+$/</code> before being interpolated into SVG <code>href</code> — invalid names render no icon.</p>
+<hr />
+<h2 id="mobile-pwa">Mobile PWA</h2>
+<p>Standalone React 18 + Vite 5 + TypeScript SPA at <code>/m/</code>, complements
+Desk pages. Source: <code>pwa/src/</code>. Build output <code>vernon_tasks/www/m/</code>
+(git-ignored). Served via <code>website_route_rules</code> →
+<code>vernon_tasks/www/m.py</code> SPA shell.</p>
+<h3 id="stack">Stack</h3>
+<ul>
+<li>React 18 + react-router-dom 6 + @tanstack/react-query 5</li>
+<li>Vite 5 + vite-plugin-pwa (workbox 7 generateSW)</li>
+<li>TypeScript 5 strict, <code>tsc --noEmit</code> for type-check</li>
+<li>Vitest + happy-dom + @testing-library/react (unit + component)</li>
+<li>Playwright (e2e, gated by env vars)</li>
+<li>recharts (lazy chunk shared by IC and Leader analytics)</li>
+<li>idb-keyval (read-cache for offline tolerance)</li>
+</ul>
+<h3 id="layout">Layout</h3>
+<pre><code>pwa/
+  src/
+    api/          # fetch wrappers per domain (client, tasks, mutations,
+                  # search, notifications, dashboard, analytics, leader,
+                  # leaderExec, boot via session, telemetry)
+    auth/         # session probe, login, route guard
+    cache/        # idb + sync-time stamping
+    components/   # primitives (SwipeRow, Skeleton, etc.) + domain widgets
+    hooks/        # useDebounce, useUndoableMutation, useCompleteCounter,
+                  # useInstallPrompt, useUnreadCount, useUserProjects,
+                  # useLedProjects, useIsLeader, useIsManager
+    pages/        # MyWork/{List,Detail}, Dashboard, Analytics,
+                  # Notifications, Me, Onboarding, Leader,
+                  # LeaderSprint, LeaderExec
+    theme/        # CSS tokens (light + dark, safe-area, shimmer keyframe)
+    i18n.ts       # id-ID strings, fmtDate/fmtTime/fmtRelative/greeting
+    telemetry.ts  # logEvent wrapper
+    router.tsx    # createBrowserRouter, lazy splits
+    main.tsx      # SW register + QueryClient + RouterProvider
+  public/
+    icons/        # 192, 512, maskable-512 placeholders
+  vite.config.ts  # base=/m/, outDir=../vernon_tasks/www/m, VitePWA, vitest config
+</code></pre>
+<h3 id="build-commands">Build commands</h3>
+<pre><code class="language-bash">./pwa/build-pwa.sh       # npm install + tsc --noEmit + vite build
+cd pwa &amp;&amp; npm run dev    # Vite dev server :5173 (proxy backend separately)
+cd pwa &amp;&amp; npm test       # vitest run
+cd pwa &amp;&amp; npm run e2e    # Playwright (set PWA_BASE_URL, PWA_TEST_USER, PWA_TEST_PASS)
+</code></pre>
+<h3 id="conventions">Conventions</h3>
+<ul>
+<li><strong>Imports use relative paths</strong>, NOT <code>@/</code> alias. Vitest's resolver does
+  not pick up <code>@/</code> from transitively-imported files; using relative
+  paths sidesteps the issue. The alias is left in <code>tsconfig.json</code> for
+  IDE intellisense only.</li>
+<li><strong>Backend DocType is <code>VT Task</code></strong> (not <code>Task</code>) with fields <code>title</code>,
+  <code>deadline</code>, <code>assigned_to</code>, <code>kanban_status</code>, <code>priority</code>,
+  <code>base_points</code>. The API client maps these to a UI-friendly <code>TaskCard</code>
+  shape in <code>pwa/src/api/tasks.ts</code>.</li>
+<li><strong>All mutations are online-only</strong> in P0.5–P1a. Components check
+  <code>navigator.onLine</code> and disable + toast when offline.</li>
+<li><strong>Optimistic UI with 5s undo</strong> for completes via
+  <code>useUndoableMutation</code> (setTimeout wrapper, NOT a real queue).</li>
+<li><strong>Telemetry events are server-allowlisted</strong>. Adding a new event
+  requires both <code>pwa/src/telemetry.ts</code> <code>TelemetryEvent</code> union and
+  <code>vernon_tasks/task/api/telemetry.py</code> <code>ALLOWED_EVENTS</code> set.</li>
+<li><strong>Role gating is dual</strong>: frontend hides tab via <code>useIsLeader</code> /
+  <code>useIsManager</code>; backend <code>_guard()</code> rejects unauthorized requests.</li>
+</ul>
+<h3 id="service-worker">Service worker</h3>
+<ul>
+<li>workbox <code>generateSW</code> strategy</li>
+<li>App shell precached (5 entries)</li>
+<li>Runtime: <code>StaleWhileRevalidate</code> on <code>/api/method/vernon_tasks.*</code>,
+  cache name keyed by git SHA, 50 entries / 1-day expiry</li>
+<li>SW version = git short SHA at build time, injected via
+  <code>__SW_VERSION__</code> define</li>
+</ul>
+<h3 id="code-split">Code split</h3>
+<ul>
+<li><code>Analytics</code> page lazy via <code>React.lazy</code> (~23 KB)</li>
+<li><code>LeaderSprint</code> + <code>LeaderExec</code> lazy</li>
+<li>Recharts ends up in its own chunk (~357 KB lazy) shared across
+  all analytics pages</li>
+<li>Main bundle stable around 300 KB</li>
+</ul>
+<h3 id="testing-patterns">Testing patterns</h3>
+<ul>
+<li>API client tests: stub <code>fetch</code> with <code>vi.stubGlobal</code>, assert URL +
+  body shape</li>
+<li>Hook tests: <code>renderHook</code> + <code>act</code>, use <code>vi.useFakeTimers</code> for
+  setTimeout-based hooks</li>
+<li>Component tests: wrap in <code>QueryClientProvider</code> + <code>MemoryRouter</code> for
+  router-aware components</li>
+<li>Setup: <code>pwa/src/test-setup.ts</code> imports <code>@testing-library/jest-dom</code>
+  matchers + <code>fake-indexeddb/auto</code> polyfill</li>
+</ul>
+<h3 id="telemetry-pipeline">Telemetry pipeline</h3>
+<ol>
+<li><code>logEvent(event, props)</code> in pwa POSTs to
+   <code>/api/method/vernon_tasks.task.api.telemetry.log_event</code></li>
+<li>Server validates event ∈ ALLOWED_EVENTS, enforces rate limit</li>
+<li>Persisted as <code>Vernon Telemetry Event</code> DocType row</li>
+<li>Daily purge at 90-day retention via <code>scheduler_events.daily</code></li>
+</ol>
+<p>Use <code>Report Builder</code> on <code>Vernon Telemetry Event</code> for funnel analysis.</p>
+<h3 id="rollout">Rollout</h3>
+<p>See <code>docs/rollout/pwa-pilot.md</code> for the pilot checklist + go/no-go gates.</p>
+<hr />
+<h2 id="development-setup">Development Setup</h2>
+<h3 id="prerequisites">Prerequisites</h3>
+<ul>
+<li>Python 3.11+</li>
+<li>Frappe Framework v15+</li>
+<li>MariaDB 10.6+ / MySQL 8+</li>
+<li>Node.js 18+ (for asset builds)</li>
+</ul>
+<h3 id="installation">Installation</h3>
+<pre><code class="language-bash">cd frappe-bench
+
+# Get the app
+bench get-app vernon_tasks &lt;repo-url&gt;
+
+# Install on a site
+bench --site &lt;site-name&gt; install-app vernon_tasks
+
+# Run migrations
+bench --site &lt;site-name&gt; migrate
+</code></pre>
+<h3 id="running-tests">Running Tests</h3>
+<pre><code class="language-bash">bench --site &lt;site-name&gt; run-tests --app vernon_tasks
+</code></pre>
+<p>To run a specific module:</p>
+<pre><code class="language-bash">bench --site &lt;site-name&gt; run-tests --app vernon_tasks --module task
+</code></pre>
+<h3 id="adding-a-new-doctype">Adding a New Doctype</h3>
+<pre><code class="language-bash"># Scaffold
+bench new-doctype --module &lt;module&gt; &quot;&lt;DocType Name&gt;&quot;
+
+# Add to fixtures in hooks.py if it should be exported
+# Then export fixtures
+bench --site &lt;site-name&gt; export-fixtures --app vernon_tasks
+</code></pre>
+<h3 id="asset-build">Asset Build</h3>
+<pre><code class="language-bash">bench build --app vernon_tasks
+</code></pre>
+<p>For development with watch:</p>
+<pre><code class="language-bash">bench watch
+</code></pre>
+<h3 id="fixtures">Fixtures</h3>
+<p>The app ships fixtures for:</p>
+<ul>
+<li><strong>Roles:</strong> <code>VT Manager</code>, <code>VT Leader</code>, <code>VT Member</code></li>
+<li><strong>Workspaces:</strong> <code>My Tasks</code>, <code>My Projects</code>, <code>Overview</code></li>
+<li><code>My Projects</code> shortcuts: Active Sprints, My Projects, Blocked Escalation, Team Workload, Sprint Velocity, Review Schedule, <strong>Leader Dashboard</strong>, <strong>Leader Review</strong></li>
+<li><code>Overview</code> shortcuts: Team Workload, KPI Achievement, Project vs OKR, Blocked Escalation, Point Audit, Sprint Velocity, All Projects, Objectives, <strong>Leader Dashboard</strong>, <strong>Leader Review</strong></li>
+<li><strong>VT Settings:</strong> default configuration values</li>
+</ul>
+<p>Fixtures are applied automatically on <code>bench migrate</code>. To re-export after changes:</p>
+<pre><code class="language-bash">bench --site &lt;site-name&gt; export-fixtures --app vernon_tasks
+</code></pre>
+<hr />
+<h2 id="coding-conventions">Coding Conventions</h2>
+<h3 id="layer-separation">Layer Separation</h3>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Responsibility</th>
+<th>Where</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Controller (<code>*.py</code>)</td>
+<td>Frappe hooks, validation, <code>db_set</code> calls</td>
+<td><code>doctype/&lt;name&gt;/&lt;name&gt;.py</code></td>
+</tr>
+<tr>
+<td>Service</td>
+<td>Business logic, calculations, algorithms</td>
+<td><code>task/services/*.py</code>, etc.</td>
+</tr>
+<tr>
+<td>Page handler</td>
+<td>Request parsing, auth check, response formatting</td>
+<td><code>page/&lt;name&gt;/&lt;name&gt;.py</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Never put business logic in controllers or page handlers.</strong></p>
+<h3 id="constants">Constants</h3>
+<p>Define named constants at module level. Never use magic strings or numbers inline:</p>
+<pre><code class="language-python"># Good
+WEIGHT_MULTIPLIER_DEFAULT = 10
+EARLY_BONUS_RATE_DEFAULT = 0.05
+
+# Bad
+base = weight * 10
+</code></pre>
+<p>The PDCA maps (<code>PDCA_KANBAN_MAP</code>, <code>VALID_PDCA_TRANSITIONS</code>) follow the same rule.</p>
+<h3 id="pdca-transitions">PDCA Transitions</h3>
+<p>Use <code>db_set()</code> to bypass validation during internal state changes that skip the normal hook cycle:</p>
+<pre><code class="language-python">doc.db_set(&quot;pdca_phase&quot;, &quot;ACT&quot;, update_modified=False)
+</code></pre>
+<p>Use this only in service functions, never in user-facing controllers.</p>
+<h3 id="permissions">Permissions</h3>
+<ul>
+<li><code>ignore_permissions=True</code> is allowed <strong>only</strong> in internal service functions that run in a controlled server-side context (e.g., scheduled jobs, triggered hooks).</li>
+<li>Never use <code>ignore_permissions=True</code> in whitelisted API functions.</li>
+<li>Whitelisted functions must call <code>frappe.has_role()</code> or <code>frappe.only_for()</code> at the top.</li>
+</ul>
+<h3 id="email-notifications">Email Notifications</h3>
+<p>Always wrap email sending in <code>try/except</code>:</p>
+<pre><code class="language-python">try:
+    frappe.sendmail(recipients=[user_email], subject=subject, message=body)
+except Exception:
+    pass  # Silently skip if no outgoing mail server is configured
+</code></pre>
+<h3 id="dependency-injection">Dependency Injection</h3>
+<p>Services must not instantiate their own dependencies. Accept configuration or settings objects as parameters:</p>
+<pre><code class="language-python"># Good
+def calculate_points(task, settings):
+    multiplier = settings.weight_multiplier
+    ...
+
+# Bad
+def calculate_points(task):
+    settings = frappe.get_single(&quot;VT Settings&quot;)  # hidden dep
+    ...
+</code></pre>
+<h3 id="function-length">Function Length</h3>
+<p>No function longer than 40 lines. Extract helpers or split into sub-functions when a function grows beyond this limit.</p>
+<h3 id="do-not-use-patterns">Do-Not-Use Patterns</h3>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Reason</th>
+<th>Alternative</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Business logic in controller</td>
+<td>Tight coupling, untestable</td>
+<td>Move to <code>services/</code></td>
+</tr>
+<tr>
+<td>Magic numbers/strings inline</td>
+<td>Obscures intent</td>
+<td>Named constants</td>
+</tr>
+<tr>
+<td><code>frappe.db.sql()</code> for simple queries</td>
+<td>Bypasses ORM safety</td>
+<td>Use <code>frappe.get_all()</code> / <code>frappe.get_doc()</code></td>
+</tr>
+<tr>
+<td><code>ignore_permissions</code> in page APIs</td>
+<td>Security bypass</td>
+<td>Explicit role check</td>
+</tr>
+<tr>
+<td>Bare <code>except:</code></td>
+<td>Swallows all errors</td>
+<td><code>except Exception:</code> with logging</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Vernon Tasks Developer Guide — maintained by the Vernon Corp engineering team.</em></p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/DEVELOPER_GUIDE.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

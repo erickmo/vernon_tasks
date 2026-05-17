@@ -1,0 +1,2273 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks — API Reference</title>
+<link rel="stylesheet" href="assets/style.css" />
+<script defer src="assets/layout.js"></script>
+</head>
+<body data-root="./" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks — API Reference</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/API_REFERENCE.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-api-reference">Vernon Tasks — API Reference</h1>
+<p>Version: 1.0<br />
+App: <code>vernon_tasks</code><br />
+Framework: Frappe v15+</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#authentication">Authentication</a></li>
+<li><a href="#request--response-format">Request &amp; Response Format</a></li>
+<li><a href="#error-reference">Error Reference</a></li>
+<li><a href="#my-work-page-apis">My Work Page APIs</a></li>
+<li><a href="#my-dashboard-page-apis">My Dashboard Page APIs</a></li>
+<li><a href="#leader-dashboard-page-apis">Leader Dashboard Page APIs</a></li>
+<li><a href="#leader-review-page-apis">Leader Review Page APIs</a></li>
+<li><a href="#point-calculator-service-apis">Point Calculator Service APIs</a></li>
+<li><a href="#scheduling-engine-service-apis">Scheduling Engine Service APIs</a></li>
+<li><a href="#data-models-reference">Data Models Reference</a></li>
+<li><a href="#standard-frappe-rest-api">Standard Frappe REST API</a></li>
+</ol>
+<hr />
+<h2 id="introduction">Introduction</h2>
+<p>Vernon Tasks is a Frappe custom app that implements a PDCA (Plan-Do-Check-Act) based task management system with point calculation, scheduling, and leader review workflows.</p>
+<p>All custom API endpoints are Python functions decorated with <code>@frappe.whitelist()</code> and are invoked via Frappe's standard <code>POST /api/method/&lt;dotted.python.path&gt;</code> convention.</p>
+<p>The PDCA phase lifecycle for a task is:</p>
+<pre><code>BACKLOG → PLAN → DO → CHECK → DONE
+                  ↑       |
+                  └── ACT ┘   (returned after leader rejection)
+</code></pre>
+<hr />
+<h2 id="authentication">Authentication</h2>
+<h3 id="session-cookie-browser">Session Cookie (Browser)</h3>
+<p>When using Vernon Tasks through a browser, authentication is handled automatically via the Frappe session cookie set at login.</p>
+<p>Include the CSRF token header on every mutating request:</p>
+<pre><code>X-Frappe-CSRF-Token: &lt;token&gt;
+</code></pre>
+<p>Retrieve the token from <code>frappe.csrf_token</code> in a browser JS context, or via:</p>
+<pre><code>GET /api/method/frappe.auth.get_logged_user
+</code></pre>
+<h3 id="api-key-secret-programmatic">API Key / Secret (Programmatic)</h3>
+<p>For server-to-server or CLI access, use HTTP Basic-style token authentication:</p>
+<pre><code>Authorization: token &lt;api_key&gt;:&lt;api_secret&gt;
+</code></pre>
+<p>Generate a key/secret pair from the Frappe User form: <strong>Menu → API Access → Generate Keys</strong>.</p>
+<h3 id="role-requirements">Role Requirements</h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Any authenticated user</td>
+<td>Access to personal My Work and My Dashboard endpoints</td>
+</tr>
+<tr>
+<td><code>VT Leader</code></td>
+<td>Access to Leader Dashboard and Leader Review endpoints</td>
+</tr>
+<tr>
+<td><code>VT Manager</code></td>
+<td>All Leader permissions plus point/schedule override endpoints</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="request-response-format">Request &amp; Response Format</h2>
+<h3 id="request">Request</h3>
+<p>All whitelisted endpoints accept <code>POST</code> requests with a JSON body:</p>
+<pre><code>POST /api/method/&lt;dotted.python.path&gt;
+Content-Type: application/json
+X-Frappe-CSRF-Token: &lt;token&gt;
+
+{&quot;param1&quot;: &quot;value1&quot;, &quot;param2&quot;: &quot;value2&quot;}
+</code></pre>
+<p>Parameters can alternatively be sent as <code>application/x-www-form-urlencoded</code> form data.</p>
+<h3 id="successful-response">Successful Response</h3>
+<p>Frappe wraps the Python return value in a <code>message</code> envelope:</p>
+<pre><code class="language-json">{
+  &quot;message&quot;: &lt;return_value&gt;
+}
+</code></pre>
+<p><code>&lt;return_value&gt;</code> may be an object, array, string, number, or <code>null</code> depending on the endpoint.</p>
+<h3 id="error-response">Error Response</h3>
+<p>Errors return an appropriate HTTP 4xx or 5xx status code with a JSON body:</p>
+<pre><code class="language-json">{
+  &quot;exc_type&quot;: &quot;ValidationError&quot;,
+  &quot;exception&quot;: &quot;frappe.exceptions.ValidationError: Task is blocked&quot;,
+  &quot;_server_messages&quot;: &quot;[{\&quot;message\&quot;: \&quot;Task is blocked by an incomplete dependency.\&quot;}]&quot;
+}
+</code></pre>
+<p>The human-readable message is always in <code>_server_messages</code> (a JSON-encoded array of message objects).</p>
+<hr />
+<h2 id="error-reference">Error Reference</h2>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Frappe Exception</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>400</code></td>
+<td><code>BadRequest</code></td>
+<td>Malformed request or missing required parameters</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td><code>PermissionError</code></td>
+<td>Caller is not authorized to perform this action</td>
+</tr>
+<tr>
+<td><code>404</code></td>
+<td><code>DoesNotExistError</code></td>
+<td>The requested resource does not exist</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td><code>ValidationError</code></td>
+<td>Business rule violation (invalid state, blocked task, etc.)</td>
+</tr>
+<tr>
+<td><code>500</code></td>
+<td><code>Exception</code></td>
+<td>Unexpected server error</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pdca-transition-error-example">PDCA Transition Error Example</h3>
+<pre><code class="language-json">{
+  &quot;_server_messages&quot;: &quot;[{\&quot;message\&quot;: \&quot;Invalid PDCA transition: DO → DONE. Allowed next phase: CHECK\&quot;}]&quot;
+}
+</code></pre>
+<hr />
+<h2 id="my-work-page-apis">My Work Page APIs</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.page.my_work.my_work</code></p>
+<p>These endpoints serve the personal <strong>My Work</strong> page. All endpoints operate on the currently authenticated user (<code>frappe.session.user</code>) and require no special roles beyond being logged in.</p>
+<hr />
+<h3 id="get_my_day"><code>get_my_day</code></h3>
+<p>Returns today's scheduled tasks for the current user, ordered by priority then deadline.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.get_my_day
+</code></pre>
+<p><strong>Authentication:</strong> Any authenticated user</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.get_my_day
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {
+      &quot;name&quot;: &quot;VT-TASK-00042&quot;,
+      &quot;title&quot;: &quot;Write unit tests for invoice module&quot;,
+      &quot;project&quot;: &quot;VT-PROJ-00005&quot;,
+      &quot;priority&quot;: &quot;High&quot;,
+      &quot;pdca_phase&quot;: &quot;DO&quot;,
+      &quot;kanban_status&quot;: &quot;In Progress&quot;,
+      &quot;allocated_hours&quot;: 2.5
+    },
+    {
+      &quot;name&quot;: &quot;VT-TASK-00051&quot;,
+      &quot;title&quot;: &quot;Code review: payment gateway PR&quot;,
+      &quot;project&quot;: &quot;VT-PROJ-00005&quot;,
+      &quot;priority&quot;: &quot;Medium&quot;,
+      &quot;pdca_phase&quot;: &quot;PLAN&quot;,
+      &quot;kanban_status&quot;: &quot;Open&quot;,
+      &quot;allocated_hours&quot;: 1.0
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>Task ID (e.g., <code>VT-TASK-00042</code>)</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td>Task title</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>Parent project ID</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>string</td>
+<td><code>Critical</code> / <code>High</code> / <code>Medium</code> / <code>Low</code></td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>string</td>
+<td>Current PDCA phase</td>
+</tr>
+<tr>
+<td><code>kanban_status</code></td>
+<td>string</td>
+<td>Kanban column label</td>
+</tr>
+<tr>
+<td><code>allocated_hours</code></td>
+<td>float</td>
+<td>Hours scheduled for today from Task Schedule Entry</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- Tasks in <code>DONE</code> phase are excluded.
+- Ordered by priority (<code>High</code> → <code>Medium</code> → <code>Low</code>), then by <code>deadline</code> ascending.</p>
+<hr />
+<h3 id="get_what_to_do_today"><code>get_what_to_do_today</code></h3>
+<p>Returns a prioritized list of unblocked tasks due within the next 3 days. Useful for "what should I work on now?" recommendations.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.get_what_to_do_today
+</code></pre>
+<p><strong>Authentication:</strong> Any authenticated user</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.get_what_to_do_today
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {
+      &quot;name&quot;: &quot;VT-TASK-00038&quot;,
+      &quot;title&quot;: &quot;Deploy staging environment&quot;,
+      &quot;project&quot;: &quot;VT-PROJ-00003&quot;,
+      &quot;priority&quot;: &quot;High&quot;,
+      &quot;deadline&quot;: &quot;2026-05-11&quot;,
+      &quot;pdca_phase&quot;: &quot;PLAN&quot;,
+      &quot;kanban_status&quot;: &quot;Open&quot;
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td>Task title</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>Parent project ID</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>string</td>
+<td><code>Critical</code> / <code>High</code> / <code>Medium</code> / <code>Low</code></td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>string</td>
+<td>Date in <code>YYYY-MM-DD</code> format</td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>string</td>
+<td>Current PDCA phase</td>
+</tr>
+<tr>
+<td><code>kanban_status</code></td>
+<td>string</td>
+<td>Kanban column label</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- Excludes tasks in <code>DONE</code> and <code>ACT</code> phases.
+- Excludes tasks blocked by incomplete dependencies.
+- Only includes tasks with <code>deadline</code> within the next 3 calendar days (inclusive of today).</p>
+<hr />
+<h3 id="get_my_blocked_tasks"><code>get_my_blocked_tasks</code></h3>
+<p>Returns all tasks assigned to the current user that are blocked by incomplete dependencies.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.get_my_blocked_tasks
+</code></pre>
+<p><strong>Authentication:</strong> Any authenticated user</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.get_my_blocked_tasks
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {
+      &quot;name&quot;: &quot;VT-TASK-00055&quot;,
+      &quot;title&quot;: &quot;Migrate production database&quot;,
+      &quot;project&quot;: &quot;VT-PROJ-00007&quot;,
+      &quot;priority&quot;: &quot;Critical&quot;,
+      &quot;deadline&quot;: &quot;2026-05-15&quot;,
+      &quot;pdca_phase&quot;: &quot;PLAN&quot;,
+      &quot;kanban_status&quot;: &quot;Open&quot;,
+      &quot;blocker_name&quot;: &quot;VT-TASK-00049&quot;,
+      &quot;blocker_title&quot;: &quot;Backup production database&quot;,
+      &quot;blocker_assignee&quot;: &quot;dba@example.com&quot;,
+      &quot;days_blocked&quot;: 3
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>Blocked task ID</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td>Blocked task title</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>Parent project ID</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>string</td>
+<td>Task priority</td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>string</td>
+<td>Task deadline (<code>YYYY-MM-DD</code>)</td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>string</td>
+<td>Current PDCA phase</td>
+</tr>
+<tr>
+<td><code>kanban_status</code></td>
+<td>string</td>
+<td>Kanban column label</td>
+</tr>
+<tr>
+<td><code>blocker_name</code></td>
+<td>string</td>
+<td>ID of the blocking task</td>
+</tr>
+<tr>
+<td><code>blocker_title</code></td>
+<td>string</td>
+<td>Title of the blocking task</td>
+</tr>
+<tr>
+<td><code>blocker_assignee</code></td>
+<td>string</td>
+<td>User assigned to the blocking task</td>
+</tr>
+<tr>
+<td><code>days_blocked</code></td>
+<td>int</td>
+<td>Number of days the task has been blocked</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- Ordered by <code>days_blocked</code> descending (longest-blocked tasks first).</p>
+<hr />
+<h3 id="start_task"><code>start_task</code></h3>
+<p>Transitions a task from <code>BACKLOG</code> or <code>PLAN</code> phase into the <code>DO</code> phase (kanban: "In Progress").</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.start_task
+</code></pre>
+<p><strong>Authentication:</strong> Must be the assigned user of the task</p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID (e.g., <code>VT-TASK-00001</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.start_task
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{
+  &quot;task&quot;: &quot;VT-TASK-00042&quot;
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;status&quot;: &quot;ok&quot;
+  }
+}
+</code></pre>
+<p><strong>Error Cases</strong></p>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>404</code></td>
+<td>Task does not exist</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>Caller is not the assigned user of the task</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td>Task is not in <code>BACKLOG</code> or <code>PLAN</code> phase</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td>Task is still blocked by an incomplete dependency</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="submit_for_review"><code>submit_for_review</code></h3>
+<p>Transitions a task from <code>DO</code> phase into the <code>CHECK</code> phase (kanban: "In Review"), signaling the leader to review it.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.submit_for_review
+</code></pre>
+<p><strong>Authentication:</strong> Must be the assigned user of the task</p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_work.my_work.submit_for_review
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{
+  &quot;task&quot;: &quot;VT-TASK-00042&quot;
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;status&quot;: &quot;ok&quot;
+  }
+}
+</code></pre>
+<p><strong>Error Cases</strong></p>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>404</code></td>
+<td>Task does not exist</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>Caller is not the assigned user of the task</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td>Task is not in <code>DO</code> phase</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="my-dashboard-page-apis">My Dashboard Page APIs</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.page.my_dashboard.my_dashboard</code></p>
+<p>These endpoints power the personal <strong>My Dashboard</strong> page. All endpoints operate on the currently authenticated user and require no special roles.</p>
+<hr />
+<h3 id="get_employee_stats"><code>get_employee_stats</code></h3>
+<p>Returns high-level productivity statistics for the current user.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_employee_stats
+</code></pre>
+<p><strong>Authentication:</strong> Any authenticated user</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_employee_stats
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;done_today&quot;: 2,
+    &quot;done_week&quot;: 8,
+    &quot;points_month&quot;: 342.5,
+    &quot;blocked&quot;: 1
+  }
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>done_today</code></td>
+<td>int</td>
+<td>Number of tasks completed (moved to <code>DONE</code>) today</td>
+</tr>
+<tr>
+<td><code>done_week</code></td>
+<td>int</td>
+<td>Number of tasks completed this ISO calendar week</td>
+</tr>
+<tr>
+<td><code>points_month</code></td>
+<td>float</td>
+<td>Sum of <code>earned_points</code> for tasks completed in the current calendar month</td>
+</tr>
+<tr>
+<td><code>blocked</code></td>
+<td>int</td>
+<td>Count of tasks currently blocked by dependencies</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="get_daily_completions"><code>get_daily_completions</code></h3>
+<p>Returns daily task completion counts for the last 7 days (for rendering a completion trend chart).</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_daily_completions
+</code></pre>
+<p><strong>Authentication:</strong> Any authenticated user</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_daily_completions
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {&quot;date&quot;: &quot;2026-05-03&quot;, &quot;count&quot;: 1},
+    {&quot;date&quot;: &quot;2026-05-04&quot;, &quot;count&quot;: 0},
+    {&quot;date&quot;: &quot;2026-05-05&quot;, &quot;count&quot;: 3},
+    {&quot;date&quot;: &quot;2026-05-06&quot;, &quot;count&quot;: 2},
+    {&quot;date&quot;: &quot;2026-05-07&quot;, &quot;count&quot;: 0},
+    {&quot;date&quot;: &quot;2026-05-08&quot;, &quot;count&quot;: 1},
+    {&quot;date&quot;: &quot;2026-05-09&quot;, &quot;count&quot;: 4}
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<p>Always returns exactly 7 items (one per day), oldest first. Days with no completions return <code>count: 0</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>date</code></td>
+<td>string</td>
+<td>Date in <code>YYYY-MM-DD</code> format</td>
+</tr>
+<tr>
+<td><code>count</code></td>
+<td>int</td>
+<td>Number of tasks completed on that date</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="get_hours_summary"><code>get_hours_summary</code></h3>
+<p>Returns the total estimated vs. actual hours for the current user's active tasks.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_hours_summary
+</code></pre>
+<p><strong>Authentication:</strong> Any authenticated user</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_hours_summary
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;actual_hours&quot;: 12.5,
+    &quot;estimated_hours&quot;: 18.0
+  }
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actual_hours</code></td>
+<td>float</td>
+<td>Sum of <code>actual_hours</code> across active tasks</td>
+</tr>
+<tr>
+<td><code>estimated_hours</code></td>
+<td>float</td>
+<td>Sum of <code>estimated_hours</code> across active tasks</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- "Active" means not in <code>DONE</code> or <code>ACT</code> phase.</p>
+<hr />
+<h2 id="leader-dashboard-page-apis">Leader Dashboard Page APIs</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.page.leader_dashboard.leader_dashboard</code></p>
+<p>These endpoints power the <strong>Leader Dashboard</strong> page. All endpoints require the caller to have the <code>VT Leader</code> or <code>VT Manager</code> role.</p>
+<hr />
+<h3 id="get_leader_stats"><code>get_leader_stats</code></h3>
+<p>Returns high-level team performance statistics.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_leader_stats
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_leader_stats
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;pending_review&quot;: 3,
+    &quot;approval_rate&quot;: 87.5,
+    &quot;team_points_month&quot;: 1240.0
+  }
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pending_review</code></td>
+<td>int</td>
+<td>Count of tasks in <code>CHECK</code> phase with kanban status "In Review"</td>
+</tr>
+<tr>
+<td><code>approval_rate</code></td>
+<td>float</td>
+<td>Percentage of this month's <code>DONE</code> tasks that had zero revisions (<code>revision_count = 0</code>)</td>
+</tr>
+<tr>
+<td><code>team_points_month</code></td>
+<td>float</td>
+<td>Sum of <code>earned_points</code> for all <code>DONE</code> tasks completed in the current calendar month</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Error Cases</strong></p>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>403</code></td>
+<td>Caller does not have <code>VT Leader</code> or <code>VT Manager</code> role</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="get_phase_distribution"><code>get_phase_distribution</code></h3>
+<p>Returns the count of tasks in each PDCA phase for the leader's team.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_phase_distribution
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_phase_distribution
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {&quot;phase&quot;: &quot;BACKLOG&quot;, &quot;count&quot;: 14},
+    {&quot;phase&quot;: &quot;PLAN&quot;,    &quot;count&quot;: 5},
+    {&quot;phase&quot;: &quot;DO&quot;,      &quot;count&quot;: 9},
+    {&quot;phase&quot;: &quot;CHECK&quot;,   &quot;count&quot;: 3},
+    {&quot;phase&quot;: &quot;ACT&quot;,     &quot;count&quot;: 1},
+    {&quot;phase&quot;: &quot;DONE&quot;,    &quot;count&quot;: 42}
+  ]
+}
+</code></pre>
+<p><strong>Notes</strong>
+- Always returns all 6 phases in PDCA sequence order, even if count is 0.</p>
+<hr />
+<h3 id="get_team_leaderboard"><code>get_team_leaderboard</code></h3>
+<p>Returns the top 10 team members ranked by points earned in the current month.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_team_leaderboard
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_team_leaderboard
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {&quot;member&quot;: &quot;alice@example.com&quot;, &quot;points&quot;: 312.5},
+    {&quot;member&quot;: &quot;bob@example.com&quot;,   &quot;points&quot;: 278.0},
+    {&quot;member&quot;: &quot;carol@example.com&quot;, &quot;points&quot;: 251.0}
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>member</code></td>
+<td>string</td>
+<td>User email address</td>
+</tr>
+<tr>
+<td><code>points</code></td>
+<td>float</td>
+<td>Total earned points for the current month</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- Returns at most 10 entries, ordered by <code>points</code> descending.</p>
+<hr />
+<h3 id="get_overdue_tasks"><code>get_overdue_tasks</code></h3>
+<p>Returns all overdue tasks (deadline passed, not yet complete) across the leader's team.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_overdue_tasks
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_overdue_tasks
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {
+      &quot;task_name&quot;: &quot;VT-TASK-00029&quot;,
+      &quot;task_title&quot;: &quot;Complete security audit report&quot;,
+      &quot;member&quot;: &quot;dave@example.com&quot;,
+      &quot;deadline&quot;: &quot;2026-05-05&quot;,
+      &quot;phase&quot;: &quot;DO&quot;,
+      &quot;days_overdue&quot;: 4
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_name</code></td>
+<td>string</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>task_title</code></td>
+<td>string</td>
+<td>Task title</td>
+</tr>
+<tr>
+<td><code>member</code></td>
+<td>string</td>
+<td>Assigned user email</td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>string</td>
+<td>Original deadline (<code>YYYY-MM-DD</code>)</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td>string</td>
+<td>Current PDCA phase</td>
+</tr>
+<tr>
+<td><code>days_overdue</code></td>
+<td>int</td>
+<td>Number of calendar days past deadline</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- Excludes tasks in <code>DONE</code> and <code>ACT</code> phases.
+- Ordered by <code>days_overdue</code> descending (most overdue first).</p>
+<hr />
+<h2 id="leader-review-page-apis">Leader Review Page APIs</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.page.leader_review.leader_review</code></p>
+<p>These endpoints power the <strong>Leader Review</strong> page. Endpoints are scoped to projects where the caller is the project leader (either via the <code>project_leader</code> field on VT Project or a Project Team Member record with <code>role = 'Leader'</code>).</p>
+<hr />
+<h3 id="get_review_queue"><code>get_review_queue</code></h3>
+<p>Returns all tasks awaiting review (in <code>CHECK</code> phase) across the leader's projects.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.get_review_queue
+</code></pre>
+<p><strong>Authentication:</strong> Must be project leader of at least one project</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.get_review_queue
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {
+      &quot;name&quot;: &quot;VT-TASK-00060&quot;,
+      &quot;title&quot;: &quot;Implement OAuth2 login flow&quot;,
+      &quot;project&quot;: &quot;VT-PROJ-00003&quot;,
+      &quot;priority&quot;: &quot;High&quot;,
+      &quot;deadline&quot;: &quot;2026-05-10&quot;,
+      &quot;assigned_to&quot;: &quot;alice@example.com&quot;,
+      &quot;pdca_phase&quot;: &quot;CHECK&quot;,
+      &quot;kanban_status&quot;: &quot;In Review&quot;,
+      &quot;estimated_hours&quot;: 8.0,
+      &quot;review_scheduled_date&quot;: &quot;2026-05-09&quot;
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td>Task title</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>Parent project ID</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>string</td>
+<td><code>Critical</code> / <code>High</code> / <code>Medium</code> / <code>Low</code></td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>string</td>
+<td>Task deadline (<code>YYYY-MM-DD</code>)</td>
+</tr>
+<tr>
+<td><code>assigned_to</code></td>
+<td>string</td>
+<td>Assignee email</td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>string</td>
+<td>Always <code>CHECK</code> for this queue</td>
+</tr>
+<tr>
+<td><code>kanban_status</code></td>
+<td>string</td>
+<td>Kanban column label</td>
+</tr>
+<tr>
+<td><code>estimated_hours</code></td>
+<td>float</td>
+<td>Originally estimated hours</td>
+</tr>
+<tr>
+<td><code>review_scheduled_date</code></td>
+<td>string</td>
+<td>Scheduled review date (<code>YYYY-MM-DD</code>), or <code>null</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- Ordered by priority (<code>Critical</code> → <code>High</code> → <code>Medium</code> → <code>Low</code>), then <code>deadline</code> ascending.</p>
+<hr />
+<h3 id="get_team_workload"><code>get_team_workload</code></h3>
+<p>Returns current active task hour load per team member, with capacity indicators.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.get_team_workload
+</code></pre>
+<p><strong>Authentication:</strong> Must be project leader of at least one project</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.get_team_workload
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {
+      &quot;assigned_to&quot;: &quot;alice@example.com&quot;,
+      &quot;total_hours&quot;: 22.5,
+      &quot;capacity&quot;: 20.0,
+      &quot;overloaded&quot;: true
+    },
+    {
+      &quot;assigned_to&quot;: &quot;bob@example.com&quot;,
+      &quot;total_hours&quot;: 14.0,
+      &quot;capacity&quot;: 20.0,
+      &quot;overloaded&quot;: false
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>assigned_to</code></td>
+<td>string</td>
+<td>User email</td>
+</tr>
+<tr>
+<td><code>total_hours</code></td>
+<td>float</td>
+<td>Sum of <code>estimated_hours</code> for all active tasks</td>
+</tr>
+<tr>
+<td><code>capacity</code></td>
+<td>float</td>
+<td>Max weekly hours from VT Settings</td>
+</tr>
+<tr>
+<td><code>overloaded</code></td>
+<td>bool</td>
+<td><code>true</code> if <code>total_hours &gt; capacity</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes</strong>
+- "Active" means not in <code>DONE</code> or <code>BACKLOG</code> phase.
+- <code>capacity</code> is sourced from the global VT Settings doctype.</p>
+<hr />
+<h3 id="get_team_blocked_tasks"><code>get_team_blocked_tasks</code></h3>
+<p>Returns all blocked tasks across the leader's projects.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.get_team_blocked_tasks
+</code></pre>
+<p><strong>Authentication:</strong> Must be project leader of at least one project</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.get_team_blocked_tasks
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {
+      &quot;name&quot;: &quot;VT-TASK-00055&quot;,
+      &quot;title&quot;: &quot;Migrate production database&quot;,
+      &quot;project&quot;: &quot;VT-PROJ-00007&quot;,
+      &quot;priority&quot;: &quot;Critical&quot;,
+      &quot;deadline&quot;: &quot;2026-05-15&quot;,
+      &quot;assigned_to&quot;: &quot;dave@example.com&quot;,
+      &quot;pdca_phase&quot;: &quot;PLAN&quot;,
+      &quot;kanban_status&quot;: &quot;Open&quot;,
+      &quot;blocker_name&quot;: &quot;VT-TASK-00049&quot;,
+      &quot;blocker_title&quot;: &quot;Backup production database&quot;,
+      &quot;blocker_assignee&quot;: &quot;dba@example.com&quot;,
+      &quot;days_blocked&quot;: 3
+    }
+  ]
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td>Blocked task ID</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>string</td>
+<td>Blocked task title</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>Parent project ID</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>string</td>
+<td>Task priority</td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>string</td>
+<td>Task deadline (<code>YYYY-MM-DD</code>)</td>
+</tr>
+<tr>
+<td><code>assigned_to</code></td>
+<td>string</td>
+<td>Assigned user email</td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>string</td>
+<td>Current PDCA phase</td>
+</tr>
+<tr>
+<td><code>kanban_status</code></td>
+<td>string</td>
+<td>Kanban column label</td>
+</tr>
+<tr>
+<td><code>blocker_name</code></td>
+<td>string</td>
+<td>ID of the blocking task</td>
+</tr>
+<tr>
+<td><code>blocker_title</code></td>
+<td>string</td>
+<td>Title of the blocking task</td>
+</tr>
+<tr>
+<td><code>blocker_assignee</code></td>
+<td>string</td>
+<td>User assigned to the blocking task</td>
+</tr>
+<tr>
+<td><code>days_blocked</code></td>
+<td>int</td>
+<td>Days the task has been blocked</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="approve_task"><code>approve_task</code></h3>
+<p>Approves a task in <code>CHECK</code> phase, transitioning it to <code>DONE</code> and triggering point calculation.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.approve_task
+</code></pre>
+<p><strong>Authentication:</strong> Must be the project leader of the task's project</p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_name</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID (e.g., <code>VT-TASK-00001</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.approve_task
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{
+  &quot;task_name&quot;: &quot;VT-TASK-00060&quot;
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;status&quot;: &quot;ok&quot;
+  }
+}
+</code></pre>
+<p><strong>Notes</strong>
+- Transitions the task <code>CHECK → DONE</code>.
+- Submits the Frappe document, which triggers the <code>on_submit</code> hook for point calculation.
+- Uses a row-level database lock (<code>SELECT ... FOR UPDATE</code>) to prevent duplicate concurrent approvals.
+- Sets <code>completion_date</code> to today's date.</p>
+<p><strong>Error Cases</strong></p>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>404</code></td>
+<td>Task does not exist</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>Caller is not the project leader for this task's project</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td>Task is not in <code>CHECK</code> phase</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="reject_task"><code>reject_task</code></h3>
+<p>Rejects a task in <code>CHECK</code> phase, sending it back to <code>DO</code> with a revision note.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.reject_task
+</code></pre>
+<p><strong>Authentication:</strong> Must be the project leader of the task's project</p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_name</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Rejection reason to communicate to the assignee</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.page.leader_review.leader_review.reject_task
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{
+  &quot;task_name&quot;: &quot;VT-TASK-00060&quot;,
+  &quot;reason&quot;: &quot;Please add integration tests and update the README with setup instructions.&quot;
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;status&quot;: &quot;ok&quot;
+  }
+}
+</code></pre>
+<p><strong>Notes</strong>
+- Transitions the task <code>CHECK → DO</code> (kanban: "In Progress").
+- Increments <code>revision_count</code> by 1.
+- Saves the <code>reason</code> to the <code>rejection_note</code> field on the task.</p>
+<p><strong>Error Cases</strong></p>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>403</code></td>
+<td>Caller is not the project leader for this task's project</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td><code>reason</code> is empty or blank</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td>Task is not in <code>CHECK</code> phase</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="point-calculator-service-apis">Point Calculator Service APIs</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.services.point_calculator</code></p>
+<p>These are internal service functions that are also exposed as callable API endpoints. Callers must be <code>VT Leader</code> or <code>VT Manager</code>.</p>
+<hr />
+<h3 id="apply_revision_deduction"><code>apply_revision_deduction</code></h3>
+<p>Applies a point deduction for a task revision. Increments the revision count, transitions the task to <code>ACT</code> phase, deducts points, and notifies the assignee.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.point_calculator.apply_revision_deduction
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_name</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.point_calculator.apply_revision_deduction
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{
+  &quot;task_name&quot;: &quot;VT-TASK-00060&quot;
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: null
+}
+</code></pre>
+<p><strong>Notes</strong>
+- Deduction formula: <code>deduction = revision_deduct_rate × base_points</code> (rates configured in VT Settings).
+- Sends an email notification to the task assignee.
+- Does not return a value; use document events or re-fetch the task to observe the change.</p>
+<hr />
+<h3 id="override_points"><code>override_points</code></h3>
+<p>Manually overrides the earned points on a completed task. Logs the delta and notifies the assignee.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.point_calculator.override_points
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_name</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>new_points</code></td>
+<td>float</td>
+<td>Yes</td>
+<td>The new point value to assign</td>
+</tr>
+<tr>
+<td><code>reason</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Justification for the override</td>
+</tr>
+<tr>
+<td><code>overridden_by</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Email of the leader performing the override</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.point_calculator.override_points
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{
+  &quot;task_name&quot;: &quot;VT-TASK-00060&quot;,
+  &quot;new_points&quot;: 95.0,
+  &quot;reason&quot;: &quot;Exceptional quality — delivered ahead of schedule with full documentation.&quot;,
+  &quot;overridden_by&quot;: &quot;leader@example.com&quot;
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: null
+}
+</code></pre>
+<p><strong>Notes</strong>
+- Sets <code>leader_override_points</code> on the task.
+- Appends a record to the Task Point Log with the delta (<code>new_points - earned_points</code>).
+- Updates the User Point Summary for the assignee's current period.
+- Sends an email notification to the assignee.</p>
+<hr />
+<h2 id="scheduling-engine-service-apis">Scheduling Engine Service APIs</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.services.scheduling_engine</code></p>
+<hr />
+<h3 id="distribute_task_schedule"><code>distribute_task_schedule</code></h3>
+<p>Distributes a task's estimated hours evenly across working days between <code>start_date</code> and <code>deadline</code>, creating Task Schedule Entry rows for each day.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.scheduling_engine.distribute_task_schedule
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_name</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.scheduling_engine.distribute_task_schedule
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{
+  &quot;task_name&quot;: &quot;VT-TASK-00042&quot;
+}
+</code></pre>
+<p><strong>Prerequisites</strong></p>
+<p>The task must have all of these fields set before calling:
+- <code>start_date</code>
+- <code>deadline</code>
+- <code>assigned_to</code>
+- <code>estimated_hours</code></p>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;conflicts&quot;: [&quot;2026-05-12&quot;],
+    &quot;days_scheduled&quot;: 5,
+    &quot;hours_per_day&quot;: 1.6
+  }
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conflicts</code></td>
+<td>array of string</td>
+<td>Dates (<code>YYYY-MM-DD</code>) where adding the scheduled hours exceeds the user's daily capacity from VT Settings</td>
+</tr>
+<tr>
+<td><code>days_scheduled</code></td>
+<td>int</td>
+<td>Number of working days the task was distributed across</td>
+</tr>
+<tr>
+<td><code>hours_per_day</code></td>
+<td>float</td>
+<td>Hours assigned to each non-conflicting working day</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Error Cases</strong></p>
+<table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>417</code></td>
+<td>Any of the required fields (<code>start_date</code>, <code>deadline</code>, <code>assigned_to</code>, <code>estimated_hours</code>) is missing</td>
+</tr>
+<tr>
+<td><code>417</code></td>
+<td>There are no working days in the date range (e.g., a weekend-only range)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="override_schedule_entry"><code>override_schedule_entry</code></h3>
+<p>Overrides the scheduled hours for a specific day on a task, then rebalances the remaining hours across all non-overridden days.</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.scheduling_engine.override_schedule_entry
+</code></pre>
+<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Request Parameters</strong></p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_name</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>Task ID</td>
+</tr>
+<tr>
+<td><code>day</code></td>
+<td>string</td>
+<td>Yes</td>
+<td>The specific day to override (<code>YYYY-MM-DD</code>)</td>
+</tr>
+<tr>
+<td><code>new_hours</code></td>
+<td>float</td>
+<td>Yes</td>
+<td>The new hour allocation for that day</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.services.scheduling_engine.override_schedule_entry
+Content-Type: application/json
+Authorization: token api_key:api_secret
+
+{
+  &quot;task_name&quot;: &quot;VT-TASK-00042&quot;,
+  &quot;day&quot;: &quot;2026-05-12&quot;,
+  &quot;new_hours&quot;: 3.0
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: null
+}
+</code></pre>
+<p><strong>Notes</strong>
+- The specified day is marked as manually overridden and will not be adjusted in future rebalance operations.
+- The remaining hours (<code>estimated_hours - sum of overridden days</code>) are redistributed evenly across all non-overridden scheduled days.</p>
+<hr />
+<h2 id="data-models-reference">Data Models Reference</h2>
+<h3 id="vt-task">VT Task</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>Data</td>
+<td>Auto-generated ID (e.g., <code>VT-TASK-00001</code>)</td>
+</tr>
+<tr>
+<td><code>title</code></td>
+<td>Data</td>
+<td>Task title</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>Link(VT Project)</td>
+<td>Parent project</td>
+</tr>
+<tr>
+<td><code>assigned_to</code></td>
+<td>Link(User)</td>
+<td>Assignee</td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>Select</td>
+<td><code>BACKLOG</code> / <code>PLAN</code> / <code>DO</code> / <code>CHECK</code> / <code>ACT</code> / <code>DONE</code></td>
+</tr>
+<tr>
+<td><code>kanban_status</code></td>
+<td>Select</td>
+<td>Synced from <code>pdca_phase</code>; displayed in Kanban view</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>Select</td>
+<td><code>Critical</code> / <code>High</code> / <code>Medium</code> / <code>Low</code></td>
+</tr>
+<tr>
+<td><code>weight</code></td>
+<td>Float</td>
+<td>Task weight multiplier for point calculation</td>
+</tr>
+<tr>
+<td><code>start_date</code></td>
+<td>Date</td>
+<td>Scheduled start date</td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>Date</td>
+<td>Due date</td>
+</tr>
+<tr>
+<td><code>completion_date</code></td>
+<td>Date</td>
+<td>Set automatically when task moves to <code>DONE</code></td>
+</tr>
+<tr>
+<td><code>estimated_hours</code></td>
+<td>Float</td>
+<td>Originally estimated effort in hours</td>
+</tr>
+<tr>
+<td><code>actual_hours</code></td>
+<td>Float</td>
+<td>Actual hours logged against the task</td>
+</tr>
+<tr>
+<td><code>base_points</code></td>
+<td>Float</td>
+<td>Calculated base points (set on document submit)</td>
+</tr>
+<tr>
+<td><code>earned_points</code></td>
+<td>Float</td>
+<td>Net points after bonuses and penalties</td>
+</tr>
+<tr>
+<td><code>leader_override_points</code></td>
+<td>Float</td>
+<td>Manual point override set by a leader</td>
+</tr>
+<tr>
+<td><code>revision_count</code></td>
+<td>Int</td>
+<td>Number of times the task was rejected and returned to <code>DO</code></td>
+</tr>
+<tr>
+<td><code>is_recurring</code></td>
+<td>Check</td>
+<td>Whether this task recurs on a schedule</td>
+</tr>
+<tr>
+<td><code>recurring_rule</code></td>
+<td>Link(Recurring Rule)</td>
+<td>Recurrence rule document</td>
+</tr>
+<tr>
+<td><code>next_occurrence</code></td>
+<td>Date</td>
+<td>Date when the next recurring instance will be created</td>
+</tr>
+<tr>
+<td><code>parent_task</code></td>
+<td>Link(VT Task)</td>
+<td>Reference to the parent task for recurring children</td>
+</tr>
+<tr>
+<td><code>review_scheduled_date</code></td>
+<td>Date</td>
+<td>Date when the leader has scheduled the review</td>
+</tr>
+<tr>
+<td><code>rejection_note</code></td>
+<td>Text</td>
+<td>Reason provided by the leader when rejecting a task</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PDCA Phase → Kanban Status Mapping</strong></p>
+<table>
+<thead>
+<tr>
+<th>PDCA Phase</th>
+<th>Kanban Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BACKLOG</code></td>
+<td><code>Open</code></td>
+</tr>
+<tr>
+<td><code>PLAN</code></td>
+<td><code>Open</code></td>
+</tr>
+<tr>
+<td><code>DO</code></td>
+<td><code>In Progress</code></td>
+</tr>
+<tr>
+<td><code>CHECK</code></td>
+<td><code>In Review</code></td>
+</tr>
+<tr>
+<td><code>ACT</code></td>
+<td><code>In Progress</code></td>
+</tr>
+<tr>
+<td><code>DONE</code></td>
+<td><code>Completed</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="vt-project">VT Project</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>Data</td>
+<td>Auto-generated project ID</td>
+</tr>
+<tr>
+<td><code>project_name</code></td>
+<td>Data</td>
+<td>Human-readable display name</td>
+</tr>
+<tr>
+<td><code>project_owner</code></td>
+<td>Link(User)</td>
+<td>Project owner (typically a manager)</td>
+</tr>
+<tr>
+<td><code>project_leader</code></td>
+<td>Link(User)</td>
+<td>Primary leader responsible for reviews</td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>Select</td>
+<td><code>PLAN</code> / <code>DO</code> / <code>CHECK</code> / <code>ACT</code> / <code>CLOSED</code></td>
+</tr>
+<tr>
+<td><code>start_date</code></td>
+<td>Date</td>
+<td>Project start date</td>
+</tr>
+<tr>
+<td><code>end_date</code></td>
+<td>Date</td>
+<td>Project target end date</td>
+</tr>
+<tr>
+<td><code>linked_objective</code></td>
+<td>Link(Objective)</td>
+<td>Optional OKR objective link</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="user-point-summary">User Point Summary</h3>
+<p>Aggregates a user's point totals per calendar month period.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user</code></td>
+<td>Link(User)</td>
+<td>The user this summary belongs to</td>
+</tr>
+<tr>
+<td><code>period</code></td>
+<td>Data</td>
+<td>Calendar month in <code>YYYY-MM</code> format (e.g., <code>2026-05</code>)</td>
+</tr>
+<tr>
+<td><code>total_earned</code></td>
+<td>Float</td>
+<td>Sum of base points for completed tasks</td>
+</tr>
+<tr>
+<td><code>total_bonus</code></td>
+<td>Float</td>
+<td>Total bonus points (e.g., early completion)</td>
+</tr>
+<tr>
+<td><code>total_penalty</code></td>
+<td>Float</td>
+<td>Total penalty points (e.g., late submission)</td>
+</tr>
+<tr>
+<td><code>total_override_delta</code></td>
+<td>Float</td>
+<td>Net change from all leader point overrides</td>
+</tr>
+<tr>
+<td><code>net_points</code></td>
+<td>Float</td>
+<td><code>total_earned + total_bonus - total_penalty + total_override_delta</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="standard-frappe-rest-api">Standard Frappe REST API</h2>
+<p>Vernon Tasks inherits the full Frappe Resource API for all its doctypes. These endpoints are available without any custom code and support standard CRUD operations.</p>
+<h3 id="base-url-pattern">Base URL Pattern</h3>
+<pre><code>/api/resource/&lt;DocType Name&gt;
+</code></pre>
+<h3 id="supported-operations">Supported Operations</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>URL</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/resource/VT Task</code></td>
+<td>List tasks (paginated)</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/resource/VT Task/&lt;name&gt;</code></td>
+<td>Get a single task by name</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/resource/VT Task</code></td>
+<td>Create a new task</td>
+</tr>
+<tr>
+<td><code>PUT</code></td>
+<td><code>/api/resource/VT Task/&lt;name&gt;</code></td>
+<td>Update an existing task</td>
+</tr>
+<tr>
+<td><code>DELETE</code></td>
+<td><code>/api/resource/VT Task/&lt;name&gt;</code></td>
+<td>Delete a task</td>
+</tr>
+</tbody>
+</table>
+<p>The same pattern applies to all Vernon Tasks doctypes:
+- <code>VT Task</code>
+- <code>VT Project</code>
+- <code>Objective</code>
+- <code>Key Result</code>
+- <code>Work Profile</code></p>
+<h3 id="filtering">Filtering</h3>
+<p>Use the <code>filters</code> query parameter with a JSON-encoded array of filter triples <code>[field, operator, value]</code>:</p>
+<pre><code>GET /api/resource/VT Task?filters=[[&quot;pdca_phase&quot;,&quot;=&quot;,&quot;DO&quot;],[&quot;assigned_to&quot;,&quot;=&quot;,&quot;alice@example.com&quot;]]&amp;fields=[&quot;name&quot;,&quot;title&quot;,&quot;priority&quot;,&quot;deadline&quot;]
+</code></pre>
+<p><strong>Supported operators:</strong> <code>=</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code>, <code>like</code>, <code>not like</code>, <code>in</code>, <code>not in</code>, <code>is</code>, <code>is not</code></p>
+<h3 id="pagination">Pagination</h3>
+<pre><code>GET /api/resource/VT Task?limit_start=0&amp;limit_page_length=20
+</code></pre>
+<h3 id="create-example">Create Example</h3>
+<pre><code>POST /api/resource/VT Task
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{
+  &quot;title&quot;: &quot;Set up CI/CD pipeline&quot;,
+  &quot;project&quot;: &quot;VT-PROJ-00003&quot;,
+  &quot;assigned_to&quot;: &quot;alice@example.com&quot;,
+  &quot;priority&quot;: &quot;High&quot;,
+  &quot;start_date&quot;: &quot;2026-05-10&quot;,
+  &quot;deadline&quot;: &quot;2026-05-17&quot;,
+  &quot;estimated_hours&quot;: 6.0,
+  &quot;pdca_phase&quot;: &quot;BACKLOG&quot;
+}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;data&quot;: {
+    &quot;name&quot;: &quot;VT-TASK-00099&quot;,
+    &quot;title&quot;: &quot;Set up CI/CD pipeline&quot;,
+    &quot;project&quot;: &quot;VT-PROJ-00003&quot;,
+    &quot;assigned_to&quot;: &quot;alice@example.com&quot;,
+    &quot;priority&quot;: &quot;High&quot;,
+    &quot;pdca_phase&quot;: &quot;BACKLOG&quot;,
+    &quot;kanban_status&quot;: &quot;Open&quot;,
+    &quot;start_date&quot;: &quot;2026-05-10&quot;,
+    &quot;deadline&quot;: &quot;2026-05-17&quot;,
+    &quot;estimated_hours&quot;: 6.0,
+    &quot;doctype&quot;: &quot;VT Task&quot;
+  }
+}
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> The standard Resource API uses a <code>data</code> envelope (not <code>message</code>) and respects the document's permission rules. PDCA phase transitions made through this API bypass the business logic guards in the custom endpoints — always prefer the whitelisted endpoints for phase transitions.</p>
+</blockquote>
+<hr />
+<h2 id="leader-analytics-endpoints-sub-a">Leader Analytics Endpoints (Sub-A)</h2>
+<p>All endpoints in <code>vernon_tasks.task.api.analytics</code>. All <code>@frappe.whitelist()</code> and require role <code>VT Leader</code> or <code>VT Manager</code>. Non-authorized callers get <code>frappe.PermissionError</code>. Velocity and forecast results are cached for 1 hour, keyed by project; cache is invalidated on any <code>VT Sprint</code> or <code>VT Task</code> update.</p>
+<h3 id="get_burndownsprint"><code>get_burndown(sprint)</code></h3>
+<p>Daily remaining-hours timeline for one sprint plus ideal linear line.</p>
+<p><strong>Request:</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.api.analytics.get_burndown
+{&quot;sprint&quot;: &quot;&lt;sprint name&gt;&quot;}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;labels&quot;: [&quot;2026-05-07&quot;, &quot;2026-05-08&quot;, ...],
+    &quot;ideal&quot;: [30.0, 22.5, 15.0, 7.5, 0.0],
+    &quot;remaining&quot;: [30.0, 30.0, 20.0, 20.0, 10.0],
+    &quot;unestimated_count&quot;: 1
+  }
+}
+</code></pre>
+<ul>
+<li><code>ideal[i]</code> is linear from total estimated hours at start to 0 at end.</li>
+<li><code>remaining[i]</code> sums <code>estimated_hours</code> of tasks where <code>completion_date</code> is null or later than that day.</li>
+<li>Tasks with <code>estimated_hours == 0</code> are excluded from <code>ideal</code>/<code>remaining</code>; their count is surfaced as <code>unestimated_count</code>.</li>
+</ul>
+<h3 id="get_velocity_trendproject-n6"><code>get_velocity_trend(project, n=6)</code></h3>
+<p>Last N closed sprints' velocity (sum of <code>actual_hours</code> of DONE tasks) in ascending order.</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;sprints&quot;: [&quot;SPR-001&quot;, &quot;SPR-002&quot;, &quot;SPR-003&quot;],
+    &quot;velocity&quot;: [15.0, 8.0, 12.0],
+    &quot;avg&quot;: 11.666,
+    &quot;trend_pct&quot;: -20.0
+  }
+}
+</code></pre>
+<ul>
+<li><code>trend_pct = (last - first) / first * 100</code>, returns <code>0.0</code> if fewer than 2 sprints or first velocity is 0.</li>
+</ul>
+<h3 id="get_forecastproject"><code>get_forecast(project)</code></h3>
+<p>Predicted project end date based on linear projection from velocity trend with a confidence band.</p>
+<p><strong>Response (sufficient data, ≥3 closed sprints):</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;insufficient_data&quot;: false,
+    &quot;predicted_end&quot;: &quot;2026-08-15&quot;,
+    &quot;p_min&quot;: &quot;2026-09-12&quot;,
+    &quot;p_max&quot;: &quot;2026-07-25&quot;,
+    &quot;confidence&quot;: 0.83,
+    &quot;remaining_hours&quot;: 120.0,
+    &quot;avg_velocity&quot;: 12.0,
+    &quot;sprints_used&quot;: 10
+  }
+}
+</code></pre>
+<p><strong>Response (insufficient data):</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;insufficient_data&quot;: true,
+    &quot;sprints_needed&quot;: 2
+  }
+}
+</code></pre>
+<ul>
+<li><code>p_min</code> uses the mean of the worst third of historical velocities (later date).</li>
+<li><code>p_max</code> uses the mean of the best third (earlier date).</li>
+<li><code>confidence = 1 - (pstdev / avg)</code>, clamped to <code>[0, 1]</code>.</li>
+<li>Sprint length used for date math is the median length of past closed sprints (default 14 days).</li>
+</ul>
+<h3 id="get_risksproject"><code>get_risks(project)</code></h3>
+<p>Returns active risks for the project; empty list when none. Each risk is one dict.</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {&quot;type&quot;: &quot;blocked&quot;,  &quot;severity&quot;: &quot;med&quot;,  &quot;target&quot;: &quot;VT-TASK-00042&quot;, &quot;detail&quot;: &quot;Setup CI blocked 5d (assignee: alice@example.com)&quot;, &quot;days&quot;: 5},
+    {&quot;type&quot;: &quot;slip&quot;,     &quot;severity&quot;: &quot;low&quot;,  &quot;target&quot;: &quot;VT-PROJ-00003&quot;, &quot;detail&quot;: &quot;Predicted end 2026-08-15 slips 9d past planned 2026-08-06 (22.5%)&quot;, &quot;days&quot;: 9},
+    {&quot;type&quot;: &quot;overcap&quot;,  &quot;severity&quot;: &quot;high&quot;, &quot;target&quot;: &quot;bob@example.com&quot;, &quot;detail&quot;: &quot;bob@example.com has 280h of 80h available (350%)&quot;, &quot;days&quot;: 0}
+  ]
+}
+</code></pre>
+<ul>
+<li><code>type ∈ {"blocked", "slip", "overcap"}</code>.</li>
+<li><code>severity</code> derived from how far the measured value exceeds threshold: <code>&lt; 1×</code> = low, <code>1×–2×</code> = med, <code>≥ 2×</code> = high.</li>
+<li>Thresholds resolved per-project: <code>VT Project.&lt;key&gt;_threshold</code> override → <code>VT Settings.default_&lt;key&gt;_threshold</code> → hardcoded fallback (blocked_days=3, slip_pct=20, capacity_pct=120).</li>
+</ul>
+<h3 id="cache-invalidation-hook">Cache invalidation hook</h3>
+<p><code>vernon_tasks.task.api.analytics.invalidate_project_cache(doc, method=None)</code> is wired to <code>doc_events.on_update</code> for <code>VT Sprint</code> and <code>VT Task</code>. It clears <code>vt_velocity:&lt;project&gt;:&lt;n&gt;</code> and <code>vt_forecast:&lt;project&gt;</code> keys so the next read recomputes.</p>
+<hr />
+<h2 id="ic-analytics-endpoints-sub-b">IC Analytics Endpoints (Sub-B)</h2>
+<p>All endpoints in <code>vernon_tasks.task.api.ic_analytics</code>. All <code>@frappe.whitelist()</code>. Roles allowed: <code>VT Member</code>, <code>VT Leader</code>, <code>VT Manager</code>. <code>get_personal_velocity</code> and <code>get_streak</code> always operate on <code>frappe.session.user</code> — the <code>user</code> argument is not accepted (no impersonation).</p>
+<h3 id="get_leaderboardperiodmonth-limit10"><code>get_leaderboard(period="month", limit=10)</code></h3>
+<p>Top users by <code>SUM(earned_points)</code> in the requested period, with <code>task_count</code> tie-break.</p>
+<p><strong>Request:</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.api.ic_analytics.get_leaderboard
+{&quot;period&quot;: &quot;month&quot;, &quot;limit&quot;: 10}
+</code></pre>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {&quot;user&quot;: &quot;alice@example.com&quot;, &quot;points&quot;: 120.0, &quot;task_count&quot;: 8},
+    {&quot;user&quot;: &quot;bob@example.com&quot;,   &quot;points&quot;:  95.0, &quot;task_count&quot;: 6}
+  ]
+}
+</code></pre>
+<ul>
+<li><code>period ∈ {"week", "month", "quarter"}</code>. Invalid value → <code>ValueError</code>.</li>
+<li>Period windows: <code>week</code> = ISO Monday–Sunday containing today; <code>month</code> = current calendar month; <code>quarter</code> = current 3-month block (Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec).</li>
+<li>Filtered to <code>pdca_phase = 'DONE'</code> with <code>completion_date</code> inside the window.</li>
+</ul>
+<h3 id="get_personal_velocityproject-n6"><code>get_personal_velocity(project, n=6)</code></h3>
+<p>Caller's personal hours per closed sprint vs team average (sum of sprint hours / distinct assignees that sprint).</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;sprints&quot;: [&quot;SPR-001&quot;, &quot;SPR-002&quot;],
+    &quot;personal&quot;: [10.0, 6.0],
+    &quot;team_avg&quot;: [15.0, 8.0],
+    &quot;avg&quot;: 8.0,
+    &quot;team_avg_total&quot;: 11.5
+  }
+}
+</code></pre>
+<h3 id="get_streakproject"><code>get_streak(project)</code></h3>
+<p>Consecutive closed sprints (walking newest→oldest) where the caller had <code>actual_hours &gt; 0</code> on at least one DONE task.</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;streak&quot;: 3,
+    &quot;sprints_checked&quot;: 4
+  }
+}
+</code></pre>
+<p>Streak stops at the first sprint with zero personal hours.</p>
+<hr />
+<h2 id="executive-analytics-endpoints-sub-c">Executive Analytics Endpoints (Sub-C)</h2>
+<p>All endpoints in <code>vernon_tasks.task.api.exec_analytics</code>. All <code>@frappe.whitelist()</code>. Roles allowed: <code>VT Manager</code>, <code>System Manager</code>.</p>
+<h3 id="get_okr_rollupperiodnone"><code>get_okr_rollup(period=None)</code></h3>
+<p>Active objectives with average key-result progress.</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: [
+    {&quot;objective&quot;: &quot;OBJ-2026-00001&quot;, &quot;title&quot;: &quot;Ship analytics&quot;, &quot;owner&quot;: &quot;alice@example.com&quot;,
+     &quot;status&quot;: &quot;On Track&quot;, &quot;progress&quot;: 72.5, &quot;kr_count&quot;: 4}
+  ]
+}
+</code></pre>
+<ul>
+<li><code>period</code> (optional): filter by <code>Objective.period</code> exact match (e.g. <code>"2026-Q2"</code>).</li>
+<li>Excludes objectives with <code>status = "Closed"</code>.</li>
+<li>Sorted by <code>progress</code> DESC, then <code>title</code> ASC.</li>
+</ul>
+<h3 id="list_kpis"><code>list_kpis()</code></h3>
+<p>All KPI Definitions.</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{&quot;message&quot;: [{&quot;name&quot;: &quot;KPI-001&quot;, &quot;kpi_name&quot;: &quot;NPS&quot;, &quot;unit&quot;: &quot;score&quot;, &quot;frequency&quot;: &quot;Monthly&quot;}]}
+</code></pre>
+<h3 id="get_kpi_trendkpi_definition-periods12"><code>get_kpi_trend(kpi_definition, periods=12)</code></h3>
+<p>Last N entries for a KPI Definition, ordered ascending by date for charting.</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;labels&quot;: [&quot;2026-01-31&quot;, &quot;2026-02-28&quot;, &quot;2026-03-31&quot;],
+    &quot;values&quot;: [42.0, 48.0, 55.0],
+    &quot;unit&quot;: &quot;score&quot;,
+    &quot;kpi_name&quot;: &quot;NPS&quot;
+  }
+}
+</code></pre>
+<ul>
+<li>Unknown <code>kpi_definition</code> raises <code>frappe.DoesNotExistError</code>.</li>
+</ul>
+<h3 id="get_health_score"><code>get_health_score()</code></h3>
+<p>Composite 0-100 company health score.</p>
+<p><strong>Response:</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;score&quot;: 67.2,
+    &quot;okr_pct&quot;: 70.0,
+    &quot;ontime_pct&quot;: 80.0,
+    &quot;velocity_health&quot;: 50.0,
+    &quot;breakdown&quot;: {&quot;okr_weight&quot;: 0.5, &quot;ontime_weight&quot;: 0.3, &quot;velocity_weight&quot;: 0.2}
+  }
+}
+</code></pre>
+<ul>
+<li><code>okr_pct</code>: mean of per-objective average <code>Key Result.progress_percent</code> across non-Closed objectives.</li>
+<li><code>ontime_pct</code>: % of <code>VT Task</code> DONE in last 90 days with <code>completion_date &lt;= deadline</code> (null deadline counts as on-time).</li>
+<li><code>velocity_health</code>: mean <code>trend_pct</code> across active projects (≥2 closed sprints each), mapped to 0-100 via <code>50 + clamp(mean, -50, 50)</code>. Defaults to 50 if no qualifying projects.</li>
+<li><code>score = okr_pct × 0.5 + ontime_pct × 0.3 + velocity_health × 0.2</code>.</li>
+</ul>
+<hr />
+<h2 id="mobile-pwa-endpoints">Mobile PWA Endpoints</h2>
+<p>All endpoints consumed by the React PWA at <code>/m/</code>. Use Frappe session
+cookie auth (same as Desk). Whitelisted via <code>@frappe.whitelist()</code>.</p>
+<h3 id="boot">Boot</h3>
+<p><code>vernon_tasks.task.api.boot.boot</code> — allow_guest</p>
+<p>Returns current session metadata for SPA bootstrap. Always-available
+endpoint, no auth required.</p>
+<pre><code class="language-json">{ &quot;user&quot;: &quot;user@example.com&quot;, &quot;csrf_token&quot;: &quot;abc…&quot;, &quot;roles&quot;: [&quot;VT Member&quot;] }
+</code></pre>
+<p>For guests: <code>{"user": null, "csrf_token": null, "roles": []}</code>.</p>
+<h3 id="my-work">My Work</h3>
+<p><code>vernon_tasks.task.api.my_work.list</code> — returns tasks for
+<code>frappe.session.user</code> grouped into <code>overdue</code> / <code>today</code> / <code>upcoming</code>
+(7-day window). Filters out <code>Cancelled</code>. Limit 500.</p>
+<p><code>vernon_tasks.task.api.my_work.detail(task_id)</code> — single task incl.
+description + last 10 Comments as <code>activity</code>. Owner-only unless
+<code>has_permission("VT Task", "read")</code>.</p>
+<p><code>vernon_tasks.task.api.my_work.search(query, priority, project, due_range)</code>
+— flat search. <code>query</code> LIKE on title. <code>priority</code> comma-separated list.
+<code>due_range</code> ∈ <code>{all, today, week, overdue}</code>. Returns
+<code>{results, total}</code>. Limit 200.</p>
+<h3 id="my-work-mutations">My Work Mutations</h3>
+<p><code>vernon_tasks.task.api.my_work_mutations.complete(task_id)</code> —
+idempotent. Sets <code>kanban_status="Done"</code>, <code>completion_date=today()</code>.
+Returns <code>{ok, idempotent?}</code>.</p>
+<p><code>...my_work_mutations.log_progress(task_id, hours, note="")</code> — adds
+hours to <code>actual_hours</code>, appends Comment. Validates <code>hours ∈ (0, 24]</code>.</p>
+<p><code>...my_work_mutations.snooze(task_id, days)</code> — shifts <code>deadline</code> by
+<code>days ∈ {1, 3, 7}</code>. Logs Comment.</p>
+<p>Permission gate: <code>assigned_to == frappe.session.user</code> OR
+<code>has_permission("VT Task", "write")</code>.</p>
+<h3 id="dashboard">Dashboard</h3>
+<p><code>vernon_tasks.task.page.my_dashboard.my_dashboard.get_sprint_kanban</code> —
+active sprint tasks for current user, grouped by <code>kanban_status</code>
+(Backlog / Doing / Review / Done). Returns
+<code>{sprint: {name, title, start_date, end_date, progress_pct}, columns}</code>
+or <code>{sprint: null, columns: {…empty}}</code> if no active sprint.</p>
+<p><code>...get_employee_stats</code>, <code>...get_daily_completions</code>, <code>...get_hours_summary</code>
+— see Desk page section above (also consumed by PWA).</p>
+<h3 id="notifications">Notifications</h3>
+<p><code>vernon_tasks.task.api.notifications.list(limit=50, offset=0, only_unread=0)</code>
+— Frappe <code>Notification Log</code> filtered by <code>for_user == session.user</code>,
+ordered DESC.</p>
+<p><code>...notifications.mark_read(name)</code> — owner-only.</p>
+<p><code>...notifications.mark_all_read()</code> — bulk update unread → read for
+current user. Invalidates count cache.</p>
+<p><code>...notifications.count_unread()</code> — integer count. Cached in
+<code>frappe.cache</code> for 30s per user. Returns <code>{count}</code>.</p>
+<h3 id="telemetry">Telemetry</h3>
+<p><code>vernon_tasks.task.api.telemetry.log_event(event, props=None)</code> —
+whitelisted event ingest. Rate-limited 60/min/user via cache counter.
+Allowlist enforced; unknown event → <code>ValidationError</code>.</p>
+<p>Allowed events:
+<code>pwa_boot</code>, <code>login_success</code>, <code>login_failure</code>, <code>page_view</code>, <code>task_view</code>,
+<code>offline_seen</code>, <code>error_boundary</code>, <code>sw_register_failed</code>,
+<code>task_complete</code>, <code>task_complete_undone</code>, <code>task_log</code>, <code>task_snooze</code>,
+<code>install_prompt_shown</code>, <code>install_accepted</code>, <code>install_dismissed</code>,
+<code>install_snoozed</code>, <code>search_query</code>, <code>filter_applied</code>, <code>notif_view</code>,
+<code>notif_tap</code>, <code>notif_mark_all_read</code>, <code>dashboard_view</code>, <code>analytics_view</code>,
+<code>analytics_period_change</code>, <code>analytics_project_change</code>,
+<code>leader_review_view</code>, <code>leader_approve</code>, <code>leader_reject</code>,
+<code>leader_sprint_view</code>, <code>leader_exec_view</code>, <code>leader_project_change</code>.</p>
+<p>Daily purge at 90-day retention via <code>scheduler_events.daily</code>.</p>
+<h3 id="leader-pwa-additions-to-existing-leader_review-module">Leader (PWA additions to existing <code>leader_review</code> module)</h3>
+<p><code>...leader_review.get_my_led_projects()</code> — list of project names where
+<code>session.user</code> is <code>project_leader</code> OR <code>Project Team Member</code> with
+<code>role="Leader"</code>.</p>
+<p><code>...leader_review.get_latest_sprint(project)</code> — most recent sprint by
+<code>start_date</code> DESC. Requires leader of project (403 otherwise).</p>
+<p>Existing <code>get_review_queue</code>, <code>approve_task</code>, <code>reject_task</code> already
+documented in Leader Review section above.</p>
+<h3 id="spa-route">SPA route</h3>
+<p><code>/m/&lt;path:rest&gt;</code> → served by <code>vernon_tasks/www/m.py</code> which inlines
+<code>vernon_tasks/www/m/index.html</code> (built by Vite). All other paths
+client-routed by react-router.</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/API_REFERENCE.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

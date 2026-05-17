@@ -1,0 +1,1059 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Login & Task UI Redesign Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Login & Task UI Redesign Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-13-login-task-ui-redesign.md</span>
+  </div>
+</header>
+
+<h1 id="login-task-ui-redesign-implementation-plan">Login &amp; Task UI Redesign Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Redesign the PWA login page and MyWork task list with a warm purple aesthetic — dark immersive glassmorphism login, purple gradient header with card list for tasks.</p>
+<p><strong>Architecture:</strong> Pure visual redesign — no logic, routing, or API changes. Three files touched: <code>tokens.css</code> (new purple variables), <code>login.tsx</code> (full markup rewrite, same <code>onSubmit</code> logic), <code>MyWork/List.tsx</code> (new header + card style, same query/mutation logic). All existing tests must remain green.</p>
+<p><strong>Tech Stack:</strong> React 18, TypeScript, inline styles (project convention), Vitest + Testing Library</p>
+<hr />
+<h2 id="file-map">File Map</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pwa/src/theme/tokens.css</code></td>
+<td>Add 4 purple CSS vars, update <code>--vt-primary</code></td>
+</tr>
+<tr>
+<td><code>pwa/src/auth/login.tsx</code></td>
+<td>Full JSX rewrite (keep <code>onSubmit</code>, state hooks identical)</td>
+</tr>
+<tr>
+<td><code>pwa/src/pages/MyWork/List.tsx</code></td>
+<td>Replace <code>&lt;header&gt;</code>, add search strip, update <code>TaskCardView</code> + <code>Section</code> styles</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="task-1-update-design-tokens">Task 1: Update Design Tokens</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/theme/tokens.css</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Write a CSS snapshot test</strong></li>
+</ul>
+<p>Create <code>pwa/src/theme/tokens.test.ts</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect } from &quot;vitest&quot;;
+import { readFileSync } from &quot;fs&quot;;
+import { resolve } from &quot;path&quot;;
+
+describe(&quot;tokens.css&quot;, () =&gt; {
+  const css = readFileSync(resolve(__dirname, &quot;tokens.css&quot;), &quot;utf-8&quot;);
+
+  it(&quot;defines --vt-primary as #9561ab&quot;, () =&gt; {
+    expect(css).toContain(&quot;--vt-primary: #9561ab&quot;);
+  });
+
+  it(&quot;defines --vt-primary-dark&quot;, () =&gt; {
+    expect(css).toContain(&quot;--vt-primary-dark: #2d1540&quot;);
+  });
+
+  it(&quot;defines --vt-primary-mid&quot;, () =&gt; {
+    expect(css).toContain(&quot;--vt-primary-mid: #4a2870&quot;);
+  });
+
+  it(&quot;defines --vt-primary-light&quot;, () =&gt; {
+    expect(css).toContain(&quot;--vt-primary-light: #f5f0f8&quot;);
+  });
+
+  it(&quot;defines dark mode primary as #c084fc&quot;, () =&gt; {
+    expect(css).toContain(&quot;--vt-primary: #c084fc&quot;);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run test to confirm it fails</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/theme/tokens.test.ts
+</code></pre>
+<p>Expected: FAIL — <code>--vt-primary</code> is <code>#1e6bff</code>, not <code>#9561ab</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Update tokens.css</strong></li>
+</ul>
+<p>In <code>pwa/src/theme/tokens.css</code>, replace the <code>:root</code> block and dark mode block:</p>
+<pre><code class="language-css">:root {
+  --vt-font: system-ui, -apple-system, &quot;Segoe UI&quot;, Roboto, sans-serif;
+  --vt-radius: 12px;
+  --vt-radius-sm: 8px;
+  --vt-space-1: 4px;
+  --vt-space-2: 8px;
+  --vt-space-3: 12px;
+  --vt-space-4: 16px;
+  --vt-space-5: 24px;
+  --vt-space-6: 32px;
+  --vt-bg: #ffffff;
+  --vt-surface: #f6f7f9;
+  --vt-text: #0b0b10;
+  --vt-text-muted: #5b6472;
+  --vt-border: #e3e6ec;
+  --vt-primary: #9561ab;
+  --vt-primary-dark: #2d1540;
+  --vt-primary-mid: #4a2870;
+  --vt-primary-light: #f5f0f8;
+  --vt-primary-contrast: #ffffff;
+  --vt-danger: #d4351c;
+  --vt-warn: #e89c1f;
+  --vt-success: #18a957;
+  --vt-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --bottom-nav-h: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vt-bg: #0b0b10;
+    --vt-surface: #15151c;
+    --vt-text: #f4f5f7;
+    --vt-text-muted: #9aa0aa;
+    --vt-border: #2a2b34;
+    --vt-primary: #c084fc;
+    --vt-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.35);
+  }
+}
+
+@keyframes vt-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: var(--vt-font);
+  font-size: 15px;
+  color: var(--vt-text);
+  background: var(--vt-bg);
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; cursor: pointer; }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run test to confirm it passes</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/theme/tokens.test.ts
+</code></pre>
+<p>Expected: PASS — all 5 assertions green.</p>
+<ul>
+<li>[ ] <strong>Step 5: Run full test suite to check for regressions</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run
+</code></pre>
+<p>Expected: All tests pass (token change is additive; <code>--vt-primary</code> usage in other components picks up purple automatically).</p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/theme/tokens.css pwa/src/theme/tokens.test.ts
+git commit -m &quot;feat(theme): update primary color to purple #9561ab, add purple scale tokens&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-redesign-login-page">Task 2: Redesign Login Page</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/auth/login.tsx</code>
+- Test: <code>pwa/src/auth/login.test.tsx</code> (new file)</p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing tests for login page</strong></li>
+</ul>
+<p>Create <code>pwa/src/auth/login.test.tsx</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect, vi, beforeEach } from &quot;vitest&quot;;
+import { render, screen, fireEvent, waitFor } from &quot;@testing-library/react&quot;;
+import { MemoryRouter } from &quot;react-router-dom&quot;;
+import { LoginPage } from &quot;./login&quot;;
+
+// Mock session module
+vi.mock(&quot;./session&quot;, () =&gt; ({
+  login: vi.fn(),
+}));
+
+import { login as mockLogin } from &quot;./session&quot;;
+
+function renderLogin() {
+  return render(
+    &lt;MemoryRouter initialEntries={[&quot;/m/login&quot;]}&gt;
+      &lt;LoginPage /&gt;
+    &lt;/MemoryRouter&gt;,
+  );
+}
+
+beforeEach(() =&gt; {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
+
+describe(&quot;LoginPage&quot;, () =&gt; {
+  it(&quot;renders username and password inputs&quot;, () =&gt; {
+    renderLogin();
+    expect(screen.getByRole(&quot;textbox&quot;, { name: /username/i })).toBeInTheDocument();
+    expect(document.querySelector('input[type=&quot;password&quot;]')).toBeInTheDocument();
+  });
+
+  it(&quot;renders submit button&quot;, () =&gt; {
+    renderLogin();
+    expect(screen.getByRole(&quot;button&quot;, { name: /masuk/i })).toBeInTheDocument();
+  });
+
+  it(&quot;pre-fills username from localStorage&quot;, () =&gt; {
+    localStorage.setItem(&quot;vt_last_user&quot;, &quot;erick@company.com&quot;);
+    renderLogin();
+    expect(screen.getByRole(&quot;textbox&quot;, { name: /username/i })).toHaveValue(&quot;erick@company.com&quot;);
+  });
+
+  it(&quot;shows error message on failed login&quot;, async () =&gt; {
+    vi.mocked(mockLogin).mockRejectedValueOnce(new Error(&quot;bad credentials&quot;));
+    renderLogin();
+    fireEvent.change(screen.getByRole(&quot;textbox&quot;, { name: /username/i }), {
+      target: { value: &quot;bad@user.com&quot; },
+    });
+    fireEvent.change(document.querySelector('input[type=&quot;password&quot;]')!, {
+      target: { value: &quot;wrongpwd&quot; },
+    });
+    fireEvent.click(screen.getByRole(&quot;button&quot;, { name: /masuk/i }));
+    await waitFor(() =&gt; expect(screen.getByRole(&quot;alert&quot;)).toBeInTheDocument());
+  });
+
+  it(&quot;disables button while busy&quot;, async () =&gt; {
+    vi.mocked(mockLogin).mockImplementation(
+      () =&gt; new Promise((resolve) =&gt; setTimeout(resolve, 500)),
+    );
+    renderLogin();
+    fireEvent.change(screen.getByRole(&quot;textbox&quot;, { name: /username/i }), {
+      target: { value: &quot;user&quot; },
+    });
+    fireEvent.change(document.querySelector('input[type=&quot;password&quot;]')!, {
+      target: { value: &quot;pass&quot; },
+    });
+    fireEvent.click(screen.getByRole(&quot;button&quot;, { name: /masuk/i }));
+    expect(screen.getByRole(&quot;button&quot;)).toBeDisabled();
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run test to confirm it fails</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/auth/login.test.tsx
+</code></pre>
+<p>Expected: FAIL — "renders username and password inputs" fails because current markup has no <code>role="alert"</code> on error and button text is <code>t("login.submit")</code> not "masuk" literally. Note failures — we will fix the component next.</p>
+<ul>
+<li>[ ] <strong>Step 3: Rewrite login.tsx</strong></li>
+</ul>
+<p>Replace the entire content of <code>pwa/src/auth/login.tsx</code> with:</p>
+<pre><code class="language-typescript">import { useState } from &quot;react&quot;;
+import { useNavigate, useSearchParams } from &quot;react-router-dom&quot;;
+import { login } from &quot;./session&quot;;
+
+const FOOTER_TEXT = &quot;Hanya untuk karyawan Vernon Corp&quot;;
+
+const styles = {
+  root: {
+    height: &quot;100svh&quot;,
+    display: &quot;flex&quot;,
+    flexDirection: &quot;column&quot; as const,
+    alignItems: &quot;center&quot;,
+    justifyContent: &quot;center&quot;,
+    background: &quot;linear-gradient(160deg, #2d1540 0%, #4a2870 40%, #9561ab 100%)&quot;,
+    position: &quot;relative&quot; as const,
+    overflow: &quot;hidden&quot;,
+  },
+  circle1: {
+    position: &quot;absolute&quot; as const,
+    top: -40,
+    right: -40,
+    width: 180,
+    height: 180,
+    borderRadius: &quot;50%&quot;,
+    background: &quot;rgba(149,97,171,0.25)&quot;,
+    pointerEvents: &quot;none&quot; as const,
+  },
+  circle2: {
+    position: &quot;absolute&quot; as const,
+    bottom: -50,
+    left: -20,
+    width: 140,
+    height: 140,
+    borderRadius: &quot;50%&quot;,
+    background: &quot;rgba(149,97,171,0.15)&quot;,
+    pointerEvents: &quot;none&quot; as const,
+  },
+  circle3: {
+    position: &quot;absolute&quot; as const,
+    top: &quot;30%&quot;,
+    left: -30,
+    width: 80,
+    height: 80,
+    borderRadius: &quot;50%&quot;,
+    background: &quot;rgba(255,255,255,0.05)&quot;,
+    pointerEvents: &quot;none&quot; as const,
+  },
+  logoWrap: {
+    display: &quot;flex&quot;,
+    flexDirection: &quot;column&quot; as const,
+    alignItems: &quot;center&quot;,
+    marginBottom: 28,
+    position: &quot;relative&quot; as const,
+    zIndex: 1,
+  },
+  logoBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    background: &quot;rgba(255,255,255,0.15)&quot;,
+    border: &quot;1px solid rgba(255,255,255,0.25)&quot;,
+    display: &quot;flex&quot;,
+    alignItems: &quot;center&quot;,
+    justifyContent: &quot;center&quot;,
+    fontSize: 26,
+    marginBottom: 12,
+  },
+  appName: {
+    color: &quot;white&quot;,
+    fontSize: 20,
+    fontWeight: 700,
+    letterSpacing: &quot;-0.3px&quot;,
+    margin: 0,
+  },
+  subtitle: {
+    color: &quot;rgba(255,255,255,0.55)&quot;,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  card: {
+    background: &quot;rgba(255,255,255,0.1)&quot;,
+    backdropFilter: &quot;blur(16px)&quot;,
+    WebkitBackdropFilter: &quot;blur(16px)&quot;,
+    border: &quot;1px solid rgba(255,255,255,0.2)&quot;,
+    borderRadius: 20,
+    padding: 28,
+    width: 320,
+    maxWidth: &quot;calc(100vw - 48px)&quot;,
+    boxShadow: &quot;0 8px 32px rgba(0,0,0,0.3)&quot;,
+    position: &quot;relative&quot; as const,
+    zIndex: 1,
+  },
+  fieldWrap: {
+    marginBottom: 16,
+  },
+  label: {
+    display: &quot;block&quot;,
+    color: &quot;rgba(255,255,255,0.7)&quot;,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: &quot;0.5px&quot;,
+    textTransform: &quot;uppercase&quot; as const,
+    marginBottom: 6,
+  },
+  input: {
+    display: &quot;block&quot;,
+    width: &quot;100%&quot;,
+    background: &quot;rgba(255,255,255,0.12)&quot;,
+    border: &quot;1px solid rgba(255,255,255,0.2)&quot;,
+    borderRadius: 10,
+    padding: &quot;11px 14px&quot;,
+    color: &quot;white&quot;,
+    fontSize: 14,
+    outline: &quot;none&quot;,
+    boxSizing: &quot;border-box&quot; as const,
+  },
+  errorBox: {
+    background: &quot;rgba(239,68,68,0.2)&quot;,
+    border: &quot;1px solid rgba(239,68,68,0.4)&quot;,
+    borderRadius: 8,
+    padding: &quot;10px 14px&quot;,
+    marginBottom: 16,
+    color: &quot;rgba(255,200,200,0.9)&quot;,
+    fontSize: 13,
+  },
+  button: {
+    width: &quot;100%&quot;,
+    background: &quot;#9561ab&quot;,
+    color: &quot;white&quot;,
+    border: &quot;none&quot;,
+    borderRadius: 12,
+    padding: 13,
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: &quot;pointer&quot;,
+    boxShadow: &quot;0 4px 16px rgba(149,97,171,0.5)&quot;,
+    letterSpacing: &quot;0.2px&quot;,
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+    cursor: &quot;not-allowed&quot; as const,
+  },
+  footer: {
+    color: &quot;rgba(255,255,255,0.35)&quot;,
+    fontSize: 12,
+    marginTop: 20,
+    position: &quot;relative&quot; as const,
+    zIndex: 1,
+  },
+};
+
+export function LoginPage() {
+  const [usr, setUsr] = useState(() =&gt; localStorage.getItem(&quot;vt_last_user&quot;) ?? &quot;&quot;);
+  const [pwd, setPwd] = useState(&quot;&quot;);
+  const [err, setErr] = useState&lt;string | null&gt;(null);
+  const [busy, setBusy] = useState(false);
+  const nav = useNavigate();
+  const [params] = useSearchParams();
+  const next = params.get(&quot;next&quot;) ?? &quot;/m/work&quot;;
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      const s = await login(usr, pwd);
+      if (!s.user) throw new Error(&quot;guest&quot;);
+      localStorage.setItem(&quot;vt_last_user&quot;, usr);
+      nav(next, { replace: true });
+    } catch {
+      setErr(&quot;Username atau password salah. Coba lagi.&quot;);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    &lt;div style={styles.root}&gt;
+      &lt;div style={styles.circle1} /&gt;
+      &lt;div style={styles.circle2} /&gt;
+      &lt;div style={styles.circle3} /&gt;
+
+      &lt;div style={styles.logoWrap}&gt;
+        &lt;div style={styles.logoBox}&gt;✓&lt;/div&gt;
+        &lt;h1 style={styles.appName}&gt;Vernon Tasks&lt;/h1&gt;
+        &lt;p style={styles.subtitle}&gt;Selamat datang kembali&lt;/p&gt;
+      &lt;/div&gt;
+
+      &lt;div style={styles.card}&gt;
+        &lt;form onSubmit={onSubmit} noValidate&gt;
+          &lt;div style={styles.fieldWrap}&gt;
+            &lt;label htmlFor=&quot;vt-usr&quot; style={styles.label}&gt;Username / Email&lt;/label&gt;
+            &lt;input
+              id=&quot;vt-usr&quot;
+              style={styles.input}
+              value={usr}
+              onChange={(e) =&gt; setUsr(e.target.value)}
+              autoComplete=&quot;username&quot;
+              required
+              autoCapitalize=&quot;none&quot;
+            /&gt;
+          &lt;/div&gt;
+          &lt;div style={{ ...styles.fieldWrap, marginBottom: 24 }}&gt;
+            &lt;label htmlFor=&quot;vt-pwd&quot; style={styles.label}&gt;Password&lt;/label&gt;
+            &lt;input
+              id=&quot;vt-pwd&quot;
+              type=&quot;password&quot;
+              style={styles.input}
+              value={pwd}
+              onChange={(e) =&gt; setPwd(e.target.value)}
+              autoComplete=&quot;current-password&quot;
+              required
+            /&gt;
+          &lt;/div&gt;
+
+          {err &amp;&amp; (
+            &lt;div role=&quot;alert&quot; style={styles.errorBox}&gt;{err}&lt;/div&gt;
+          )}
+
+          &lt;button
+            type=&quot;submit&quot;
+            disabled={busy}
+            style={{ ...styles.button, ...(busy ? styles.buttonDisabled : {}) }}
+          &gt;
+            {busy ? &quot;Memproses…&quot; : &quot;Masuk&quot;}
+          &lt;/button&gt;
+        &lt;/form&gt;
+      &lt;/div&gt;
+
+      &lt;p style={styles.footer}&gt;{FOOTER_TEXT}&lt;/p&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run tests to confirm they pass</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/auth/login.test.tsx
+</code></pre>
+<p>Expected: All 5 tests PASS.</p>
+<ul>
+<li>[ ] <strong>Step 5: Run full test suite</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run
+</code></pre>
+<p>Expected: All tests pass. No regressions.</p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/auth/login.tsx pwa/src/auth/login.test.tsx
+git commit -m &quot;feat(login): redesign with dark immersive glassmorphism and purple theme&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-redesign-mywork-header-search-bar">Task 3: Redesign MyWork Header + Search Bar</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/MyWork/List.tsx</code>
+- Test: <code>pwa/src/pages/MyWork/List.test.tsx</code> (extend existing)</p>
+<ul>
+<li>[ ] <strong>Step 1: Add failing tests for new header</strong></li>
+</ul>
+<p>Append these test cases to <code>pwa/src/pages/MyWork/List.test.tsx</code> (inside the existing <code>describe</code> block, after the existing tests):</p>
+<pre><code class="language-typescript">  it(&quot;renders greeting text in header&quot;, async () =&gt; {
+    vi.stubGlobal(
+      &quot;fetch&quot;,
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { overdue: [], today: [], upcoming: [] } }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(&lt;MyWorkList /&gt;);
+    // greeting() returns locale-based greeting string
+    await waitFor(() =&gt; {
+      const header = document.querySelector(&quot;header&quot;);
+      expect(header).toBeInTheDocument();
+    });
+  });
+
+  it(&quot;shows overdue count chip when overdue tasks exist&quot;, async () =&gt; {
+    vi.stubGlobal(
+      &quot;fetch&quot;,
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: {
+              overdue: [{ id: &quot;T1&quot;, title: &quot;Overdue task&quot; }],
+              today: [],
+              upcoming: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(&lt;MyWorkList /&gt;);
+    await waitFor(() =&gt; expect(screen.getByText(/Terlambat 1/)).toBeInTheDocument());
+  });
+
+  it(&quot;shows today count chip when today tasks exist&quot;, async () =&gt; {
+    vi.stubGlobal(
+      &quot;fetch&quot;,
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: {
+              overdue: [],
+              today: [
+                { id: &quot;T2&quot;, title: &quot;Today task 1&quot; },
+                { id: &quot;T3&quot;, title: &quot;Today task 2&quot; },
+              ],
+              upcoming: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(&lt;MyWorkList /&gt;);
+    await waitFor(() =&gt; expect(screen.getByText(/Hari ini 2/)).toBeInTheDocument());
+  });
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run new tests to confirm they fail</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/pages/MyWork/List.test.tsx
+</code></pre>
+<p>Expected: The two new chip tests FAIL ("Terlambat 1" and "Hari ini 2" not found in DOM).</p>
+<ul>
+<li>[ ] <strong>Step 3: Replace the header + search area in List.tsx</strong></li>
+</ul>
+<p>In <code>pwa/src/pages/MyWork/List.tsx</code>, find the <code>MyWorkList</code> function's return statement. Replace the existing <code>&lt;PullToRefresh&gt;</code> inner content's <code>&lt;header&gt;</code>, <code>&lt;SearchBar&gt;</code>, and <code>&lt;ActiveFilterChips&gt;</code> block with the new sticky header + search strip. The full updated return JSX (inside <code>&lt;PullToRefresh onRefresh={...}&gt;</code>):</p>
+<pre><code class="language-typescript">  return (
+    &lt;PullToRefresh onRefresh={() =&gt; q.refetch().then(() =&gt; {})}&gt;
+      {/* ── Sticky gradient header ── */}
+      &lt;header
+        style={{
+          background: &quot;linear-gradient(135deg, #2d1540, #9561ab)&quot;,
+          padding: &quot;var(--vt-space-4) var(--vt-space-4) var(--vt-space-3)&quot;,
+          position: &quot;sticky&quot;,
+          top: 0,
+          zIndex: 10,
+        }}
+      &gt;
+        &lt;div style={{ color: &quot;rgba(255,255,255,0.65)&quot;, fontSize: 12, marginBottom: 2 }}&gt;
+          {fmtDate(new Date())}
+        &lt;/div&gt;
+        &lt;div style={{ color: &quot;white&quot;, fontSize: 18, fontWeight: 700 }}&gt;
+          {greeting()}
+        &lt;/div&gt;
+
+        {/* Filter chips — display only, scroll to section on click */}
+        &lt;div
+          style={{
+            display: &quot;flex&quot;,
+            gap: 8,
+            marginTop: 12,
+            overflowX: &quot;auto&quot;,
+            scrollbarWidth: &quot;none&quot;,
+            msOverflowStyle: &quot;none&quot;,
+          }}
+        &gt;
+          &lt;button
+            onClick={() =&gt; { setQuery(&quot;&quot;); setFilters({ due_range: &quot;all&quot; }); }}
+            style={{
+              background: &quot;rgba(255,255,255,0.2)&quot;,
+              border: &quot;none&quot;,
+              borderRadius: 20,
+              padding: &quot;4px 12px&quot;,
+              color: &quot;white&quot;,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: &quot;pointer&quot;,
+              whiteSpace: &quot;nowrap&quot;,
+            }}
+          &gt;
+            Semua
+          &lt;/button&gt;
+          {q.data &amp;&amp; q.data.overdue.length &gt; 0 &amp;&amp; (
+            &lt;span
+              style={{
+                background: &quot;rgba(212,53,28,0.25)&quot;,
+                border: &quot;1px solid rgba(212,53,28,0.4)&quot;,
+                borderRadius: 20,
+                padding: &quot;4px 12px&quot;,
+                color: &quot;rgba(255,200,200,0.9)&quot;,
+                fontSize: 12,
+                whiteSpace: &quot;nowrap&quot;,
+              }}
+            &gt;
+              Terlambat {q.data.overdue.length}
+            &lt;/span&gt;
+          )}
+          {q.data &amp;&amp; q.data.today.length &gt; 0 &amp;&amp; (
+            &lt;span
+              style={{
+                background: &quot;rgba(255,255,255,0.1)&quot;,
+                borderRadius: 20,
+                padding: &quot;4px 12px&quot;,
+                color: &quot;rgba(255,255,255,0.8)&quot;,
+                fontSize: 12,
+                whiteSpace: &quot;nowrap&quot;,
+              }}
+            &gt;
+              Hari ini {q.data.today.length}
+            &lt;/span&gt;
+          )}
+          &lt;StaleBadge resource=&quot;my-work&quot; /&gt;
+        &lt;/div&gt;
+      &lt;/header&gt;
+
+      {/* ── Sticky search strip ── */}
+      &lt;div
+        style={{
+          background: &quot;white&quot;,
+          padding: &quot;var(--vt-space-2) var(--vt-space-4)&quot;,
+          borderBottom: &quot;1px solid var(--vt-primary-light)&quot;,
+          position: &quot;sticky&quot;,
+          top: 96,
+          zIndex: 9,
+        }}
+      &gt;
+        &lt;SearchBar
+          value={query}
+          onChange={(v) =&gt; {
+            setQuery(v);
+            if (v.length &gt; 0) logEvent(&quot;search_query&quot;, { query_length: v.length });
+          }}
+          onOpenFilter={() =&gt; setFilterOpen(true)}
+          filterActive={Boolean(
+            (filters.priority &amp;&amp; filters.priority.length &gt; 0) ||
+              filters.project ||
+              (filters.due_range &amp;&amp; filters.due_range !== &quot;all&quot;),
+          )}
+        /&gt;
+        &lt;ActiveFilterChips filters={combinedFilters} onRemove={removeFilter} /&gt;
+      &lt;/div&gt;
+
+      {/* ── Task content ── */}
+      &lt;div style={{ padding: &quot;var(--vt-space-4)&quot;, background: &quot;var(--vt-primary-light)&quot;, minHeight: &quot;100%&quot; }}&gt;
+        {!searching &amp;&amp; q.isLoading &amp;&amp; (
+          &lt;&gt;
+            &lt;Skeleton height={64} /&gt;
+            &lt;div style={{ height: 12 }} /&gt;
+            &lt;Skeleton height={64} /&gt;
+          &lt;/&gt;
+        )}
+
+        {!searching &amp;&amp; q.isError &amp;&amp; !q.data &amp;&amp; (
+          &lt;EmptyState
+            title={t(&quot;empty.no_offline&quot;)}
+            cta={{ label: t(&quot;common.retry&quot;), onClick: () =&gt; q.refetch() }}
+          /&gt;
+        )}
+
+        {!searching &amp;&amp;
+          q.data &amp;&amp;
+          (total === 0 ? (
+            &lt;EmptyState title={t(&quot;empty.no_tasks&quot;)} /&gt;
+          ) : (
+            &lt;&gt;
+              &lt;Section
+                title={t(&quot;tasks.section.overdue&quot;)}
+                items={q.data.overdue}
+                accent=&quot;var(--vt-danger)&quot;
+                render={(task) =&gt; (
+                  &lt;TaskCardView
+                    task={task}
+                    accent=&quot;var(--vt-danger)&quot;
+                    onComplete={() =&gt; handleComplete(task)}
+                    onLog={() =&gt; setLogTask(task)}
+                    onSnooze={() =&gt; handleSnooze(task, 1)}
+                    disabled={offline}
+                  /&gt;
+                )}
+              /&gt;
+              &lt;Section
+                title={t(&quot;tasks.section.today&quot;)}
+                items={q.data.today}
+                accent=&quot;var(--vt-primary)&quot;
+                render={(task) =&gt; (
+                  &lt;TaskCardView
+                    task={task}
+                    accent=&quot;var(--vt-primary)&quot;
+                    onComplete={() =&gt; handleComplete(task)}
+                    onLog={() =&gt; setLogTask(task)}
+                    onSnooze={() =&gt; handleSnooze(task, 1)}
+                    disabled={offline}
+                  /&gt;
+                )}
+              /&gt;
+              &lt;Section
+                title={t(&quot;tasks.section.upcoming&quot;)}
+                items={q.data.upcoming}
+                accent=&quot;var(--vt-border)&quot;
+                render={(task) =&gt; (
+                  &lt;TaskCardView
+                    task={task}
+                    accent=&quot;var(--vt-border)&quot;
+                    onComplete={() =&gt; handleComplete(task)}
+                    onLog={() =&gt; setLogTask(task)}
+                    onSnooze={() =&gt; handleSnooze(task, 1)}
+                    disabled={offline}
+                  /&gt;
+                )}
+              /&gt;
+            &lt;/&gt;
+          ))}
+
+        {searching &amp;&amp; searchQ.isLoading &amp;&amp; (
+          &lt;&gt;
+            &lt;Skeleton height={64} /&gt;
+            &lt;div style={{ height: 12 }} /&gt;
+            &lt;Skeleton height={64} /&gt;
+          &lt;/&gt;
+        )}
+
+        {searching &amp;&amp; searchQ.isError &amp;&amp; (
+          &lt;EmptyState
+            title={t(&quot;search.failed&quot;)}
+            cta={{ label: t(&quot;common.retry&quot;), onClick: () =&gt; searchQ.refetch() }}
+          /&gt;
+        )}
+
+        {searching &amp;&amp; searchQ.data &amp;&amp; (
+          searchQ.data.results.length === 0 ? (
+            &lt;EmptyState title={t(&quot;search.no_results&quot;)} /&gt;
+          ) : (
+            &lt;div&gt;
+              {searchQ.data.results.map((task) =&gt; (
+                &lt;div key={task.id} style={{ marginBottom: &quot;var(--vt-space-3)&quot; }}&gt;
+                  &lt;TaskCardView
+                    task={task}
+                    accent=&quot;var(--vt-border)&quot;
+                    onComplete={() =&gt; handleComplete(task)}
+                    onLog={() =&gt; setLogTask(task)}
+                    onSnooze={() =&gt; handleSnooze(task, 1)}
+                    disabled={offline}
+                  /&gt;
+                &lt;/div&gt;
+              ))}
+            &lt;/div&gt;
+          )
+        )}
+      &lt;/div&gt;
+
+      &lt;FilterSheet
+        open={filterOpen}
+        initial={filters}
+        onApply={(f) =&gt; {
+          setFilters(f);
+          setFilterOpen(false);
+          logEvent(&quot;filter_applied&quot;, {
+            priority_count: f.priority?.length ?? 0,
+            has_project: !!f.project,
+            due_range: f.due_range ?? &quot;all&quot;,
+          });
+        }}
+        onCancel={() =&gt; setFilterOpen(false)}
+      /&gt;
+
+      &lt;LogProgressModal
+        open={logTask !== null}
+        onSubmit={(h, n) =&gt; logTask &amp;&amp; handleLog(logTask, h, n)}
+        onCancel={() =&gt; setLogTask(null)}
+      /&gt;
+
+      &lt;InstallPrompt visible={ready} /&gt;
+    &lt;/PullToRefresh&gt;
+  );
+</code></pre>
+<p>Also update the <code>Section</code> component signature to accept an <code>accent</code> prop for the label color:</p>
+<pre><code class="language-typescript">function Section({
+  title,
+  items,
+  accent,
+  render,
+}: {
+  title: string;
+  items: TaskCardT[];
+  accent?: string;
+  render: (task: TaskCardT) =&gt; React.ReactNode;
+}) {
+  if (items.length === 0) return null;
+  return (
+    &lt;section style={{ marginBottom: &quot;var(--vt-space-5)&quot; }}&gt;
+      &lt;h3
+        style={{
+          fontSize: 11,
+          color: accent ?? &quot;var(--vt-text-muted)&quot;,
+          margin: &quot;0 0 var(--vt-space-2)&quot;,
+          textTransform: &quot;uppercase&quot;,
+          letterSpacing: 0.8,
+          fontWeight: 700,
+        }}
+      &gt;
+        {title}
+      &lt;/h3&gt;
+      {items.map((task) =&gt; (
+        &lt;div key={task.id} style={{ marginBottom: &quot;var(--vt-space-3)&quot; }}&gt;
+          {render(task)}
+        &lt;/div&gt;
+      ))}
+    &lt;/section&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run tests to confirm they pass</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/pages/MyWork/List.test.tsx
+</code></pre>
+<p>Expected: All tests pass including the 3 new chip tests.</p>
+<ul>
+<li>[ ] <strong>Step 5: Run full test suite</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run
+</code></pre>
+<p>Expected: All tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/MyWork/List.tsx pwa/src/pages/MyWork/List.test.tsx
+git commit -m &quot;feat(task-list): add purple gradient header with filter chips and sticky search bar&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-redesign-task-cards">Task 4: Redesign Task Cards</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/MyWork/List.tsx</code> (TaskCardView style only)</p>
+<ul>
+<li>[ ] <strong>Step 1: Write a test for card border color</strong></li>
+</ul>
+<p>Append to the <code>describe</code> block in <code>pwa/src/pages/MyWork/List.test.tsx</code>:</p>
+<pre><code class="language-typescript">  it(&quot;overdue task card has red left border&quot;, async () =&gt; {
+    vi.stubGlobal(
+      &quot;fetch&quot;,
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            message: {
+              overdue: [{ id: &quot;T-OVR&quot;, title: &quot;Past due task&quot; }],
+              today: [],
+              upcoming: [],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(&lt;MyWorkList /&gt;);
+    await waitFor(() =&gt; screen.getByText(&quot;Past due task&quot;));
+    const card = screen.getByText(&quot;Past due task&quot;).closest(&quot;[data-testid='task-card']&quot;);
+    expect(card).toHaveStyle(&quot;border-left: 3px solid var(--vt-danger)&quot;);
+  });
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run to confirm it fails</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/pages/MyWork/List.test.tsx
+</code></pre>
+<p>Expected: FAIL — "past due task" card doesn't have <code>data-testid='task-card'</code> yet.</p>
+<ul>
+<li>[ ] <strong>Step 3: Update TaskCardView style in List.tsx</strong></li>
+</ul>
+<p>Replace the <code>TaskCardView</code> component's inner <code>&lt;div&gt;</code> (the card container inside <code>&lt;SwipeRow&gt;</code>) with the new card style. Add <code>data-testid="task-card"</code>:</p>
+<pre><code class="language-typescript">function TaskCardView({
+  task,
+  accent,
+  onComplete,
+  onLog,
+  onSnooze,
+  disabled,
+}: {
+  task: TaskCardT;
+  accent?: string;
+  onComplete: () =&gt; void;
+  onLog: () =&gt; void;
+  onSnooze: () =&gt; void;
+  disabled: boolean;
+}) {
+  return (
+    &lt;SwipeRow
+      actions={
+        &lt;TaskActions
+          onComplete={onComplete}
+          onLog={onLog}
+          onSnooze={onSnooze}
+          disabled={disabled}
+        /&gt;
+      }
+    &gt;
+      &lt;div
+        data-testid=&quot;task-card&quot;
+        style={{
+          display: &quot;flex&quot;,
+          alignItems: &quot;center&quot;,
+          gap: 12,
+          padding: &quot;var(--vt-space-3) var(--vt-space-4)&quot;,
+          background: &quot;white&quot;,
+          borderRadius: &quot;var(--vt-radius)&quot;,
+          borderLeft: accent ? `3px solid ${accent}` : undefined,
+          boxShadow: &quot;0 1px 6px rgba(149,97,171,0.08)&quot;,
+        }}
+      &gt;
+        &lt;input
+          type=&quot;checkbox&quot;
+          checked={false}
+          onChange={onComplete}
+          disabled={disabled}
+          aria-label=&quot;complete&quot;
+          style={{ width: 22, height: 22, accentColor: &quot;var(--vt-primary)&quot; }}
+        /&gt;
+        &lt;Link
+          to={`/m/work/${encodeURIComponent(task.id)}`}
+          style={{ flex: 1, color: &quot;var(--vt-text)&quot;, textDecoration: &quot;none&quot; }}
+        &gt;
+          &lt;div style={{ fontWeight: 600, fontSize: 14 }}&gt;{task.title}&lt;/div&gt;
+          &lt;div style={{ fontSize: 12, color: &quot;var(--vt-text-muted)&quot;, marginTop: 3 }}&gt;
+            {[task.project, task.priority].filter(Boolean).join(&quot; · &quot;)}
+            {task.points ? ` · +${task.points} pts` : &quot;&quot;}
+          &lt;/div&gt;
+        &lt;/Link&gt;
+      &lt;/div&gt;
+    &lt;/SwipeRow&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run tests</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/pages/MyWork/List.test.tsx
+</code></pre>
+<p>Expected: All tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Run full test suite</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run
+</code></pre>
+<p>Expected: All tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/MyWork/List.tsx pwa/src/pages/MyWork/List.test.tsx
+git commit -m &quot;feat(task-list): style task cards with colored left border and purple shadow&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-build-manual-qa">Task 5: Build &amp; Manual QA</h2>
+<ul>
+<li>[ ] <strong>Step 1: Build the PWA</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run build
+</code></pre>
+<p>Expected: Build succeeds, no TypeScript errors.</p>
+<ul>
+<li>[ ] <strong>Step 2: Preview locally</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run preview
+</code></pre>
+<p>Open <code>http://localhost:4173/m/login</code> — verify:
+- Dark purple gradient background fills screen
+- Decorative circles visible
+- Glassmorphism form card renders
+- Inputs are semi-transparent white text
+- Submit button is solid <code>#9561ab</code> with glow</p>
+<ul>
+<li>[ ] <strong>Step 3: Check task list</strong></li>
+</ul>
+<p>Navigate to <code>/m/work</code> (requires login or stub). Verify:
+- Header is gradient purple, sticky on scroll
+- Greeting and date visible in white
+- Filter chips appear after data loads
+- Task cards are white with colored left border
+- Background is <code>#f5f0f8</code> (light purple tint)</p>
+<ul>
+<li>[ ] <strong>Step 4: Check mobile viewport</strong></li>
+</ul>
+<p>Resize browser to 375px wide. Verify:
+- Login form doesn't overflow (max-width clamps)
+- Header chips scroll horizontally without breaking layout</p>
+<ul>
+<li>[ ] <strong>Step 5: Final commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add -p
+git commit -m &quot;chore: final QA pass — login and task list redesign complete&quot;
+</code></pre>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-13-login-task-ui-redesign.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

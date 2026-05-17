@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Mobile ↔ Desktop Responsive Navigation Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Mobile ↔ Desktop Responsive Navigation Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-14-mobile-desktop-responsive-nav.md</span>
+  </div>
+</header>
+
+<h1 id="mobile-desktop-responsive-navigation-implementation-plan">Mobile ↔ Desktop Responsive Navigation Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Deliver a two-tier top navigation (Nav1 + Nav2) for desktop (≥768px) while keeping the existing BottomNav unchanged on mobile.</p>
+<p><strong>Architecture:</strong> A <code>useMediaQuery(768)</code> hook drives conditional rendering in <code>AppShell</code> — desktop gets <code>TopNav</code>, mobile gets <code>BottomNav</code>. Tab state in <code>Analytics</code> and <code>Leader</code> migrates from <code>useState</code> to <code>useSearchParams</code> so Nav2 can control active tab. Page layouts gain CSS-media-query-based grid columns for desktop.</p>
+<p><strong>Tech Stack:</strong> React 18, TypeScript, react-router-dom v6 (<code>useSearchParams</code>), Vitest + Testing Library, inline styles (project convention)</p>
+<hr />
+<h2 id="file-map">File Map</h2>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Path</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Create</td>
+<td><code>pwa/src/hooks/useMediaQuery.ts</code></td>
+<td>Returns <code>boolean</code> for <code>min-width</code> match</td>
+</tr>
+<tr>
+<td>Create</td>
+<td><code>pwa/src/components/TopNav.tsx</code></td>
+<td>Desktop Nav1 + Nav2 two-tier bar</td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>pwa/src/AppShell.tsx</code></td>
+<td>Swap BottomNav↔TopNav based on breakpoint</td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>pwa/src/components/SafeArea.tsx</code></td>
+<td>Desktop: padding-top from nav height vars</td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>pwa/src/theme/tokens.css</code></td>
+<td>Add <code>--top-nav1-h</code>, <code>--top-nav2-h</code>; desktop media overrides</td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>pwa/src/pages/Analytics.tsx</code></td>
+<td>Tab state → <code>useSearchParams</code></td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>pwa/src/pages/Leader.tsx</code></td>
+<td>Tab state → <code>useSearchParams</code></td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>pwa/src/pages/Dashboard.tsx</code></td>
+<td>Desktop 2-column grid layout</td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>pwa/src/pages/MyWork/List.tsx</code></td>
+<td>Desktop master-detail layout</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="task-1-usemediaquery-hook">Task 1: <code>useMediaQuery</code> hook</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/hooks/useMediaQuery.ts</code>
+- Test: <code>pwa/src/hooks/useMediaQuery.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Write the failing test</strong></li>
+</ul>
+<pre><code class="language-ts">// pwa/src/hooks/useMediaQuery.test.ts
+import { renderHook, act } from &quot;@testing-library/react&quot;;
+import { describe, it, expect, beforeAll, afterAll, vi } from &quot;vitest&quot;;
+import { useMediaQuery } from &quot;./useMediaQuery&quot;;
+
+describe(&quot;useMediaQuery&quot;, () =&gt; {
+  let listeners: Map&lt;string, EventListener&gt;;
+
+  beforeAll(() =&gt; {
+    listeners = new Map();
+    Object.defineProperty(window, &quot;matchMedia&quot;, {
+      writable: true,
+      value: vi.fn((query: string) =&gt; ({
+        matches: query === &quot;(min-width: 768px)&quot; ? false : false,
+        media: query,
+        addEventListener: (_: string, cb: EventListener) =&gt; {
+          listeners.set(query, cb);
+        },
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  });
+
+  it(&quot;returns false when media does not match&quot;, () =&gt; {
+    const { result } = renderHook(() =&gt; useMediaQuery(768));
+    expect(result.current).toBe(false);
+  });
+
+  it(&quot;updates when media changes&quot;, () =&gt; {
+    const { result } = renderHook(() =&gt; useMediaQuery(768));
+    act(() =&gt; {
+      const cb = listeners.get(&quot;(min-width: 768px)&quot;);
+      cb?.({ matches: true } as MediaQueryListEvent);
+    });
+    expect(result.current).toBe(true);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run test to verify it fails</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/hooks/useMediaQuery.test.ts
+</code></pre>
+<p>Expected: FAIL — "Cannot find module './useMediaQuery'"</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement hook</strong></li>
+</ul>
+<pre><code class="language-ts">// pwa/src/hooks/useMediaQuery.ts
+import { useEffect, useState } from &quot;react&quot;;
+
+export function useMediaQuery(minWidth: number): boolean {
+  const query = `(min-width: ${minWidth}px)`;
+  const [matches, setMatches] = useState(
+    () =&gt; typeof window !== &quot;undefined&quot; &amp;&amp; window.matchMedia(query).matches
+  );
+
+  useEffect(() =&gt; {
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) =&gt; setMatches(e.matches);
+    mql.addEventListener(&quot;change&quot;, handler);
+    setMatches(mql.matches);
+    return () =&gt; mql.removeEventListener(&quot;change&quot;, handler);
+  }, [query]);
+
+  return matches;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run tests to verify pass</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/hooks/useMediaQuery.test.ts
+</code></pre>
+<p>Expected: PASS (2 tests)</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/hooks/useMediaQuery.ts pwa/src/hooks/useMediaQuery.test.ts
+git commit -m &quot;feat(hooks): add useMediaQuery for responsive layout detection&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-css-tokens-for-desktop-nav">Task 2: CSS tokens for desktop nav</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/theme/tokens.css</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Add desktop nav tokens and media override</strong></li>
+</ul>
+<p>In <code>pwa/src/theme/tokens.css</code>, inside the existing <code>:root { ... }</code> block, add these three lines directly after <code>--bottom-nav-h: 64px;</code>:</p>
+<pre><code class="language-css">  --top-nav1-h: 0px;
+  --top-nav2-h: 0px;
+  --top-nav-total-h: 0px;
+</code></pre>
+<p>Then after the closing <code>}</code> of <code>:root</code>, append a new media query block:</p>
+<pre><code class="language-css">@media (min-width: 768px) {
+  :root {
+    --top-nav1-h: 52px;
+    --top-nav2-h: 40px;
+    --top-nav-total-h: calc(var(--top-nav1-h) + var(--top-nav2-h));
+    --bottom-nav-h: 0px;
+  }
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Verify no TypeScript errors</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/theme/tokens.css
+git commit -m &quot;feat(tokens): add desktop nav height CSS variables&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-safearea-desktop-padding">Task 3: <code>SafeArea</code> desktop padding</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/components/SafeArea.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Update SafeArea to use desktop nav height</strong></li>
+</ul>
+<p>Replace the entire file content:</p>
+<pre><code class="language-tsx">// pwa/src/components/SafeArea.tsx
+import { ReactNode } from &quot;react&quot;;
+
+export function SafeArea({ children }: { children: ReactNode }) {
+  return (
+    &lt;div
+      style={{
+        paddingTop: &quot;calc(var(--safe-top) + var(--top-nav-total-h))&quot;,
+        paddingLeft: &quot;var(--safe-left)&quot;,
+        paddingRight: &quot;var(--safe-right)&quot;,
+        paddingBottom: &quot;calc(var(--bottom-nav-h) + var(--safe-bottom))&quot;,
+        minHeight: &quot;100%&quot;,
+      }}
+    &gt;
+      {children}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Verify no TypeScript errors</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/components/SafeArea.tsx
+git commit -m &quot;feat(layout): SafeArea accounts for desktop TopNav height&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-topnav-component-nav1-nav2">Task 4: <code>TopNav</code> component (Nav1 + Nav2)</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/components/TopNav.tsx</code>
+- Test: <code>pwa/src/components/TopNav.test.tsx</code></p>
+<p>The component renders Nav1 (primary links) and Nav2 (submenu, slide-in when active item has submenus). It reads <code>useIsLeader</code> to conditionally show Leader tab. Nav2 tab clicks use <code>setSearchParams</code>.</p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing test</strong></li>
+</ul>
+<pre><code class="language-tsx">// pwa/src/components/TopNav.test.tsx
+import { render, screen } from &quot;@testing-library/react&quot;;
+import { MemoryRouter, Route, Routes } from &quot;react-router-dom&quot;;
+import { describe, it, expect, vi } from &quot;vitest&quot;;
+import { TopNav } from &quot;./TopNav&quot;;
+
+vi.mock(&quot;../hooks/useIsLeader&quot;, () =&gt; ({ useIsLeader: () =&gt; false }));
+vi.mock(&quot;../hooks/useUnreadCount&quot;, () =&gt; ({
+  useUnreadCount: () =&gt; ({ data: 0 }),
+}));
+
+function Wrapper({ path }: { path: string }) {
+  return (
+    &lt;MemoryRouter initialEntries={[path]}&gt;
+      &lt;Routes&gt;
+        &lt;Route path=&quot;*&quot; element={&lt;TopNav /&gt;} /&gt;
+      &lt;/Routes&gt;
+    &lt;/MemoryRouter&gt;
+  );
+}
+
+describe(&quot;TopNav&quot;, () =&gt; {
+  it(&quot;renders Nav1 items&quot;, () =&gt; {
+    render(&lt;Wrapper path=&quot;/m/dashboard&quot; /&gt;);
+    expect(screen.getByText(&quot;Dashboard&quot;)).toBeInTheDocument();
+    expect(screen.getByText(&quot;Work&quot;)).toBeInTheDocument();
+    expect(screen.getByText(&quot;Analytics&quot;)).toBeInTheDocument();
+    expect(screen.getByText(&quot;Me&quot;)).toBeInTheDocument();
+  });
+
+  it(&quot;hides Leader for non-leaders&quot;, () =&gt; {
+    render(&lt;Wrapper path=&quot;/m/dashboard&quot; /&gt;);
+    expect(screen.queryByText(&quot;Leader&quot;)).not.toBeInTheDocument();
+  });
+
+  it(&quot;shows Analytics Nav2 when analytics is active&quot;, () =&gt; {
+    render(&lt;Wrapper path=&quot;/m/analytics&quot; /&gt;);
+    expect(screen.getByText(&quot;Leaderboard&quot;)).toBeInTheDocument();
+    expect(screen.getByText(&quot;Velocity&quot;)).toBeInTheDocument();
+    expect(screen.getByText(&quot;Streak&quot;)).toBeInTheDocument();
+  });
+
+  it(&quot;hides Nav2 when active page has no submenus&quot;, () =&gt; {
+    render(&lt;Wrapper path=&quot;/m/dashboard&quot; /&gt;);
+    expect(screen.queryByText(&quot;Leaderboard&quot;)).not.toBeInTheDocument();
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run test to verify it fails</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/components/TopNav.test.tsx
+</code></pre>
+<p>Expected: FAIL — "Cannot find module './TopNav'"</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement TopNav</strong></li>
+</ul>
+<pre><code class="language-tsx">// pwa/src/components/TopNav.tsx
+import { NavLink, useLocation, useSearchParams } from &quot;react-router-dom&quot;;
+import { useIsLeader } from &quot;../hooks/useIsLeader&quot;;
+import { useUnreadCount } from &quot;../hooks/useUnreadCount&quot;;
+
+const NAV1_BASE = [
+  { to: &quot;/m/dashboard&quot;, label: &quot;Dashboard&quot;, key: &quot;dashboard&quot; },
+  { to: &quot;/m/leader&quot;,    label: &quot;Leader&quot;,    key: &quot;leader&quot;,  leaderOnly: true },
+  { to: &quot;/m/work&quot;,      label: &quot;Work&quot;,      key: &quot;work&quot; },
+  { to: &quot;/m/analytics&quot;, label: &quot;Analytics&quot;, key: &quot;analytics&quot; },
+  { to: &quot;/m/me&quot;,        label: &quot;Me&quot;,        key: &quot;me&quot; },
+] as const;
+
+const NAV2: Record&lt;string, { label: string; tab: string }[]&gt; = {
+  analytics: [
+    { label: &quot;Leaderboard&quot;, tab: &quot;leaderboard&quot; },
+    { label: &quot;Velocity&quot;,    tab: &quot;velocity&quot; },
+    { label: &quot;Streak&quot;,      tab: &quot;streak&quot; },
+  ],
+  leader: [
+    { label: &quot;Review Queue&quot;, tab: &quot;review&quot; },
+    { label: &quot;Sprint&quot;,       tab: &quot;sprint&quot; },
+    { label: &quot;Executive&quot;,    tab: &quot;exec&quot; },
+  ],
+  me: [
+    { label: &quot;Profile&quot;,        tab: &quot;profile&quot; },
+    { label: &quot;Notifications&quot;,  tab: &quot;notifications&quot; },
+    { label: &quot;Push Settings&quot;,  tab: &quot;push&quot; },
+  ],
+};
+
+const ME_TAB_ROUTES: Record&lt;string, string&gt; = {
+  profile:       &quot;/m/me&quot;,
+  notifications: &quot;/m/me/notifications&quot;,
+  push:          &quot;/m/me/notifications/settings&quot;,
+};
+
+const S = {
+  nav1: {
+    position: &quot;fixed&quot; as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: &quot;var(--top-nav1-h)&quot;,
+    background: &quot;#08010f&quot;,
+    borderBottom: &quot;1px solid rgba(255,255,255,0.08)&quot;,
+    display: &quot;flex&quot;,
+    alignItems: &quot;center&quot;,
+    zIndex: 50,
+    gap: 0,
+  },
+  logo: {
+    padding: &quot;0 24px&quot;,
+    fontSize: 16,
+    fontWeight: 800,
+    color: &quot;#a855f7&quot;,
+    letterSpacing: &quot;-0.02em&quot;,
+    whiteSpace: &quot;nowrap&quot; as const,
+    userSelect: &quot;none&quot; as const,
+  },
+  nav1Items: {
+    display: &quot;flex&quot;,
+    alignItems: &quot;center&quot;,
+    height: &quot;100%&quot;,
+    gap: 2,
+  },
+  nav2: {
+    position: &quot;fixed&quot; as const,
+    top: &quot;var(--top-nav1-h)&quot;,
+    left: 0,
+    right: 0,
+    height: &quot;var(--top-nav2-h)&quot;,
+    background: &quot;rgba(255,255,255,0.03)&quot;,
+    borderBottom: &quot;1px solid rgba(255,255,255,0.06)&quot;,
+    display: &quot;flex&quot;,
+    alignItems: &quot;center&quot;,
+    zIndex: 49,
+    padding: &quot;0 16px&quot;,
+    gap: 4,
+  },
+} as const;
+
+function nav1ItemStyle(isActive: boolean) {
+  return {
+    display: &quot;flex&quot;,
+    alignItems: &quot;center&quot;,
+    height: &quot;100%&quot;,
+    padding: &quot;0 14px&quot;,
+    fontSize: 14,
+    fontWeight: 600,
+    color: isActive ? &quot;#a855f7&quot; : &quot;rgba(255,255,255,0.45)&quot;,
+    textDecoration: &quot;none&quot;,
+    position: &quot;relative&quot; as const,
+    borderBottom: isActive ? &quot;2px solid #a855f7&quot; : &quot;2px solid transparent&quot;,
+    transition: &quot;color 0.15s, border-color 0.15s&quot;,
+  };
+}
+
+function nav2ItemStyle(isActive: boolean) {
+  return {
+    padding: &quot;4px 12px&quot;,
+    fontSize: 13,
+    fontWeight: 600,
+    borderRadius: 999,
+    border: &quot;none&quot;,
+    cursor: &quot;pointer&quot;,
+    background: isActive ? &quot;rgba(168,85,247,0.18)&quot; : &quot;transparent&quot;,
+    color: isActive ? &quot;#a855f7&quot; : &quot;rgba(255,255,255,0.45)&quot;,
+    transition: &quot;background 0.15s, color 0.15s&quot;,
+  };
+}
+
+export function TopNav() {
+  const isLeader = useIsLeader();
+  const unread = useUnreadCount();
+  const loc = useLocation();
+  const [params, setParams] = useSearchParams();
+
+  const activeKey = NAV1_BASE.find((n) =&gt; {
+    if (n.key === &quot;me&quot;) return loc.pathname.startsWith(&quot;/m/me&quot;);
+    return loc.pathname.startsWith(n.to);
+  })?.key ?? &quot;dashboard&quot;;
+
+  const submenus = NAV2[activeKey] ?? [];
+  const activeTab = params.get(&quot;tab&quot;) ?? submenus[0]?.tab ?? &quot;&quot;;
+
+  const nav1Items = NAV1_BASE.filter((n) =&gt;
+    &quot;leaderOnly&quot; in n &amp;&amp; n.leaderOnly ? isLeader === true : true
+  );
+
+  function handleNav2Click(item: { label: string; tab: string }) {
+    if (activeKey === &quot;me&quot;) {
+      const route = ME_TAB_ROUTES[item.tab];
+      if (route) window.location.href = route;
+    } else {
+      setParams({ tab: item.tab }, { replace: true });
+    }
+  }
+
+  return (
+    &lt;&gt;
+      &lt;nav style={S.nav1}&gt;
+        &lt;span style={S.logo}&gt;◆ Vernon&lt;/span&gt;
+        &lt;div style={S.nav1Items}&gt;
+          {nav1Items.map((item) =&gt; (
+            &lt;NavLink
+              key={item.key}
+              to={item.to}
+              style={({ isActive }) =&gt; nav1ItemStyle(
+                item.key === &quot;me&quot;
+                  ? loc.pathname.startsWith(&quot;/m/me&quot;)
+                  : isActive
+              )}
+            &gt;
+              {item.label}
+              {item.key === &quot;me&quot; &amp;&amp; unread.data &amp;&amp; unread.data &gt; 0 ? (
+                &lt;span
+                  style={{
+                    position: &quot;absolute&quot;,
+                    top: 10,
+                    right: 6,
+                    width: 6,
+                    height: 6,
+                    borderRadius: &quot;50%&quot;,
+                    background: &quot;#a855f7&quot;,
+                  }}
+                /&gt;
+              ) : null}
+            &lt;/NavLink&gt;
+          ))}
+        &lt;/div&gt;
+      &lt;/nav&gt;
+
+      {submenus.length &gt; 0 &amp;&amp; (
+        &lt;div style={S.nav2}&gt;
+          {submenus.map((item) =&gt; (
+            &lt;button
+              key={item.tab}
+              style={nav2ItemStyle(activeTab === item.tab)}
+              onClick={() =&gt; handleNav2Click(item)}
+            &gt;
+              {item.label}
+            &lt;/button&gt;
+          ))}
+        &lt;/div&gt;
+      )}
+    &lt;/&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run tests</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/components/TopNav.test.tsx
+</code></pre>
+<p>Expected: PASS (4 tests)</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/components/TopNav.tsx pwa/src/components/TopNav.test.tsx
+git commit -m &quot;feat(nav): add TopNav component with Nav1 + Nav2 for desktop&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-appshell-wire-topnav-vs-bottomnav">Task 5: AppShell — wire TopNav vs BottomNav</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/AppShell.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Update AppShell</strong></li>
+</ul>
+<pre><code class="language-tsx">// pwa/src/AppShell.tsx
+import { useEffect, useState } from &quot;react&quot;;
+import { Outlet, useLocation } from &quot;react-router-dom&quot;;
+import { BottomNav } from &quot;./components/BottomNav&quot;;
+import { TopNav } from &quot;./components/TopNav&quot;;
+import { OfflineBanner } from &quot;./components/OfflineBanner&quot;;
+import { SafeArea } from &quot;./components/SafeArea&quot;;
+import { ReloginModal } from &quot;./components/ReloginModal&quot;;
+import { ToastProvider } from &quot;./components/Toast&quot;;
+import { ErrorBoundary } from &quot;./components/ErrorBoundary&quot;;
+import { useMediaQuery } from &quot;./hooks/useMediaQuery&quot;;
+import { onAuthChallenge } from &quot;./api/client&quot;;
+import { logEvent } from &quot;./telemetry&quot;;
+
+export function AppShell() {
+  const [reloginOpen, setReloginOpen] = useState(false);
+  const [resolver, setResolver] = useState&lt;((ok: boolean) =&gt; void) | null&gt;(null);
+  const loc = useLocation();
+  const isDesktop = useMediaQuery(768);
+
+  useEffect(() =&gt; {
+    onAuthChallenge(
+      () =&gt;
+        new Promise&lt;boolean&gt;((resolve) =&gt; {
+          setResolver(() =&gt; resolve);
+          setReloginOpen(true);
+        }),
+    );
+  }, []);
+
+  useEffect(() =&gt; {
+    logEvent(&quot;page_view&quot;, { route: loc.pathname });
+  }, [loc.pathname]);
+
+  return (
+    &lt;ErrorBoundary&gt;
+      &lt;ToastProvider&gt;
+        &lt;OfflineBanner /&gt;
+        {isDesktop ? &lt;TopNav /&gt; : null}
+        &lt;SafeArea&gt;
+          &lt;Outlet /&gt;
+        &lt;/SafeArea&gt;
+        {isDesktop ? null : &lt;BottomNav /&gt;}
+        &lt;ReloginModal
+          open={reloginOpen}
+          onResolve={(ok) =&gt; {
+            setReloginOpen(false);
+            resolver?.(ok);
+            setResolver(null);
+          }}
+        /&gt;
+      &lt;/ToastProvider&gt;
+    &lt;/ErrorBoundary&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Verify TypeScript</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/AppShell.tsx
+git commit -m &quot;feat(shell): render TopNav on desktop, BottomNav on mobile&quot;
+</code></pre>
+<hr />
+<h2 id="task-6-analytics-tab-state-via-url-params">Task 6: Analytics — tab state via URL params</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/Analytics.tsx</code></p>
+<p>Current: <code>const [tab, setTab] = useState&lt;TabKey&gt;("leaderboard")</code><br />
+Target: <code>useSearchParams</code> with fallback to <code>"leaderboard"</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Replace tab state in <code>AnalyticsPage</code></strong></li>
+</ul>
+<p>In <code>pwa/src/pages/Analytics.tsx</code>, replace the import list top — add <code>useSearchParams</code>:</p>
+<pre><code class="language-tsx">import { useEffect } from &quot;react&quot;;
+import { useSearchParams } from &quot;react-router-dom&quot;;
+</code></pre>
+<p>Remove <code>useState</code> from the import (it's still used inside tab components, so keep it if any tab component uses it — check: <code>LeaderboardTab</code>, <code>VelocityTab</code>, <code>StreakTab</code> each use <code>useState</code> internally, so keep <code>useState</code> in the import for those).</p>
+<p>Full import line after edit:</p>
+<pre><code class="language-tsx">import { useEffect, useState } from &quot;react&quot;;
+import { useSearchParams } from &quot;react-router-dom&quot;;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Replace tab state in <code>AnalyticsPage</code> function</strong></li>
+</ul>
+<p>Find and replace in <code>AnalyticsPage</code>:</p>
+<pre><code class="language-tsx">// REMOVE:
+const [tab, setTab] = useState&lt;TabKey&gt;(&quot;leaderboard&quot;);
+
+// ADD:
+const [params, setParams] = useSearchParams();
+const tab = (params.get(&quot;tab&quot;) as TabKey) ?? &quot;leaderboard&quot;;
+function setTab(k: TabKey) {
+  setParams({ tab: k }, { replace: true });
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Verify TypeScript</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/Analytics.tsx
+git commit -m &quot;feat(analytics): tab state driven by URL search params&quot;
+</code></pre>
+<hr />
+<h2 id="task-7-leader-tab-state-via-url-params">Task 7: Leader — tab state via URL params</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/Leader.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Add <code>useSearchParams</code> import</strong></li>
+</ul>
+<p>In <code>pwa/src/pages/Leader.tsx</code>, add to imports:</p>
+<pre><code class="language-tsx">import { useSearchParams } from &quot;react-router-dom&quot;;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Replace tab state in <code>LeaderPage</code></strong></li>
+</ul>
+<p>Find and replace in <code>LeaderPage</code>:</p>
+<pre><code class="language-tsx">// REMOVE:
+const [tab, setTab] = useState&lt;TabKey&gt;(&quot;review&quot;);
+
+// ADD:
+const [params, setParams] = useSearchParams();
+const tab = (params.get(&quot;tab&quot;) as TabKey) ?? &quot;review&quot;;
+function setTab(k: TabKey) {
+  setParams({ tab: k }, { replace: true });
+}
+</code></pre>
+<p>Remove unused <code>useState</code> import only if <code>LeaderPage</code> was the only consumer — <code>LeaderReviewTab</code> uses <code>useState</code> internally, so keep <code>useState</code> in the import.</p>
+<ul>
+<li>[ ] <strong>Step 3: Verify TypeScript</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/Leader.tsx
+git commit -m &quot;feat(leader): tab state driven by URL search params&quot;
+</code></pre>
+<hr />
+<h2 id="task-8-dashboard-desktop-2-column-layout">Task 8: Dashboard — desktop 2-column layout</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/Dashboard.tsx</code></p>
+<p>The dashboard hero + stat cards go left; Kanban columns go right. On mobile (&lt; 900px via CSS) both sections stack. Use a CSS class-free approach with inline style + a wrapping grid div.</p>
+<ul>
+<li>[ ] <strong>Step 1: Wrap dashboard content in responsive grid</strong></li>
+</ul>
+<p>In <code>pwa/src/pages/Dashboard.tsx</code>, find the <code>return</code> JSX in <code>DashboardPage</code>. Wrap the content below the hero section in a two-column grid:</p>
+<p>Find this section (after the closing <code>&lt;/div&gt;</code> of the hero <code>&lt;div style={{ background: ... padding: "20px 20px 0" }}</code>):</p>
+<pre><code class="language-tsx">{/* ── Content ── */}
+&lt;div style={{ padding: &quot;16px 20px 32px&quot; }}&gt;
+</code></pre>
+<p>Replace with:</p>
+<pre><code class="language-tsx">{/* ── Content — responsive grid ── */}
+&lt;div style={{
+  display: &quot;grid&quot;,
+  gridTemplateColumns: &quot;repeat(auto-fit, minmax(340px, 1fr))&quot;,
+  gap: 24,
+  padding: &quot;16px 20px 32px&quot;,
+  alignItems: &quot;start&quot;,
+}}&gt;
+</code></pre>
+<p>This uses <code>auto-fit</code> + <code>minmax</code> so on narrow screens it becomes single-column automatically, and on wide screens it expands to fill available columns.</p>
+<ul>
+<li>[ ] <strong>Step 2: Verify TypeScript</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/Dashboard.tsx
+git commit -m &quot;feat(dashboard): responsive 2-column grid layout for desktop&quot;
+</code></pre>
+<hr />
+<h2 id="task-9-mywork-desktop-master-detail-layout">Task 9: MyWork — desktop master-detail layout</h2>
+<p><strong>Files:</strong>
+- Modify: <code>pwa/src/pages/MyWork/List.tsx</code></p>
+<p>On desktop, render task list at 380px fixed-width on the left, and a detail panel on the right. Detail panel shows <code>&lt;MyWorkDetail&gt;</code> inline when a task <code>id</code> is in state, or an empty state. On mobile, the detail link navigates (existing behavior unchanged).</p>
+<ul>
+<li>[ ] <strong>Step 1: Add <code>useMediaQuery</code> import and selected task state</strong></li>
+</ul>
+<p>At the top of <code>pwa/src/pages/MyWork/List.tsx</code>, add:</p>
+<pre><code class="language-tsx">import { useMediaQuery } from &quot;../../hooks/useMediaQuery&quot;;
+import { MyWorkDetail } from &quot;./Detail&quot;;
+</code></pre>
+<p>Inside <code>MyWorkList</code> function body, add:</p>
+<pre><code class="language-tsx">const isDesktop = useMediaQuery(768);
+const [selectedId, setSelectedId] = useState&lt;string | null&gt;(null);
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Wrap list + detail in master-detail container</strong></li>
+</ul>
+<p>Find the outermost <code>return</code> div in <code>MyWorkList</code>. Wrap it:</p>
+<pre><code class="language-tsx">return (
+  &lt;div style={{
+    display: &quot;flex&quot;,
+    height: &quot;100%&quot;,
+    minHeight: &quot;100vh&quot;,
+  }}&gt;
+    {/* List panel */}
+    &lt;div style={{
+      width: isDesktop ? 380 : &quot;100%&quot;,
+      minWidth: isDesktop ? 380 : undefined,
+      flexShrink: 0,
+      borderRight: isDesktop ? &quot;1px solid var(--vt-border)&quot; : undefined,
+      overflowY: &quot;auto&quot;,
+    }}&gt;
+      {/* existing list JSX goes here unchanged */}
+      &lt;PullToRefresh onRefresh={...}&gt;
+        ...
+      &lt;/PullToRefresh&gt;
+    &lt;/div&gt;
+
+    {/* Detail panel — desktop only */}
+    {isDesktop &amp;&amp; (
+      &lt;div style={{ flex: 1, overflowY: &quot;auto&quot;, background: &quot;var(--vt-bg)&quot; }}&gt;
+        {selectedId ? (
+          &lt;MyWorkDetail desktopId={selectedId} /&gt;
+        ) : (
+          &lt;div style={{
+            display: &quot;flex&quot;,
+            alignItems: &quot;center&quot;,
+            justifyContent: &quot;center&quot;,
+            height: &quot;100%&quot;,
+            color: &quot;var(--vt-text-muted)&quot;,
+            fontSize: 14,
+          }}&gt;
+            Pilih task untuk melihat detail
+          &lt;/div&gt;
+        )}
+      &lt;/div&gt;
+    )}
+  &lt;/div&gt;
+);
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Make task cards selectable on desktop</strong></li>
+</ul>
+<p>Find the task card click/link handler. When <code>isDesktop</code>, call <code>setSelectedId(task.name)</code> instead of navigating. When not desktop, keep existing <code>&lt;Link to={...}&gt;</code> behavior.</p>
+<p>In the task card JSX, wrap the card with:</p>
+<pre><code class="language-tsx">{isDesktop ? (
+  &lt;div
+    onClick={() =&gt; setSelectedId(card.name)}
+    style={{ cursor: &quot;pointer&quot; }}
+  &gt;
+    {/* card content */}
+  &lt;/div&gt;
+) : (
+  &lt;Link to={`/m/work/${card.name}`}&gt;
+    {/* card content */}
+  &lt;/Link&gt;
+)}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Add <code>desktopId</code> prop to <code>MyWorkDetail</code></strong></li>
+</ul>
+<p>Open <code>pwa/src/pages/MyWork/Detail.tsx</code>. The component currently reads <code>:id</code> from <code>useParams</code>. Add an optional override:</p>
+<pre><code class="language-tsx">// At top of Detail.tsx, update props:
+export function MyWorkDetail({ desktopId }: { desktopId?: string } = {}) {
+  const params = useParams&lt;{ id: string }&gt;();
+  const id = desktopId ?? params.id ?? &quot;&quot;;
+  // rest unchanged — replace all usages of `params.id` with `id`
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Verify TypeScript</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/MyWork/List.tsx pwa/src/pages/MyWork/Detail.tsx
+git commit -m &quot;feat(work): master-detail layout on desktop&quot;
+</code></pre>
+<hr />
+<h2 id="task-10-full-build-lint-verification">Task 10: Full build + lint verification</h2>
+<ul>
+<li>[ ] <strong>Step 1: Run full test suite</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run
+</code></pre>
+<p>Expected: all tests pass, 0 failures</p>
+<ul>
+<li>[ ] <strong>Step 2: Run TypeScript check</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx tsc --noEmit
+</code></pre>
+<p>Expected: no errors</p>
+<ul>
+<li>[ ] <strong>Step 3: Build production bundle</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run build
+</code></pre>
+<p>Expected: build completes without errors</p>
+<ul>
+<li>[ ] <strong>Step 4: Final commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add -A
+git commit -m &quot;feat(pwa): mobile/desktop responsive nav and page layouts&quot;
+</code></pre>
+<hr />
+<h2 id="qa-checklist-post-implementation-manual-verification">QA Checklist (post-implementation manual verification)</h2>
+<p>Run against a dev server (<code>cd pwa &amp;&amp; npm run dev</code>) at <code>http://localhost:5173/m/dashboard</code>:</p>
+<p><strong>Desktop (browser width ≥ 768px):</strong>
+- [ ] TopNav visible with: <code>◆ Vernon</code> logo, Dashboard, Work, Analytics, Me
+- [ ] Leader tab hidden when logged in as non-leader
+- [ ] Nav2 appears below Nav1 when Analytics or Leader or Me is active
+- [ ] Nav2 hidden when Dashboard or Work is active
+- [ ] Active Nav1 item has purple underline indicator
+- [ ] Active Nav2 item has purple pill background
+- [ ] Clicking Analytics Nav2 items changes tab content without page reload
+- [ ] Refreshing page with <code>?tab=velocity</code> keeps Velocity tab active
+- [ ] Dashboard shows 2-column layout (stat cards + Kanban)
+- [ ] Work shows list panel left + "Pilih task" empty state right
+- [ ] Clicking a task in Work list shows detail in right panel
+- [ ] BottomNav NOT visible</p>
+<p><strong>Mobile (browser width &lt; 768px or DevTools mobile emulation):</strong>
+- [ ] BottomNav visible at bottom
+- [ ] TopNav NOT visible
+- [ ] Analytics uses internal Tabs component (not Nav2)
+- [ ] Leader uses internal Tabs component
+- [ ] Work task click navigates to detail page (not inline panel)
+- [ ] Dashboard shows single-column layout
+- [ ] PullToRefresh still works on all pages</p>
+<p><strong>Resize test:</strong>
+- [ ] Resizing browser from 800px → 600px switches TopNav → BottomNav without layout errors
+- [ ] Resizing from 600px → 800px switches BottomNav → TopNav without layout errors</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-14-mobile-desktop-responsive-nav.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

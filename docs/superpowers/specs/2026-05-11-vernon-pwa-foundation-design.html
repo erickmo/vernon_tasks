@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks PWA — Foundation + My Work Read-only (P0.5)</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks PWA — Foundation + My Work Read-only (P0.5)</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-11-vernon-pwa-foundation-design.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-pwa-foundation-my-work-read-only-p05">Vernon Tasks PWA — Foundation + My Work Read-only (P0.5)</h1>
+<p><strong>Date:</strong> 2026-05-11
+<strong>Scope:</strong> Phase P0.5 of Vernon Tasks PWA initiative
+<strong>Status:</strong> Design approved (COO + UI/UX review APPROVE-WITH-CHANGES, integrated)</p>
+<h2 id="context">Context</h2>
+<p>Vernon Tasks is an internal Frappe v15 app for company-wide task / OKR / sprint
+management. Existing surfaces are Frappe Desk pages (vanilla JS):
+<code>my_dashboard</code>, <code>my_work</code>, <code>my_analytics</code>, <code>leader_dashboard</code>, <code>leader_review</code>,
+<code>leader_analytics</code>, <code>exec_analytics</code>. Analytics APIs already shipped
+(Sub-A Leader, Sub-B IC, Sub-C Executive).</p>
+<p>Desk UI is not optimised for mobile. This spec covers the first slice of a
+standalone Progressive Web App that complements Desk and gives ICs and Leaders
+a true mobile experience.</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Installable PWA served from <code>vernon_tasks/www/m/</code> at route <code>/m/</code> (Frappe
+  Desk owns <code>/app</code>, so PWA uses <code>/m/</code> for "mobile")</li>
+<li>Authenticated via Frappe session cookie (same as Desk)</li>
+<li>Read-only offline cache (stale data viewable, mutations require online)</li>
+<li>First user-facing screen: <strong>My Work</strong> list + detail (read-only)</li>
+<li>Foundation primitives ready for P1 mutations and later phases</li>
+</ul>
+<p>Non-goals (deferred to later phases):</p>
+<ul>
+<li>Task mutations (complete / log progress) — P1</li>
+<li>Sprint kanban, analytics charts — P2</li>
+<li>Leader views — P3</li>
+<li>Full offline write queue with conflict resolution</li>
+<li>Push notifications (delivery channel) — separate initiative</li>
+<li>Native mobile app</li>
+</ul>
+<h2 id="phasing-full-initiative">Phasing (full initiative)</h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Scope</th>
+<th>Ship unit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P0.5</strong></td>
+<td>Foundation + My Work read-only (this spec)</td>
+<td>1</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Mutations (complete / log / snooze), install prompt, search, notifications screen</td>
+<td>2</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>Dashboard + Analytics screens (kanban read, charts)</td>
+<td>3</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Leader views (review queue, burndown, forecast, risk, exec analytics)</td>
+<td>4</td>
+</tr>
+</tbody>
+</table>
+<p>Each phase has its own spec + plan + ship.</p>
+<h2 id="architecture">Architecture</h2>
+<h3 id="repository-layout">Repository layout</h3>
+<pre><code>vernon_tasks/
+  pwa/                              # Vite source (new)
+    src/
+      api/
+        client.ts                   # fetch wrapper, 401/403 → ReloginModal
+        tasks.ts                    # my_work_list, task_detail
+      auth/
+        login.tsx
+        session.ts                  # cookie probe, expiry detect
+        guard.tsx                   # route guard component
+      cache/
+        sw.ts                       # workbox config (precache + SWR runtime)
+        idb.ts                      # IndexedDB read cache wrapper
+        sync-time.ts                # per-resource last-sync timestamp
+      components/
+        BottomNav.tsx               # 4 tabs: Work / Dashboard / Analytics / Me
+        Skeleton.tsx
+        EmptyState.tsx
+        ErrorBoundary.tsx
+        Toast.tsx                   # snackbar w/ optional action
+        OfflineBanner.tsx           # persistent when offline
+        StaleBadge.tsx              # per-screen &quot;Updated 2m ago&quot;, amber &gt;1h
+        SafeArea.tsx                # iOS notch / Android gesture inset wrapper
+        PullToRefresh.tsx
+        ReloginModal.tsx            # preserves current route
+      pages/
+        Onboarding.tsx              # 3-slide first-run, localStorage flag
+        MyWork/
+          List.tsx                  # grouped by Today / Upcoming / Overdue
+          Detail.tsx                # read-only
+        Placeholder.tsx             # Dashboard / Analytics / Me stubs
+      router.tsx                    # react-router v6
+      telemetry.ts                  # POST /api/method/...telemetry.log_event
+      i18n.ts                       # id-ID, formal &quot;Anda&quot;, DD MMM YYYY
+      theme/tokens.css              # light + dark, safe-area vars
+      main.tsx
+    public/
+      manifest.json
+      icons/                        # 192, 512, maskable
+    index.html
+    package.json
+    vite.config.ts                  # outDir=../vernon_tasks/www/m, base=/m/
+    tsconfig.json
+  vernon_tasks/
+    www/
+      m/                            # Vite build output (git-ignored)
+        index.html
+        assets/                     # hashed chunks
+        sw.js                       # workbox-generated, versioned
+    hooks.py                        # add website_route_rules for /m/*
+    task/
+      api/
+        my_work.py                  # NEW: my_work_list, task_detail (if not present)
+        telemetry.py                # NEW: log_event whitelisted
+</code></pre>
+<h3 id="frappe-integration">Frappe integration</h3>
+<ul>
+<li><code>hooks.py</code> adds <code>website_route_rules</code> so any unknown <code>/m/&lt;rest&gt;</code> request
+  returns <code>www/m/index.html</code> (SPA fallback)</li>
+<li><code>package.json</code> build script runs Vite before <code>bench build</code> collects static
+  assets</li>
+<li>Vite emits content-hashed chunks → safe under nginx + service worker caching</li>
+<li>Service worker version string injected from git short SHA at build time</li>
+</ul>
+<h3 id="auth-flow">Auth flow</h3>
+<pre><code>Open /m
+  → guard.tsx probes session via GET /api/method/frappe.auth.get_logged_user
+      ├─ 200 → continue to requested route (default /m/work)
+      └─ 401/403 → redirect /m/login (preserve `next` param)
+On /m/login submit
+  → POST /api/method/login (usr, pwd)
+  → on success: Set-Cookie sid → redirect to `next` (or /m/work)
+Mid-session 401/403 from any API call
+  → ReloginModal opens above current route, preserves component state
+  → user re-logs → modal closes → original request is retried once
+</code></pre>
+<p>CSRF: Frappe issues <code>X-Frappe-CSRF-Token</code> after login. <code>api/client.ts</code> reads
+the token from <code>window.csrf_token</code> (injected at SPA boot via a small
+<code>/m/_boot</code> endpoint that returns <code>{user, csrf_token, sid_age_seconds}</code>) and
+attaches it to mutating requests in later phases.</p>
+<h3 id="data-flow-read-only">Data flow (read-only)</h3>
+<pre><code>Component
+  → useQuery(['my-work']) — react-query
+      → api/client.get('/api/method/vernon_tasks.task.api.my_work.list')
+      → on success: idb.put('my-work', payload); sync-time.stamp('my-work')
+      → on network error: idb.get('my-work') and mark stale
+Render
+  → if data &amp;&amp; !stale → list
+  → if data &amp;&amp;  stale → list + amber StaleBadge
+  → if !data &amp;&amp; offline → EmptyState &quot;Belum ada data offline&quot;
+  → if loading → Skeleton
+</code></pre>
+<p>Service worker strategy:</p>
+<ul>
+<li>App shell (<code>index.html</code>, JS/CSS chunks, icons): <code>precache</code> (workbox)</li>
+<li><code>GET /api/method/vernon_tasks.task.api.*</code>: <code>StaleWhileRevalidate</code>,
+  cache name <code>vt-api-v&lt;SW_VERSION&gt;</code>, max 50 entries, 1-day expiry</li>
+<li>Everything else: <code>NetworkOnly</code></li>
+</ul>
+<h3 id="telemetry-minimal">Telemetry (minimal)</h3>
+<p>Single endpoint <code>POST /api/method/vernon_tasks.task.api.telemetry.log_event</code>
+accepting <code>{event, props}</code>. Events emitted in P0.5:</p>
+<ul>
+<li><code>pwa_boot</code> (props: <code>version</code>, <code>display_mode</code>)</li>
+<li><code>login_success</code></li>
+<li><code>login_failure</code> (props: <code>reason</code>)</li>
+<li><code>page_view</code> (props: <code>route</code>)</li>
+<li><code>task_view</code> (props: <code>task_id</code>)</li>
+<li><code>offline_seen</code> (props: <code>route</code>)</li>
+</ul>
+<p>Server side persists to a lightweight <code>Vernon Telemetry Event</code> DocType
+(timestamp, user, event, props JSON). Retention 90 days via daily cron.</p>
+<h3 id="i18n-locale">i18n + locale</h3>
+<ul>
+<li>Default <code>id-ID</code></li>
+<li>Formal "Anda", "Tugas Anda", "Masuk", "Keluar"</li>
+<li>Dates: <code>DD MMM YYYY</code> (e.g. <code>11 Mei 2026</code>)</li>
+<li>Time: <code>HH:mm</code> 24h</li>
+<li>Numbers: <code>Intl.NumberFormat('id-ID')</code></li>
+<li>Single <code>i18n.ts</code> map; English strings not bundled (can add later)</li>
+</ul>
+<h2 id="ui-behaviour">UI behaviour</h2>
+<h3 id="bottom-navigation">Bottom navigation</h3>
+<p>Four tabs, fixed bottom, safe-area aware:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Route</th>
+<th>P0.5 state</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tugas</td>
+<td><code>/m/work</code></td>
+<td>Active screen</td>
+</tr>
+<tr>
+<td>Dashboard</td>
+<td><code>/m/dashboard</code></td>
+<td>Placeholder "Segera hadir"</td>
+</tr>
+<tr>
+<td>Analitik</td>
+<td><code>/m/analytics</code></td>
+<td>Placeholder</td>
+</tr>
+<tr>
+<td>Saya</td>
+<td><code>/m/me</code></td>
+<td>Profile + logout</td>
+</tr>
+</tbody>
+</table>
+<h3 id="my-work-list">My Work list</h3>
+<ul>
+<li>Header: greeting "Selamat pagi/siang/sore/malam, <Nama>" + date</li>
+<li>Sections in order:
+  1. Terlambat (overdue, red accent)
+  2. Hari Ini
+  3. Mendatang (next 7 days, grouped by day)</li>
+<li>Card shows: title, project, priority dot, due time, points reward</li>
+<li>Tap card → Detail</li>
+<li>Pull-to-refresh on top</li>
+<li>Skeleton: 5 placeholder cards on first load</li>
+<li>Empty state: illustration + "Tidak ada tugas hari ini. Nikmati waktumu."</li>
+<li>StaleBadge top-right when cache age &gt; 1h</li>
+</ul>
+<h3 id="my-work-detail">My Work detail</h3>
+<p>Read-only in P0.5:</p>
+<ul>
+<li>Title, status badge, priority, due date, project, sprint, points</li>
+<li>Description (markdown rendered)</li>
+<li>Activity log (last 10 entries)</li>
+<li>Action bar with disabled buttons (Complete / Log) labelled "Tersedia di
+  pembaruan berikutnya" — sets expectation, no dead UI</li>
+</ul>
+<h3 id="onboarding">Onboarding</h3>
+<p>3 slides, swipeable, shown on first launch (localStorage
+<code>vt_pwa_onboarded=1</code>):</p>
+<ol>
+<li>"Selamat datang di Vernon" — what app is for</li>
+<li>"Tugasmu, di mana saja" — installable, offline-friendly</li>
+<li>"Mulai" — CTA → <code>/m/work</code></li>
+</ol>
+<p>A2HS prompt deferred to P1 (after first task complete moment).</p>
+<h3 id="re-login-modal">Re-login modal</h3>
+<ul>
+<li>Triggered on first 401/403 from any API call after boot</li>
+<li>Backdrop dimmed, current route DOM preserved beneath</li>
+<li>Form fields prefilled with last username (not password)</li>
+<li>On success: dismiss, retry original request once</li>
+<li>On dismiss without login: redirect to <code>/m/login?next=&lt;current&gt;</code></li>
+</ul>
+<h3 id="offline-ux">Offline UX</h3>
+<ul>
+<li><code>OfflineBanner</code> (sticky top, gray) whenever <code>navigator.onLine === false</code>,
+  text "Mode offline · terakhir sinkron 14:32"</li>
+<li><code>StaleBadge</code> per screen when this screen's last-sync &gt; 1 hour, amber tint</li>
+<li>All write-bearing UI in P0.5 already disabled, so no queue needed yet</li>
+</ul>
+<h2 id="error-handling">Error handling</h2>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Network error on GET</td>
+<td>Show cached + StaleBadge; if no cache, EmptyState w/ Retry</td>
+</tr>
+<tr>
+<td>401 / 403 mid-session</td>
+<td>ReloginModal</td>
+</tr>
+<tr>
+<td>5xx</td>
+<td>Toast "Gagal memuat. Coba lagi." + Retry button</td>
+</tr>
+<tr>
+<td>Component render error</td>
+<td>ErrorBoundary screen: title, "Muat ulang" button, telemetry <code>error_boundary</code></td>
+</tr>
+<tr>
+<td>SW registration failure</td>
+<td>Continue without offline; log telemetry <code>sw_register_failed</code></td>
+</tr>
+<tr>
+<td>Cookie cleared by browser</td>
+<td>Treated as 401 → ReloginModal on next call</td>
+</tr>
+</tbody>
+</table>
+<h2 id="backend-additions">Backend additions</h2>
+<p>Two new files in <code>vernon_tasks/task/api/</code>:</p>
+<ul>
+<li><code>my_work.py</code></li>
+<li><code>@frappe.whitelist() def list()</code> → <code>{overdue, today, upcoming}</code> for
+    <code>frappe.session.user</code>. Reuses existing task query helpers in
+    <code>vernon_tasks/task/services/</code> where possible.</li>
+<li><code>@frappe.whitelist() def detail(task_id)</code> → full task incl. activity log</li>
+<li><code>telemetry.py</code></li>
+<li><code>@frappe.whitelist() def log_event(event, props=None)</code></li>
+</ul>
+<p>One new DocType:</p>
+<ul>
+<li><code>Vernon Telemetry Event</code> (single table, indexed on <code>event</code>, <code>timestamp</code>,
+  <code>user</code>). Hidden from menu, admin-only via role permissions.</li>
+</ul>
+<p>One new scheduled job:</p>
+<ul>
+<li>Daily <code>purge_old_telemetry</code>: deletes rows older than 90 days.</li>
+</ul>
+<p><code>hooks.py</code> additions:</p>
+<ul>
+<li><code>website_route_rules</code>: <code>[{"from_route": "/m/&lt;path:rest&gt;", "to_route":
+  "app"}]</code> with a www file <code>www/m.py</code> serving <code>www/m/index.html</code></li>
+<li><code>scheduler_events.daily</code>: append telemetry purge</li>
+</ul>
+<h2 id="testing">Testing</h2>
+<h3 id="unit-vitest-in-pwa">Unit (Vitest, in <code>pwa/</code>)</h3>
+<ul>
+<li><code>api/client.test.ts</code> — 401 triggers re-login event, retry once</li>
+<li><code>auth/session.test.ts</code> — cookie probe parses logged-in vs guest</li>
+<li><code>cache/idb.test.ts</code> — put/get/clear, namespace per resource</li>
+<li><code>cache/sync-time.test.ts</code> — stale threshold 1h</li>
+<li><code>i18n.test.ts</code> — date and number formatting for id-ID</li>
+</ul>
+<h3 id="component-vitest-testing-library">Component (Vitest + Testing Library)</h3>
+<ul>
+<li><code>MyWork/List</code> renders skeleton → data → empty → stale</li>
+<li><code>OfflineBanner</code> reacts to <code>navigator.onLine</code> events</li>
+<li><code>ReloginModal</code> preserves underlying DOM</li>
+<li><code>BottomNav</code> highlights current route</li>
+</ul>
+<h3 id="backend-pytest-via-bench">Backend (pytest via bench)</h3>
+<ul>
+<li><code>my_work.list</code> returns correct grouping for fixture user</li>
+<li><code>my_work.detail</code> rejects access to other-user tasks</li>
+<li><code>telemetry.log_event</code> rate-limited (max 60/min/user)</li>
+</ul>
+<h3 id="smoke-playwright-1-spec">Smoke (Playwright, 1 spec)</h3>
+<ul>
+<li>Launch dev server → login → <code>/m/work</code> list renders ≥ 1 card</li>
+</ul>
+<h3 id="manual-checklist">Manual checklist</h3>
+<ul>
+<li>Install on iOS Safari (Add to Home Screen) — icon, splash, standalone mode</li>
+<li>Install on Android Chrome — A2HS banner suppressed (P0.5), manual install works</li>
+<li>Airplane mode → cached list still renders + OfflineBanner shows</li>
+<li>Session expiry (manually delete sid cookie) → ReloginModal appears</li>
+</ul>
+<h2 id="rollout">Rollout</h2>
+<ol>
+<li>Merge to <code>master</code>, run <code>bench build</code>, deploy to staging</li>
+<li>Pilot: 1 team (5–10 users) for 1 week</li>
+<li>Measure via telemetry: DAU, install rate, login_failure rate, offline_seen,
+   ErrorBoundary frequency</li>
+<li>Fix issues, then company-wide announcement + Desk banner linking to <code>/m/</code></li>
+</ol>
+<h2 id="open-questions">Open questions</h2>
+<p>None — all decisions captured above. P1 spec will revisit swipe ergonomics,
+A2HS timing, and notification surface after pilot telemetry is in.</p>
+<h2 id="references">References</h2>
+<ul>
+<li>Frappe v15 docs: <code>frappe.auth</code>, website route rules, hooks</li>
+<li>Workbox 7 docs: precaching + runtime strategies</li>
+<li>Apple HIG: mobile navigation, safe areas</li>
+<li>Material Design 3: swipe actions, snackbars, empty states</li>
+</ul>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-11-vernon-pwa-foundation-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

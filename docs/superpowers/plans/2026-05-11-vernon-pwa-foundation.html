@@ -1,0 +1,2629 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks PWA — Foundation + My Work Read-only (P0.5) Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks PWA — Foundation + My Work Read-only (P0.5) Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-11-vernon-pwa-foundation.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-pwa-foundation-my-work-read-only-p05-implementation-plan">Vernon Tasks PWA — Foundation + My Work Read-only (P0.5) Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Ship installable PWA at <code>/m/</code> with session-cookie auth, read-only offline cache, and a working My Work list+detail screen — laying foundation for P1 mutations.</p>
+<p><strong>Architecture:</strong> React+Vite SPA built into <code>vernon_tasks/www/m/</code>, served via Frappe <code>website_route_rules</code>. Workbox SW caches API responses (StaleWhileRevalidate). Auth reuses Frappe <code>/api/method/login</code> and the <code>sid</code> cookie. New Frappe-side: 2 whitelisted APIs (<code>my_work</code>, <code>telemetry</code>), 1 DocType (<code>Vernon Telemetry Event</code>), 1 SPA route shell, 1 scheduled purge.</p>
+<p><strong>Tech Stack:</strong> Frappe v15 (Python 3.11), React 18, TypeScript 5, Vite 5, react-router 6, @tanstack/react-query 5, workbox 7, idb-keyval, Vitest, Playwright.</p>
+<p><strong>Reference spec:</strong> <code>docs/superpowers/specs/2026-05-11-vernon-pwa-foundation-design.md</code></p>
+<hr />
+<h2 id="pre-flight">Pre-flight</h2>
+<ul>
+<li>[ ] <strong>Step 0.1: Create feature branch</strong></li>
+</ul>
+<pre><code class="language-bash">cd /Users/erickmo/Desktop/Project/frappe/apps/vernon_tasks
+git checkout -b feat/pwa-foundation
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 0.2: Verify bench environment</strong></li>
+</ul>
+<p>Run: <code>ls vernon_tasks/hooks.py vernon_tasks/www</code>
+Expected: both exist.</p>
+<hr />
+<h2 id="task-1-backend-vernon-telemetry-event-doctype">Task 1: Backend — <code>Vernon Telemetry Event</code> DocType</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/__init__.py</code>
+- Create: <code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/vernon_telemetry_event.json</code>
+- Create: <code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/vernon_telemetry_event.py</code>
+- Create: <code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/test_vernon_telemetry_event.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1.1: Write failing test</strong></li>
+</ul>
+<p><code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/test_vernon_telemetry_event.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+
+
+class TestVernonTelemetryEvent(FrappeTestCase):
+    def test_create_event(self):
+        doc = frappe.get_doc({
+            &quot;doctype&quot;: &quot;Vernon Telemetry Event&quot;,
+            &quot;event&quot;: &quot;pwa_boot&quot;,
+            &quot;props&quot;: '{&quot;version&quot;:&quot;abc123&quot;}',
+        })
+        doc.insert(ignore_permissions=True)
+        self.assertEqual(doc.event, &quot;pwa_boot&quot;)
+        self.assertEqual(doc.user, frappe.session.user)
+        self.assertIsNotNone(doc.timestamp)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 1.2: Run test to verify it fails</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module "vernon_tasks.vt_settings.doctype.vernon_telemetry_event.test_vernon_telemetry_event"</code>
+Expected: FAIL with "DocType Vernon Telemetry Event not found".</p>
+<ul>
+<li>[ ] <strong>Step 1.3: Create empty <code>__init__.py</code></strong></li>
+</ul>
+<p><code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/__init__.py</code>: empty file.</p>
+<ul>
+<li>[ ] <strong>Step 1.4: Create DocType JSON</strong></li>
+</ul>
+<p><code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/vernon_telemetry_event.json</code>:</p>
+<pre><code class="language-json">{
+ &quot;actions&quot;: [],
+ &quot;allow_rename&quot;: 0,
+ &quot;autoname&quot;: &quot;hash&quot;,
+ &quot;creation&quot;: &quot;2026-05-11 00:00:00&quot;,
+ &quot;doctype&quot;: &quot;DocType&quot;,
+ &quot;engine&quot;: &quot;InnoDB&quot;,
+ &quot;field_order&quot;: [&quot;timestamp&quot;, &quot;user&quot;, &quot;event&quot;, &quot;props&quot;],
+ &quot;fields&quot;: [
+  {&quot;fieldname&quot;: &quot;timestamp&quot;, &quot;fieldtype&quot;: &quot;Datetime&quot;, &quot;label&quot;: &quot;Timestamp&quot;, &quot;default&quot;: &quot;now&quot;, &quot;reqd&quot;: 1, &quot;in_list_view&quot;: 1, &quot;in_standard_filter&quot;: 1},
+  {&quot;fieldname&quot;: &quot;user&quot;, &quot;fieldtype&quot;: &quot;Link&quot;, &quot;options&quot;: &quot;User&quot;, &quot;label&quot;: &quot;User&quot;, &quot;default&quot;: &quot;__user&quot;, &quot;reqd&quot;: 1, &quot;in_list_view&quot;: 1, &quot;in_standard_filter&quot;: 1},
+  {&quot;fieldname&quot;: &quot;event&quot;, &quot;fieldtype&quot;: &quot;Data&quot;, &quot;label&quot;: &quot;Event&quot;, &quot;reqd&quot;: 1, &quot;in_list_view&quot;: 1, &quot;in_standard_filter&quot;: 1, &quot;length&quot;: 64},
+  {&quot;fieldname&quot;: &quot;props&quot;, &quot;fieldtype&quot;: &quot;Long Text&quot;, &quot;label&quot;: &quot;Props (JSON)&quot;}
+ ],
+ &quot;index_web_pages_for_search&quot;: 0,
+ &quot;links&quot;: [],
+ &quot;modified&quot;: &quot;2026-05-11 00:00:00&quot;,
+ &quot;modified_by&quot;: &quot;Administrator&quot;,
+ &quot;module&quot;: &quot;VT Settings&quot;,
+ &quot;name&quot;: &quot;Vernon Telemetry Event&quot;,
+ &quot;naming_rule&quot;: &quot;Random&quot;,
+ &quot;owner&quot;: &quot;Administrator&quot;,
+ &quot;permissions&quot;: [
+  {&quot;role&quot;: &quot;System Manager&quot;, &quot;read&quot;: 1, &quot;write&quot;: 1, &quot;create&quot;: 1, &quot;delete&quot;: 1, &quot;report&quot;: 1, &quot;export&quot;: 1},
+  {&quot;role&quot;: &quot;Vernon Admin&quot;, &quot;read&quot;: 1, &quot;report&quot;: 1, &quot;export&quot;: 1}
+ ],
+ &quot;sort_field&quot;: &quot;timestamp&quot;,
+ &quot;sort_order&quot;: &quot;DESC&quot;,
+ &quot;states&quot;: [],
+ &quot;track_changes&quot;: 0,
+ &quot;hide_toolbar&quot;: 1
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 1.5: Create controller</strong></li>
+</ul>
+<p><code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/vernon_telemetry_event.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.model.document import Document
+
+
+class VernonTelemetryEvent(Document):
+    def before_insert(self):
+        if not self.timestamp:
+            self.timestamp = frappe.utils.now_datetime()
+        if not self.user:
+            self.user = frappe.session.user
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 1.6: Migrate + re-run test</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; migrate
+bench --site &lt;site&gt; run-tests --app vernon_tasks --module &quot;vernon_tasks.vt_settings.doctype.vernon_telemetry_event.test_vernon_telemetry_event&quot;
+</code></pre>
+<p>Expected: PASS.</p>
+<ul>
+<li>[ ] <strong>Step 1.7: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/vt_settings/doctype/vernon_telemetry_event
+git commit -m &quot;feat(telemetry): add Vernon Telemetry Event DocType&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-backend-telemetry-api-daily-purge">Task 2: Backend — telemetry API + daily purge</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/api/telemetry.py</code>
+- Create: <code>vernon_tasks/task/api/test_telemetry.py</code>
+- Create: <code>vernon_tasks/task/api/__init__.py</code> (only if missing)</p>
+<ul>
+<li>[ ] <strong>Step 2.1: Failing test</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/test_telemetry.py</code>:</p>
+<pre><code class="language-python">import json
+import frappe
+from frappe.tests.utils import FrappeTestCase
+from vernon_tasks.task.api.telemetry import log_event, purge_old_telemetry
+
+
+class TestTelemetry(FrappeTestCase):
+    def setUp(self):
+        frappe.db.delete(&quot;Vernon Telemetry Event&quot;)
+
+    def test_log_event_persists(self):
+        log_event(event=&quot;pwa_boot&quot;, props={&quot;version&quot;: &quot;abc&quot;})
+        rows = frappe.get_all(&quot;Vernon Telemetry Event&quot;, filters={&quot;event&quot;: &quot;pwa_boot&quot;})
+        self.assertEqual(len(rows), 1)
+
+    def test_log_event_rejects_unknown(self):
+        with self.assertRaises(frappe.ValidationError):
+            log_event(event=&quot;rogue_event&quot;)
+
+    def test_log_event_rate_limit(self):
+        for _ in range(60):
+            log_event(event=&quot;page_view&quot;, props={&quot;route&quot;: &quot;/m/work&quot;})
+        with self.assertRaises(frappe.ValidationError):
+            log_event(event=&quot;page_view&quot;, props={&quot;route&quot;: &quot;/m/work&quot;})
+
+    def test_purge_removes_old(self):
+        doc = frappe.get_doc({
+            &quot;doctype&quot;: &quot;Vernon Telemetry Event&quot;,
+            &quot;event&quot;: &quot;pwa_boot&quot;,
+            &quot;timestamp&quot;: frappe.utils.add_days(frappe.utils.now_datetime(), -100),
+        }).insert(ignore_permissions=True)
+        purge_old_telemetry()
+        self.assertFalse(frappe.db.exists(&quot;Vernon Telemetry Event&quot;, doc.name))
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2.2: Run to confirm fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module "vernon_tasks.task.api.test_telemetry"</code>
+Expected: ImportError on <code>telemetry</code>.</p>
+<ul>
+<li>[ ] <strong>Step 2.3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/telemetry.py</code>:</p>
+<pre><code class="language-python">import json
+import frappe
+from frappe.utils import add_days, now_datetime
+
+ALLOWED_EVENTS = {
+    &quot;pwa_boot&quot;,
+    &quot;login_success&quot;,
+    &quot;login_failure&quot;,
+    &quot;page_view&quot;,
+    &quot;task_view&quot;,
+    &quot;offline_seen&quot;,
+    &quot;error_boundary&quot;,
+    &quot;sw_register_failed&quot;,
+}
+
+RATE_LIMIT_PER_MINUTE = 60
+RETENTION_DAYS = 90
+
+
+@frappe.whitelist()
+def log_event(event: str, props: dict | None = None) -&gt; dict:
+    if event not in ALLOWED_EVENTS:
+        frappe.throw(f&quot;Unknown telemetry event: {event}&quot;)
+
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return {&quot;ok&quot;: False, &quot;reason&quot;: &quot;guest&quot;}
+
+    cache_key = f&quot;vt:tel:{user}:{frappe.utils.now()[:16]}&quot;
+    count = frappe.cache().incrby(cache_key, 1)
+    frappe.cache().expire(cache_key, 90)
+    if count &gt; RATE_LIMIT_PER_MINUTE:
+        frappe.throw(&quot;Telemetry rate limit exceeded&quot;)
+
+    props_str = json.dumps(props) if isinstance(props, dict) else (props or None)
+
+    doc = frappe.get_doc({
+        &quot;doctype&quot;: &quot;Vernon Telemetry Event&quot;,
+        &quot;event&quot;: event,
+        &quot;user&quot;: user,
+        &quot;timestamp&quot;: now_datetime(),
+        &quot;props&quot;: props_str,
+    })
+    doc.insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True}
+
+
+def purge_old_telemetry() -&gt; None:
+    cutoff = add_days(now_datetime(), -RETENTION_DAYS)
+    frappe.db.delete(&quot;Vernon Telemetry Event&quot;, {&quot;timestamp&quot;: [&quot;&lt;&quot;, cutoff]})
+    frappe.db.commit()
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2.4: Re-run test</strong></li>
+</ul>
+<p>Run: same command as 2.2.
+Expected: 4 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 2.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/telemetry.py vernon_tasks/task/api/test_telemetry.py
+git commit -m &quot;feat(api): add telemetry log_event + daily purge&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-backend-my_work-list-detail-api">Task 3: Backend — <code>my_work</code> list + detail API</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/api/my_work.py</code>
+- Create: <code>vernon_tasks/task/api/test_my_work.py</code></p>
+<ul>
+<li>[ ] <strong>Step 3.1: Failing test</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/test_my_work.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from vernon_tasks.task.api.my_work import list as my_work_list, detail
+
+
+class TestMyWork(FrappeTestCase):
+    def setUp(self):
+        self.user_a = &quot;a@test.local&quot;
+        self.user_b = &quot;b@test.local&quot;
+        for u in (self.user_a, self.user_b):
+            if not frappe.db.exists(&quot;User&quot;, u):
+                frappe.get_doc({&quot;doctype&quot;: &quot;User&quot;, &quot;email&quot;: u, &quot;first_name&quot;: u}).insert(ignore_permissions=True)
+
+    def _make_task(self, owner, due_date, title=&quot;T&quot;):
+        return frappe.get_doc({
+            &quot;doctype&quot;: &quot;Task&quot;,
+            &quot;subject&quot;: title,
+            &quot;exp_end_date&quot;: due_date,
+            &quot;_assign&quot;: frappe.as_json([owner]),
+        }).insert(ignore_permissions=True)
+
+    def test_list_groups_correctly(self):
+        frappe.set_user(self.user_a)
+        today = frappe.utils.today()
+        self._make_task(self.user_a, frappe.utils.add_days(today, -2), &quot;old&quot;)
+        self._make_task(self.user_a, today, &quot;now&quot;)
+        self._make_task(self.user_a, frappe.utils.add_days(today, 3), &quot;soon&quot;)
+        result = my_work_list()
+        self.assertEqual(len(result[&quot;overdue&quot;]), 1)
+        self.assertEqual(len(result[&quot;today&quot;]), 1)
+        self.assertEqual(len(result[&quot;upcoming&quot;]), 1)
+
+    def test_detail_rejects_other_user(self):
+        frappe.set_user(self.user_a)
+        task = self._make_task(self.user_a, frappe.utils.today())
+        frappe.set_user(self.user_b)
+        with self.assertRaises(frappe.PermissionError):
+            detail(task.name)
+</code></pre>
+<blockquote>
+<p><strong>Note for executor:</strong> Confirm Vernon's task DocType name (it may be <code>VT Task</code> or similar). Update <code>"doctype": "Task"</code> + <code>frappe.get_all("Task", ...)</code> in the implementation accordingly. Grep with <code>find vernon_tasks/task/doctype -type d</code> first.</p>
+</blockquote>
+<ul>
+<li>[ ] <strong>Step 3.2: Run — confirm fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module "vernon_tasks.task.api.test_my_work"</code>
+Expected: ImportError.</p>
+<ul>
+<li>[ ] <strong>Step 3.3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/my_work.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.utils import today, add_days, getdate
+
+TASK_DOCTYPE = &quot;Task&quot;
+
+
+def _serialize(row: dict) -&gt; dict:
+    return {
+        &quot;id&quot;: row[&quot;name&quot;],
+        &quot;title&quot;: row.get(&quot;subject&quot;) or row.get(&quot;title&quot;),
+        &quot;status&quot;: row.get(&quot;status&quot;),
+        &quot;priority&quot;: row.get(&quot;priority&quot;),
+        &quot;due_date&quot;: row.get(&quot;exp_end_date&quot;) or row.get(&quot;due_date&quot;),
+        &quot;project&quot;: row.get(&quot;project&quot;),
+        &quot;sprint&quot;: row.get(&quot;sprint&quot;),
+        &quot;points&quot;: row.get(&quot;points&quot;) or 0,
+    }
+
+
+@frappe.whitelist()
+def list() -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+    rows = frappe.get_all(
+        TASK_DOCTYPE,
+        filters=[[&quot;_assign&quot;, &quot;like&quot;, f&quot;%{user}%&quot;], [&quot;status&quot;, &quot;!=&quot;, &quot;Cancelled&quot;]],
+        fields=[&quot;name&quot;, &quot;subject&quot;, &quot;status&quot;, &quot;priority&quot;, &quot;exp_end_date&quot;, &quot;project&quot;],
+        order_by=&quot;exp_end_date asc&quot;,
+        limit_page_length=500,
+    )
+
+    today_d = getdate(today())
+    upcoming_cap = add_days(today_d, 7)
+    overdue, today_list, upcoming = [], [], []
+    for r in rows:
+        d = getdate(r[&quot;exp_end_date&quot;]) if r[&quot;exp_end_date&quot;] else None
+        item = _serialize(r)
+        if d is None or d &gt; upcoming_cap:
+            continue
+        if d &lt; today_d:
+            overdue.append(item)
+        elif d == today_d:
+            today_list.append(item)
+        else:
+            upcoming.append(item)
+    return {&quot;overdue&quot;: overdue, &quot;today&quot;: today_list, &quot;upcoming&quot;: upcoming}
+
+
+@frappe.whitelist()
+def detail(task_id: str) -&gt; dict:
+    user = frappe.session.user
+    if not frappe.db.exists(TASK_DOCTYPE, task_id):
+        frappe.throw(&quot;Not found&quot;, frappe.PermissionError)
+
+    doc = frappe.get_doc(TASK_DOCTYPE, task_id)
+    assignees = frappe.parse_json(doc.get(&quot;_assign&quot;) or &quot;[]&quot;)
+    if user not in assignees and not frappe.has_permission(TASK_DOCTYPE, &quot;read&quot;, doc=doc):
+        frappe.throw(&quot;Forbidden&quot;, frappe.PermissionError)
+
+    activity = frappe.get_all(
+        &quot;Comment&quot;,
+        filters={&quot;reference_doctype&quot;: TASK_DOCTYPE, &quot;reference_name&quot;: task_id},
+        fields=[&quot;content&quot;, &quot;comment_type&quot;, &quot;creation&quot;, &quot;owner&quot;],
+        order_by=&quot;creation desc&quot;,
+        limit_page_length=10,
+    )
+    return {
+        **_serialize(doc.as_dict()),
+        &quot;description&quot;: doc.get(&quot;description&quot;),
+        &quot;activity&quot;: activity,
+    }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3.4: Re-run, fix DocType name if needed</strong></li>
+</ul>
+<p>Run: same as 3.2.
+Expected: 2 PASS. If "DocType X not found", adjust <code>TASK_DOCTYPE</code> and <code>subject</code> field.</p>
+<ul>
+<li>[ ] <strong>Step 3.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/my_work.py vernon_tasks/task/api/test_my_work.py
+git commit -m &quot;feat(api): add my_work list + detail for PWA&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-backend-spa-route-hooks-integration">Task 4: Backend — SPA route + hooks integration</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/www/m.py</code>
+- Create: <code>vernon_tasks/www/m.html</code>
+- Modify: <code>vernon_tasks/hooks.py</code></p>
+<ul>
+<li>[ ] <strong>Step 4.1: Create SPA controller</strong></li>
+</ul>
+<p><code>vernon_tasks/www/m.py</code>:</p>
+<pre><code class="language-python">import os
+import frappe
+
+no_cache = 1
+sitemap = 0
+
+
+def get_context(context):
+    &quot;&quot;&quot;Serve the built PWA index.html for /m/* routes (SPA fallback).&quot;&quot;&quot;
+    app_path = frappe.get_app_path(&quot;vernon_tasks&quot;, &quot;www&quot;, &quot;m&quot;, &quot;index.html&quot;)
+    if os.path.exists(app_path):
+        with open(app_path, &quot;r&quot;, encoding=&quot;utf-8&quot;) as f:
+            context.spa_html = f.read()
+    else:
+        context.spa_html = (
+            &quot;&lt;!doctype html&gt;&lt;html&gt;&lt;body&gt;&lt;p&gt;PWA not built. &quot;
+            &quot;Run &lt;code&gt;cd pwa &amp;amp;&amp;amp; npm run build&lt;/code&gt;.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;
+        )
+    context.no_breadcrumbs = True
+    return context
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4.2: Create minimal Jinja template</strong></li>
+</ul>
+<p><code>vernon_tasks/www/m.html</code>:</p>
+<pre><code class="language-html">{{ spa_html | safe }}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4.3: Add route rule + scheduler in <code>hooks.py</code></strong></li>
+</ul>
+<p>Read current <code>vernon_tasks/hooks.py</code> first. Append (or merge):</p>
+<pre><code class="language-python">website_route_rules = [
+    {&quot;from_route&quot;: &quot;/m/&lt;path:rest&gt;&quot;, &quot;to_route&quot;: &quot;m&quot;},
+]
+
+scheduler_events = {
+    &quot;daily&quot;: [
+        &quot;vernon_tasks.task.api.telemetry.purge_old_telemetry&quot;,
+    ],
+}
+</code></pre>
+<p>If keys already exist, merge.</p>
+<ul>
+<li>[ ] <strong>Step 4.4: Smoke test route</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; migrate
+bench --site &lt;site&gt; clear-cache
+bench restart
+curl -s http://&lt;site&gt;/m/anything | grep -q &quot;PWA not built&quot; &amp;&amp; echo OK
+</code></pre>
+<p>Expected: prints <code>OK</code>.</p>
+<ul>
+<li>[ ] <strong>Step 4.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/www/m.py vernon_tasks/www/m.html vernon_tasks/hooks.py
+git commit -m &quot;feat(hooks): SPA route /m/* + daily telemetry purge&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-frontend-vite-typescript-scaffold">Task 5: Frontend — Vite + TypeScript scaffold</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/package.json</code>
+- Create: <code>pwa/tsconfig.json</code>
+- Create: <code>pwa/vite.config.ts</code>
+- Create: <code>pwa/index.html</code>
+- Create: <code>pwa/.gitignore</code>
+- Create: <code>pwa/src/main.tsx</code>
+- Create: <code>pwa/src/test-setup.ts</code>
+- Modify: project root <code>.gitignore</code></p>
+<ul>
+<li>[ ] <strong>Step 5.1: <code>pwa/package.json</code></strong></li>
+</ul>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;vernon-tasks-pwa&quot;,
+  &quot;private&quot;: true,
+  &quot;version&quot;: &quot;0.0.1&quot;,
+  &quot;type&quot;: &quot;module&quot;,
+  &quot;scripts&quot;: {
+    &quot;dev&quot;: &quot;vite&quot;,
+    &quot;build&quot;: &quot;tsc -b &amp;&amp; vite build&quot;,
+    &quot;preview&quot;: &quot;vite preview&quot;,
+    &quot;test&quot;: &quot;vitest run&quot;,
+    &quot;test:watch&quot;: &quot;vitest&quot;,
+    &quot;lint&quot;: &quot;tsc --noEmit&quot;
+  },
+  &quot;dependencies&quot;: {
+    &quot;@tanstack/react-query&quot;: &quot;^5.51.0&quot;,
+    &quot;idb-keyval&quot;: &quot;^6.2.1&quot;,
+    &quot;react&quot;: &quot;^18.3.1&quot;,
+    &quot;react-dom&quot;: &quot;^18.3.1&quot;,
+    &quot;react-router-dom&quot;: &quot;^6.26.0&quot;
+  },
+  &quot;devDependencies&quot;: {
+    &quot;@testing-library/jest-dom&quot;: &quot;^6.4.8&quot;,
+    &quot;@testing-library/react&quot;: &quot;^16.0.0&quot;,
+    &quot;@types/react&quot;: &quot;^18.3.3&quot;,
+    &quot;@types/react-dom&quot;: &quot;^18.3.0&quot;,
+    &quot;@vitejs/plugin-react&quot;: &quot;^4.3.1&quot;,
+    &quot;happy-dom&quot;: &quot;^14.12.3&quot;,
+    &quot;typescript&quot;: &quot;^5.5.4&quot;,
+    &quot;vite&quot;: &quot;^5.4.0&quot;,
+    &quot;vite-plugin-pwa&quot;: &quot;^0.20.1&quot;,
+    &quot;vitest&quot;: &quot;^2.0.5&quot;,
+    &quot;workbox-window&quot;: &quot;^7.1.0&quot;
+  }
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.2: <code>pwa/tsconfig.json</code></strong></li>
+</ul>
+<pre><code class="language-json">{
+  &quot;compilerOptions&quot;: {
+    &quot;target&quot;: &quot;ES2022&quot;,
+    &quot;lib&quot;: [&quot;ES2022&quot;, &quot;DOM&quot;, &quot;DOM.Iterable&quot;, &quot;WebWorker&quot;],
+    &quot;module&quot;: &quot;ESNext&quot;,
+    &quot;moduleResolution&quot;: &quot;Bundler&quot;,
+    &quot;jsx&quot;: &quot;react-jsx&quot;,
+    &quot;strict&quot;: true,
+    &quot;noUnusedLocals&quot;: true,
+    &quot;noUnusedParameters&quot;: true,
+    &quot;resolveJsonModule&quot;: true,
+    &quot;isolatedModules&quot;: true,
+    &quot;esModuleInterop&quot;: true,
+    &quot;skipLibCheck&quot;: true,
+    &quot;types&quot;: [&quot;vite/client&quot;, &quot;vitest/globals&quot;],
+    &quot;baseUrl&quot;: &quot;src&quot;,
+    &quot;paths&quot;: { &quot;@/*&quot;: [&quot;*&quot;] }
+  },
+  &quot;include&quot;: [&quot;src&quot;, &quot;vite.config.ts&quot;]
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.3: <code>pwa/vite.config.ts</code></strong></li>
+</ul>
+<p>Uses <code>execFileSync</code> with array args (no shell) to read git SHA — safe, no shell interpolation.</p>
+<pre><code class="language-typescript">import { defineConfig } from &quot;vite&quot;;
+import react from &quot;@vitejs/plugin-react&quot;;
+import { VitePWA } from &quot;vite-plugin-pwa&quot;;
+import { execFileSync } from &quot;node:child_process&quot;;
+import path from &quot;node:path&quot;;
+
+const swVersion = (() =&gt; {
+  try {
+    return execFileSync(&quot;git&quot;, [&quot;rev-parse&quot;, &quot;--short&quot;, &quot;HEAD&quot;]).toString().trim();
+  } catch {
+    return &quot;dev&quot;;
+  }
+})();
+
+export default defineConfig({
+  base: &quot;/m/&quot;,
+  define: { __SW_VERSION__: JSON.stringify(swVersion) },
+  resolve: { alias: { &quot;@&quot;: path.resolve(__dirname, &quot;src&quot;) } },
+  plugins: [
+    react(),
+    VitePWA({
+      strategies: &quot;generateSW&quot;,
+      registerType: &quot;autoUpdate&quot;,
+      manifest: {
+        name: &quot;Vernon Tasks&quot;,
+        short_name: &quot;Vernon&quot;,
+        description: &quot;Tugas, sprint, dan analitik Vernon.&quot;,
+        start_url: &quot;/m/&quot;,
+        scope: &quot;/m/&quot;,
+        display: &quot;standalone&quot;,
+        background_color: &quot;#0b0b10&quot;,
+        theme_color: &quot;#0b0b10&quot;,
+        lang: &quot;id-ID&quot;,
+        icons: [
+          { src: &quot;icons/icon-192.png&quot;, sizes: &quot;192x192&quot;, type: &quot;image/png&quot; },
+          { src: &quot;icons/icon-512.png&quot;, sizes: &quot;512x512&quot;, type: &quot;image/png&quot; },
+          { src: &quot;icons/maskable-512.png&quot;, sizes: &quot;512x512&quot;, type: &quot;image/png&quot;, purpose: &quot;maskable&quot; }
+        ]
+      },
+      workbox: {
+        cacheId: `vt-${swVersion}`,
+        navigateFallback: &quot;/m/index.html&quot;,
+        navigateFallbackDenylist: [/^\/api\//, /^\/app\//, /^\/private\//],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =&gt; url.pathname.startsWith(&quot;/api/method/vernon_tasks.&quot;),
+            handler: &quot;StaleWhileRevalidate&quot;,
+            options: {
+              cacheName: `vt-api-${swVersion}`,
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 }
+            }
+          }
+        ]
+      }
+    })
+  ],
+  build: {
+    outDir: path.resolve(__dirname, &quot;../vernon_tasks/www/m&quot;),
+    emptyOutDir: true,
+    sourcemap: false
+  },
+  test: {
+    environment: &quot;happy-dom&quot;,
+    globals: true,
+    setupFiles: [&quot;./src/test-setup.ts&quot;]
+  }
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.4: <code>pwa/index.html</code></strong></li>
+</ul>
+<pre><code class="language-html">&lt;!doctype html&gt;
+&lt;html lang=&quot;id&quot;&gt;
+  &lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot; /&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1, viewport-fit=cover&quot; /&gt;
+    &lt;meta name=&quot;theme-color&quot; content=&quot;#0b0b10&quot; /&gt;
+    &lt;title&gt;Vernon Tasks&lt;/title&gt;
+    &lt;link rel=&quot;icon&quot; href=&quot;/m/icons/icon-192.png&quot; /&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;div id=&quot;root&quot;&gt;&lt;/div&gt;
+    &lt;script type=&quot;module&quot; src=&quot;/src/main.tsx&quot;&gt;&lt;/script&gt;
+  &lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.5: Stub <code>pwa/src/main.tsx</code> + test setup</strong></li>
+</ul>
+<p><code>pwa/src/main.tsx</code>:</p>
+<pre><code class="language-typescript">import React from &quot;react&quot;;
+import ReactDOM from &quot;react-dom/client&quot;;
+
+ReactDOM.createRoot(document.getElementById(&quot;root&quot;)!).render(
+  &lt;React.StrictMode&gt;
+    &lt;div&gt;Vernon PWA boot OK&lt;/div&gt;
+  &lt;/React.StrictMode&gt;
+);
+</code></pre>
+<p><code>pwa/src/test-setup.ts</code>:</p>
+<pre><code class="language-typescript">import &quot;@testing-library/jest-dom/vitest&quot;;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.6: <code>pwa/.gitignore</code></strong></li>
+</ul>
+<pre><code>node_modules
+dist
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.7: Update root <code>.gitignore</code></strong></li>
+</ul>
+<p>Append to <code>.gitignore</code>:</p>
+<pre><code>vernon_tasks/www/m/
+!vernon_tasks/www/m.py
+!vernon_tasks/www/m.html
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5.8: Install + build smoke</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa
+npm install
+npm run build
+ls ../vernon_tasks/www/m/index.html
+</code></pre>
+<p>Expected: build succeeds, <code>index.html</code> exists.</p>
+<ul>
+<li>[ ] <strong>Step 5.9: Verify served</strong></li>
+</ul>
+<pre><code class="language-bash">cd ..
+bench restart
+curl -s http://&lt;site&gt;/m/ | grep -q &quot;Vernon PWA boot OK&quot; &amp;&amp; echo OK
+</code></pre>
+<p>Expected: prints <code>OK</code>.</p>
+<ul>
+<li>[ ] <strong>Step 5.10: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa .gitignore
+git commit -m &quot;feat(pwa): scaffold Vite + React + workbox PWA shell at /m/&quot;
+</code></pre>
+<hr />
+<h2 id="task-6-frontend-design-tokens-safe-area-theme">Task 6: Frontend — design tokens + safe-area + theme</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/theme/tokens.css</code>
+- Create: <code>pwa/src/theme/index.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 6.1: Tokens CSS</strong></li>
+</ul>
+<p><code>pwa/src/theme/tokens.css</code>:</p>
+<pre><code class="language-css">:root {
+  --vt-font: system-ui, -apple-system, &quot;Segoe UI&quot;, Roboto, sans-serif;
+  --vt-radius: 12px;
+  --vt-radius-sm: 8px;
+  --vt-space-1: 4px;
+  --vt-space-2: 8px;
+  --vt-space-3: 12px;
+  --vt-space-4: 16px;
+  --vt-space-5: 24px;
+  --vt-space-6: 32px;
+  --vt-bg: #ffffff;
+  --vt-surface: #f6f7f9;
+  --vt-text: #0b0b10;
+  --vt-text-muted: #5b6472;
+  --vt-border: #e3e6ec;
+  --vt-primary: #1e6bff;
+  --vt-primary-contrast: #ffffff;
+  --vt-danger: #d4351c;
+  --vt-warn: #e89c1f;
+  --vt-success: #18a957;
+  --vt-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --bottom-nav-h: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vt-bg: #0b0b10;
+    --vt-surface: #15151c;
+    --vt-text: #f4f5f7;
+    --vt-text-muted: #9aa0aa;
+    --vt-border: #2a2b34;
+    --vt-primary: #4a8bff;
+    --vt-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.35);
+  }
+}
+
+@keyframes vt-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: var(--vt-font);
+  font-size: 15px;
+  color: var(--vt-text);
+  background: var(--vt-bg);
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; cursor: pointer; }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6.2: Theme helper</strong></li>
+</ul>
+<p><code>pwa/src/theme/index.ts</code>:</p>
+<pre><code class="language-typescript">import &quot;./tokens.css&quot;;
+
+export const theme = { bottomNavHeight: 64 };
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6.3: Wire in main.tsx</strong></li>
+</ul>
+<p>Replace <code>pwa/src/main.tsx</code>:</p>
+<pre><code class="language-typescript">import React from &quot;react&quot;;
+import ReactDOM from &quot;react-dom/client&quot;;
+import &quot;./theme&quot;;
+
+ReactDOM.createRoot(document.getElementById(&quot;root&quot;)!).render(
+  &lt;React.StrictMode&gt;
+    &lt;div&gt;Vernon PWA boot OK&lt;/div&gt;
+  &lt;/React.StrictMode&gt;
+);
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6.4: Build</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run build &amp;&amp; cd ..
+</code></pre>
+<p>Expected: build succeeds.</p>
+<ul>
+<li>[ ] <strong>Step 6.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/theme pwa/src/main.tsx
+git commit -m &quot;feat(pwa): design tokens (light+dark, safe-area)&quot;
+</code></pre>
+<hr />
+<h2 id="task-7-frontend-i18n">Task 7: Frontend — i18n</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/i18n.ts</code>
+- Create: <code>pwa/src/i18n.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 7.1: Failing test</strong></li>
+</ul>
+<p><code>pwa/src/i18n.test.ts</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect } from &quot;vitest&quot;;
+import { t, fmtDate, fmtTime, greeting } from &quot;./i18n&quot;;
+
+describe(&quot;i18n&quot;, () =&gt; {
+  it(&quot;translates keys&quot;, () =&gt; {
+    expect(t(&quot;login.submit&quot;)).toBe(&quot;Masuk&quot;);
+    expect(t(&quot;nav.tasks&quot;)).toBe(&quot;Tugas&quot;);
+  });
+
+  it(&quot;returns key when missing&quot;, () =&gt; {
+    expect(t(&quot;does.not.exist&quot; as never)).toBe(&quot;does.not.exist&quot;);
+  });
+
+  it(&quot;formats date as DD MMM YYYY id-ID&quot;, () =&gt; {
+    const d = new Date(&quot;2026-05-11T12:00:00Z&quot;);
+    expect(fmtDate(d)).toMatch(/11 Mei 2026/);
+  });
+
+  it(&quot;formats time 24h&quot;, () =&gt; {
+    const d = new Date(&quot;2026-05-11T14:32:00Z&quot;);
+    expect(fmtTime(d)).toMatch(/\d{2}:\d{2}/);
+  });
+
+  it(&quot;greets by hour&quot;, () =&gt; {
+    expect(greeting(7)).toBe(&quot;Selamat pagi&quot;);
+    expect(greeting(13)).toBe(&quot;Selamat siang&quot;);
+    expect(greeting(16)).toBe(&quot;Selamat sore&quot;);
+    expect(greeting(21)).toBe(&quot;Selamat malam&quot;);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7.2: Run — confirm fail</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npx vitest run src/i18n.test.ts
+</code></pre>
+<p>Expected: FAIL "cannot find ./i18n".</p>
+<ul>
+<li>[ ] <strong>Step 7.3: Implement</strong></li>
+</ul>
+<p><code>pwa/src/i18n.ts</code>:</p>
+<pre><code class="language-typescript">const STRINGS = {
+  &quot;app.title&quot;: &quot;Vernon Tasks&quot;,
+  &quot;nav.tasks&quot;: &quot;Tugas&quot;,
+  &quot;nav.dashboard&quot;: &quot;Dashboard&quot;,
+  &quot;nav.analytics&quot;: &quot;Analitik&quot;,
+  &quot;nav.me&quot;: &quot;Saya&quot;,
+  &quot;login.title&quot;: &quot;Masuk ke Vernon&quot;,
+  &quot;login.username&quot;: &quot;Email atau Username&quot;,
+  &quot;login.password&quot;: &quot;Kata Sandi&quot;,
+  &quot;login.submit&quot;: &quot;Masuk&quot;,
+  &quot;login.error&quot;: &quot;Email atau kata sandi salah.&quot;,
+  &quot;logout&quot;: &quot;Keluar&quot;,
+  &quot;common.retry&quot;: &quot;Coba lagi&quot;,
+  &quot;common.refresh&quot;: &quot;Muat ulang&quot;,
+  &quot;common.loading&quot;: &quot;Memuat…&quot;,
+  &quot;common.coming_soon&quot;: &quot;Segera hadir&quot;,
+  &quot;offline.banner&quot;: &quot;Mode offline · terakhir sinkron&quot;,
+  &quot;stale.prefix&quot;: &quot;Diperbarui&quot;,
+  &quot;empty.no_offline&quot;: &quot;Belum ada data offline.&quot;,
+  &quot;empty.no_tasks&quot;: &quot;Tidak ada tugas hari ini. Nikmati waktumu.&quot;,
+  &quot;tasks.section.overdue&quot;: &quot;Terlambat&quot;,
+  &quot;tasks.section.today&quot;: &quot;Hari Ini&quot;,
+  &quot;tasks.section.upcoming&quot;: &quot;Mendatang&quot;,
+  &quot;tasks.detail.action_disabled&quot;: &quot;Tersedia di pembaruan berikutnya&quot;,
+  &quot;relogin.title&quot;: &quot;Sesi berakhir&quot;,
+  &quot;relogin.body&quot;: &quot;Sesi Anda berakhir. Silakan masuk lagi untuk melanjutkan.&quot;,
+  &quot;onboarding.welcome.title&quot;: &quot;Selamat datang di Vernon&quot;,
+  &quot;onboarding.welcome.body&quot;: &quot;Tugas, sprint, dan analitik tim Anda di satu tempat.&quot;,
+  &quot;onboarding.anywhere.title&quot;: &quot;Tugas Anda, di mana saja&quot;,
+  &quot;onboarding.anywhere.body&quot;: &quot;Bisa di-install seperti aplikasi, tetap bisa dilihat saat offline.&quot;,
+  &quot;onboarding.start.title&quot;: &quot;Mari mulai&quot;,
+  &quot;onboarding.start.cta&quot;: &quot;Mulai&quot;,
+  &quot;error.boundary.title&quot;: &quot;Terjadi kesalahan&quot;,
+  &quot;error.boundary.body&quot;: &quot;Halaman gagal dimuat. Coba muat ulang.&quot;
+} as const;
+
+export type StringKey = keyof typeof STRINGS;
+
+export function t(key: StringKey): string {
+  return (STRINGS as Record&lt;string, string&gt;)[key] ?? key;
+}
+
+const dateFmt = new Intl.DateTimeFormat(&quot;id-ID&quot;, { day: &quot;2-digit&quot;, month: &quot;short&quot;, year: &quot;numeric&quot; });
+const timeFmt = new Intl.DateTimeFormat(&quot;id-ID&quot;, { hour: &quot;2-digit&quot;, minute: &quot;2-digit&quot;, hour12: false });
+
+export function fmtDate(d: Date | string): string {
+  const dt = typeof d === &quot;string&quot; ? new Date(d) : d;
+  return dateFmt.format(dt);
+}
+
+export function fmtTime(d: Date | string): string {
+  const dt = typeof d === &quot;string&quot; ? new Date(d) : d;
+  return timeFmt.format(dt);
+}
+
+export function fmtRelative(ms: number): string {
+  if (ms &lt; 60_000) return &quot;baru saja&quot;;
+  if (ms &lt; 3_600_000) return `${Math.floor(ms / 60_000)} menit lalu`;
+  if (ms &lt; 86_400_000) return `${Math.floor(ms / 3_600_000)} jam lalu`;
+  return `${Math.floor(ms / 86_400_000)} hari lalu`;
+}
+
+export function greeting(hour: number = new Date().getHours()): string {
+  if (hour &lt; 11) return &quot;Selamat pagi&quot;;
+  if (hour &lt; 15) return &quot;Selamat siang&quot;;
+  if (hour &lt; 18) return &quot;Selamat sore&quot;;
+  return &quot;Selamat malam&quot;;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 7.4: Re-run — PASS</strong></li>
+</ul>
+<p>Run: <code>npx vitest run src/i18n.test.ts</code>
+Expected: 5 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 7.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/i18n.ts pwa/src/i18n.test.ts
+git commit -m &quot;feat(pwa): i18n strings + id-ID date/time formatters&quot;
+</code></pre>
+<hr />
+<h2 id="task-8-frontend-apiclient-with-401-hook">Task 8: Frontend — <code>api/client</code> with 401 hook</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/api/client.ts</code>
+- Create: <code>pwa/src/api/client.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 8.1: Failing test</strong></li>
+</ul>
+<p><code>pwa/src/api/client.test.ts</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect, vi, beforeEach } from &quot;vitest&quot;;
+import { api, onAuthChallenge } from &quot;./client&quot;;
+
+describe(&quot;api client&quot;, () =&gt; {
+  beforeEach(() =&gt; { vi.restoreAllMocks(); });
+
+  it(&quot;GET parses JSON body via .message&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { hello: &quot;world&quot; } }), { status: 200 })
+    ));
+    const r = await api.get&lt;{ hello: string }&gt;(&quot;/api/method/x&quot;);
+    expect(r.hello).toBe(&quot;world&quot;);
+  });
+
+  it(&quot;emits auth challenge on 401&quot;, async () =&gt; {
+    const cb = vi.fn().mockResolvedValue(true);
+    onAuthChallenge(cb);
+    const responses = [
+      new Response(&quot;&quot;, { status: 401 }),
+      new Response(JSON.stringify({ message: { ok: true } }), { status: 200 })
+    ];
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockImplementation(() =&gt; Promise.resolve(responses.shift()!)));
+    const r = await api.get&lt;{ ok: boolean }&gt;(&quot;/api/method/x&quot;);
+    expect(cb).toHaveBeenCalledOnce();
+    expect(r.ok).toBe(true);
+  });
+
+  it(&quot;throws on 5xx&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(new Response(&quot;&quot;, { status: 500 })));
+    await expect(api.get(&quot;/api/method/x&quot;)).rejects.toThrow(/500/);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 8.2: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">npx vitest run src/api/client.test.ts
+</code></pre>
+<p>Expected: FAIL (module missing).</p>
+<ul>
+<li>[ ] <strong>Step 8.3: Implement</strong></li>
+</ul>
+<p><code>pwa/src/api/client.ts</code>:</p>
+<pre><code class="language-typescript">type AuthChallenge = () =&gt; Promise&lt;boolean&gt;;
+
+let authHandler: AuthChallenge | null = null;
+export function onAuthChallenge(handler: AuthChallenge) {
+  authHandler = handler;
+}
+
+function getCsrf(): string | undefined {
+  return (window as unknown as { csrf_token?: string }).csrf_token;
+}
+
+async function request&lt;T&gt;(method: string, url: string, body?: unknown, retry = true): Promise&lt;T&gt; {
+  const headers: Record&lt;string, string&gt; = { &quot;X-Requested-With&quot;: &quot;fetch&quot; };
+  if (body !== undefined) headers[&quot;Content-Type&quot;] = &quot;application/json&quot;;
+  const csrf = getCsrf();
+  if (csrf) headers[&quot;X-Frappe-CSRF-Token&quot;] = csrf;
+
+  const res = await fetch(url, {
+    method,
+    headers,
+    credentials: &quot;same-origin&quot;,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    if (retry &amp;&amp; authHandler) {
+      const ok = await authHandler();
+      if (ok) return request&lt;T&gt;(method, url, body, false);
+    }
+    throw new ApiError(res.status, &quot;Unauthorized&quot;);
+  }
+
+  if (!res.ok) {
+    throw new ApiError(res.status, `HTTP ${res.status}`);
+  }
+
+  const text = await res.text();
+  if (!text) return undefined as T;
+  const json = JSON.parse(text);
+  return (json &amp;&amp; &quot;message&quot; in json ? json.message : json) as T;
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+export const api = {
+  get: &lt;T&gt;(url: string) =&gt; request&lt;T&gt;(&quot;GET&quot;, url),
+  post: &lt;T&gt;(url: string, body?: unknown) =&gt; request&lt;T&gt;(&quot;POST&quot;, url, body ?? {}),
+};
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 8.4: Re-run — PASS</strong></li>
+</ul>
+<p>Run: same as 8.2.
+Expected: 3 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 8.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/api
+git commit -m &quot;feat(pwa): api client with 401 re-auth hook&quot;
+</code></pre>
+<hr />
+<h2 id="task-9-frontend-auth-session-login-guard-boot">Task 9: Frontend — auth (session, login, guard, boot)</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/auth/session.ts</code>
+- Create: <code>pwa/src/auth/session.test.ts</code>
+- Create: <code>pwa/src/auth/login.tsx</code>
+- Create: <code>pwa/src/auth/guard.tsx</code>
+- Create: <code>vernon_tasks/task/api/boot.py</code></p>
+<ul>
+<li>[ ] <strong>Step 9.1: Backend boot endpoint</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/boot.py</code>:</p>
+<pre><code class="language-python">import frappe
+
+
+@frappe.whitelist(allow_guest=True)
+def boot():
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return {&quot;user&quot;: None, &quot;csrf_token&quot;: None}
+    return {&quot;user&quot;: user, &quot;csrf_token&quot;: frappe.sessions.get_csrf_token()}
+</code></pre>
+<p>Smoke:</p>
+<pre><code class="language-bash">bench --site &lt;site&gt; clear-cache &amp;&amp; bench restart
+curl -s http://&lt;site&gt;/api/method/vernon_tasks.task.api.boot.boot
+</code></pre>
+<p>Expected: JSON with <code>user: null</code> for guest.</p>
+<ul>
+<li>[ ] <strong>Step 9.2: Failing session test</strong></li>
+</ul>
+<p><code>pwa/src/auth/session.test.ts</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect, vi } from &quot;vitest&quot;;
+import { probeSession } from &quot;./session&quot;;
+
+describe(&quot;session&quot;, () =&gt; {
+  it(&quot;returns user on 200&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { user: &quot;a@b.c&quot;, csrf_token: &quot;tok&quot; } }), { status: 200 })
+    ));
+    const s = await probeSession();
+    expect(s.user).toBe(&quot;a@b.c&quot;);
+    expect((window as unknown as { csrf_token?: string }).csrf_token).toBe(&quot;tok&quot;);
+  });
+
+  it(&quot;returns null on guest&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { user: null } }), { status: 200 })
+    ));
+    const s = await probeSession();
+    expect(s.user).toBeNull();
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 9.3: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">npx vitest run src/auth/session.test.ts
+</code></pre>
+<p>Expected: module missing.</p>
+<ul>
+<li>[ ] <strong>Step 9.4: Implement <code>session.ts</code></strong></li>
+</ul>
+<p><code>pwa/src/auth/session.ts</code>:</p>
+<pre><code class="language-typescript">import { api } from &quot;@/api/client&quot;;
+
+export interface Session {
+  user: string | null;
+  csrf_token: string | null;
+}
+
+export async function probeSession(): Promise&lt;Session&gt; {
+  const s = await api.get&lt;Session&gt;(&quot;/api/method/vernon_tasks.task.api.boot.boot&quot;);
+  if (s.csrf_token) {
+    (window as unknown as { csrf_token: string }).csrf_token = s.csrf_token;
+  }
+  return s;
+}
+
+export async function login(usr: string, pwd: string): Promise&lt;Session&gt; {
+  await api.post(&quot;/api/method/login&quot;, { usr, pwd });
+  return probeSession();
+}
+
+export async function logout(): Promise&lt;void&gt; {
+  await api.post(&quot;/api/method/logout&quot;);
+  (window as unknown as { csrf_token?: string }).csrf_token = undefined;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 9.5: Re-run — PASS</strong></li>
+</ul>
+<p>Run: same as 9.3.
+Expected: 2 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 9.6: Implement <code>login.tsx</code></strong></li>
+</ul>
+<p><code>pwa/src/auth/login.tsx</code>:</p>
+<pre><code class="language-typescript">import { useState } from &quot;react&quot;;
+import { useNavigate, useSearchParams } from &quot;react-router-dom&quot;;
+import { login } from &quot;./session&quot;;
+import { t } from &quot;@/i18n&quot;;
+
+export function LoginPage() {
+  const [usr, setUsr] = useState(() =&gt; localStorage.getItem(&quot;vt_last_user&quot;) ?? &quot;&quot;);
+  const [pwd, setPwd] = useState(&quot;&quot;);
+  const [err, setErr] = useState&lt;string | null&gt;(null);
+  const [busy, setBusy] = useState(false);
+  const nav = useNavigate();
+  const [params] = useSearchParams();
+  const next = params.get(&quot;next&quot;) ?? &quot;/m/work&quot;;
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setErr(null);
+    try {
+      const s = await login(usr, pwd);
+      if (!s.user) throw new Error(&quot;guest&quot;);
+      localStorage.setItem(&quot;vt_last_user&quot;, usr);
+      nav(next, { replace: true });
+    } catch {
+      setErr(t(&quot;login.error&quot;));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    &lt;div style={{ padding: &quot;var(--vt-space-5)&quot;, maxWidth: 420, margin: &quot;0 auto&quot; }}&gt;
+      &lt;h1 style={{ marginTop: 0 }}&gt;{t(&quot;login.title&quot;)}&lt;/h1&gt;
+      &lt;form onSubmit={onSubmit}&gt;
+        &lt;label style={{ display: &quot;block&quot;, marginBottom: &quot;var(--vt-space-3)&quot; }}&gt;
+          {t(&quot;login.username&quot;)}
+          &lt;input
+            value={usr}
+            onChange={(e) =&gt; setUsr(e.target.value)}
+            autoComplete=&quot;username&quot;
+            required
+            style={{ display: &quot;block&quot;, width: &quot;100%&quot;, padding: &quot;var(--vt-space-3)&quot;, marginTop: 4 }}
+          /&gt;
+        &lt;/label&gt;
+        &lt;label style={{ display: &quot;block&quot;, marginBottom: &quot;var(--vt-space-4)&quot; }}&gt;
+          {t(&quot;login.password&quot;)}
+          &lt;input
+            type=&quot;password&quot;
+            value={pwd}
+            onChange={(e) =&gt; setPwd(e.target.value)}
+            autoComplete=&quot;current-password&quot;
+            required
+            style={{ display: &quot;block&quot;, width: &quot;100%&quot;, padding: &quot;var(--vt-space-3)&quot;, marginTop: 4 }}
+          /&gt;
+        &lt;/label&gt;
+        {err &amp;&amp; &lt;p style={{ color: &quot;var(--vt-danger)&quot; }}&gt;{err}&lt;/p&gt;}
+        &lt;button disabled={busy} type=&quot;submit&quot; style={{ width: &quot;100%&quot;, padding: &quot;var(--vt-space-3)&quot; }}&gt;
+          {busy ? t(&quot;common.loading&quot;) : t(&quot;login.submit&quot;)}
+        &lt;/button&gt;
+      &lt;/form&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 9.7: Implement <code>guard.tsx</code></strong></li>
+</ul>
+<p><code>pwa/src/auth/guard.tsx</code>:</p>
+<pre><code class="language-typescript">import { useEffect, useState } from &quot;react&quot;;
+import { Navigate, Outlet, useLocation } from &quot;react-router-dom&quot;;
+import { probeSession } from &quot;./session&quot;;
+
+export function AuthGuard() {
+  const [state, setState] = useState&lt;&quot;loading&quot; | &quot;auth&quot; | &quot;guest&quot;&gt;(&quot;loading&quot;);
+  const loc = useLocation();
+
+  useEffect(() =&gt; {
+    probeSession()
+      .then((s) =&gt; setState(s.user ? &quot;auth&quot; : &quot;guest&quot;))
+      .catch(() =&gt; setState(&quot;guest&quot;));
+  }, []);
+
+  if (state === &quot;loading&quot;) return &lt;div style={{ padding: 24 }}&gt;…&lt;/div&gt;;
+  if (state === &quot;guest&quot;) {
+    const next = encodeURIComponent(loc.pathname + loc.search);
+    return &lt;Navigate to={`/m/login?next=${next}`} replace /&gt;;
+  }
+  return &lt;Outlet /&gt;;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 9.8: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/auth vernon_tasks/task/api/boot.py
+git commit -m &quot;feat(auth): session probe, login page, route guard, boot endpoint&quot;
+</code></pre>
+<hr />
+<h2 id="task-10-frontend-indexeddb-cache-sync-time">Task 10: Frontend — IndexedDB cache + sync-time</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/cache/idb.ts</code>
+- Create: <code>pwa/src/cache/sync-time.ts</code>
+- Create: <code>pwa/src/cache/cache.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 10.1: Failing test</strong></li>
+</ul>
+<p><code>pwa/src/cache/cache.test.ts</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect, beforeEach } from &quot;vitest&quot;;
+import { cacheGet, cachePut } from &quot;./idb&quot;;
+import { stamp, ageMs, isStale, STALE_THRESHOLD_MS } from &quot;./sync-time&quot;;
+
+beforeEach(() =&gt; { localStorage.clear(); });
+
+describe(&quot;idb cache&quot;, () =&gt; {
+  it(&quot;put then get returns same payload&quot;, async () =&gt; {
+    await cachePut(&quot;k&quot;, { a: 1 });
+    expect(await cacheGet&lt;{ a: number }&gt;(&quot;k&quot;)).toEqual({ a: 1 });
+  });
+
+  it(&quot;get returns undefined for missing&quot;, async () =&gt; {
+    expect(await cacheGet(&quot;missing&quot;)).toBeUndefined();
+  });
+});
+
+describe(&quot;sync-time&quot;, () =&gt; {
+  it(&quot;stamp + ageMs returns small number&quot;, () =&gt; {
+    stamp(&quot;k&quot;);
+    expect(ageMs(&quot;k&quot;)).toBeLessThan(1000);
+  });
+
+  it(&quot;isStale true when &gt; threshold&quot;, () =&gt; {
+    localStorage.setItem(&quot;vt_sync:k&quot;, String(Date.now() - STALE_THRESHOLD_MS - 1000));
+    expect(isStale(&quot;k&quot;)).toBe(true);
+  });
+
+  it(&quot;isStale true when never stamped&quot;, () =&gt; {
+    expect(isStale(&quot;never&quot;)).toBe(true);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 10.2: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">npx vitest run src/cache/cache.test.ts
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 10.3: Implement <code>idb.ts</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { get, set } from &quot;idb-keyval&quot;;
+
+const PREFIX = &quot;vt:cache:&quot;;
+
+export async function cacheGet&lt;T&gt;(key: string): Promise&lt;T | undefined&gt; {
+  return (await get(PREFIX + key)) as T | undefined;
+}
+
+export async function cachePut&lt;T&gt;(key: string, value: T): Promise&lt;void&gt; {
+  await set(PREFIX + key, value);
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 10.4: Implement <code>sync-time.ts</code></strong></li>
+</ul>
+<pre><code class="language-typescript">export const STALE_THRESHOLD_MS = 60 * 60 * 1000;
+const PREFIX = &quot;vt_sync:&quot;;
+
+export function stamp(key: string): void {
+  localStorage.setItem(PREFIX + key, String(Date.now()));
+}
+
+export function lastSync(key: string): number | null {
+  const v = localStorage.getItem(PREFIX + key);
+  return v ? Number(v) : null;
+}
+
+export function ageMs(key: string): number {
+  const ts = lastSync(key);
+  return ts ? Date.now() - ts : Number.POSITIVE_INFINITY;
+}
+
+export function isStale(key: string): boolean {
+  return ageMs(key) &gt; STALE_THRESHOLD_MS;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 10.5: Re-run — PASS</strong></li>
+</ul>
+<p>Run: same as 10.2.
+Expected: 5 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 10.6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/cache
+git commit -m &quot;feat(pwa): IndexedDB read cache + per-resource sync-time&quot;
+</code></pre>
+<hr />
+<h2 id="task-11-frontend-shared-components">Task 11: Frontend — shared components</h2>
+<p><strong>Files (one component per file):</strong>
+- Create: <code>pwa/src/components/Skeleton.tsx</code>
+- Create: <code>pwa/src/components/EmptyState.tsx</code>
+- Create: <code>pwa/src/components/ErrorBoundary.tsx</code>
+- Create: <code>pwa/src/components/Toast.tsx</code>
+- Create: <code>pwa/src/components/SafeArea.tsx</code>
+- Create: <code>pwa/src/components/OfflineBanner.tsx</code>
+- Create: <code>pwa/src/components/StaleBadge.tsx</code>
+- Create: <code>pwa/src/components/PullToRefresh.tsx</code>
+- Create: <code>pwa/src/components/BottomNav.tsx</code>
+- Create: <code>pwa/src/components/ReloginModal.tsx</code>
+- Create: <code>pwa/src/components/components.test.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 11.1: Failing component test</strong></li>
+</ul>
+<p><code>pwa/src/components/components.test.tsx</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect } from &quot;vitest&quot;;
+import { render, screen, act } from &quot;@testing-library/react&quot;;
+import { MemoryRouter } from &quot;react-router-dom&quot;;
+import { EmptyState } from &quot;./EmptyState&quot;;
+import { OfflineBanner } from &quot;./OfflineBanner&quot;;
+import { StaleBadge } from &quot;./StaleBadge&quot;;
+import { BottomNav } from &quot;./BottomNav&quot;;
+import { stamp } from &quot;@/cache/sync-time&quot;;
+
+describe(&quot;components&quot;, () =&gt; {
+  it(&quot;EmptyState renders title + cta&quot;, () =&gt; {
+    render(&lt;EmptyState title=&quot;Kosong&quot; cta={{ label: &quot;Coba&quot;, onClick: () =&gt; {} }} /&gt;);
+    expect(screen.getByText(&quot;Kosong&quot;)).toBeInTheDocument();
+    expect(screen.getByText(&quot;Coba&quot;)).toBeInTheDocument();
+  });
+
+  it(&quot;OfflineBanner shows when offline&quot;, () =&gt; {
+    Object.defineProperty(navigator, &quot;onLine&quot;, { configurable: true, value: false });
+    render(&lt;OfflineBanner /&gt;);
+    act(() =&gt; window.dispatchEvent(new Event(&quot;offline&quot;)));
+    expect(screen.getByText(/offline/i)).toBeInTheDocument();
+  });
+
+  it(&quot;StaleBadge prints relative time&quot;, () =&gt; {
+    stamp(&quot;my-work&quot;);
+    render(&lt;StaleBadge resource=&quot;my-work&quot; /&gt;);
+    expect(screen.getByText(/baru saja/i)).toBeInTheDocument();
+  });
+
+  it(&quot;BottomNav highlights active route&quot;, () =&gt; {
+    render(
+      &lt;MemoryRouter initialEntries={[&quot;/m/work&quot;]}&gt;
+        &lt;BottomNav /&gt;
+      &lt;/MemoryRouter&gt;
+    );
+    const tasks = screen.getByText(&quot;Tugas&quot;).closest(&quot;a&quot;);
+    expect(tasks).toHaveAttribute(&quot;aria-current&quot;, &quot;page&quot;);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.2: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">npx vitest run src/components/components.test.tsx
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.3: <code>Skeleton.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">export function Skeleton({ height = 16, width = &quot;100%&quot;, radius = 8 }: { height?: number; width?: number | string; radius?: number }) {
+  return (
+    &lt;div
+      aria-hidden
+      style={{
+        height,
+        width,
+        borderRadius: radius,
+        background: &quot;linear-gradient(90deg, var(--vt-surface), var(--vt-border), var(--vt-surface))&quot;,
+        backgroundSize: &quot;200% 100%&quot;,
+        animation: &quot;vt-shimmer 1.4s infinite&quot;,
+      }}
+    /&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.4: <code>EmptyState.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">interface Props {
+  title: string;
+  body?: string;
+  cta?: { label: string; onClick: () =&gt; void };
+}
+
+export function EmptyState({ title, body, cta }: Props) {
+  return (
+    &lt;div style={{ padding: &quot;var(--vt-space-6)&quot;, textAlign: &quot;center&quot;, color: &quot;var(--vt-text-muted)&quot; }}&gt;
+      &lt;h3 style={{ color: &quot;var(--vt-text)&quot; }}&gt;{title}&lt;/h3&gt;
+      {body &amp;&amp; &lt;p&gt;{body}&lt;/p&gt;}
+      {cta &amp;&amp; (
+        &lt;button onClick={cta.onClick} style={{ padding: &quot;var(--vt-space-3) var(--vt-space-4)&quot;, background: &quot;var(--vt-primary)&quot;, color: &quot;var(--vt-primary-contrast)&quot;, border: 0, borderRadius: &quot;var(--vt-radius)&quot; }}&gt;
+          {cta.label}
+        &lt;/button&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.5: <code>ErrorBoundary.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { Component, ReactNode } from &quot;react&quot;;
+import { t } from &quot;@/i18n&quot;;
+import { logEvent } from &quot;@/telemetry&quot;;
+
+interface State { err: Error | null; }
+
+export class ErrorBoundary extends Component&lt;{ children: ReactNode }, State&gt; {
+  state: State = { err: null };
+  static getDerivedStateFromError(err: Error) { return { err }; }
+  componentDidCatch(err: Error) { logEvent(&quot;error_boundary&quot;, { msg: err.message }); }
+  render() {
+    if (this.state.err) {
+      return (
+        &lt;div style={{ padding: 24, textAlign: &quot;center&quot; }}&gt;
+          &lt;h2&gt;{t(&quot;error.boundary.title&quot;)}&lt;/h2&gt;
+          &lt;p&gt;{t(&quot;error.boundary.body&quot;)}&lt;/p&gt;
+          &lt;button onClick={() =&gt; window.location.reload()}&gt;{t(&quot;common.refresh&quot;)}&lt;/button&gt;
+        &lt;/div&gt;
+      );
+    }
+    return this.props.children;
+  }
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.6: <code>Toast.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { createContext, useCallback, useContext, useState, ReactNode } from &quot;react&quot;;
+
+interface ToastItem { id: number; msg: string; action?: { label: string; onClick: () =&gt; void }; }
+interface Ctx { show: (msg: string, action?: ToastItem[&quot;action&quot;]) =&gt; void; }
+
+const ToastCtx = createContext&lt;Ctx&gt;({ show: () =&gt; {} });
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [items, setItems] = useState&lt;ToastItem[]&gt;([]);
+  const show = useCallback((msg: string, action?: ToastItem[&quot;action&quot;]) =&gt; {
+    const id = Date.now() + Math.random();
+    setItems((p) =&gt; [...p, { id, msg, action }]);
+    setTimeout(() =&gt; setItems((p) =&gt; p.filter((i) =&gt; i.id !== id)), 5000);
+  }, []);
+  return (
+    &lt;ToastCtx.Provider value={{ show }}&gt;
+      {children}
+      &lt;div style={{ position: &quot;fixed&quot;, bottom: &quot;calc(var(--bottom-nav-h) + 12px + var(--safe-bottom))&quot;, left: 12, right: 12, display: &quot;grid&quot;, gap: 8, zIndex: 50 }}&gt;
+        {items.map((i) =&gt; (
+          &lt;div key={i.id} style={{ background: &quot;var(--vt-text)&quot;, color: &quot;var(--vt-bg)&quot;, padding: &quot;var(--vt-space-3) var(--vt-space-4)&quot;, borderRadius: &quot;var(--vt-radius)&quot;, display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot;, gap: 12 }}&gt;
+            &lt;span&gt;{i.msg}&lt;/span&gt;
+            {i.action &amp;&amp; &lt;button onClick={i.action.onClick} style={{ color: &quot;var(--vt-primary)&quot;, background: &quot;transparent&quot;, border: 0 }}&gt;{i.action.label}&lt;/button&gt;}
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/ToastCtx.Provider&gt;
+  );
+}
+
+export function useToast() { return useContext(ToastCtx); }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.7: <code>SafeArea.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { ReactNode } from &quot;react&quot;;
+
+export function SafeArea({ children }: { children: ReactNode }) {
+  return (
+    &lt;div style={{ paddingTop: &quot;var(--safe-top)&quot;, paddingLeft: &quot;var(--safe-left)&quot;, paddingRight: &quot;var(--safe-right)&quot;, paddingBottom: &quot;calc(var(--bottom-nav-h) + var(--safe-bottom))&quot;, minHeight: &quot;100%&quot; }}&gt;
+      {children}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.8: <code>OfflineBanner.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { useEffect, useState } from &quot;react&quot;;
+import { fmtTime } from &quot;@/i18n&quot;;
+
+export function OfflineBanner() {
+  const [online, setOnline] = useState(navigator.onLine);
+  const [since, setSince] = useState&lt;Date | null&gt;(null);
+
+  useEffect(() =&gt; {
+    const on = () =&gt; { setOnline(true); setSince(null); };
+    const off = () =&gt; { setOnline(false); setSince(new Date()); };
+    window.addEventListener(&quot;online&quot;, on);
+    window.addEventListener(&quot;offline&quot;, off);
+    return () =&gt; { window.removeEventListener(&quot;online&quot;, on); window.removeEventListener(&quot;offline&quot;, off); };
+  }, []);
+
+  if (online) return null;
+  return (
+    &lt;div role=&quot;status&quot; style={{ position: &quot;sticky&quot;, top: 0, background: &quot;var(--vt-text-muted)&quot;, color: &quot;var(--vt-bg)&quot;, textAlign: &quot;center&quot;, padding: &quot;var(--vt-space-2)&quot;, fontSize: 13 }}&gt;
+      Mode offline · terakhir sinkron {since ? fmtTime(since) : &quot;—&quot;}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.9: <code>StaleBadge.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { ageMs, isStale } from &quot;@/cache/sync-time&quot;;
+import { fmtRelative } from &quot;@/i18n&quot;;
+
+export function StaleBadge({ resource }: { resource: string }) {
+  const age = ageMs(resource);
+  if (!Number.isFinite(age)) return null;
+  const stale = isStale(resource);
+  return (
+    &lt;span style={{ fontSize: 12, color: stale ? &quot;var(--vt-warn)&quot; : &quot;var(--vt-text-muted)&quot; }}&gt;
+      Diperbarui {fmtRelative(age)}
+    &lt;/span&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.10: <code>PullToRefresh.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { ReactNode, useRef, useState } from &quot;react&quot;;
+
+interface Props { onRefresh: () =&gt; Promise&lt;void&gt;; children: ReactNode; }
+
+export function PullToRefresh({ onRefresh, children }: Props) {
+  const startY = useRef&lt;number | null&gt;(null);
+  const [pull, setPull] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  function onTouchStart(e: React.TouchEvent) {
+    if (window.scrollY &lt;= 0) startY.current = e.touches[0].clientY;
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    if (startY.current == null) return;
+    const dy = e.touches[0].clientY - startY.current;
+    if (dy &gt; 0) setPull(Math.min(dy, 80));
+  }
+  async function onTouchEnd() {
+    if (pull &gt; 60 &amp;&amp; !busy) {
+      setBusy(true);
+      try { await onRefresh(); } finally { setBusy(false); }
+    }
+    setPull(0);
+    startY.current = null;
+  }
+
+  return (
+    &lt;div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}&gt;
+      &lt;div style={{ height: pull, textAlign: &quot;center&quot;, color: &quot;var(--vt-text-muted)&quot;, overflow: &quot;hidden&quot;, transition: busy ? &quot;none&quot; : &quot;height 0.2s&quot; }}&gt;
+        {busy ? &quot;Menyegarkan…&quot; : pull &gt; 60 ? &quot;Lepas untuk segarkan&quot; : &quot;Tarik untuk segarkan&quot;}
+      &lt;/div&gt;
+      {children}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.11: <code>BottomNav.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { NavLink } from &quot;react-router-dom&quot;;
+import { t } from &quot;@/i18n&quot;;
+
+const TABS = [
+  { to: &quot;/m/work&quot;, label: t(&quot;nav.tasks&quot;) },
+  { to: &quot;/m/dashboard&quot;, label: t(&quot;nav.dashboard&quot;) },
+  { to: &quot;/m/analytics&quot;, label: t(&quot;nav.analytics&quot;) },
+  { to: &quot;/m/me&quot;, label: t(&quot;nav.me&quot;) },
+];
+
+export function BottomNav() {
+  return (
+    &lt;nav style={{
+      position: &quot;fixed&quot;, bottom: 0, left: 0, right: 0,
+      height: &quot;calc(var(--bottom-nav-h) + var(--safe-bottom))&quot;,
+      paddingBottom: &quot;var(--safe-bottom)&quot;,
+      background: &quot;var(--vt-bg)&quot;, borderTop: &quot;1px solid var(--vt-border)&quot;,
+      display: &quot;grid&quot;, gridTemplateColumns: &quot;repeat(4, 1fr)&quot;, zIndex: 40,
+    }}&gt;
+      {TABS.map((tab) =&gt; (
+        &lt;NavLink
+          key={tab.to}
+          to={tab.to}
+          style={({ isActive }) =&gt; ({
+            display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot;,
+            color: isActive ? &quot;var(--vt-primary)&quot; : &quot;var(--vt-text-muted)&quot;,
+            textDecoration: &quot;none&quot;, fontSize: 13, fontWeight: 600,
+          })}
+        &gt;
+          {tab.label}
+        &lt;/NavLink&gt;
+      ))}
+    &lt;/nav&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.12: <code>ReloginModal.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { useState } from &quot;react&quot;;
+import { login } from &quot;@/auth/session&quot;;
+import { t } from &quot;@/i18n&quot;;
+
+interface Props { open: boolean; onResolve: (ok: boolean) =&gt; void; }
+
+export function ReloginModal({ open, onResolve }: Props) {
+  const [pwd, setPwd] = useState(&quot;&quot;);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState&lt;string | null&gt;(null);
+  const usr = localStorage.getItem(&quot;vt_last_user&quot;) ?? &quot;&quot;;
+
+  if (!open) return null;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const s = await login(usr, pwd);
+      if (!s.user) throw new Error();
+      onResolve(true);
+    } catch {
+      setErr(t(&quot;login.error&quot;));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    &lt;div style={{ position: &quot;fixed&quot;, inset: 0, background: &quot;rgba(0,0,0,0.5)&quot;, display: &quot;grid&quot;, placeItems: &quot;center&quot;, zIndex: 100, padding: 16 }}&gt;
+      &lt;form onSubmit={submit} style={{ background: &quot;var(--vt-bg)&quot;, color: &quot;var(--vt-text)&quot;, padding: 24, borderRadius: 16, maxWidth: 420, width: &quot;100%&quot; }}&gt;
+        &lt;h3 style={{ marginTop: 0 }}&gt;{t(&quot;relogin.title&quot;)}&lt;/h3&gt;
+        &lt;p style={{ color: &quot;var(--vt-text-muted)&quot; }}&gt;{t(&quot;relogin.body&quot;)}&lt;/p&gt;
+        &lt;p style={{ fontSize: 13 }}&gt;{usr}&lt;/p&gt;
+        &lt;input type=&quot;password&quot; autoFocus value={pwd} onChange={(e) =&gt; setPwd(e.target.value)} required style={{ width: &quot;100%&quot;, padding: 12, marginBottom: 12 }} /&gt;
+        {err &amp;&amp; &lt;p style={{ color: &quot;var(--vt-danger)&quot; }}&gt;{err}&lt;/p&gt;}
+        &lt;div style={{ display: &quot;flex&quot;, gap: 8, justifyContent: &quot;flex-end&quot; }}&gt;
+          &lt;button type=&quot;button&quot; onClick={() =&gt; onResolve(false)} disabled={busy}&gt;{t(&quot;logout&quot;)}&lt;/button&gt;
+          &lt;button type=&quot;submit&quot; disabled={busy}&gt;{busy ? t(&quot;common.loading&quot;) : t(&quot;login.submit&quot;)}&lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/form&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 11.13: Re-run component tests — PASS</strong></li>
+</ul>
+<pre><code class="language-bash">npx vitest run src/components/components.test.tsx
+</code></pre>
+<p>Expected: 4 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 11.14: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/components
+git commit -m &quot;feat(pwa): shared UI components (nav, banner, toast, modal, etc.)&quot;
+</code></pre>
+<hr />
+<h2 id="task-12-frontend-telemetry-client">Task 12: Frontend — telemetry client</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/telemetry.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 12.1: Implement</strong></li>
+</ul>
+<p><code>pwa/src/telemetry.ts</code>:</p>
+<pre><code class="language-typescript">import { api } from &quot;@/api/client&quot;;
+
+export type TelemetryEvent =
+  | &quot;pwa_boot&quot;
+  | &quot;login_success&quot;
+  | &quot;login_failure&quot;
+  | &quot;page_view&quot;
+  | &quot;task_view&quot;
+  | &quot;offline_seen&quot;
+  | &quot;error_boundary&quot;
+  | &quot;sw_register_failed&quot;;
+
+export function logEvent(event: TelemetryEvent, props: Record&lt;string, unknown&gt; = {}): void {
+  api.post(&quot;/api/method/vernon_tasks.task.api.telemetry.log_event&quot;, { event, props })
+    .catch(() =&gt; { /* swallow */ });
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 12.2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/telemetry.ts
+git commit -m &quot;feat(pwa): telemetry client&quot;
+</code></pre>
+<hr />
+<h2 id="task-13-frontend-apitasks-with-cache-fallback">Task 13: Frontend — <code>api/tasks</code> (with cache fallback)</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/api/tasks.ts</code>
+- Create: <code>pwa/src/api/tasks.test.ts</code></p>
+<ul>
+<li>[ ] <strong>Step 13.1: Failing test</strong></li>
+</ul>
+<p><code>pwa/src/api/tasks.test.ts</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect, vi, beforeEach } from &quot;vitest&quot;;
+import { fetchMyWork } from &quot;./tasks&quot;;
+
+beforeEach(() =&gt; { vi.restoreAllMocks(); localStorage.clear(); });
+
+describe(&quot;tasks api&quot;, () =&gt; {
+  it(&quot;fetchMyWork returns groups + stamps cache&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { overdue: [], today: [{ id: &quot;T1&quot;, title: &quot;x&quot; }], upcoming: [] } }), { status: 200 })
+    ));
+    const r = await fetchMyWork();
+    expect(r.today).toHaveLength(1);
+    expect(localStorage.getItem(&quot;vt_sync:my-work&quot;)).toBeTruthy();
+  });
+
+  it(&quot;fetchMyWork falls back to cache on network fail&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { overdue: [], today: [{ id: &quot;T1&quot;, title: &quot;x&quot; }], upcoming: [] } }), { status: 200 })
+    ));
+    await fetchMyWork();
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockRejectedValue(new Error(&quot;offline&quot;)));
+    const r = await fetchMyWork();
+    expect(r.today).toHaveLength(1);
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 13.2: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">npx vitest run src/api/tasks.test.ts
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 13.3: Implement</strong></li>
+</ul>
+<p><code>pwa/src/api/tasks.ts</code>:</p>
+<pre><code class="language-typescript">import { api } from &quot;./client&quot;;
+import { cacheGet, cachePut } from &quot;@/cache/idb&quot;;
+import { stamp } from &quot;@/cache/sync-time&quot;;
+
+export interface TaskCard {
+  id: string;
+  title: string;
+  status?: string;
+  priority?: string;
+  due_date?: string;
+  project?: string;
+  sprint?: string;
+  points?: number;
+}
+
+export interface MyWork {
+  overdue: TaskCard[];
+  today: TaskCard[];
+  upcoming: TaskCard[];
+}
+
+export interface TaskDetail extends TaskCard {
+  description?: string;
+  activity: Array&lt;{ content: string; comment_type: string; creation: string; owner: string }&gt;;
+}
+
+export async function fetchMyWork(): Promise&lt;MyWork&gt; {
+  try {
+    const data = await api.get&lt;MyWork&gt;(&quot;/api/method/vernon_tasks.task.api.my_work.list&quot;);
+    await cachePut(&quot;my-work&quot;, data);
+    stamp(&quot;my-work&quot;);
+    return data;
+  } catch (e) {
+    const cached = await cacheGet&lt;MyWork&gt;(&quot;my-work&quot;);
+    if (cached) return cached;
+    throw e;
+  }
+}
+
+export async function fetchTaskDetail(id: string): Promise&lt;TaskDetail&gt; {
+  const key = `task:${id}`;
+  try {
+    const data = await api.get&lt;TaskDetail&gt;(
+      `/api/method/vernon_tasks.task.api.my_work.detail?task_id=${encodeURIComponent(id)}`
+    );
+    await cachePut(key, data);
+    stamp(key);
+    return data;
+  } catch (e) {
+    const cached = await cacheGet&lt;TaskDetail&gt;(key);
+    if (cached) return cached;
+    throw e;
+  }
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 13.4: Re-run — PASS</strong></li>
+</ul>
+<p>Run: same as 13.2.
+Expected: 2 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 13.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/api/tasks.ts pwa/src/api/tasks.test.ts
+git commit -m &quot;feat(pwa): tasks API w/ IDB cache fallback&quot;
+</code></pre>
+<hr />
+<h2 id="task-14-frontend-pagesmyworklist">Task 14: Frontend — <code>pages/MyWork/List</code></h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/pages/MyWork/List.tsx</code>
+- Create: <code>pwa/src/pages/MyWork/List.test.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 14.1: Failing test</strong></li>
+</ul>
+<p><code>pwa/src/pages/MyWork/List.test.tsx</code>:</p>
+<pre><code class="language-typescript">import { describe, it, expect, vi } from &quot;vitest&quot;;
+import { render, screen, waitFor } from &quot;@testing-library/react&quot;;
+import { MemoryRouter } from &quot;react-router-dom&quot;;
+import { QueryClient, QueryClientProvider } from &quot;@tanstack/react-query&quot;;
+import { MyWorkList } from &quot;./List&quot;;
+
+function wrap(ui: React.ReactNode) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    &lt;QueryClientProvider client={qc}&gt;
+      &lt;MemoryRouter&gt;{ui}&lt;/MemoryRouter&gt;
+    &lt;/QueryClientProvider&gt;
+  );
+}
+
+describe(&quot;MyWorkList&quot;, () =&gt; {
+  it(&quot;renders task title from API&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        message: { overdue: [], today: [{ id: &quot;T1&quot;, title: &quot;Buat laporan&quot; }], upcoming: [] }
+      }), { status: 200 })
+    ));
+    wrap(&lt;MyWorkList /&gt;);
+    await waitFor(() =&gt; expect(screen.getByText(&quot;Buat laporan&quot;)).toBeInTheDocument());
+  });
+
+  it(&quot;shows empty state when no tasks&quot;, async () =&gt; {
+    vi.stubGlobal(&quot;fetch&quot;, vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { overdue: [], today: [], upcoming: [] } }), { status: 200 })
+    ));
+    wrap(&lt;MyWorkList /&gt;);
+    await waitFor(() =&gt; expect(screen.getByText(/Nikmati waktumu/i)).toBeInTheDocument());
+  });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 14.2: Run — fail</strong></li>
+</ul>
+<pre><code class="language-bash">npx vitest run src/pages/MyWork/List.test.tsx
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 14.3: Implement</strong></li>
+</ul>
+<p><code>pwa/src/pages/MyWork/List.tsx</code>:</p>
+<pre><code class="language-typescript">import { useQuery } from &quot;@tanstack/react-query&quot;;
+import { Link } from &quot;react-router-dom&quot;;
+import { fetchMyWork, TaskCard as TaskCardT } from &quot;@/api/tasks&quot;;
+import { Skeleton } from &quot;@/components/Skeleton&quot;;
+import { EmptyState } from &quot;@/components/EmptyState&quot;;
+import { StaleBadge } from &quot;@/components/StaleBadge&quot;;
+import { PullToRefresh } from &quot;@/components/PullToRefresh&quot;;
+import { greeting, fmtDate, t } from &quot;@/i18n&quot;;
+
+function TaskCardView({ task, accent }: { task: TaskCardT; accent?: string }) {
+  return (
+    &lt;Link
+      to={`/m/work/${encodeURIComponent(task.id)}`}
+      style={{
+        display: &quot;block&quot;, padding: &quot;var(--vt-space-4)&quot;, marginBottom: &quot;var(--vt-space-3)&quot;,
+        background: &quot;var(--vt-surface)&quot;, borderRadius: &quot;var(--vt-radius)&quot;,
+        borderLeft: accent ? `3px solid ${accent}` : undefined,
+        color: &quot;var(--vt-text)&quot;, textDecoration: &quot;none&quot;, boxShadow: &quot;var(--vt-shadow)&quot;,
+      }}
+    &gt;
+      &lt;div style={{ fontWeight: 600 }}&gt;{task.title}&lt;/div&gt;
+      &lt;div style={{ fontSize: 13, color: &quot;var(--vt-text-muted)&quot;, marginTop: 4 }}&gt;
+        {[task.project, task.priority].filter(Boolean).join(&quot; · &quot;)}
+        {task.points ? ` · +${task.points} pts` : &quot;&quot;}
+      &lt;/div&gt;
+    &lt;/Link&gt;
+  );
+}
+
+function Section({ title, items, accent }: { title: string; items: TaskCardT[]; accent?: string }) {
+  if (items.length === 0) return null;
+  return (
+    &lt;section style={{ marginBottom: &quot;var(--vt-space-5)&quot; }}&gt;
+      &lt;h3 style={{ fontSize: 14, color: &quot;var(--vt-text-muted)&quot;, margin: &quot;0 0 var(--vt-space-3)&quot;, textTransform: &quot;uppercase&quot;, letterSpacing: 0.5 }}&gt;{title}&lt;/h3&gt;
+      {items.map((task) =&gt; &lt;TaskCardView key={task.id} task={task} accent={accent} /&gt;)}
+    &lt;/section&gt;
+  );
+}
+
+export function MyWorkList() {
+  const q = useQuery({ queryKey: [&quot;my-work&quot;], queryFn: fetchMyWork });
+
+  const total = (q.data?.overdue.length ?? 0) + (q.data?.today.length ?? 0) + (q.data?.upcoming.length ?? 0);
+
+  return (
+    &lt;PullToRefresh onRefresh={() =&gt; q.refetch().then(() =&gt; {})}&gt;
+      &lt;div style={{ padding: &quot;var(--vt-space-4)&quot; }}&gt;
+        &lt;header style={{ marginBottom: &quot;var(--vt-space-4)&quot; }}&gt;
+          &lt;h1 style={{ margin: 0 }}&gt;{greeting()}&lt;/h1&gt;
+          &lt;div style={{ color: &quot;var(--vt-text-muted)&quot;, display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot;, marginTop: 4 }}&gt;
+            &lt;span&gt;{fmtDate(new Date())}&lt;/span&gt;
+            &lt;StaleBadge resource=&quot;my-work&quot; /&gt;
+          &lt;/div&gt;
+        &lt;/header&gt;
+
+        {q.isLoading &amp;&amp; (
+          &lt;&gt;
+            &lt;Skeleton height={64} /&gt;
+            &lt;div style={{ height: 12 }} /&gt;
+            &lt;Skeleton height={64} /&gt;
+            &lt;div style={{ height: 12 }} /&gt;
+            &lt;Skeleton height={64} /&gt;
+          &lt;/&gt;
+        )}
+
+        {q.isError &amp;&amp; !q.data &amp;&amp; (
+          &lt;EmptyState title={t(&quot;empty.no_offline&quot;)} cta={{ label: t(&quot;common.retry&quot;), onClick: () =&gt; q.refetch() }} /&gt;
+        )}
+
+        {q.data &amp;&amp; (
+          total === 0 ? (
+            &lt;EmptyState title={t(&quot;empty.no_tasks&quot;)} /&gt;
+          ) : (
+            &lt;&gt;
+              &lt;Section title={t(&quot;tasks.section.overdue&quot;)} items={q.data.overdue} accent=&quot;var(--vt-danger)&quot; /&gt;
+              &lt;Section title={t(&quot;tasks.section.today&quot;)} items={q.data.today} accent=&quot;var(--vt-primary)&quot; /&gt;
+              &lt;Section title={t(&quot;tasks.section.upcoming&quot;)} items={q.data.upcoming} /&gt;
+            &lt;/&gt;
+          )
+        )}
+      &lt;/div&gt;
+    &lt;/PullToRefresh&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 14.4: Re-run — PASS</strong></li>
+</ul>
+<p>Run: same as 14.2.
+Expected: 2 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 14.5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/MyWork
+git commit -m &quot;feat(pwa): My Work list page (sections + pull-to-refresh)&quot;
+</code></pre>
+<hr />
+<h2 id="task-15-frontend-pagesmyworkdetail">Task 15: Frontend — <code>pages/MyWork/Detail</code></h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/pages/MyWork/Detail.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 15.1: Implement</strong></li>
+</ul>
+<pre><code class="language-typescript">import { useEffect } from &quot;react&quot;;
+import { useParams, Link } from &quot;react-router-dom&quot;;
+import { useQuery } from &quot;@tanstack/react-query&quot;;
+import { fetchTaskDetail } from &quot;@/api/tasks&quot;;
+import { Skeleton } from &quot;@/components/Skeleton&quot;;
+import { EmptyState } from &quot;@/components/EmptyState&quot;;
+import { fmtDate, fmtTime, t } from &quot;@/i18n&quot;;
+import { logEvent } from &quot;@/telemetry&quot;;
+
+export function MyWorkDetail() {
+  const { id } = useParams&lt;{ id: string }&gt;();
+  const q = useQuery({ queryKey: [&quot;task&quot;, id], queryFn: () =&gt; fetchTaskDetail(id!), enabled: !!id });
+
+  useEffect(() =&gt; { if (id) logEvent(&quot;task_view&quot;, { task_id: id }); }, [id]);
+
+  if (q.isLoading) {
+    return (
+      &lt;div style={{ padding: 16 }}&gt;
+        &lt;Skeleton height={28} width=&quot;60%&quot; /&gt;
+        &lt;div style={{ height: 12 }} /&gt;
+        &lt;Skeleton height={120} /&gt;
+      &lt;/div&gt;
+    );
+  }
+  if (q.isError || !q.data) {
+    return &lt;EmptyState title={t(&quot;empty.no_offline&quot;)} cta={{ label: t(&quot;common.retry&quot;), onClick: () =&gt; q.refetch() }} /&gt;;
+  }
+  const d = q.data;
+  return (
+    &lt;div style={{ padding: 16 }}&gt;
+      &lt;Link to=&quot;/m/work&quot; style={{ color: &quot;var(--vt-primary)&quot;, textDecoration: &quot;none&quot; }}&gt;← {t(&quot;nav.tasks&quot;)}&lt;/Link&gt;
+      &lt;h1 style={{ marginTop: 12 }}&gt;{d.title}&lt;/h1&gt;
+      &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot;, color: &quot;var(--vt-text-muted)&quot;, marginBottom: 16 }}&gt;
+        {d.status &amp;&amp; &lt;span&gt;{d.status}&lt;/span&gt;}
+        {d.priority &amp;&amp; &lt;span&gt;· {d.priority}&lt;/span&gt;}
+        {d.due_date &amp;&amp; &lt;span&gt;· {fmtDate(d.due_date)}&lt;/span&gt;}
+        {d.points ? &lt;span&gt;· +{d.points} pts&lt;/span&gt; : null}
+      &lt;/div&gt;
+      {d.description &amp;&amp; (
+        &lt;div style={{ background: &quot;var(--vt-surface)&quot;, padding: 16, borderRadius: &quot;var(--vt-radius)&quot;, whiteSpace: &quot;pre-wrap&quot;, marginBottom: 16 }}&gt;
+          {d.description}
+        &lt;/div&gt;
+      )}
+      &lt;h3&gt;Aktivitas&lt;/h3&gt;
+      {d.activity.length === 0 &amp;&amp; &lt;p style={{ color: &quot;var(--vt-text-muted)&quot; }}&gt;—&lt;/p&gt;}
+      {d.activity.map((a, idx) =&gt; (
+        &lt;div key={idx} style={{ padding: 12, borderTop: &quot;1px solid var(--vt-border)&quot; }}&gt;
+          &lt;div style={{ fontSize: 12, color: &quot;var(--vt-text-muted)&quot; }}&gt;
+            {a.owner} · {fmtDate(a.creation)} {fmtTime(a.creation)}
+          &lt;/div&gt;
+          &lt;div&gt;{a.content}&lt;/div&gt;
+        &lt;/div&gt;
+      ))}
+      &lt;div style={{ marginTop: 24, padding: 16, background: &quot;var(--vt-surface)&quot;, borderRadius: &quot;var(--vt-radius)&quot;, textAlign: &quot;center&quot;, color: &quot;var(--vt-text-muted)&quot; }}&gt;
+        {t(&quot;tasks.detail.action_disabled&quot;)}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 15.2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/MyWork/Detail.tsx
+git commit -m &quot;feat(pwa): My Work detail page (read-only)&quot;
+</code></pre>
+<hr />
+<h2 id="task-16-frontend-pagesonboarding-pagesplaceholder-pagesme">Task 16: Frontend — <code>pages/Onboarding</code>, <code>pages/Placeholder</code>, <code>pages/Me</code></h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/pages/Onboarding.tsx</code>
+- Create: <code>pwa/src/pages/Placeholder.tsx</code>
+- Create: <code>pwa/src/pages/Me.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 16.1: <code>Onboarding.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { useState } from &quot;react&quot;;
+import { useNavigate } from &quot;react-router-dom&quot;;
+import { t } from &quot;@/i18n&quot;;
+
+const SLIDES = [
+  { title: t(&quot;onboarding.welcome.title&quot;), body: t(&quot;onboarding.welcome.body&quot;), cta: &quot;Lanjut&quot; },
+  { title: t(&quot;onboarding.anywhere.title&quot;), body: t(&quot;onboarding.anywhere.body&quot;), cta: &quot;Lanjut&quot; },
+  { title: t(&quot;onboarding.start.title&quot;), body: &quot;&quot;, cta: t(&quot;onboarding.start.cta&quot;) },
+];
+
+export function Onboarding() {
+  const [i, setI] = useState(0);
+  const nav = useNavigate();
+  const slide = SLIDES[i];
+  const last = i === SLIDES.length - 1;
+
+  function next() {
+    if (last) {
+      localStorage.setItem(&quot;vt_pwa_onboarded&quot;, &quot;1&quot;);
+      nav(&quot;/m/work&quot;, { replace: true });
+    } else {
+      setI(i + 1);
+    }
+  }
+
+  return (
+    &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, height: &quot;100vh&quot;, padding: 24, paddingTop: &quot;calc(var(--safe-top) + 24px)&quot; }}&gt;
+      &lt;div style={{ flex: 1, display: &quot;grid&quot;, placeItems: &quot;center&quot;, textAlign: &quot;center&quot; }}&gt;
+        &lt;div&gt;
+          &lt;h1&gt;{slide.title}&lt;/h1&gt;
+          &lt;p style={{ color: &quot;var(--vt-text-muted)&quot;, maxWidth: 320, margin: &quot;0 auto&quot; }}&gt;{slide.body}&lt;/p&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;center&quot;, gap: 8, marginBottom: 24 }}&gt;
+        {SLIDES.map((_, idx) =&gt; (
+          &lt;span key={idx} style={{ width: 8, height: 8, borderRadius: &quot;50%&quot;, background: idx === i ? &quot;var(--vt-primary)&quot; : &quot;var(--vt-border)&quot; }} /&gt;
+        ))}
+      &lt;/div&gt;
+      &lt;button onClick={next} style={{ padding: 16, background: &quot;var(--vt-primary)&quot;, color: &quot;var(--vt-primary-contrast)&quot;, border: 0, borderRadius: &quot;var(--vt-radius)&quot; }}&gt;
+        {slide.cta}
+      &lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 16.2: <code>Placeholder.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { EmptyState } from &quot;@/components/EmptyState&quot;;
+import { t } from &quot;@/i18n&quot;;
+
+export function Placeholder({ title }: { title: string }) {
+  return &lt;EmptyState title={title} body={t(&quot;common.coming_soon&quot;)} /&gt;;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 16.3: <code>Me.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { useEffect, useState } from &quot;react&quot;;
+import { useNavigate } from &quot;react-router-dom&quot;;
+import { logout, probeSession } from &quot;@/auth/session&quot;;
+import { t } from &quot;@/i18n&quot;;
+
+export function MePage() {
+  const [user, setUser] = useState&lt;string | null&gt;(null);
+  const nav = useNavigate();
+
+  useEffect(() =&gt; { probeSession().then((s) =&gt; setUser(s.user)); }, []);
+
+  async function doLogout() {
+    await logout();
+    nav(&quot;/m/login&quot;, { replace: true });
+  }
+
+  return (
+    &lt;div style={{ padding: 24 }}&gt;
+      &lt;h1&gt;{t(&quot;nav.me&quot;)}&lt;/h1&gt;
+      &lt;p style={{ color: &quot;var(--vt-text-muted)&quot; }}&gt;{user ?? &quot;—&quot;}&lt;/p&gt;
+      &lt;button onClick={doLogout} style={{ marginTop: 24, padding: 12 }}&gt;{t(&quot;logout&quot;)}&lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 16.4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/pages/Onboarding.tsx pwa/src/pages/Placeholder.tsx pwa/src/pages/Me.tsx
+git commit -m &quot;feat(pwa): onboarding, placeholder, profile pages&quot;
+</code></pre>
+<hr />
+<h2 id="task-17-frontend-router-appshell-maintsx-wiring">Task 17: Frontend — router + AppShell + main.tsx wiring</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/src/AppShell.tsx</code>
+- Create: <code>pwa/src/router.tsx</code>
+- Create: <code>pwa/src/vite-env.d.ts</code>
+- Modify: <code>pwa/src/main.tsx</code></p>
+<ul>
+<li>[ ] <strong>Step 17.1: <code>AppShell.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { useEffect, useState } from &quot;react&quot;;
+import { Outlet, useLocation } from &quot;react-router-dom&quot;;
+import { BottomNav } from &quot;@/components/BottomNav&quot;;
+import { OfflineBanner } from &quot;@/components/OfflineBanner&quot;;
+import { SafeArea } from &quot;@/components/SafeArea&quot;;
+import { ReloginModal } from &quot;@/components/ReloginModal&quot;;
+import { ToastProvider } from &quot;@/components/Toast&quot;;
+import { ErrorBoundary } from &quot;@/components/ErrorBoundary&quot;;
+import { onAuthChallenge } from &quot;@/api/client&quot;;
+import { logEvent } from &quot;@/telemetry&quot;;
+
+export function AppShell() {
+  const [reloginOpen, setReloginOpen] = useState(false);
+  const [resolver, setResolver] = useState&lt;((ok: boolean) =&gt; void) | null&gt;(null);
+  const loc = useLocation();
+
+  useEffect(() =&gt; {
+    onAuthChallenge(() =&gt; new Promise&lt;boolean&gt;((resolve) =&gt; {
+      setResolver(() =&gt; resolve);
+      setReloginOpen(true);
+    }));
+  }, []);
+
+  useEffect(() =&gt; { logEvent(&quot;page_view&quot;, { route: loc.pathname }); }, [loc.pathname]);
+
+  return (
+    &lt;ErrorBoundary&gt;
+      &lt;ToastProvider&gt;
+        &lt;OfflineBanner /&gt;
+        &lt;SafeArea&gt;
+          &lt;Outlet /&gt;
+        &lt;/SafeArea&gt;
+        &lt;BottomNav /&gt;
+        &lt;ReloginModal open={reloginOpen} onResolve={(ok) =&gt; {
+          setReloginOpen(false);
+          resolver?.(ok);
+          setResolver(null);
+        }} /&gt;
+      &lt;/ToastProvider&gt;
+    &lt;/ErrorBoundary&gt;
+  );
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 17.2: <code>router.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { createBrowserRouter, Navigate } from &quot;react-router-dom&quot;;
+import { AuthGuard } from &quot;@/auth/guard&quot;;
+import { LoginPage } from &quot;@/auth/login&quot;;
+import { AppShell } from &quot;@/AppShell&quot;;
+import { MyWorkList } from &quot;@/pages/MyWork/List&quot;;
+import { MyWorkDetail } from &quot;@/pages/MyWork/Detail&quot;;
+import { Onboarding } from &quot;@/pages/Onboarding&quot;;
+import { Placeholder } from &quot;@/pages/Placeholder&quot;;
+import { MePage } from &quot;@/pages/Me&quot;;
+import { t } from &quot;@/i18n&quot;;
+
+function OnboardingGate() {
+  if (localStorage.getItem(&quot;vt_pwa_onboarded&quot;) === &quot;1&quot;) {
+    return &lt;Navigate to=&quot;/m/work&quot; replace /&gt;;
+  }
+  return &lt;Onboarding /&gt;;
+}
+
+export const router = createBrowserRouter([
+  { path: &quot;/m/login&quot;, element: &lt;LoginPage /&gt; },
+  { path: &quot;/m/onboarding&quot;, element: &lt;OnboardingGate /&gt; },
+  {
+    element: &lt;AuthGuard /&gt;,
+    children: [{
+      element: &lt;AppShell /&gt;,
+      children: [
+        { path: &quot;/m&quot;, element: &lt;Navigate to=&quot;/m/work&quot; replace /&gt; },
+        { path: &quot;/m/work&quot;, element: &lt;MyWorkList /&gt; },
+        { path: &quot;/m/work/:id&quot;, element: &lt;MyWorkDetail /&gt; },
+        { path: &quot;/m/dashboard&quot;, element: &lt;Placeholder title={t(&quot;nav.dashboard&quot;)} /&gt; },
+        { path: &quot;/m/analytics&quot;, element: &lt;Placeholder title={t(&quot;nav.analytics&quot;)} /&gt; },
+        { path: &quot;/m/me&quot;, element: &lt;MePage /&gt; },
+      ],
+    }],
+  },
+  { path: &quot;*&quot;, element: &lt;Navigate to=&quot;/m/work&quot; replace /&gt; },
+]);
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 17.3: <code>vite-env.d.ts</code></strong></li>
+</ul>
+<pre><code class="language-typescript">/// &lt;reference types=&quot;vite/client&quot; /&gt;
+/// &lt;reference types=&quot;vite-plugin-pwa/client&quot; /&gt;
+declare const __SW_VERSION__: string;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 17.4: <code>main.tsx</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import React from &quot;react&quot;;
+import ReactDOM from &quot;react-dom/client&quot;;
+import { RouterProvider } from &quot;react-router-dom&quot;;
+import { QueryClient, QueryClientProvider } from &quot;@tanstack/react-query&quot;;
+import { registerSW } from &quot;virtual:pwa-register&quot;;
+import { router } from &quot;./router&quot;;
+import { logEvent } from &quot;./telemetry&quot;;
+import &quot;./theme&quot;;
+
+const qc = new QueryClient({
+  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+});
+
+ReactDOM.createRoot(document.getElementById(&quot;root&quot;)!).render(
+  &lt;React.StrictMode&gt;
+    &lt;QueryClientProvider client={qc}&gt;
+      &lt;RouterProvider router={router} /&gt;
+    &lt;/QueryClientProvider&gt;
+  &lt;/React.StrictMode&gt;
+);
+
+try {
+  registerSW({ immediate: true });
+} catch {
+  logEvent(&quot;sw_register_failed&quot;, {});
+}
+
+const displayMode = window.matchMedia(&quot;(display-mode: standalone)&quot;).matches ? &quot;standalone&quot; : &quot;browser&quot;;
+logEvent(&quot;pwa_boot&quot;, { version: __SW_VERSION__, display_mode: displayMode });
+
+if (!localStorage.getItem(&quot;vt_pwa_onboarded&quot;) &amp;&amp; !location.pathname.startsWith(&quot;/m/login&quot;)) {
+  if (!location.pathname.startsWith(&quot;/m/onboarding&quot;)) {
+    history.replaceState(null, &quot;&quot;, &quot;/m/onboarding&quot;);
+  }
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 17.5: Build + smoke</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run build &amp;&amp; cd ..
+bench restart
+</code></pre>
+<p>Open <code>http://&lt;site&gt;/m/</code> in browser → expect onboarding → login → My Work list.</p>
+<ul>
+<li>[ ] <strong>Step 17.6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/src/main.tsx pwa/src/router.tsx pwa/src/AppShell.tsx pwa/src/vite-env.d.ts
+git commit -m &quot;feat(pwa): wire router, app shell, SW registration, telemetry boot&quot;
+</code></pre>
+<hr />
+<h2 id="task-18-pwa-icons">Task 18: PWA icons</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/public/icons/icon-192.png</code>
+- Create: <code>pwa/public/icons/icon-512.png</code>
+- Create: <code>pwa/public/icons/maskable-512.png</code></p>
+<ul>
+<li>[ ] <strong>Step 18.1: Generate placeholder icons</strong></li>
+</ul>
+<p>Solid <code>#0b0b10</code> background, white "V" centered. Sizes 192/512/512 maskable.</p>
+<p>With ImageMagick:</p>
+<pre><code class="language-bash">mkdir -p pwa/public/icons
+for sz in 192 512; do
+  magick -size ${sz}x${sz} xc:'#0b0b10' \
+    -fill white -gravity center -pointsize $((sz/2)) -annotate 0 'V' \
+    pwa/public/icons/icon-${sz}.png
+done
+magick -size 512x512 xc:'#0b0b10' \
+  -fill white -gravity center -pointsize 200 -annotate 0 'V' \
+  pwa/public/icons/maskable-512.png
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 18.2: Verify</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run build &amp;&amp; cd ..
+ls vernon_tasks/www/m/icons/
+</code></pre>
+<p>Expected: 3 PNGs present.</p>
+<ul>
+<li>[ ] <strong>Step 18.3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/public/icons
+git commit -m &quot;feat(pwa): placeholder app icons (192, 512, 512 maskable)&quot;
+</code></pre>
+<hr />
+<h2 id="task-19-build-helper-readme">Task 19: Build helper + README</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/build-pwa.sh</code>
+- Modify: <code>README.md</code></p>
+<ul>
+<li>[ ] <strong>Step 19.1: Helper script</strong></li>
+</ul>
+<p><code>pwa/build-pwa.sh</code>:</p>
+<pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+cd &quot;$(dirname &quot;$0&quot;)&quot;
+npm install --no-audit --no-fund
+npm run build
+echo &quot;PWA built into ../vernon_tasks/www/m/&quot;
+</code></pre>
+<pre><code class="language-bash">chmod +x pwa/build-pwa.sh
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 19.2: Update README</strong></li>
+</ul>
+<p>Append:</p>
+<pre><code class="language-markdown">## Mobile PWA
+
+Vernon mobile PWA lives in `pwa/` (React + Vite). Served at `/m/`.
+
+Build:
+
+    ./pwa/build-pwa.sh
+    bench restart
+
+Source: `pwa/src/`. Build output: `vernon_tasks/www/m/` (git-ignored).
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 19.3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/build-pwa.sh README.md
+git commit -m &quot;chore(pwa): build helper + README&quot;
+</code></pre>
+<hr />
+<h2 id="task-20-playwright-smoke">Task 20: Playwright smoke</h2>
+<p><strong>Files:</strong>
+- Create: <code>pwa/playwright.config.ts</code>
+- Create: <code>pwa/e2e/smoke.spec.ts</code>
+- Modify: <code>pwa/package.json</code></p>
+<ul>
+<li>[ ] <strong>Step 20.1: Install Playwright</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa
+npm install -D @playwright/test
+npx playwright install --with-deps chromium
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 20.2: Add script</strong></li>
+</ul>
+<p>In <code>pwa/package.json</code> <code>scripts</code>:</p>
+<pre><code class="language-json">&quot;e2e&quot;: &quot;playwright test&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 20.3: <code>playwright.config.ts</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { defineConfig } from &quot;@playwright/test&quot;;
+
+export default defineConfig({
+  testDir: &quot;./e2e&quot;,
+  timeout: 30_000,
+  use: {
+    baseURL: process.env.PWA_BASE_URL ?? &quot;http://localhost:8000&quot;,
+    headless: true,
+  },
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 20.4: <code>e2e/smoke.spec.ts</code></strong></li>
+</ul>
+<pre><code class="language-typescript">import { test, expect } from &quot;@playwright/test&quot;;
+
+const USER = process.env.PWA_TEST_USER ?? &quot;Administrator&quot;;
+const PASS = process.env.PWA_TEST_PASS ?? &quot;admin&quot;;
+
+test(&quot;login → My Work renders&quot;, async ({ page }) =&gt; {
+  await page.goto(&quot;/m/work&quot;);
+  await page.fill('input[autocomplete=&quot;username&quot;]', USER);
+  await page.fill('input[type=&quot;password&quot;]', PASS);
+  await page.click('button[type=&quot;submit&quot;]');
+  await expect(page.getByRole(&quot;heading&quot;, { name: /selamat/i })).toBeVisible({ timeout: 10_000 });
+});
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 20.5: Run smoke</strong></li>
+</ul>
+<pre><code class="language-bash">PWA_BASE_URL=http://&lt;site&gt; PWA_TEST_USER=&lt;user&gt; PWA_TEST_PASS=&lt;pwd&gt; npm run e2e
+</code></pre>
+<p>Expected: 1 PASS.</p>
+<ul>
+<li>[ ] <strong>Step 20.6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add pwa/playwright.config.ts pwa/e2e pwa/package.json pwa/package-lock.json
+git commit -m &quot;test(pwa): playwright smoke (login → My Work)&quot;
+</code></pre>
+<hr />
+<h2 id="task-21-pilot-rollout-checklist">Task 21: Pilot rollout checklist</h2>
+<p><strong>Files:</strong>
+- Create: <code>docs/rollout/pwa-pilot.md</code></p>
+<ul>
+<li>[ ] <strong>Step 21.1: Checklist doc</strong></li>
+</ul>
+<pre><code class="language-markdown"># Vernon PWA P0.5 Pilot
+
+## Pre-launch
+
+- [ ] `./pwa/build-pwa.sh` succeeds locally
+- [ ] `bench build &amp;&amp; bench restart` on staging
+- [ ] `/m/` returns SPA on staging
+- [ ] iOS Safari: A2HS works, icon + standalone display
+- [ ] Android Chrome: manual install works
+- [ ] Airplane mode: cached list still renders, banner shows
+- [ ] Manually expire `sid` cookie: ReloginModal opens
+- [ ] Vernon Telemetry Event records `pwa_boot` rows
+
+## Pilot week
+
+- [ ] 1 team (5–10 users) invited
+- [ ] Daily check on `Vernon Telemetry Event` for `error_boundary` and
+      `login_failure` rates
+- [ ] Collect qualitative feedback (Slack thread / form)
+
+## Go/no-go gate
+
+- [ ] `error_boundary` &lt; 1% of `page_view`
+- [ ] `login_failure` post-success &lt; 5%
+- [ ] Install rate ≥ 30% of pilot users
+- [ ] No P0 bugs open
+
+## Company-wide
+
+- [ ] Desk banner linking to `/m/`
+- [ ] Email announcement
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 21.2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add docs/rollout/pwa-pilot.md
+git commit -m &quot;docs(rollout): PWA P0.5 pilot checklist&quot;
+</code></pre>
+<hr />
+<h2 id="task-22-final-integration-pr">Task 22: Final integration + PR</h2>
+<ul>
+<li>[ ] <strong>Step 22.1: All unit tests</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm test &amp;&amp; cd ..
+</code></pre>
+<p>Expected: all green.</p>
+<ul>
+<li>[ ] <strong>Step 22.2: Backend tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks
+</code></pre>
+<p>Expected: green.</p>
+<ul>
+<li>[ ] <strong>Step 22.3: Lint</strong></li>
+</ul>
+<pre><code class="language-bash">cd pwa &amp;&amp; npm run lint &amp;&amp; cd ..
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 22.4: Build + manual walkthrough</strong></li>
+</ul>
+<pre><code class="language-bash">./pwa/build-pwa.sh
+bench restart
+</code></pre>
+<p>Open <code>/m/</code>. Walk: onboarding → login → list → detail → /me → logout → re-login.</p>
+<ul>
+<li>[ ] <strong>Step 22.5: Push + PR</strong></li>
+</ul>
+<pre><code class="language-bash">git push -u origin feat/pwa-foundation
+gh pr create --title &quot;feat(pwa): foundation + My Work read-only (P0.5)&quot; --body &quot;$(cat &lt;&lt;'EOF'
+## Summary
+- Standalone PWA at /m/ (React + Vite + workbox)
+- Frappe session cookie auth + re-login modal
+- Read-only offline cache (IDB + StaleWhileRevalidate)
+- My Work list + detail screens
+- Telemetry DocType + endpoint + daily purge
+- i18n id-ID, design tokens light+dark, safe-area aware
+
+## Phasing
+P0.5 (this PR) — foundation + read-only My Work
+P1 — mutations + install prompt
+P2 — Dashboard + Analytics
+P3 — Leader views
+
+## Test plan
+- [ ] `cd pwa &amp;&amp; npm test` green
+- [ ] `bench run-tests --app vernon_tasks` green
+- [ ] iOS Safari A2HS works
+- [ ] Android Chrome manual install
+- [ ] Airplane mode: cached list renders + banner
+- [ ] Cookie expiry: ReloginModal preserves route
+- [ ] Telemetry rows visible in Desk
+
+Spec: docs/superpowers/specs/2026-05-11-vernon-pwa-foundation-design.md
+
+🤖 Generated with Claude Code
+EOF
+)&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 22.6: Track pilot</strong></li>
+</ul>
+<p>After PR merged + deployed, run pilot per <code>docs/rollout/pwa-pilot.md</code>.</p>
+<hr />
+<h2 id="self-review">Self-Review</h2>
+<p>Spec coverage:</p>
+<table>
+<thead>
+<tr>
+<th>Spec section</th>
+<th>Task(s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Goals (PWA at /m/, session cookie, read-only offline, My Work, foundation)</td>
+<td>4, 5, 9, 10, 13, 14, 15</td>
+</tr>
+<tr>
+<td>Repository layout</td>
+<td>5, 11–17</td>
+</tr>
+<tr>
+<td>Frappe integration (route, build)</td>
+<td>4, 19</td>
+</tr>
+<tr>
+<td>Auth flow (probe, login, mid-session 401, CSRF, boot)</td>
+<td>8, 9, 11.12, 17</td>
+</tr>
+<tr>
+<td>Data flow (react-query → IDB + sync-time, SWR)</td>
+<td>5, 10, 13</td>
+</tr>
+<tr>
+<td>Telemetry events</td>
+<td>1, 2, 12, 17</td>
+</tr>
+<tr>
+<td>i18n (id-ID, formal Anda, DD MMM YYYY)</td>
+<td>7</td>
+</tr>
+<tr>
+<td>Bottom nav</td>
+<td>11.11, 17</td>
+</tr>
+<tr>
+<td>My Work list (sections, greeting, stale, P2R, empty)</td>
+<td>14</td>
+</tr>
+<tr>
+<td>My Work detail (read-only, action placeholder)</td>
+<td>15</td>
+</tr>
+<tr>
+<td>Onboarding (3-slide, localStorage flag)</td>
+<td>16.1</td>
+</tr>
+<tr>
+<td>Re-login modal (preserve route)</td>
+<td>11.12, 17.1</td>
+</tr>
+<tr>
+<td>Offline UX (banner, StaleBadge, amber &gt;1h)</td>
+<td>11.8, 11.9</td>
+</tr>
+<tr>
+<td>Error handling (network, 401, 5xx, boundary, SW fail)</td>
+<td>8, 11.5, 17</td>
+</tr>
+<tr>
+<td>Backend additions (my_work, telemetry, boot, DocType, route, purge)</td>
+<td>1, 2, 3, 4, 9.1</td>
+</tr>
+<tr>
+<td>Testing (Vitest unit + component, backend pytest, Playwright)</td>
+<td>1.1, 2.1, 3.1, 7.1, 8.1, 9.2, 10.1, 11.1, 13.1, 14.1, 20</td>
+</tr>
+<tr>
+<td>Rollout (pilot 1 team, telemetry gates)</td>
+<td>21</td>
+</tr>
+</tbody>
+</table>
+<p>All sections mapped.</p>
+<p>Placeholder scan: no TBD / "implement later" / generic "handle errors".</p>
+<p>Type consistency: <code>MyWork</code>, <code>TaskCard</code>, <code>TaskDetail</code>, <code>Session</code>, <code>TelemetryEvent</code> consistent across tasks.</p>
+<p>Plan ready.</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-11-vernon-pwa-foundation.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

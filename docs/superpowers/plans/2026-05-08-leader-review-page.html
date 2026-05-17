@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Leader Review Page Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Leader Review Page Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-08-leader-review-page.md</span>
+  </div>
+</header>
+
+<h1 id="leader-review-page-implementation-plan">Leader Review Page Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Build a Frappe page (<code>leader-review</code>) for project leaders to approve/reject submitted tasks, monitor team workload, and track blocked tasks.</p>
+<p><strong>Architecture:</strong> Single page following the <code>my_work</code> pattern — one Python file with 5 whitelisted APIs, one JS file with 3 Bootstrap tabs, one test file. Leader's team is derived from VT Project's <code>project_leader</code> field and <code>Project Team Member</code> rows with <code>role = Leader</code>.</p>
+<p><strong>Tech Stack:</strong> Frappe (Python + JS), MariaDB, Bootstrap tabs (via Frappe), <code>frappe.db.sql</code>, <code>frappe.get_doc</code>, <code>frappe.db.set_value</code>.</p>
+<hr />
+<h2 id="file-map">File Map</h2>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>File</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Modify</td>
+<td><code>vernon_tasks/task/doctype/vt_task/vt_task.json</code> — add <code>rejection_note</code> field</td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>vernon_tasks/task/doctype/vt_task/vt_task.py</code> — add <code>"DO"</code> to CHECK transitions</td>
+</tr>
+<tr>
+<td>Create</td>
+<td><code>vernon_tasks/task/page/leader_review/__init__.py</code></td>
+</tr>
+<tr>
+<td>Create</td>
+<td><code>vernon_tasks/task/page/leader_review/leader_review.json</code></td>
+</tr>
+<tr>
+<td>Create</td>
+<td><code>vernon_tasks/task/page/leader_review/leader_review.py</code></td>
+</tr>
+<tr>
+<td>Create</td>
+<td><code>vernon_tasks/task/page/leader_review/test_leader_review.py</code></td>
+</tr>
+<tr>
+<td>Create</td>
+<td><code>vernon_tasks/task/page/leader_review/leader_review.js</code></td>
+</tr>
+<tr>
+<td>Modify</td>
+<td><code>vernon_tasks/workspace/my_projects/my_projects.json</code> — add Leader Review shortcut</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="task-1-add-rejection_note-field-to-vt-task-schema">Task 1: Add <code>rejection_note</code> field to VT Task schema</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/doctype/vt_task/vt_task.json</code>
+- Modify: <code>vernon_tasks/task/doctype/vt_task/vt_task.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Add <code>rejection_note</code> field to <code>vt_task.json</code></strong></li>
+</ul>
+<p>Open <code>vernon_tasks/task/doctype/vt_task/vt_task.json</code>. Find the <code>override_reason</code> field entry (index ~23 in the <code>fields</code> array). Insert the new field <strong>after</strong> <code>override_reason</code>:</p>
+<pre><code class="language-json">{
+  &quot;fieldname&quot;: &quot;rejection_note&quot;,
+  &quot;fieldtype&quot;: &quot;Small Text&quot;,
+  &quot;label&quot;: &quot;Rejection Note&quot;,
+  &quot;read_only&quot;: 1,
+  &quot;in_list_view&quot;: 0,
+  &quot;in_standard_filter&quot;: 0
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Allow CHECK → DO transition in <code>vt_task.py</code></strong></li>
+</ul>
+<p>In <code>vernon_tasks/task/doctype/vt_task/vt_task.py</code>, find <code>VALID_PDCA_TRANSITIONS</code> and change the <code>"CHECK"</code> entry:</p>
+<pre><code class="language-python"># Before:
+&quot;CHECK&quot;: [&quot;ACT&quot;, &quot;DONE&quot;],
+
+# After:
+&quot;CHECK&quot;: [&quot;ACT&quot;, &quot;DONE&quot;, &quot;DO&quot;],
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Run existing VT Task tests to confirm no regressions</strong></li>
+</ul>
+<pre><code class="language-bash">cd /path/to/frappe-bench
+bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.doctype.vt_task.test_vt_task
+</code></pre>
+<p>Expected: all tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/doctype/vt_task/vt_task.json
+git add vernon_tasks/task/doctype/vt_task/vt_task.py
+git commit -m &quot;feat(schema): add rejection_note field to VT Task + allow CHECK→DO transition&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-create-page-skeleton">Task 2: Create page skeleton</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/page/leader_review/__init__.py</code>
+- Create: <code>vernon_tasks/task/page/leader_review/leader_review.json</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>__init__.py</code></strong></li>
+</ul>
+<p>Create empty file at <code>vernon_tasks/task/page/leader_review/__init__.py</code> (zero bytes).</p>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>leader_review.json</code></strong></li>
+</ul>
+<p>Create <code>vernon_tasks/task/page/leader_review/leader_review.json</code>:</p>
+<pre><code class="language-json">{
+ &quot;creation&quot;: &quot;2026-05-08 00:00:00.000000&quot;,
+ &quot;doctype&quot;: &quot;Page&quot;,
+ &quot;module&quot;: &quot;Task&quot;,
+ &quot;name&quot;: &quot;leader-review&quot;,
+ &quot;page_name&quot;: &quot;leader-review&quot;,
+ &quot;roles&quot;: [
+  {&quot;role&quot;: &quot;VT Leader&quot;},
+  {&quot;role&quot;: &quot;VT Manager&quot;}
+ ],
+ &quot;title&quot;: &quot;Leader Review&quot;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/leader_review/
+git commit -m &quot;feat(page/leader_review): add page skeleton&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-read-apis-get_review_queue-get_team_workload-get_team_blocked_tasks">Task 3: Read APIs — get_review_queue, get_team_workload, get_team_blocked_tasks</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/page/leader_review/leader_review.py</code>
+- Create: <code>vernon_tasks/task/page/leader_review/test_leader_review.py</code></p>
+<h3 id="3a-write-failing-tests-for-read-apis">3a: Write failing tests for read APIs</h3>
+<ul>
+<li>[ ] <strong>Step 1: Create test file with fixtures and read API tests</strong></li>
+</ul>
+<p>Create <code>vernon_tasks/task/page/leader_review/test_leader_review.py</code>:</p>
+<pre><code class="language-python">import frappe
+import unittest
+from frappe.utils import today, add_days
+
+PROJ_NAME = &quot;TEST-LR-PRJ&quot;
+PROJ2_NAME = &quot;TEST-LR-PRJ2&quot;
+LEADER_USER = &quot;Administrator&quot;
+MEMBER_USER = &quot;test-member@example.com&quot;
+
+
+def _ensure_user(email):
+    if not frappe.db.exists(&quot;User&quot;, email):
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;User&quot;,
+            &quot;email&quot;: email,
+            &quot;first_name&quot;: &quot;Test&quot;,
+            &quot;last_name&quot;: &quot;Member&quot;,
+            &quot;send_welcome_email&quot;: 0,
+        }).insert(ignore_permissions=True)
+    return email
+
+
+def _make_project(name, leader, members=None):
+    if frappe.db.exists(&quot;VT Project&quot;, name):
+        frappe.delete_doc(&quot;VT Project&quot;, name, force=True)
+    doc = frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Project&quot;,
+        &quot;name&quot;: name,
+        &quot;title&quot;: f&quot;Project {name}&quot;,
+        &quot;project_leader&quot;: leader,
+        &quot;start_date&quot;: today(),
+        &quot;end_date&quot;: add_days(today(), 30),
+        &quot;pdca_phase&quot;: &quot;DO&quot;,
+        &quot;team_members&quot;: [
+            {&quot;user&quot;: m, &quot;role&quot;: &quot;Member&quot;} for m in (members or [])
+        ],
+    })
+    doc.insert(ignore_permissions=True)
+    return doc
+
+
+def _make_task(name, assigned_to, project, pdca_phase=&quot;PLAN&quot;, kanban_status=&quot;Scheduled&quot;,
+               priority=&quot;Medium&quot;, estimated_hours=3.0, deadline_offset=5):
+    if frappe.db.exists(&quot;VT Task&quot;, name):
+        frappe.delete_doc(&quot;VT Task&quot;, name, force=True)
+    return frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Task&quot;,
+        &quot;name&quot;: name,
+        &quot;title&quot;: f&quot;Task {name}&quot;,
+        &quot;project&quot;: project,
+        &quot;assigned_to&quot;: assigned_to,
+        &quot;pdca_phase&quot;: pdca_phase,
+        &quot;kanban_status&quot;: kanban_status,
+        &quot;priority&quot;: priority,
+        &quot;estimated_hours&quot;: estimated_hours,
+        &quot;start_date&quot;: today(),
+        &quot;deadline&quot;: add_days(today(), deadline_offset),
+        &quot;weight&quot;: 3.0,
+    }).insert(ignore_permissions=True)
+
+
+class TestLeaderReviewReadAPIs(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        frappe.set_user(&quot;Administrator&quot;)
+        _ensure_user(MEMBER_USER)
+        _make_project(PROJ_NAME, LEADER_USER, members=[MEMBER_USER])
+        _make_project(PROJ2_NAME, &quot;Guest&quot;, members=[])
+
+    @classmethod
+    def tearDownClass(cls):
+        for name in [PROJ_NAME, PROJ2_NAME]:
+            if frappe.db.exists(&quot;VT Project&quot;, name):
+                frappe.delete_doc(&quot;VT Project&quot;, name, force=True)
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user(&quot;Administrator&quot;)
+
+    def tearDown(self):
+        for t in [&quot;LR-T1&quot;, &quot;LR-T2&quot;, &quot;LR-T3&quot;, &quot;LR-T4&quot;, &quot;LR-BLOCKER&quot;, &quot;LR-BLOCKED&quot;]:
+            if frappe.db.exists(&quot;VT Task&quot;, t):
+                frappe.delete_doc(&quot;VT Task&quot;, t, force=True)
+        frappe.db.commit()
+
+    # --- get_review_queue ---
+
+    def test_get_review_queue_returns_check_tasks_in_leader_projects(self):
+        _make_task(&quot;LR-T1&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import get_review_queue
+        result = get_review_queue()
+        names = [r[&quot;name&quot;] for r in result]
+        self.assertIn(&quot;LR-T1&quot;, names)
+
+    def test_get_review_queue_excludes_tasks_in_other_projects(self):
+        _make_task(&quot;LR-T2&quot;, MEMBER_USER, PROJ2_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import get_review_queue
+        result = get_review_queue()
+        names = [r[&quot;name&quot;] for r in result]
+        self.assertNotIn(&quot;LR-T2&quot;, names)
+
+    def test_get_review_queue_excludes_non_check_tasks(self):
+        _make_task(&quot;LR-T3&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;DO&quot;, kanban_status=&quot;In Progress&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import get_review_queue
+        result = get_review_queue()
+        names = [r[&quot;name&quot;] for r in result]
+        self.assertNotIn(&quot;LR-T3&quot;, names)
+
+    # --- get_team_workload ---
+
+    def test_get_team_workload_sums_estimated_hours_per_member(self):
+        _make_task(&quot;LR-T1&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;DO&quot;, estimated_hours=4.0)
+        _make_task(&quot;LR-T2&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;CHECK&quot;, estimated_hours=3.0)
+
+        from vernon_tasks.task.page.leader_review.leader_review import get_team_workload
+        result = get_team_workload()
+        member_row = next((r for r in result if r[&quot;assigned_to&quot;] == MEMBER_USER), None)
+        self.assertIsNotNone(member_row)
+        self.assertAlmostEqual(member_row[&quot;total_hours&quot;], 7.0, places=1)
+
+    def test_get_team_workload_excludes_done_and_backlog(self):
+        _make_task(&quot;LR-T1&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;BACKLOG&quot;, estimated_hours=10.0)
+
+        from vernon_tasks.task.page.leader_review.leader_review import get_team_workload
+        result = get_team_workload()
+        member_row = next((r for r in result if r[&quot;assigned_to&quot;] == MEMBER_USER), None)
+        if member_row:
+            self.assertAlmostEqual(member_row[&quot;total_hours&quot;], 0.0, places=1)
+
+    # --- get_team_blocked_tasks ---
+
+    def test_get_team_blocked_tasks_returns_blocked_member_tasks(self):
+        _make_task(&quot;LR-BLOCKER&quot;, LEADER_USER, PROJ_NAME, pdca_phase=&quot;DO&quot;)
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Task&quot;,
+            &quot;name&quot;: &quot;LR-BLOCKED&quot;,
+            &quot;title&quot;: &quot;Blocked Task&quot;,
+            &quot;project&quot;: PROJ_NAME,
+            &quot;assigned_to&quot;: MEMBER_USER,
+            &quot;pdca_phase&quot;: &quot;PLAN&quot;,
+            &quot;kanban_status&quot;: &quot;Scheduled&quot;,
+            &quot;priority&quot;: &quot;High&quot;,
+            &quot;estimated_hours&quot;: 2.0,
+            &quot;start_date&quot;: today(),
+            &quot;deadline&quot;: add_days(today(), 3),
+            &quot;weight&quot;: 2.0,
+            &quot;dependencies&quot;: [{&quot;blocked_by&quot;: &quot;LR-BLOCKER&quot;, &quot;dependency_type&quot;: &quot;Finish-to-Start&quot;}],
+        }).insert(ignore_permissions=True)
+
+        from vernon_tasks.task.page.leader_review.leader_review import get_team_blocked_tasks
+        result = get_team_blocked_tasks()
+        names = [r[&quot;name&quot;] for r in result]
+        self.assertIn(&quot;LR-BLOCKED&quot;, names)
+        row = next(r for r in result if r[&quot;name&quot;] == &quot;LR-BLOCKED&quot;)
+        self.assertEqual(row[&quot;blocker_name&quot;], &quot;LR-BLOCKER&quot;)
+        self.assertIn(&quot;days_blocked&quot;, row)
+
+    def test_get_team_blocked_tasks_excludes_other_project_tasks(self):
+        # Tasks in PROJ2_NAME (not led by LEADER_USER) should not appear
+        _make_task(&quot;LR-T4&quot;, MEMBER_USER, PROJ2_NAME, pdca_phase=&quot;PLAN&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import get_team_blocked_tasks
+        result = get_team_blocked_tasks()
+        names = [r[&quot;name&quot;] for r in result]
+        self.assertNotIn(&quot;LR-T4&quot;, names)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run tests to verify they fail</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.page.leader_review.test_leader_review
+</code></pre>
+<p>Expected: <code>ImportError: cannot import name 'get_review_queue'</code> or <code>ModuleNotFoundError</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Create <code>leader_review.py</code> with read APIs</strong></li>
+</ul>
+<p>Create <code>vernon_tasks/task/page/leader_review/leader_review.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.utils import today
+
+
+def _leader_project_names(user: str) -&gt; list:
+    rows = frappe.db.sql(&quot;&quot;&quot;
+        SELECT p.name FROM `tabVT Project` p
+        WHERE p.project_leader = %(user)s
+        UNION
+        SELECT ptm.parent FROM `tabProject Team Member` ptm
+        WHERE ptm.user = %(user)s AND ptm.role = 'Leader'
+    &quot;&quot;&quot;, {&quot;user&quot;: user}, as_dict=True)
+    return [r.name for r in rows]
+
+
+def _is_leader_of_project(user: str, project: str) -&gt; bool:
+    proj_leader = frappe.db.get_value(&quot;VT Project&quot;, project, &quot;project_leader&quot;)
+    if proj_leader == user:
+        return True
+    return bool(frappe.db.exists(
+        &quot;Project Team Member&quot;,
+        {&quot;parent&quot;: project, &quot;user&quot;: user, &quot;role&quot;: &quot;Leader&quot;},
+    ))
+
+
+@frappe.whitelist()
+def get_review_queue() -&gt; list:
+    user = frappe.session.user
+    projects = _leader_project_names(user)
+    if not projects:
+        return []
+    placeholders = &quot;, &quot;.join([&quot;%s&quot;] * len(projects))
+    return frappe.db.sql(f&quot;&quot;&quot;
+        SELECT t.name, t.title, t.project, t.priority, t.deadline,
+               t.assigned_to, t.pdca_phase, t.kanban_status,
+               t.estimated_hours, t.review_scheduled_date
+        FROM `tabVT Task` t
+        WHERE t.pdca_phase = 'CHECK'
+          AND t.project IN ({placeholders})
+        ORDER BY
+            FIELD(t.priority, 'Critical', 'High', 'Medium', 'Low'),
+            t.deadline ASC
+    &quot;&quot;&quot;, projects, as_dict=True)
+
+
+@frappe.whitelist()
+def get_team_workload() -&gt; list:
+    user = frappe.session.user
+    projects = _leader_project_names(user)
+    if not projects:
+        return []
+    placeholders = &quot;, &quot;.join([&quot;%s&quot;] * len(projects))
+    rows = frappe.db.sql(f&quot;&quot;&quot;
+        SELECT t.assigned_to, COALESCE(SUM(t.estimated_hours), 0) AS total_hours
+        FROM `tabVT Task` t
+        WHERE t.pdca_phase NOT IN ('DONE', 'BACKLOG')
+          AND t.project IN ({placeholders})
+          AND t.assigned_to IS NOT NULL
+          AND t.assigned_to != ''
+        GROUP BY t.assigned_to
+        ORDER BY total_hours DESC
+    &quot;&quot;&quot;, projects, as_dict=True)
+    capacity = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;default_daily_target_hours&quot;) or 8.0
+    for r in rows:
+        r[&quot;capacity&quot;] = float(capacity)
+        r[&quot;overloaded&quot;] = r[&quot;total_hours&quot;] &gt; float(capacity)
+    return rows
+
+
+@frappe.whitelist()
+def get_team_blocked_tasks() -&gt; list:
+    user = frappe.session.user
+    projects = _leader_project_names(user)
+    if not projects:
+        return []
+    placeholders = &quot;, &quot;.join([&quot;%s&quot;] * len(projects))
+    return frappe.db.sql(f&quot;&quot;&quot;
+        SELECT
+            t.name, t.title, t.project, t.priority, t.deadline,
+            t.assigned_to, t.pdca_phase, t.kanban_status,
+            td.blocked_by AS blocker_name,
+            bt.title AS blocker_title,
+            bt.assigned_to AS blocker_assignee,
+            DATEDIFF(CURDATE(), t.start_date) AS days_blocked
+        FROM `tabVT Task` t
+        INNER JOIN `tabTask Dependency` td ON td.parent = t.name
+        INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
+        WHERE t.pdca_phase NOT IN ('DONE')
+          AND bt.pdca_phase != 'DONE'
+          AND t.project IN ({placeholders})
+        ORDER BY days_blocked DESC
+    &quot;&quot;&quot;, projects, as_dict=True)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run read API tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.page.leader_review.test_leader_review
+</code></pre>
+<p>Expected: all <code>TestLeaderReviewReadAPIs</code> tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/leader_review/leader_review.py
+git add vernon_tasks/task/page/leader_review/test_leader_review.py
+git commit -m &quot;feat(page/leader_review): add read APIs + tests (review queue, workload, blocked)&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-write-apis-approve_task-reject_task">Task 4: Write APIs — approve_task, reject_task</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/page/leader_review/leader_review.py</code>
+- Modify: <code>vernon_tasks/task/page/leader_review/test_leader_review.py</code></p>
+<h3 id="4a-write-failing-tests-for-write-apis">4a: Write failing tests for write APIs</h3>
+<ul>
+<li>[ ] <strong>Step 1: Append write API test class to <code>test_leader_review.py</code></strong></li>
+</ul>
+<p>Add this class at the bottom of <code>test_leader_review.py</code>:</p>
+<pre><code class="language-python">class TestLeaderReviewWriteAPIs(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        frappe.set_user(&quot;Administrator&quot;)
+        _ensure_user(MEMBER_USER)
+        _make_project(PROJ_NAME, LEADER_USER, members=[MEMBER_USER])
+        _make_project(PROJ2_NAME, &quot;Guest&quot;, members=[])
+
+    @classmethod
+    def tearDownClass(cls):
+        for name in [PROJ_NAME, PROJ2_NAME]:
+            if frappe.db.exists(&quot;VT Project&quot;, name):
+                frappe.delete_doc(&quot;VT Project&quot;, name, force=True)
+        frappe.db.commit()
+
+    def setUp(self):
+        frappe.set_user(&quot;Administrator&quot;)
+
+    def tearDown(self):
+        for t in [&quot;LR-W1&quot;, &quot;LR-W2&quot;, &quot;LR-W3&quot;, &quot;LR-W4&quot;]:
+            if frappe.db.exists(&quot;VT Task&quot;, t):
+                frappe.delete_doc(&quot;VT Task&quot;, t, force=True, ignore_permissions=True)
+        frappe.db.commit()
+
+    # --- approve_task ---
+
+    def test_approve_task_sets_done(self):
+        _make_task(&quot;LR-W1&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import approve_task
+        result = approve_task(&quot;LR-W1&quot;)
+        self.assertEqual(result[&quot;status&quot;], &quot;ok&quot;)
+
+        phase = frappe.db.get_value(&quot;VT Task&quot;, &quot;LR-W1&quot;, &quot;pdca_phase&quot;)
+        self.assertEqual(phase, &quot;DONE&quot;)
+
+    def test_approve_task_wrong_phase_raises_validation_error(self):
+        _make_task(&quot;LR-W2&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;DO&quot;, kanban_status=&quot;In Progress&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import approve_task
+        with self.assertRaises(frappe.ValidationError):
+            approve_task(&quot;LR-W2&quot;)
+
+    def test_approve_task_unauthorized_raises_permission_error(self):
+        _make_task(&quot;LR-W3&quot;, MEMBER_USER, PROJ2_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import approve_task
+        with self.assertRaises(frappe.PermissionError):
+            approve_task(&quot;LR-W3&quot;)
+
+    # --- reject_task ---
+
+    def test_reject_task_sets_do_and_saves_rejection_note(self):
+        _make_task(&quot;LR-W1&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        result = reject_task(&quot;LR-W1&quot;, &quot;Output tidak lengkap, perlu revisi bagian A&quot;)
+        self.assertEqual(result[&quot;status&quot;], &quot;ok&quot;)
+
+        phase, note = frappe.db.get_value(&quot;VT Task&quot;, &quot;LR-W1&quot;, [&quot;pdca_phase&quot;, &quot;rejection_note&quot;])
+        self.assertEqual(phase, &quot;DO&quot;)
+        self.assertEqual(note, &quot;Output tidak lengkap, perlu revisi bagian A&quot;)
+
+    def test_reject_task_empty_reason_raises_validation_error(self):
+        _make_task(&quot;LR-W2&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        with self.assertRaises(frappe.ValidationError):
+            reject_task(&quot;LR-W2&quot;, &quot;&quot;)
+
+    def test_reject_task_whitespace_reason_raises_validation_error(self):
+        _make_task(&quot;LR-W3&quot;, MEMBER_USER, PROJ_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        with self.assertRaises(frappe.ValidationError):
+            reject_task(&quot;LR-W3&quot;, &quot;   &quot;)
+
+    def test_reject_task_unauthorized_raises_permission_error(self):
+        _make_task(&quot;LR-W4&quot;, MEMBER_USER, PROJ2_NAME, pdca_phase=&quot;CHECK&quot;, kanban_status=&quot;In Review&quot;)
+
+        from vernon_tasks.task.page.leader_review.leader_review import reject_task
+        with self.assertRaises(frappe.PermissionError):
+            reject_task(&quot;LR-W4&quot;, &quot;some reason&quot;)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run tests to verify they fail</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.page.leader_review.test_leader_review
+</code></pre>
+<p>Expected: <code>TestLeaderReviewWriteAPIs</code> tests fail with <code>ImportError</code> for <code>approve_task</code>.</p>
+<ul>
+<li>[ ] <strong>Step 3: Add <code>approve_task</code> and <code>reject_task</code> to <code>leader_review.py</code></strong></li>
+</ul>
+<p>Append to the bottom of <code>vernon_tasks/task/page/leader_review/leader_review.py</code>:</p>
+<pre><code class="language-python">@frappe.whitelist()
+def approve_task(task_name: str) -&gt; dict:
+    user = frappe.session.user
+    doc = frappe.get_doc(&quot;VT Task&quot;, task_name)
+    if doc.pdca_phase != &quot;CHECK&quot;:
+        frappe.throw(
+            f&quot;Task must be In Review to approve (current: {doc.kanban_status})&quot;,
+            frappe.ValidationError,
+        )
+    if not _is_leader_of_project(user, doc.project):
+        frappe.throw(&quot;Not authorized to approve this task&quot;, frappe.PermissionError)
+    doc.pdca_phase = &quot;DONE&quot;
+    doc.save(ignore_permissions=True)
+    doc.submit()
+    return {&quot;status&quot;: &quot;ok&quot;}
+
+
+@frappe.whitelist()
+def reject_task(task_name: str, reason: str) -&gt; dict:
+    user = frappe.session.user
+    if not reason or not reason.strip():
+        frappe.throw(&quot;Rejection reason is required&quot;, frappe.ValidationError)
+    doc = frappe.get_doc(&quot;VT Task&quot;, task_name)
+    if doc.pdca_phase != &quot;CHECK&quot;:
+        frappe.throw(
+            f&quot;Task must be In Review to reject (current: {doc.kanban_status})&quot;,
+            frappe.ValidationError,
+        )
+    if not _is_leader_of_project(user, doc.project):
+        frappe.throw(&quot;Not authorized to reject this task&quot;, frappe.PermissionError)
+    frappe.db.set_value(&quot;VT Task&quot;, task_name, {
+        &quot;pdca_phase&quot;: &quot;DO&quot;,
+        &quot;kanban_status&quot;: &quot;In Progress&quot;,
+        &quot;rejection_note&quot;: reason.strip(),
+    })
+    return {&quot;status&quot;: &quot;ok&quot;}
+</code></pre>
+<p><strong>Note on <code>approve_task</code>:</strong> <code>doc.save()</code> triggers <code>_validate_pdca_transition</code> (CHECK → DONE is valid) and <code>_sync_kanban_status</code> (sets <code>kanban_status = Done</code>). Then <code>doc.submit()</code> triggers <code>on_submit</code> which sets <code>completion_date</code>, then <code>calculate_points</code> fires via the <code>on_submit</code> hook in <code>hooks.py</code>.</p>
+<p><strong>Note on <code>reject_task</code>:</strong> Uses <code>frappe.db.set_value</code> to bypass <code>_validate_pdca_transition</code> because CHECK → DO is not a forward PDCA transition — it is a leader override. This is consistent with the pattern in <code>my_work.py</code>.</p>
+<ul>
+<li>[ ] <strong>Step 4: Run all leader_review tests</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.page.leader_review.test_leader_review
+</code></pre>
+<p>Expected: all 13 tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/leader_review/leader_review.py
+git add vernon_tasks/task/page/leader_review/test_leader_review.py
+git commit -m &quot;feat(page/leader_review): add approve_task + reject_task APIs + tests&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-build-leader_reviewjs-3-tab-ui">Task 5: Build <code>leader_review.js</code> — 3-tab UI</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/page/leader_review/leader_review.js</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Create <code>leader_review.js</code></strong></li>
+</ul>
+<p>Create <code>vernon_tasks/task/page/leader_review/leader_review.js</code>:</p>
+<pre><code class="language-javascript">frappe.pages[&quot;leader-review&quot;].on_page_load = function (wrapper) {
+    const page = frappe.ui.make_app_page({
+        parent: wrapper,
+        title: &quot;Leader Review&quot;,
+        single_column: true,
+    });
+
+    page.add_button(__(&quot;Refresh&quot;), () =&gt; render_active_tab(), { icon: &quot;refresh&quot; });
+
+    const container = $('&lt;div class=&quot;lr-container&quot; style=&quot;padding: 0 20px 40px;&quot;&gt;&lt;/div&gt;')
+        .appendTo(page.main);
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    const PRIORITY_COLOR = { Critical: &quot;red&quot;, High: &quot;red&quot;, Medium: &quot;orange&quot;, Low: &quot;blue&quot; };
+    const KANBAN_COLOR = {
+        &quot;Backlog&quot;: &quot;gray&quot;, &quot;Scheduled&quot;: &quot;blue&quot;, &quot;In Progress&quot;: &quot;yellow&quot;,
+        &quot;In Review&quot;: &quot;purple&quot;, &quot;Revision&quot;: &quot;orange&quot;, &quot;Done&quot;: &quot;green&quot;,
+    };
+
+    const esc = (s) =&gt; frappe.utils.escape_html(String(s || &quot;&quot;));
+
+    function task_link(name, title) {
+        return `&lt;a href=&quot;/app/vt-task/${esc(name)}&quot; target=&quot;_blank&quot;&gt;${esc(title)}&lt;/a&gt;`;
+    }
+
+    function status_pill(label) {
+        return `&lt;span class=&quot;indicator-pill ${KANBAN_COLOR[label] || &quot;gray&quot;}&quot;&gt;${esc(label)}&lt;/span&gt;`;
+    }
+
+    function priority_pill(p) {
+        return `&lt;span class=&quot;indicator-pill ${PRIORITY_COLOR[p] || &quot;gray&quot;}&quot;&gt;${esc(p)}&lt;/span&gt;`;
+    }
+
+    function fmt_deadline(d) {
+        if (!d) return &quot;—&quot;;
+        const diff = frappe.datetime.get_diff(d, frappe.datetime.get_today());
+        if (diff &lt; 0) return `&lt;span style=&quot;color:var(--red-500)&quot;&gt;Overdue ${Math.abs(diff)}d&lt;/span&gt;`;
+        if (diff === 0) return `&lt;span style=&quot;color:var(--orange-500)&quot;&gt;Today&lt;/span&gt;`;
+        return `+${diff}d`;
+    }
+
+    function empty_state(msg) {
+        return `&lt;p class=&quot;text-muted&quot; style=&quot;padding:12px 0;&quot;&gt;${esc(msg)}&lt;/p&gt;`;
+    }
+
+    function workload_bar(hours, capacity) {
+        const pct = Math.min(100, Math.round((hours / capacity) * 100));
+        const color = pct &gt;= 100 ? &quot;var(--red-500)&quot; : pct &gt;= 80 ? &quot;var(--orange-500)&quot; : &quot;var(--green-500)&quot;;
+        return `
+            &lt;div style=&quot;display:flex; align-items:center; gap:8px;&quot;&gt;
+                &lt;div style=&quot;flex:1; background:var(--gray-200); border-radius:4px; height:8px;&quot;&gt;
+                    &lt;div style=&quot;width:${pct}%; background:${color}; border-radius:4px; height:8px;&quot;&gt;&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;span style=&quot;font-size:11px; color:${color};&quot;&gt;${hours.toFixed(1)}h / ${capacity}h${pct &gt;= 100 ? &quot; ⚠&quot; : &quot;&quot;}&lt;/span&gt;
+            &lt;/div&gt;`;
+    }
+
+    // ── tabs ─────────────────────────────────────────────────────────────────
+
+    const TABS = [
+        { id: &quot;review-queue&quot;, label: &quot;Review Queue&quot; },
+        { id: &quot;team-workload&quot;, label: &quot;Team Workload&quot; },
+        { id: &quot;team-blocked&quot;, label: &quot;Blocked Tasks&quot; },
+    ];
+
+    let activeTab = &quot;review-queue&quot;;
+
+    const tabNav = $('&lt;ul class=&quot;nav nav-tabs&quot; style=&quot;margin: 16px 0 0;&quot;&gt;&lt;/ul&gt;').appendTo(container);
+    const tabContent = $('&lt;div class=&quot;tab-content&quot; style=&quot;margin-top:0;&quot;&gt;&lt;/div&gt;').appendTo(container);
+
+    TABS.forEach(({ id, label }) =&gt; {
+        $(`&lt;li class=&quot;nav-item&quot;&gt;
+            &lt;a class=&quot;nav-link${id === activeTab ? &quot; active&quot; : &quot;&quot;}&quot; data-tab=&quot;${id}&quot; href=&quot;#&quot;&gt;
+                ${esc(label)} &lt;span class=&quot;badge badge-secondary&quot; id=&quot;${id}-count&quot; style=&quot;margin-left:4px;&quot;&gt;0&lt;/span&gt;
+            &lt;/a&gt;
+        &lt;/li&gt;`).appendTo(tabNav);
+
+        $(`&lt;div class=&quot;tab-pane frappe-card&quot; id=&quot;${id}-pane&quot;
+            style=&quot;padding:16px; display:${id === activeTab ? &quot;block&quot; : &quot;none&quot;}; margin-top:0; border-top:none; border-radius:0 0 4px 4px;&quot;&gt;
+            &lt;div id=&quot;${id}-body&quot;&gt;&lt;/div&gt;
+        &lt;/div&gt;`).appendTo(tabContent);
+    });
+
+    tabNav.on(&quot;click&quot;, &quot;.nav-link&quot;, function (e) {
+        e.preventDefault();
+        activeTab = $(this).data(&quot;tab&quot;);
+        tabNav.find(&quot;.nav-link&quot;).removeClass(&quot;active&quot;);
+        $(this).addClass(&quot;active&quot;);
+        tabContent.find(&quot;.tab-pane&quot;).hide();
+        $(`#${activeTab}-pane`).show();
+        render_active_tab();
+    });
+
+    // ── Tab 1: Review Queue ───────────────────────────────────────────────────
+
+    function render_review_queue() {
+        frappe.call({
+            method: &quot;vernon_tasks.task.page.leader_review.leader_review.get_review_queue&quot;,
+            callback(r) {
+                const data = r.message || [];
+                $(&quot;#review-queue-count&quot;).text(data.length);
+                if (!data.length) {
+                    $(&quot;#review-queue-body&quot;).html(empty_state(&quot;No tasks pending review.&quot;));
+                    return;
+                }
+                const rows = data.map(t =&gt; `
+                    &lt;tr&gt;
+                        &lt;td&gt;${task_link(t.name, t.title)}&lt;/td&gt;
+                        &lt;td&gt;${esc(t.project) || &quot;—&quot;}&lt;/td&gt;
+                        &lt;td&gt;${esc(t.assigned_to) || &quot;—&quot;}&lt;/td&gt;
+                        &lt;td&gt;${priority_pill(t.priority)}&lt;/td&gt;
+                        &lt;td&gt;${fmt_deadline(t.deadline)}&lt;/td&gt;
+                        &lt;td style=&quot;white-space:nowrap;&quot;&gt;
+                            &lt;button class=&quot;btn btn-xs btn-success btn-approve&quot; data-task=&quot;${esc(t.name)}&quot;&gt;Approve&lt;/button&gt;
+                            &lt;button class=&quot;btn btn-xs btn-danger btn-reject&quot; data-task=&quot;${esc(t.name)}&quot; style=&quot;margin-left:4px;&quot;&gt;Reject&lt;/button&gt;
+                        &lt;/td&gt;
+                    &lt;/tr&gt;
+                `).join(&quot;&quot;);
+                $(&quot;#review-queue-body&quot;).html(`
+                    &lt;table class=&quot;table table-sm&quot; style=&quot;margin:0;&quot;&gt;
+                        &lt;thead&gt;&lt;tr&gt;
+                            &lt;th&gt;Task&lt;/th&gt;&lt;th&gt;Project&lt;/th&gt;&lt;th&gt;Assignee&lt;/th&gt;
+                            &lt;th&gt;Priority&lt;/th&gt;&lt;th&gt;Deadline&lt;/th&gt;&lt;th&gt;&lt;/th&gt;
+                        &lt;/tr&gt;&lt;/thead&gt;
+                        &lt;tbody&gt;${rows}&lt;/tbody&gt;
+                    &lt;/table&gt;
+                `);
+            },
+        });
+    }
+
+    // ── Tab 2: Team Workload ──────────────────────────────────────────────────
+
+    function render_team_workload() {
+        frappe.call({
+            method: &quot;vernon_tasks.task.page.leader_review.leader_review.get_team_workload&quot;,
+            callback(r) {
+                const data = r.message || [];
+                $(&quot;#team-workload-count&quot;).text(data.length);
+                if (!data.length) {
+                    $(&quot;#team-workload-body&quot;).html(empty_state(&quot;No active team members.&quot;));
+                    return;
+                }
+                const rows = data.map(m =&gt; `
+                    &lt;tr&gt;
+                        &lt;td&gt;${esc(m.assigned_to)}&lt;/td&gt;
+                        &lt;td&gt;${workload_bar(m.total_hours, m.capacity)}&lt;/td&gt;
+                    &lt;/tr&gt;
+                `).join(&quot;&quot;);
+                $(&quot;#team-workload-body&quot;).html(`
+                    &lt;table class=&quot;table table-sm&quot; style=&quot;margin:0;&quot;&gt;
+                        &lt;thead&gt;&lt;tr&gt;&lt;th&gt;Member&lt;/th&gt;&lt;th&gt;Load&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;
+                        &lt;tbody&gt;${rows}&lt;/tbody&gt;
+                    &lt;/table&gt;
+                `);
+            },
+        });
+    }
+
+    // ── Tab 3: Blocked Tasks ──────────────────────────────────────────────────
+
+    function render_team_blocked() {
+        frappe.call({
+            method: &quot;vernon_tasks.task.page.leader_review.leader_review.get_team_blocked_tasks&quot;,
+            callback(r) {
+                const data = r.message || [];
+                $(&quot;#team-blocked-count&quot;).text(data.length);
+                if (!data.length) {
+                    $(&quot;#team-blocked-body&quot;).html(empty_state(&quot;No blocked tasks.&quot;));
+                    return;
+                }
+                const rows = data.map(t =&gt; `
+                    &lt;tr&gt;
+                        &lt;td&gt;${task_link(t.name, t.title)}&lt;/td&gt;
+                        &lt;td&gt;${esc(t.assigned_to) || &quot;—&quot;}&lt;/td&gt;
+                        &lt;td&gt;${task_link(t.blocker_name, t.blocker_title)}&lt;/td&gt;
+                        &lt;td&gt;${esc(t.blocker_assignee) || &quot;—&quot;}&lt;/td&gt;
+                        &lt;td&gt;${t.days_blocked || 0}d&lt;/td&gt;
+                    &lt;/tr&gt;
+                `).join(&quot;&quot;);
+                $(&quot;#team-blocked-body&quot;).html(`
+                    &lt;table class=&quot;table table-sm&quot; style=&quot;margin:0;&quot;&gt;
+                        &lt;thead&gt;&lt;tr&gt;
+                            &lt;th&gt;Blocked Task&lt;/th&gt;&lt;th&gt;Member&lt;/th&gt;
+                            &lt;th&gt;Blocked By&lt;/th&gt;&lt;th&gt;Blocker Owner&lt;/th&gt;&lt;th&gt;Days&lt;/th&gt;
+                        &lt;/tr&gt;&lt;/thead&gt;
+                        &lt;tbody&gt;${rows}&lt;/tbody&gt;
+                    &lt;/table&gt;
+                `);
+            },
+        });
+    }
+
+    // ── Action handlers ───────────────────────────────────────────────────────
+
+    $(document).on(&quot;click&quot;, &quot;.btn-approve&quot;, function () {
+        const task_name = $(this).data(&quot;task&quot;);
+        frappe.confirm(
+            `Approve task &lt;b&gt;${esc(task_name)}&lt;/b&gt;? This will mark it as DONE and calculate points.`,
+            () =&gt; {
+                frappe.call({
+                    method: &quot;vernon_tasks.task.page.leader_review.leader_review.approve_task&quot;,
+                    args: { task_name },
+                    callback(r) {
+                        if (r.message &amp;&amp; r.message.status === &quot;ok&quot;) {
+                            frappe.show_alert({ message: &quot;Task approved&quot;, indicator: &quot;green&quot; });
+                            render_review_queue();
+                        }
+                    },
+                    error(r) {
+                        frappe.msgprint(r.message || &quot;Approval failed&quot;);
+                    },
+                });
+            }
+        );
+    });
+
+    $(document).on(&quot;click&quot;, &quot;.btn-reject&quot;, function () {
+        const task_name = $(this).data(&quot;task&quot;);
+        frappe.prompt(
+            {
+                label: &quot;Rejection Reason&quot;,
+                fieldname: &quot;reason&quot;,
+                fieldtype: &quot;Small Text&quot;,
+                reqd: 1,
+            },
+            ({ reason }) =&gt; {
+                frappe.call({
+                    method: &quot;vernon_tasks.task.page.leader_review.leader_review.reject_task&quot;,
+                    args: { task_name, reason },
+                    callback(r) {
+                        if (r.message &amp;&amp; r.message.status === &quot;ok&quot;) {
+                            frappe.show_alert({ message: &quot;Task sent back for revision&quot;, indicator: &quot;orange&quot; });
+                            render_review_queue();
+                        }
+                    },
+                    error(r) {
+                        frappe.msgprint(r.message || &quot;Rejection failed&quot;);
+                    },
+                });
+            },
+            &quot;Reject Task&quot;,
+            &quot;Reject&quot;
+        );
+    });
+
+    // ── Routing ───────────────────────────────────────────────────────────────
+
+    function render_active_tab() {
+        if (activeTab === &quot;review-queue&quot;) render_review_queue();
+        else if (activeTab === &quot;team-workload&quot;) render_team_workload();
+        else if (activeTab === &quot;team-blocked&quot;) render_team_blocked();
+    }
+
+    render_review_queue();
+};
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/leader_review/leader_review.js
+git commit -m &quot;feat(page/leader_review): add 3-tab JS UI with approve/reject handlers&quot;
+</code></pre>
+<hr />
+<h2 id="task-6-add-leader-review-shortcut-to-leader-workspace">Task 6: Add Leader Review shortcut to Leader Workspace</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/workspace/my_projects/my_projects.json</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Add shortcut to <code>my_projects.json</code></strong></li>
+</ul>
+<p>Open <code>vernon_tasks/workspace/my_projects/my_projects.json</code>. Find the <code>"shortcuts"</code> array and add this entry as the <strong>first</strong> item:</p>
+<pre><code class="language-json">{&quot;color&quot;: &quot;Blue&quot;, &quot;icon&quot;: &quot;check-circle&quot;, &quot;label&quot;: &quot;Leader Review&quot;, &quot;link_to&quot;: &quot;leader-review&quot;, &quot;type&quot;: &quot;Page&quot;}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/workspace/my_projects/my_projects.json
+git commit -m &quot;feat(workspace): add Leader Review shortcut to Leader workspace&quot;
+</code></pre>
+<hr />
+<h2 id="task-7-final-verification">Task 7: Final verification</h2>
+<ul>
+<li>[ ] <strong>Step 1: Run full test suite for the app</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; run-tests --app vernon_tasks
+</code></pre>
+<p>Expected: all tests pass, zero failures.</p>
+<ul>
+<li>[ ] <strong>Step 2: Reload the app in the site</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site &lt;site&gt; migrate
+bench build --app vernon_tasks
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Verify the page loads</strong></li>
+</ul>
+<p>Open browser → navigate to <code>/app/leader-review</code>. Confirm:
+- Page loads with 3 tabs
+- Review Queue tab shows CHECK-phase tasks for your projects
+- Team Workload tab shows member load bars
+- Blocked Tasks tab shows blocked member tasks
+- Approve button opens confirm dialog
+- Reject button opens reason prompt</p>
+<ul>
+<li>[ ] <strong>Step 4: Final commit (if any fixes needed)</strong></li>
+</ul>
+<pre><code class="language-bash">git add -p
+git commit -m &quot;fix(page/leader_review): &lt;describe fix&gt;&quot;
+</code></pre>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-08-leader-review-page.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

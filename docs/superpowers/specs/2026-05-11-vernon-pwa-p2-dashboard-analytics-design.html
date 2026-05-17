@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks PWA — P2 Dashboard + IC Analytics</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks PWA — P2 Dashboard + IC Analytics</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-11-vernon-pwa-p2-dashboard-analytics-design.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-pwa-p2-dashboard-ic-analytics">Vernon Tasks PWA — P2 Dashboard + IC Analytics</h1>
+<p><strong>Date:</strong> 2026-05-11
+<strong>Predecessors:</strong> P0.5 (#1), P1a (#2), P1b (#3) — all merged</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Replace <code>/m/dashboard</code> and <code>/m/analytics</code> placeholders with working pages</li>
+<li>Dashboard: 3 summary tiles (points / streak / completed) + active sprint
+  progress + sprint kanban (read-only, horizontal scroll)</li>
+<li>Analytics: tab switcher with three sub-views (Leaderboard / Velocity / Streak)</li>
+<li>Reuse existing whitelisted endpoints; add one new (<code>get_sprint_kanban</code>)</li>
+<li>Charts via <code>recharts</code> (lightweight, accessible, dark-mode aware)</li>
+<li>Offline cache via existing IDB primitives</li>
+<li>4 new telemetry events</li>
+</ul>
+<p>Non-goals (deferred):</p>
+<ul>
+<li>Leader views (P3)</li>
+<li>Push notifications (separate initiative)</li>
+<li>Realtime kanban updates (read-only this phase)</li>
+<li>Drag-to-move kanban cards (out of scope)</li>
+</ul>
+<h2 id="existing-endpoints-reused">Existing endpoints reused</h2>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vernon_tasks.task.page.my_dashboard.my_dashboard.get_employee_stats</code></td>
+<td>Points, streak, completion totals</td>
+</tr>
+<tr>
+<td><code>vernon_tasks.task.page.my_dashboard.my_dashboard.get_daily_completions</code></td>
+<td>Last 14-day daily count</td>
+</tr>
+<tr>
+<td><code>vernon_tasks.task.page.my_dashboard.my_dashboard.get_hours_summary</code></td>
+<td>Estimated vs actual hours</td>
+</tr>
+<tr>
+<td><code>vernon_tasks.task.api.ic_analytics.get_leaderboard</code></td>
+<td>Top performers per period</td>
+</tr>
+<tr>
+<td><code>vernon_tasks.task.api.ic_analytics.get_personal_velocity</code></td>
+<td>Points per sprint</td>
+</tr>
+<tr>
+<td><code>vernon_tasks.task.api.ic_analytics.get_streak</code></td>
+<td>Streak history</td>
+</tr>
+</tbody>
+</table>
+<h2 id="new-endpoint">New endpoint</h2>
+<p><code>vernon_tasks.task.page.my_dashboard.my_dashboard.get_sprint_kanban</code> returns:</p>
+<pre><code class="language-json">{
+  &quot;sprint&quot;: {&quot;name&quot;: &quot;SPR-001&quot;, &quot;title&quot;: &quot;Sprint May 2026&quot;, &quot;start_date&quot;: &quot;...&quot;, &quot;end_date&quot;: &quot;...&quot;, &quot;progress_pct&quot;: 60},
+  &quot;columns&quot;: {
+    &quot;Backlog&quot;: [{&quot;id&quot;: &quot;...&quot;, &quot;title&quot;: &quot;...&quot;, &quot;points&quot;: 5}, ...],
+    &quot;Doing&quot;:   [...],
+    &quot;Review&quot;:  [...],
+    &quot;Done&quot;:    [...]
+  }
+}
+</code></pre>
+<p>Returns <code>{"sprint": null, "columns": {}}</code> if user has no active sprint task.
+Restricted to <code>frappe.session.user</code> (tasks where <code>assigned_to == user</code>).</p>
+<h2 id="architecture">Architecture</h2>
+<h3 id="repository-additions">Repository additions</h3>
+<pre><code>pwa/src/
+  api/
+    dashboard.ts                    # employee_stats, daily_completions, hours, sprint_kanban
+    dashboard.test.ts
+    analytics.ts                    # leaderboard, velocity, streak
+    analytics.test.ts
+  components/
+    SummaryCard.tsx                 # icon + value + label tile
+    ProgressBar.tsx                 # h-bar + percentage label
+    KanbanColumn.tsx                # status column
+    KanbanCard.tsx                  # mini task card
+    Tabs.tsx                        # generic tab switcher
+    LeaderboardTable.tsx
+    VelocityChart.tsx               # recharts LineChart wrapper
+    StreakChart.tsx                 # recharts BarChart wrapper
+    ProjectPicker.tsx               # dropdown over user's projects
+  hooks/
+    useUserProjects.ts              # fetches distinct projects from my_work
+  pages/
+    Dashboard.tsx                   # MODIFY router from Placeholder
+    Analytics.tsx                   # MODIFY router from Placeholder
+
+vernon_tasks/task/page/my_dashboard/
+  my_dashboard.py                   # MODIFY: add get_sprint_kanban
+  test_my_dashboard.py              # MODIFY: add kanban tests
+
+vernon_tasks/task/api/
+  telemetry.py                      # MODIFY: 4 new events
+</code></pre>
+<h3 id="backend-get_sprint_kanban">Backend: <code>get_sprint_kanban</code></h3>
+<pre><code class="language-python">@frappe.whitelist()
+def get_sprint_kanban() -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+    sprint = frappe.db.get_value(
+        &quot;VT Sprint&quot;,
+        {&quot;status&quot;: [&quot;in&quot;, [&quot;Active&quot;, &quot;In Progress&quot;, &quot;Started&quot;]]},
+        [&quot;name&quot;, &quot;title&quot;, &quot;start_date&quot;, &quot;end_date&quot;],
+        as_dict=True,
+    )
+    if not sprint:
+        return {&quot;sprint&quot;: None, &quot;columns&quot;: {}}
+
+    rows = frappe.get_all(
+        &quot;VT Task&quot;,
+        filters={
+            &quot;sprint&quot;: sprint[&quot;name&quot;],
+            &quot;assigned_to&quot;: user,
+            &quot;kanban_status&quot;: [&quot;!=&quot;, &quot;Cancelled&quot;],
+        },
+        fields=[&quot;name&quot;, &quot;title&quot;, &quot;kanban_status&quot;, &quot;base_points&quot;, &quot;priority&quot;, &quot;deadline&quot;],
+        order_by=&quot;kanban_status asc, deadline asc&quot;,
+        limit_page_length=200,
+    )
+
+    columns: dict = {&quot;Backlog&quot;: [], &quot;Doing&quot;: [], &quot;Review&quot;: [], &quot;Done&quot;: []}
+    for r in rows:
+        col = r.get(&quot;kanban_status&quot;) or &quot;Backlog&quot;
+        if col not in columns:
+            columns[col] = []
+        columns[col].append({
+            &quot;id&quot;: r[&quot;name&quot;],
+            &quot;title&quot;: r[&quot;title&quot;],
+            &quot;points&quot;: r.get(&quot;base_points&quot;) or 0,
+            &quot;priority&quot;: r.get(&quot;priority&quot;),
+            &quot;deadline&quot;: r.get(&quot;deadline&quot;),
+        })
+
+    total = sum(len(v) for v in columns.values())
+    done_count = len(columns.get(&quot;Done&quot;, []))
+    progress_pct = round(100 * done_count / total) if total else 0
+
+    return {
+        &quot;sprint&quot;: {**sprint, &quot;progress_pct&quot;: progress_pct},
+        &quot;columns&quot;: columns,
+    }
+</code></pre>
+<h3 id="frontend-dashboardts">Frontend: <code>dashboard.ts</code></h3>
+<pre><code class="language-typescript">import { api } from &quot;./client&quot;;
+
+const PAGE = &quot;vernon_tasks.task.page.my_dashboard.my_dashboard&quot;;
+
+export interface EmployeeStats {
+  total_points: number;
+  current_streak_days: number;
+  tasks_completed_this_month: number;
+}
+
+export interface SprintKanbanColumn {
+  Backlog: KanbanItem[];
+  Doing: KanbanItem[];
+  Review: KanbanItem[];
+  Done: KanbanItem[];
+}
+
+export interface KanbanItem {
+  id: string;
+  title: string;
+  points: number;
+  priority?: string;
+  deadline?: string;
+}
+
+export interface SprintKanban {
+  sprint: {
+    name: string;
+    title: string;
+    start_date: string;
+    end_date: string;
+    progress_pct: number;
+  } | null;
+  columns: SprintKanbanColumn;
+}
+
+export const fetchEmployeeStats = () =&gt;
+  api.get&lt;EmployeeStats&gt;(`/api/method/${PAGE}.get_employee_stats`);
+
+export const fetchSprintKanban = () =&gt;
+  api.get&lt;SprintKanban&gt;(`/api/method/${PAGE}.get_sprint_kanban`);
+
+export const fetchDailyCompletions = () =&gt;
+  api.get&lt;Array&lt;{ date: string; count: number }&gt;&gt;(
+    `/api/method/${PAGE}.get_daily_completions`,
+  );
+</code></pre>
+<h3 id="frontend-analyticsts">Frontend: <code>analytics.ts</code></h3>
+<pre><code class="language-typescript">import { api } from &quot;./client&quot;;
+
+const BASE = &quot;/api/method/vernon_tasks.task.api.ic_analytics&quot;;
+
+export type Period = &quot;week&quot; | &quot;month&quot; | &quot;quarter&quot;;
+
+export interface LeaderboardRow {
+  user: string;
+  full_name: string;
+  total_points: number;
+  rank: number;
+}
+
+export interface VelocityPoint {
+  sprint: string;
+  completed_points: number;
+  target_points: number;
+}
+
+export interface StreakBucket {
+  date: string;
+  count: number;
+}
+
+export const fetchLeaderboard = (period: Period = &quot;month&quot;, limit = 10) =&gt;
+  api.get&lt;{ leaderboard: LeaderboardRow[] }&gt;(
+    `${BASE}.get_leaderboard?period=${period}&amp;limit=${limit}`,
+  );
+
+export const fetchVelocity = (project: string, n = 6) =&gt;
+  api.get&lt;{ trend: VelocityPoint[] }&gt;(
+    `${BASE}.get_personal_velocity?project=${encodeURIComponent(project)}&amp;n=${n}`,
+  );
+
+export const fetchStreak = (project: string) =&gt;
+  api.get&lt;{ streak: StreakBucket[]; current: number; longest: number }&gt;(
+    `${BASE}.get_streak?project=${encodeURIComponent(project)}`,
+  );
+</code></pre>
+<h3 id="dashboard-page">Dashboard page</h3>
+<pre><code>Vertical scroll:
+1. &lt;h1&gt;Dashboard&lt;/h1&gt;
+2. SummaryCard row (grid 3 cols):
+   - Poin: total_points
+   - Streak: current_streak_days &quot;hari&quot;
+   - Selesai bulan ini: tasks_completed_this_month
+3. Sprint section:
+   - &quot;Sprint Aktif&quot; header
+   - sprint.title
+   - ProgressBar progress_pct
+   - Date range &quot;start_date — end_date&quot;
+4. Kanban section:
+   - horizontal scroll container
+   - 4 KanbanColumn (Backlog / Doing / Review / Done)
+   - each column shows count badge + scrollable card list
+5. PullToRefresh wraps everything
+</code></pre>
+<p>If no active sprint → EmptyState "Belum ada sprint aktif" (skip sprint+kanban sections).</p>
+<h3 id="analytics-page">Analytics page</h3>
+<pre><code>1. &lt;h1&gt;Analitik&lt;/h1&gt;
+2. Tabs: [Leaderboard | Velocity | Streak]
+3. Tab body switches on click. Each tab manages its own queries.
+
+Leaderboard tab:
+  - Period chip row: Minggu / Bulan / Kuartal
+  - LeaderboardTable: rank, name, points, top-3 badge (🥇🥈🥉)
+
+Velocity tab:
+  - ProjectPicker
+  - VelocityChart: line chart, last 6 sprints, completed vs target
+
+Streak tab:
+  - ProjectPicker
+  - &quot;Streak saat ini: X hari · terpanjang: Y hari&quot;
+  - StreakChart: bar chart last 14 days, count per day
+</code></pre>
+<h3 id="projectpicker">ProjectPicker</h3>
+<p>Reads distinct projects from My Work via <code>useUserProjects</code> hook (memoized).</p>
+<pre><code class="language-typescript">// useUserProjects.ts
+export function useUserProjects() {
+  const q = useQuery({ queryKey: [&quot;my-work&quot;], queryFn: fetchMyWork });
+  const set = new Set&lt;string&gt;();
+  for (const list of [q.data?.overdue, q.data?.today, q.data?.upcoming]) {
+    list?.forEach((t) =&gt; t.project &amp;&amp; set.add(t.project));
+  }
+  return { projects: Array.from(set).sort(), isLoading: q.isLoading };
+}
+</code></pre>
+<h3 id="charts-wrappers">Charts wrappers</h3>
+<p><code>VelocityChart</code>:</p>
+<pre><code class="language-typescript">&lt;ResponsiveContainer width=&quot;100%&quot; height={220}&gt;
+  &lt;LineChart data={trend}&gt;
+    &lt;CartesianGrid stroke=&quot;var(--vt-border)&quot; /&gt;
+    &lt;XAxis dataKey=&quot;sprint&quot; stroke=&quot;var(--vt-text-muted)&quot; fontSize={12} /&gt;
+    &lt;YAxis stroke=&quot;var(--vt-text-muted)&quot; fontSize={12} /&gt;
+    &lt;Tooltip contentStyle={{ background: &quot;var(--vt-surface)&quot; }} /&gt;
+    &lt;Line type=&quot;monotone&quot; dataKey=&quot;completed_points&quot; stroke=&quot;var(--vt-primary)&quot; strokeWidth={2} /&gt;
+    &lt;Line type=&quot;monotone&quot; dataKey=&quot;target_points&quot; stroke=&quot;var(--vt-text-muted)&quot; strokeDasharray=&quot;3 3&quot; /&gt;
+  &lt;/LineChart&gt;
+&lt;/ResponsiveContainer&gt;
+</code></pre>
+<p><code>StreakChart</code> same but <code>&lt;BarChart&gt;</code> with <code>Bar dataKey="count"</code>.</p>
+<h3 id="telemetry-events">Telemetry events</h3>
+<p>Append to <code>ALLOWED_EVENTS</code>:</p>
+<pre><code>&quot;dashboard_view&quot;
+&quot;analytics_view&quot;
+&quot;analytics_period_change&quot;
+&quot;analytics_project_change&quot;
+</code></pre>
+<h3 id="caching">Caching</h3>
+<ul>
+<li>Dashboard data: react-query staleTime 60s + IDB write-through</li>
+<li>Analytics: staleTime 60s, refetchInterval false (manual via tab switch)</li>
+<li>Hooks reuse existing <code>cacheGet/cachePut</code> + <code>stamp</code> from P0.5 IDB module</li>
+</ul>
+<h3 id="error-handling">Error handling</h3>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>UX</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Offline + cached</td>
+<td>render + StaleBadge</td>
+</tr>
+<tr>
+<td>Offline no cache</td>
+<td>EmptyState</td>
+</tr>
+<tr>
+<td>403</td>
+<td>"Tidak ada akses"</td>
+</tr>
+<tr>
+<td>Empty data</td>
+<td>"Belum ada data" + suggestion</td>
+</tr>
+<tr>
+<td>Chart all-zero</td>
+<td>render axes + dimmed text overlay</td>
+</tr>
+<tr>
+<td>No projects (new user)</td>
+<td>"Mulai kerjakan tugas untuk lihat analitik"</td>
+</tr>
+</tbody>
+</table>
+<h3 id="testing">Testing</h3>
+<ul>
+<li>Vitest: dashboard.ts URLs, analytics.ts URLs, SummaryCard render, ProgressBar percentage clamp, Tabs switching, LeaderboardTable medal logic, useUserProjects dedup</li>
+<li>pytest: get_sprint_kanban returns correct structure + perm gate + null sprint case</li>
+<li>Playwright (gated): open /m/dashboard → SummaryCard "Poin" visible</li>
+</ul>
+<h3 id="bundle-impact">Bundle impact</h3>
+<ul>
+<li>recharts: +50KB gzipped (lazy-loaded via <code>React.lazy</code> on Analytics route)</li>
+<li>New components: ~15KB</li>
+<li>Estimate: 357 KB total (from 292 KB at P1b end)</li>
+</ul>
+<p>To soften: lazy-load recharts only when Analytics route mounts.</p>
+<h3 id="rollout">Rollout</h3>
+<ol>
+<li>Build + deploy staging</li>
+<li>Pilot week — same group as P0.5/P1</li>
+<li>Verify analytics counts match Desk pages (sanity check parity)</li>
+<li>Watch telemetry: <code>dashboard_view</code> rate, <code>analytics_view</code> per-tab distribution</li>
+<li>Company-wide</li>
+</ol>
+<h2 id="open-questions">Open questions</h2>
+<p>None.</p>
+<h2 id="references">References</h2>
+<ul>
+<li>Spec P0.5 / P1a / P1b</li>
+<li>Desk pages: <code>vernon_tasks/task/page/my_dashboard</code>, <code>my_analytics</code></li>
+<li>recharts 2.x docs</li>
+</ul>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-11-vernon-pwa-p2-dashboard-analytics-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

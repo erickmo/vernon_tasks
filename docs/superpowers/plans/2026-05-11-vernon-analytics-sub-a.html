@@ -1,0 +1,1418 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks Analytics — Sub-A Leader Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks Analytics — Sub-A Leader Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-11-vernon-analytics-sub-a.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-analytics-sub-a-leader-implementation-plan">Vernon Tasks Analytics — Sub-A Leader Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Ship the Sub-A Leader Analytics page (burndown, velocity trend, forecast, risk alerts) using hours as the metric unit.</p>
+<p><strong>Architecture:</strong> Pure service layer in <code>vernon_tasks/task/services/</code>, whitelisted API in <code>vernon_tasks/task/api/</code>, single Frappe Page consuming Frappe Charts. Cache velocity/forecast via <code>frappe.cache()</code>, invalidate on sprint/task hooks. Risk thresholds: per-project override → VT Settings default → hardcoded fallback.</p>
+<p><strong>Tech Stack:</strong> Frappe Framework (Python), MariaDB, Frappe Charts (JS), pytest/unittest via <code>bench run-tests</code>.</p>
+<p><strong>Spec:</strong> <code>docs/superpowers/specs/2026-05-11-vernon-analytics-design.md</code></p>
+<p><strong>Conventions discovered in repo:</strong>
+- Roles used: <code>VT Leader</code>, <code>VT Manager</code> (NOT <code>Leader</code>).
+- Tests sit next to source as <code>test_&lt;module&gt;.py</code> (no separate <code>tests/</code> dir).
+- SQL: parameterized <code>frappe.db.sql(..., as_dict=True)</code>.
+- Whitelisted API endpoints live in module Python files; pages call via <code>frappe.call("vernon_tasks.task.api.analytics.&lt;fn&gt;")</code>.</p>
+<hr />
+<h2 id="file-structure">File Structure</h2>
+<p><strong>Create:</strong>
+- <code>vernon_tasks/task/services/threshold.py</code> — <code>get_project_threshold(project, key)</code> resolver
+- <code>vernon_tasks/task/services/test_threshold.py</code>
+- <code>vernon_tasks/task/services/velocity_service.py</code> — <code>get_sprint_velocity</code>, <code>get_velocity_trend</code>
+- <code>vernon_tasks/task/services/test_velocity_service.py</code>
+- <code>vernon_tasks/task/services/burndown_service.py</code> — <code>get_burndown</code>
+- <code>vernon_tasks/task/services/test_burndown_service.py</code>
+- <code>vernon_tasks/task/services/forecast_service.py</code> — <code>get_forecast</code>
+- <code>vernon_tasks/task/services/test_forecast_service.py</code>
+- <code>vernon_tasks/task/services/risk_evaluator.py</code> — <code>evaluate_risks</code>
+- <code>vernon_tasks/task/services/test_risk_evaluator.py</code>
+- <code>vernon_tasks/task/api/__init__.py</code>
+- <code>vernon_tasks/task/api/analytics.py</code> — whitelisted endpoints
+- <code>vernon_tasks/task/api/test_analytics.py</code>
+- <code>vernon_tasks/task/page/leader_analytics/__init__.py</code>
+- <code>vernon_tasks/task/page/leader_analytics/leader_analytics.json</code>
+- <code>vernon_tasks/task/page/leader_analytics/leader_analytics.js</code>
+- <code>vernon_tasks/task/page/leader_analytics/leader_analytics.py</code></p>
+<p><strong>Modify:</strong>
+- <code>vernon_tasks/project/doctype/vt_project/vt_project.json</code> — append 3 override fields
+- <code>vernon_tasks/vt_settings/doctype/vt_settings/vt_settings.json</code> — append 3 default fields
+- <code>vernon_tasks/hooks.py</code> — register doc_events for cache invalidation
+- <code>vernon_tasks/task/workspace/vernon_tasks/vernon_tasks.json</code> — add shortcut for Leader Analytics page</p>
+<hr />
+<h2 id="task-1-vt-settings-defaults">Task 1: VT Settings defaults</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/vt_settings/doctype/vt_settings/vt_settings.json</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Inspect current schema</strong></li>
+</ul>
+<p>Run: <code>cat vernon_tasks/vt_settings/doctype/vt_settings/vt_settings.json</code></p>
+<p>Note the existing <code>field_order</code> and <code>fields</code> arrays.</p>
+<ul>
+<li>[ ] <strong>Step 2: Append 3 new fields</strong></li>
+</ul>
+<p>Append to <code>field_order</code> (after existing entries):</p>
+<pre><code>&quot;analytics_defaults_section&quot;,
+&quot;default_blocked_days_threshold&quot;,
+&quot;default_slip_pct_threshold&quot;,
+&quot;default_capacity_pct_threshold&quot;
+</code></pre>
+<p>Append to <code>fields</code>:</p>
+<pre><code class="language-json">{&quot;fieldname&quot;: &quot;analytics_defaults_section&quot;, &quot;fieldtype&quot;: &quot;Section Break&quot;, &quot;label&quot;: &quot;Analytics Defaults&quot;},
+{&quot;fieldname&quot;: &quot;default_blocked_days_threshold&quot;, &quot;fieldtype&quot;: &quot;Int&quot;, &quot;label&quot;: &quot;Default Blocked Days Threshold&quot;, &quot;default&quot;: &quot;3&quot;},
+{&quot;fieldname&quot;: &quot;default_slip_pct_threshold&quot;, &quot;fieldtype&quot;: &quot;Percent&quot;, &quot;label&quot;: &quot;Default Sprint Slip % Threshold&quot;, &quot;default&quot;: &quot;20&quot;},
+{&quot;fieldname&quot;: &quot;default_capacity_pct_threshold&quot;, &quot;fieldtype&quot;: &quot;Percent&quot;, &quot;label&quot;: &quot;Default Capacity % Threshold&quot;, &quot;default&quot;: &quot;120&quot;}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Run migration</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; migrate</code>
+Expected: Migration completes; no errors.</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/vt_settings/doctype/vt_settings/vt_settings.json
+git commit -m &quot;feat(settings): add analytics threshold defaults&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-vt-project-override-fields">Task 2: VT Project override fields</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/project/doctype/vt_project/vt_project.json</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Append 3 override fields</strong></li>
+</ul>
+<p>Append to <code>field_order</code>:</p>
+<pre><code>&quot;analytics_overrides_section&quot;,
+&quot;blocked_days_threshold&quot;,
+&quot;slip_pct_threshold&quot;,
+&quot;capacity_pct_threshold&quot;
+</code></pre>
+<p>Append to <code>fields</code>:</p>
+<pre><code class="language-json">{&quot;fieldname&quot;: &quot;analytics_overrides_section&quot;, &quot;fieldtype&quot;: &quot;Section Break&quot;, &quot;label&quot;: &quot;Analytics Overrides&quot;, &quot;collapsible&quot;: 1},
+{&quot;fieldname&quot;: &quot;blocked_days_threshold&quot;, &quot;fieldtype&quot;: &quot;Int&quot;, &quot;label&quot;: &quot;Blocked Days Threshold&quot;, &quot;description&quot;: &quot;Leave blank to inherit from VT Settings&quot;},
+{&quot;fieldname&quot;: &quot;slip_pct_threshold&quot;, &quot;fieldtype&quot;: &quot;Percent&quot;, &quot;label&quot;: &quot;Sprint Slip % Threshold&quot;, &quot;description&quot;: &quot;Leave blank to inherit&quot;},
+{&quot;fieldname&quot;: &quot;capacity_pct_threshold&quot;, &quot;fieldtype&quot;: &quot;Percent&quot;, &quot;label&quot;: &quot;Capacity % Threshold&quot;, &quot;description&quot;: &quot;Leave blank to inherit&quot;}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run migration</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; migrate</code>
+Expected: Migration completes.</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/project/doctype/vt_project/vt_project.json
+git commit -m &quot;feat(project): add per-project analytics override fields&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-threshold-resolver-service">Task 3: Threshold resolver service</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/services/threshold.py</code>
+- Create: <code>vernon_tasks/task/services/test_threshold.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing test</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/test_threshold.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from vernon_tasks.task.services.threshold import get_project_threshold, THRESHOLD_KEYS
+
+
+class TestThreshold(FrappeTestCase):
+    def setUp(self):
+        settings = frappe.get_single(&quot;VT Settings&quot;)
+        settings.default_blocked_days_threshold = 3
+        settings.default_slip_pct_threshold = 20
+        settings.default_capacity_pct_threshold = 120
+        settings.save(ignore_permissions=True)
+
+    def test_unknown_key_raises(self):
+        with self.assertRaises(ValueError):
+            get_project_threshold(None, &quot;unknown_key&quot;)
+
+    def test_no_project_returns_settings_default(self):
+        self.assertEqual(get_project_threshold(None, &quot;blocked_days&quot;), 3)
+        self.assertEqual(get_project_threshold(None, &quot;slip_pct&quot;), 20)
+        self.assertEqual(get_project_threshold(None, &quot;capacity_pct&quot;), 120)
+
+    def test_threshold_keys_complete(self):
+        self.assertEqual(set(THRESHOLD_KEYS), {&quot;blocked_days&quot;, &quot;slip_pct&quot;, &quot;capacity_pct&quot;})
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run, verify fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_threshold</code>
+Expected: ImportError or ModuleNotFoundError.</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/threshold.py</code>:</p>
+<pre><code class="language-python">import frappe
+
+THRESHOLD_KEYS = (&quot;blocked_days&quot;, &quot;slip_pct&quot;, &quot;capacity_pct&quot;)
+
+_PROJECT_FIELD = {
+    &quot;blocked_days&quot;: &quot;blocked_days_threshold&quot;,
+    &quot;slip_pct&quot;: &quot;slip_pct_threshold&quot;,
+    &quot;capacity_pct&quot;: &quot;capacity_pct_threshold&quot;,
+}
+
+_SETTINGS_FIELD = {
+    &quot;blocked_days&quot;: &quot;default_blocked_days_threshold&quot;,
+    &quot;slip_pct&quot;: &quot;default_slip_pct_threshold&quot;,
+    &quot;capacity_pct&quot;: &quot;default_capacity_pct_threshold&quot;,
+}
+
+_HARDCODED_FALLBACK = {
+    &quot;blocked_days&quot;: 3,
+    &quot;slip_pct&quot;: 20.0,
+    &quot;capacity_pct&quot;: 120.0,
+}
+
+
+def get_project_threshold(project: str | None, key: str) -&gt; float:
+    if key not in THRESHOLD_KEYS:
+        raise ValueError(f&quot;Unknown threshold key: {key}&quot;)
+
+    if project:
+        val = frappe.db.get_value(&quot;VT Project&quot;, project, _PROJECT_FIELD[key])
+        if val not in (None, 0, &quot;&quot;):
+            return float(val)
+
+    settings = frappe.get_single(&quot;VT Settings&quot;)
+    val = getattr(settings, _SETTINGS_FIELD[key], None)
+    if val not in (None, 0, &quot;&quot;):
+        return float(val)
+
+    return float(_HARDCODED_FALLBACK[key])
+</code></pre>
+<p>Note: treat <code>0</code> as "unset" (Frappe Int/Percent default to 0 when blank).</p>
+<ul>
+<li>[ ] <strong>Step 4: Run, verify pass</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_threshold</code>
+Expected: 3 tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/services/threshold.py vernon_tasks/task/services/test_threshold.py
+git commit -m &quot;feat(analytics): add threshold resolver with project/settings/hardcoded fallback&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-velocity-service">Task 4: Velocity service</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/services/velocity_service.py</code>
+- Create: <code>vernon_tasks/task/services/test_velocity_service.py</code></p>
+<p>Behavior:
+- <code>get_sprint_velocity(sprint)</code> → sum of <code>actual_hours</code> for tasks where <code>sprint == &lt;sprint&gt;</code>, <code>pdca_phase == 'DONE'</code>, <code>completion_date</code> between sprint start/end.
+- <code>get_velocity_trend(project, n=6)</code> → last n COMPLETED sprints (<code>status == 'Closed'</code>), ordered ASC by <code>end_date</code>. Returns <code>{sprints, velocity, avg, trend_pct}</code>. <code>trend_pct</code> = <code>(last - first) / first * 100</code>, 0 if first is 0 or n &lt; 2.</p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing tests</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/test_velocity_service.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from frappe.utils import add_days, today
+from vernon_tasks.task.services.velocity_service import (
+    get_sprint_velocity,
+    get_velocity_trend,
+)
+
+
+def _make_project(name=&quot;Test-Proj-Vel&quot;):
+    if frappe.db.exists(&quot;VT Project&quot;, name):
+        frappe.delete_doc(&quot;VT Project&quot;, name, force=True)
+    return frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Project&quot;,
+        &quot;title&quot;: name,
+        &quot;start_date&quot;: add_days(today(), -60),
+        &quot;end_date&quot;: add_days(today(), 60),
+        &quot;status&quot;: &quot;Active&quot;,
+    }).insert(ignore_permissions=True)
+
+
+def _make_sprint(project, idx, start_offset):
+    return frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Sprint&quot;,
+        &quot;sprint_title&quot;: f&quot;S{idx}&quot;,
+        &quot;project&quot;: project,
+        &quot;start_date&quot;: add_days(today(), start_offset),
+        &quot;end_date&quot;: add_days(today(), start_offset + 13),
+        &quot;status&quot;: &quot;Closed&quot;,
+    }).insert(ignore_permissions=True)
+
+
+def _make_task(project, sprint, hours, completion_offset, phase=&quot;DONE&quot;):
+    return frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Task&quot;,
+        &quot;title&quot;: &quot;T&quot;,
+        &quot;project&quot;: project,
+        &quot;sprint&quot;: sprint,
+        &quot;estimated_hours&quot;: hours,
+        &quot;actual_hours&quot;: hours,
+        &quot;completion_date&quot;: add_days(today(), completion_offset) if phase == &quot;DONE&quot; else None,
+        &quot;pdca_phase&quot;: phase,
+        &quot;kanban_status&quot;: &quot;Done&quot; if phase == &quot;DONE&quot; else &quot;Todo&quot;,
+    }).insert(ignore_permissions=True)
+
+
+class TestVelocityService(FrappeTestCase):
+    def setUp(self):
+        self.project = _make_project()
+        self.s1 = _make_sprint(self.project.name, 1, -42)
+        self.s2 = _make_sprint(self.project.name, 2, -28)
+        self.s3 = _make_sprint(self.project.name, 3, -14)
+        _make_task(self.project.name, self.s1.name, 10, -32)
+        _make_task(self.project.name, self.s1.name, 5, -30)  # 15 total
+        _make_task(self.project.name, self.s2.name, 8, -18)  # 8 total
+        _make_task(self.project.name, self.s3.name, 12, -4)  # 12 total
+        _make_task(self.project.name, self.s3.name, 7, -10, phase=&quot;DO&quot;)  # excluded
+
+    def test_sprint_velocity_sums_done_actual_hours(self):
+        self.assertEqual(get_sprint_velocity(self.s1.name), 15.0)
+        self.assertEqual(get_sprint_velocity(self.s2.name), 8.0)
+        self.assertEqual(get_sprint_velocity(self.s3.name), 12.0)
+
+    def test_velocity_trend_returns_last_n_closed_sprints_in_order(self):
+        result = get_velocity_trend(self.project.name, n=6)
+        self.assertEqual(result[&quot;velocity&quot;], [15.0, 8.0, 12.0])
+        self.assertEqual(result[&quot;sprints&quot;], [self.s1.name, self.s2.name, self.s3.name])
+        self.assertAlmostEqual(result[&quot;avg&quot;], (15 + 8 + 12) / 3)
+
+    def test_trend_pct_first_to_last(self):
+        result = get_velocity_trend(self.project.name, n=6)
+        self.assertAlmostEqual(result[&quot;trend_pct&quot;], (12 - 15) / 15 * 100)
+
+    def test_velocity_trend_empty(self):
+        empty = _make_project(&quot;Empty-Proj-Vel&quot;)
+        result = get_velocity_trend(empty.name, n=6)
+        self.assertEqual(result[&quot;velocity&quot;], [])
+        self.assertEqual(result[&quot;avg&quot;], 0.0)
+        self.assertEqual(result[&quot;trend_pct&quot;], 0.0)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run, verify fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_velocity_service</code>
+Expected: ImportError.</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/velocity_service.py</code>:</p>
+<pre><code class="language-python">import frappe
+
+_DONE_PHASE = &quot;DONE&quot;
+_CLOSED_STATUS = &quot;Closed&quot;
+
+
+def get_sprint_velocity(sprint: str) -&gt; float:
+    row = frappe.db.sql(&quot;&quot;&quot;
+        SELECT COALESCE(SUM(actual_hours), 0) AS hours
+        FROM `tabVT Task`
+        WHERE sprint = %(sprint)s
+          AND pdca_phase = %(done)s
+    &quot;&quot;&quot;, {&quot;sprint&quot;: sprint, &quot;done&quot;: _DONE_PHASE}, as_dict=True)
+    return float(row[0][&quot;hours&quot;])
+
+
+def get_velocity_trend(project: str, n: int = 6) -&gt; dict:
+    sprints = frappe.db.sql(&quot;&quot;&quot;
+        SELECT name FROM `tabVT Sprint`
+        WHERE project = %(project)s
+          AND status = %(closed)s
+        ORDER BY end_date DESC
+        LIMIT %(n)s
+    &quot;&quot;&quot;, {&quot;project&quot;: project, &quot;closed&quot;: _CLOSED_STATUS, &quot;n&quot;: n}, as_dict=True)
+
+    sprint_names = [s[&quot;name&quot;] for s in reversed(sprints)]
+    velocities = [get_sprint_velocity(name) for name in sprint_names]
+
+    avg = sum(velocities) / len(velocities) if velocities else 0.0
+    if len(velocities) &gt;= 2 and velocities[0] &gt; 0:
+        trend_pct = (velocities[-1] - velocities[0]) / velocities[0] * 100
+    else:
+        trend_pct = 0.0
+
+    return {
+        &quot;sprints&quot;: sprint_names,
+        &quot;velocity&quot;: velocities,
+        &quot;avg&quot;: float(avg),
+        &quot;trend_pct&quot;: float(trend_pct),
+    }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run, verify pass</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_velocity_service</code>
+Expected: 4 tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/services/velocity_service.py vernon_tasks/task/services/test_velocity_service.py
+git commit -m &quot;feat(analytics): add velocity service (per-sprint + trend)&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-burndown-service">Task 5: Burndown service</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/services/burndown_service.py</code>
+- Create: <code>vernon_tasks/task/services/test_burndown_service.py</code></p>
+<p>Behavior:
+- <code>get_burndown(sprint)</code> → for each day <code>d</code> from sprint.start_date to sprint.end_date:
+  - <code>remaining[d]</code> = sum of <code>estimated_hours</code> of tasks where <code>sprint=&lt;sprint&gt;</code> AND (<code>completion_date IS NULL</code> OR <code>completion_date &gt; d</code>) AND <code>estimated_hours &gt; 0</code>.
+  - <code>ideal[d]</code> = linear from <code>total</code> at start to <code>0</code> at end.
+- Return <code>{labels, ideal, remaining, unestimated_count}</code>. <code>unestimated_count</code> = tasks in sprint with <code>estimated_hours == 0</code>.</p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing tests</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/test_burndown_service.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from frappe.utils import add_days, today, getdate
+from vernon_tasks.task.services.burndown_service import get_burndown
+
+
+class TestBurndownService(FrappeTestCase):
+    def setUp(self):
+        if frappe.db.exists(&quot;VT Project&quot;, &quot;BD-Proj&quot;):
+            frappe.delete_doc(&quot;VT Project&quot;, &quot;BD-Proj&quot;, force=True)
+        self.project = frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Project&quot;,
+            &quot;title&quot;: &quot;BD-Proj&quot;,
+            &quot;start_date&quot;: add_days(today(), -10),
+            &quot;end_date&quot;: add_days(today(), 10),
+            &quot;status&quot;: &quot;Active&quot;,
+        }).insert(ignore_permissions=True)
+        # 5-day sprint starting 4 days ago
+        self.sprint = frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Sprint&quot;,
+            &quot;sprint_title&quot;: &quot;BD-S1&quot;,
+            &quot;project&quot;: self.project.name,
+            &quot;start_date&quot;: add_days(today(), -4),
+            &quot;end_date&quot;: add_days(today(), 0),
+            &quot;status&quot;: &quot;Active&quot;,
+        }).insert(ignore_permissions=True)
+        # 3 tasks, 10h each = 30h total
+        for offset in (-2, -1, None):
+            frappe.get_doc({
+                &quot;doctype&quot;: &quot;VT Task&quot;,
+                &quot;title&quot;: &quot;T&quot;,
+                &quot;project&quot;: self.project.name,
+                &quot;sprint&quot;: self.sprint.name,
+                &quot;estimated_hours&quot;: 10,
+                &quot;actual_hours&quot;: 10,
+                &quot;completion_date&quot;: add_days(today(), offset) if offset is not None else None,
+                &quot;pdca_phase&quot;: &quot;DONE&quot; if offset is not None else &quot;DO&quot;,
+                &quot;kanban_status&quot;: &quot;Done&quot; if offset is not None else &quot;In Progress&quot;,
+            }).insert(ignore_permissions=True)
+        # Unestimated task
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Task&quot;,
+            &quot;title&quot;: &quot;U&quot;,
+            &quot;project&quot;: self.project.name,
+            &quot;sprint&quot;: self.sprint.name,
+            &quot;estimated_hours&quot;: 0,
+            &quot;actual_hours&quot;: 0,
+            &quot;pdca_phase&quot;: &quot;DO&quot;,
+            &quot;kanban_status&quot;: &quot;In Progress&quot;,
+        }).insert(ignore_permissions=True)
+
+    def test_labels_cover_sprint_window_inclusive(self):
+        result = get_burndown(self.sprint.name)
+        self.assertEqual(len(result[&quot;labels&quot;]), 5)
+        self.assertEqual(result[&quot;labels&quot;][0], str(getdate(add_days(today(), -4))))
+        self.assertEqual(result[&quot;labels&quot;][-1], str(getdate(today())))
+
+    def test_ideal_starts_at_total_ends_at_zero(self):
+        result = get_burndown(self.sprint.name)
+        self.assertEqual(result[&quot;ideal&quot;][0], 30.0)
+        self.assertEqual(result[&quot;ideal&quot;][-1], 0.0)
+
+    def test_remaining_decreases_as_tasks_complete(self):
+        result = get_burndown(self.sprint.name)
+        # Day 0 (-4): nothing done yet → 30
+        self.assertEqual(result[&quot;remaining&quot;][0], 30.0)
+        # Final day: 2 tasks done (offset -2 and -1), 1 still open → 10
+        self.assertEqual(result[&quot;remaining&quot;][-1], 10.0)
+
+    def test_unestimated_count(self):
+        result = get_burndown(self.sprint.name)
+        self.assertEqual(result[&quot;unestimated_count&quot;], 1)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run, verify fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_burndown_service</code>
+Expected: ImportError.</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/burndown_service.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.utils import add_days, getdate
+
+
+def get_burndown(sprint: str) -&gt; dict:
+    sprint_doc = frappe.get_doc(&quot;VT Sprint&quot;, sprint)
+    start = getdate(sprint_doc.start_date)
+    end = getdate(sprint_doc.end_date)
+    days = (end - start).days + 1
+    if days &lt;= 0:
+        return {&quot;labels&quot;: [], &quot;ideal&quot;: [], &quot;remaining&quot;: [], &quot;unestimated_count&quot;: 0}
+
+    tasks = frappe.db.sql(&quot;&quot;&quot;
+        SELECT estimated_hours, completion_date
+        FROM `tabVT Task`
+        WHERE sprint = %(sprint)s
+          AND estimated_hours &gt; 0
+    &quot;&quot;&quot;, {&quot;sprint&quot;: sprint}, as_dict=True)
+
+    total = sum(float(t[&quot;estimated_hours&quot;]) for t in tasks)
+
+    labels, ideal, remaining = [], [], []
+    for i in range(days):
+        d = add_days(start, i)
+        d_date = getdate(d)
+        labels.append(str(d_date))
+        ideal.append(round(total * (1 - i / (days - 1)) if days &gt; 1 else 0.0, 2))
+        rem = sum(
+            float(t[&quot;estimated_hours&quot;])
+            for t in tasks
+            if t[&quot;completion_date&quot;] is None or getdate(t[&quot;completion_date&quot;]) &gt; d_date
+        )
+        remaining.append(float(rem))
+
+    unestimated_count = frappe.db.count(
+        &quot;VT Task&quot;,
+        filters={&quot;sprint&quot;: sprint, &quot;estimated_hours&quot;: 0},
+    )
+
+    return {
+        &quot;labels&quot;: labels,
+        &quot;ideal&quot;: ideal,
+        &quot;remaining&quot;: remaining,
+        &quot;unestimated_count&quot;: int(unestimated_count),
+    }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run, verify pass</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_burndown_service</code>
+Expected: 4 tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/services/burndown_service.py vernon_tasks/task/services/test_burndown_service.py
+git commit -m &quot;feat(analytics): add burndown service (daily remaining vs ideal in hours)&quot;
+</code></pre>
+<hr />
+<h2 id="task-6-forecast-service">Task 6: Forecast service</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/services/forecast_service.py</code>
+- Create: <code>vernon_tasks/task/services/test_forecast_service.py</code></p>
+<p>Behavior:
+- <code>get_forecast(project)</code>:
+  - Pull last 6 closed sprints via <code>get_velocity_trend</code>.
+  - If fewer than 3 → <code>{"insufficient_data": True, "sprints_needed": 3 - n}</code>.
+  - <code>remaining_hours</code> = sum <code>estimated_hours - actual_hours</code> (floored at 0 per task) for tasks where <code>project=&lt;project&gt;</code> AND <code>pdca_phase != 'DONE'</code>.
+  - <code>avg_velocity</code> = mean of velocities, <code>min_velocity</code> = mean of worst 1/3, <code>max_velocity</code> = mean of best 1/3.
+  - <code>sprints_to_finish</code> = ceil(remaining / avg). Sprint length: median of past sprints in days.
+  - <code>predicted_end</code> = today + sprints_to_finish * sprint_len_days.
+  - <code>p_min</code> (worst case) = today + ceil(remaining / min_velocity) * sprint_len_days.
+  - <code>p_max</code> (best case) = today + ceil(remaining / max_velocity) * sprint_len_days.
+  - <code>confidence</code> = 1 - (stdev / avg), clamped [0, 1].</p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing tests</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/test_forecast_service.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from frappe.utils import add_days, today
+from vernon_tasks.task.services.forecast_service import get_forecast
+
+
+def _setup_project(name, sprint_velocities, remaining_hours, sprint_len=14):
+    if frappe.db.exists(&quot;VT Project&quot;, name):
+        frappe.delete_doc(&quot;VT Project&quot;, name, force=True)
+    project = frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Project&quot;,
+        &quot;title&quot;: name,
+        &quot;start_date&quot;: add_days(today(), -180),
+        &quot;end_date&quot;: add_days(today(), 180),
+        &quot;status&quot;: &quot;Active&quot;,
+    }).insert(ignore_permissions=True)
+    for idx, v in enumerate(sprint_velocities):
+        offset = -((len(sprint_velocities) - idx) * sprint_len)
+        sprint = frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Sprint&quot;,
+            &quot;sprint_title&quot;: f&quot;FC-{name}-{idx}&quot;,
+            &quot;project&quot;: project.name,
+            &quot;start_date&quot;: add_days(today(), offset),
+            &quot;end_date&quot;: add_days(today(), offset + sprint_len - 1),
+            &quot;status&quot;: &quot;Closed&quot;,
+        }).insert(ignore_permissions=True)
+        if v &gt; 0:
+            frappe.get_doc({
+                &quot;doctype&quot;: &quot;VT Task&quot;,
+                &quot;title&quot;: &quot;T&quot;,
+                &quot;project&quot;: project.name,
+                &quot;sprint&quot;: sprint.name,
+                &quot;estimated_hours&quot;: v,
+                &quot;actual_hours&quot;: v,
+                &quot;completion_date&quot;: add_days(today(), offset + 1),
+                &quot;pdca_phase&quot;: &quot;DONE&quot;,
+                &quot;kanban_status&quot;: &quot;Done&quot;,
+            }).insert(ignore_permissions=True)
+    if remaining_hours &gt; 0:
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Task&quot;,
+            &quot;title&quot;: &quot;Remain&quot;,
+            &quot;project&quot;: project.name,
+            &quot;estimated_hours&quot;: remaining_hours,
+            &quot;actual_hours&quot;: 0,
+            &quot;pdca_phase&quot;: &quot;DO&quot;,
+            &quot;kanban_status&quot;: &quot;In Progress&quot;,
+        }).insert(ignore_permissions=True)
+    return project
+
+
+class TestForecastService(FrappeTestCase):
+    def test_insufficient_data_under_three_sprints(self):
+        _setup_project(&quot;FC-Few&quot;, [10, 12], remaining_hours=20)
+        result = get_forecast(&quot;FC-Few&quot;)
+        self.assertTrue(result[&quot;insufficient_data&quot;])
+        self.assertEqual(result[&quot;sprints_needed&quot;], 1)
+
+    def test_predicted_end_uses_avg_velocity(self):
+        _setup_project(&quot;FC-Even&quot;, [10, 10, 10], remaining_hours=30)
+        result = get_forecast(&quot;FC-Even&quot;)
+        self.assertFalse(result.get(&quot;insufficient_data&quot;))
+        self.assertAlmostEqual(result[&quot;avg_velocity&quot;], 10.0)
+        self.assertEqual(result[&quot;remaining_hours&quot;], 30.0)
+        # 30 / 10 = 3 sprints
+        self.assertEqual(result[&quot;sprints_used&quot;], 3)
+
+    def test_confidence_high_when_stdev_low(self):
+        _setup_project(&quot;FC-Stable&quot;, [10, 10, 10, 10], remaining_hours=10)
+        result = get_forecast(&quot;FC-Stable&quot;)
+        self.assertGreaterEqual(result[&quot;confidence&quot;], 0.95)
+
+    def test_pmin_after_predicted_after_pmax(self):
+        _setup_project(&quot;FC-Range&quot;, [5, 10, 15], remaining_hours=30)
+        result = get_forecast(&quot;FC-Range&quot;)
+        from frappe.utils import getdate
+        self.assertGreaterEqual(getdate(result[&quot;p_min&quot;]), getdate(result[&quot;predicted_end&quot;]))
+        self.assertLessEqual(getdate(result[&quot;p_max&quot;]), getdate(result[&quot;predicted_end&quot;]))
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run, verify fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_forecast_service</code>
+Expected: ImportError.</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/forecast_service.py</code>:</p>
+<pre><code class="language-python">import math
+import statistics
+import frappe
+from frappe.utils import add_days, getdate, today
+from vernon_tasks.task.services.velocity_service import get_velocity_trend
+
+_MIN_SPRINTS = 3
+_DEFAULT_SPRINT_DAYS = 14
+
+
+def _remaining_hours(project: str) -&gt; float:
+    row = frappe.db.sql(&quot;&quot;&quot;
+        SELECT COALESCE(SUM(GREATEST(estimated_hours - actual_hours, 0)), 0) AS hrs
+        FROM `tabVT Task`
+        WHERE project = %(project)s
+          AND pdca_phase != 'DONE'
+    &quot;&quot;&quot;, {&quot;project&quot;: project}, as_dict=True)
+    return float(row[0][&quot;hrs&quot;])
+
+
+def _median_sprint_length(project: str) -&gt; int:
+    rows = frappe.db.sql(&quot;&quot;&quot;
+        SELECT DATEDIFF(end_date, start_date) + 1 AS days
+        FROM `tabVT Sprint`
+        WHERE project = %(project)s
+          AND status = 'Closed'
+    &quot;&quot;&quot;, {&quot;project&quot;: project}, as_dict=True)
+    if not rows:
+        return _DEFAULT_SPRINT_DAYS
+    return int(statistics.median([int(r[&quot;days&quot;]) for r in rows]))
+
+
+def _bucket_mean(values: list[float], pick: str) -&gt; float:
+    &quot;&quot;&quot;pick='worst' takes lowest third; 'best' takes highest third.&quot;&quot;&quot;
+    if not values:
+        return 0.0
+    sorted_v = sorted(values)
+    size = max(1, len(sorted_v) // 3)
+    bucket = sorted_v[:size] if pick == &quot;worst&quot; else sorted_v[-size:]
+    return sum(bucket) / len(bucket)
+
+
+def get_forecast(project: str) -&gt; dict:
+    trend = get_velocity_trend(project, n=6)
+    velocities = trend[&quot;velocity&quot;]
+
+    if len(velocities) &lt; _MIN_SPRINTS:
+        return {
+            &quot;insufficient_data&quot;: True,
+            &quot;sprints_needed&quot;: _MIN_SPRINTS - len(velocities),
+        }
+
+    avg = trend[&quot;avg&quot;]
+    if avg &lt;= 0:
+        return {&quot;insufficient_data&quot;: True, &quot;sprints_needed&quot;: 0, &quot;reason&quot;: &quot;zero velocity&quot;}
+
+    remaining = _remaining_hours(project)
+    sprint_days = _median_sprint_length(project)
+
+    sprints_used = math.ceil(remaining / avg) if remaining &gt; 0 else 0
+    predicted_end = add_days(today(), sprints_used * sprint_days)
+
+    min_v = _bucket_mean(velocities, &quot;worst&quot;)
+    max_v = _bucket_mean(velocities, &quot;best&quot;)
+    p_min = add_days(today(), math.ceil(remaining / min_v) * sprint_days) if min_v &gt; 0 else predicted_end
+    p_max = add_days(today(), math.ceil(remaining / max_v) * sprint_days) if max_v &gt; 0 else predicted_end
+
+    if len(velocities) &gt;= 2:
+        stdev = statistics.pstdev(velocities)
+        confidence = max(0.0, min(1.0, 1 - (stdev / avg)))
+    else:
+        confidence = 0.0
+
+    return {
+        &quot;insufficient_data&quot;: False,
+        &quot;predicted_end&quot;: str(getdate(predicted_end)),
+        &quot;p_min&quot;: str(getdate(p_min)),
+        &quot;p_max&quot;: str(getdate(p_max)),
+        &quot;confidence&quot;: round(float(confidence), 3),
+        &quot;remaining_hours&quot;: round(remaining, 2),
+        &quot;avg_velocity&quot;: round(float(avg), 2),
+        &quot;sprints_used&quot;: int(sprints_used),
+    }
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run, verify pass</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_forecast_service</code>
+Expected: 4 tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/services/forecast_service.py vernon_tasks/task/services/test_forecast_service.py
+git commit -m &quot;feat(analytics): add forecast service (linear projection + confidence band)&quot;
+</code></pre>
+<hr />
+<h2 id="task-7-risk-evaluator">Task 7: Risk evaluator</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/services/risk_evaluator.py</code>
+- Create: <code>vernon_tasks/task/services/test_risk_evaluator.py</code></p>
+<p>Behavior:
+- <code>evaluate_risks(project)</code> → list of <code>{type, severity, target, detail, days}</code> dicts.
+- Risk types:
+  - <code>slip</code>: forecast <code>predicted_end &gt; project.end_date</code> by <code>slip_pct_threshold</code>. Severity: low &lt;slip_pct, med [slip_pct, 2<em>slip_pct), high ≥2</em>slip_pct.
+  - <code>blocked</code>: any task with <code>kanban_status = 'Blocked'</code> for <code>&gt; blocked_days_threshold</code> days (today - modified). Severity scales similarly.
+  - <code>overcap</code>: any member where <code>SUM(estimated_hours of active tasks) / available_hours &gt; capacity_pct_threshold</code>. Active = <code>pdca_phase NOT IN ('DONE')</code>. For Phase 1, <code>available_hours = 40 * (sprints_remaining_in_project)</code>; if no project end, use 40h × 2 weeks = 80h.</p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing tests</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/test_risk_evaluator.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from frappe.utils import add_days, today
+from vernon_tasks.task.services.risk_evaluator import evaluate_risks
+
+
+def _make_project(name, end_offset=30):
+    if frappe.db.exists(&quot;VT Project&quot;, name):
+        frappe.delete_doc(&quot;VT Project&quot;, name, force=True)
+    return frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Project&quot;,
+        &quot;title&quot;: name,
+        &quot;start_date&quot;: add_days(today(), -30),
+        &quot;end_date&quot;: add_days(today(), end_offset),
+        &quot;status&quot;: &quot;Active&quot;,
+    }).insert(ignore_permissions=True)
+
+
+class TestRiskEvaluator(FrappeTestCase):
+    def setUp(self):
+        settings = frappe.get_single(&quot;VT Settings&quot;)
+        settings.default_blocked_days_threshold = 3
+        settings.default_slip_pct_threshold = 20
+        settings.default_capacity_pct_threshold = 120
+        settings.save(ignore_permissions=True)
+
+    def test_no_risks_on_empty_project(self):
+        _make_project(&quot;Risk-Empty&quot;)
+        self.assertEqual(evaluate_risks(&quot;Risk-Empty&quot;), [])
+
+    def test_blocked_task_above_threshold(self):
+        p = _make_project(&quot;Risk-Blocked&quot;)
+        t = frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Task&quot;,
+            &quot;title&quot;: &quot;Stuck&quot;,
+            &quot;project&quot;: p.name,
+            &quot;estimated_hours&quot;: 4,
+            &quot;actual_hours&quot;: 0,
+            &quot;kanban_status&quot;: &quot;Blocked&quot;,
+            &quot;pdca_phase&quot;: &quot;DO&quot;,
+        }).insert(ignore_permissions=True)
+        # Backdate modified by 5 days
+        frappe.db.set_value(&quot;VT Task&quot;, t.name, &quot;modified&quot;, add_days(today(), -5), update_modified=False)
+        risks = evaluate_risks(p.name)
+        blocked = [r for r in risks if r[&quot;type&quot;] == &quot;blocked&quot;]
+        self.assertEqual(len(blocked), 1)
+        self.assertEqual(blocked[0][&quot;target&quot;], t.name)
+        self.assertGreaterEqual(blocked[0][&quot;days&quot;], 5)
+
+    def test_blocked_below_threshold_not_reported(self):
+        p = _make_project(&quot;Risk-Blocked-Fresh&quot;)
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Task&quot;,
+            &quot;title&quot;: &quot;Fresh&quot;,
+            &quot;project&quot;: p.name,
+            &quot;estimated_hours&quot;: 4,
+            &quot;actual_hours&quot;: 0,
+            &quot;kanban_status&quot;: &quot;Blocked&quot;,
+            &quot;pdca_phase&quot;: &quot;DO&quot;,
+        }).insert(ignore_permissions=True)
+        risks = evaluate_risks(p.name)
+        self.assertEqual([r for r in risks if r[&quot;type&quot;] == &quot;blocked&quot;], [])
+
+    def test_project_override_changes_threshold(self):
+        p = _make_project(&quot;Risk-Override&quot;)
+        frappe.db.set_value(&quot;VT Project&quot;, p.name, &quot;blocked_days_threshold&quot;, 30)
+        t = frappe.get_doc({
+            &quot;doctype&quot;: &quot;VT Task&quot;,
+            &quot;title&quot;: &quot;Stuck&quot;,
+            &quot;project&quot;: p.name,
+            &quot;estimated_hours&quot;: 4,
+            &quot;actual_hours&quot;: 0,
+            &quot;kanban_status&quot;: &quot;Blocked&quot;,
+            &quot;pdca_phase&quot;: &quot;DO&quot;,
+        }).insert(ignore_permissions=True)
+        frappe.db.set_value(&quot;VT Task&quot;, t.name, &quot;modified&quot;, add_days(today(), -10), update_modified=False)
+        risks = evaluate_risks(p.name)
+        # Override raises threshold to 30 days; 10 days blocked → no risk
+        self.assertEqual([r for r in risks if r[&quot;type&quot;] == &quot;blocked&quot;], [])
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run, verify fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_risk_evaluator</code>
+Expected: ImportError.</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/services/risk_evaluator.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.utils import date_diff, getdate, today
+from vernon_tasks.task.services.threshold import get_project_threshold
+from vernon_tasks.task.services.forecast_service import get_forecast
+
+_BLOCKED_STATUS = &quot;Blocked&quot;
+_DONE_PHASE = &quot;DONE&quot;
+_DEFAULT_WEEKLY_HOURS = 40
+
+
+def _severity(ratio: float) -&gt; str:
+    if ratio &gt;= 2.0:
+        return &quot;high&quot;
+    if ratio &gt;= 1.0:
+        return &quot;med&quot;
+    return &quot;low&quot;
+
+
+def _blocked_risks(project: str, threshold_days: int) -&gt; list[dict]:
+    rows = frappe.db.sql(&quot;&quot;&quot;
+        SELECT name, title, assigned_to, modified
+        FROM `tabVT Task`
+        WHERE project = %(project)s
+          AND kanban_status = %(blocked)s
+          AND pdca_phase != %(done)s
+    &quot;&quot;&quot;, {&quot;project&quot;: project, &quot;blocked&quot;: _BLOCKED_STATUS, &quot;done&quot;: _DONE_PHASE}, as_dict=True)
+
+    risks = []
+    today_d = getdate(today())
+    for r in rows:
+        days = date_diff(today_d, getdate(r[&quot;modified&quot;]))
+        if days &gt; threshold_days:
+            ratio = days / threshold_days
+            risks.append({
+                &quot;type&quot;: &quot;blocked&quot;,
+                &quot;severity&quot;: _severity(ratio),
+                &quot;target&quot;: r[&quot;name&quot;],
+                &quot;detail&quot;: f&quot;{r['title']} blocked {days}d (assignee: {r['assigned_to'] or 'unassigned'})&quot;,
+                &quot;days&quot;: int(days),
+            })
+    return risks
+
+
+def _slip_risk(project: str, threshold_pct: float) -&gt; list[dict]:
+    project_doc = frappe.get_doc(&quot;VT Project&quot;, project)
+    if not project_doc.end_date:
+        return []
+    forecast = get_forecast(project)
+    if forecast.get(&quot;insufficient_data&quot;):
+        return []
+
+    planned = getdate(project_doc.end_date)
+    predicted = getdate(forecast[&quot;predicted_end&quot;])
+    total_days = max(1, date_diff(planned, getdate(project_doc.start_date)))
+    slip_days = date_diff(predicted, planned)
+    if slip_days &lt;= 0:
+        return []
+
+    slip_pct = (slip_days / total_days) * 100
+    if slip_pct &lt; threshold_pct:
+        return []
+
+    ratio = slip_pct / threshold_pct
+    return [{
+        &quot;type&quot;: &quot;slip&quot;,
+        &quot;severity&quot;: _severity(ratio),
+        &quot;target&quot;: project,
+        &quot;detail&quot;: f&quot;Predicted end {predicted} slips {int(slip_days)}d past planned {planned} ({slip_pct:.1f}%)&quot;,
+        &quot;days&quot;: int(slip_days),
+    }]
+
+
+def _overcap_risks(project: str, threshold_pct: float) -&gt; list[dict]:
+    rows = frappe.db.sql(&quot;&quot;&quot;
+        SELECT assigned_to,
+               COALESCE(SUM(GREATEST(estimated_hours - actual_hours, 0)), 0) AS hrs
+        FROM `tabVT Task`
+        WHERE project = %(project)s
+          AND pdca_phase != %(done)s
+          AND assigned_to IS NOT NULL
+        GROUP BY assigned_to
+    &quot;&quot;&quot;, {&quot;project&quot;: project, &quot;done&quot;: _DONE_PHASE}, as_dict=True)
+
+    project_doc = frappe.get_doc(&quot;VT Project&quot;, project)
+    if project_doc.end_date:
+        days_left = max(1, date_diff(getdate(project_doc.end_date), getdate(today())))
+        available = (days_left / 7) * _DEFAULT_WEEKLY_HOURS
+    else:
+        available = 2 * _DEFAULT_WEEKLY_HOURS
+
+    risks = []
+    for r in rows:
+        hrs = float(r[&quot;hrs&quot;])
+        if available &lt;= 0:
+            continue
+        pct = (hrs / available) * 100
+        if pct &gt;= threshold_pct:
+            ratio = pct / threshold_pct
+            risks.append({
+                &quot;type&quot;: &quot;overcap&quot;,
+                &quot;severity&quot;: _severity(ratio),
+                &quot;target&quot;: r[&quot;assigned_to&quot;],
+                &quot;detail&quot;: f&quot;{r['assigned_to']} has {hrs:.0f}h of {available:.0f}h available ({pct:.0f}%)&quot;,
+                &quot;days&quot;: 0,
+            })
+    return risks
+
+
+def evaluate_risks(project: str) -&gt; list[dict]:
+    blocked_thr = int(get_project_threshold(project, &quot;blocked_days&quot;))
+    slip_thr = float(get_project_threshold(project, &quot;slip_pct&quot;))
+    cap_thr = float(get_project_threshold(project, &quot;capacity_pct&quot;))
+
+    return [
+        *_blocked_risks(project, blocked_thr),
+        *_slip_risk(project, slip_thr),
+        *_overcap_risks(project, cap_thr),
+    ]
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run, verify pass</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.services.test_risk_evaluator</code>
+Expected: 4 tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/services/risk_evaluator.py vernon_tasks/task/services/test_risk_evaluator.py
+git commit -m &quot;feat(analytics): add risk evaluator (slip, blocked, overcap)&quot;
+</code></pre>
+<hr />
+<h2 id="task-8-whitelisted-api-caching">Task 8: Whitelisted API + caching</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/api/__init__.py</code> (empty)
+- Create: <code>vernon_tasks/task/api/analytics.py</code>
+- Create: <code>vernon_tasks/task/api/test_analytics.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Write failing tests</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/test_analytics.py</code>:</p>
+<pre><code class="language-python">import frappe
+from frappe.tests.utils import FrappeTestCase
+from vernon_tasks.task.api.analytics import (
+    get_burndown,
+    get_velocity_trend,
+    get_forecast,
+    get_risks,
+)
+
+
+def _ensure_role(role):
+    if not frappe.db.exists(&quot;Role&quot;, role):
+        frappe.get_doc({&quot;doctype&quot;: &quot;Role&quot;, &quot;role_name&quot;: role}).insert(ignore_permissions=True)
+
+
+def _user_with_roles(email, roles):
+    if not frappe.db.exists(&quot;User&quot;, email):
+        frappe.get_doc({
+            &quot;doctype&quot;: &quot;User&quot;,
+            &quot;email&quot;: email,
+            &quot;first_name&quot;: &quot;T&quot;,
+            &quot;send_welcome_email&quot;: 0,
+            &quot;enabled&quot;: 1,
+            &quot;roles&quot;: [{&quot;role&quot;: r} for r in roles],
+        }).insert(ignore_permissions=True)
+    return email
+
+
+class TestAnalyticsAPI(FrappeTestCase):
+    def setUp(self):
+        _ensure_role(&quot;VT Leader&quot;)
+        self.leader = _user_with_roles(&quot;vt-leader-test@example.com&quot;, [&quot;VT Leader&quot;])
+        self.guest = _user_with_roles(&quot;vt-guest-test@example.com&quot;, [])
+
+    def test_get_burndown_requires_leader_role(self):
+        frappe.set_user(self.guest)
+        with self.assertRaises(frappe.PermissionError):
+            get_burndown(sprint=&quot;x&quot;)
+        frappe.set_user(&quot;Administrator&quot;)
+
+    def test_get_velocity_trend_requires_leader_role(self):
+        frappe.set_user(self.guest)
+        with self.assertRaises(frappe.PermissionError):
+            get_velocity_trend(project=&quot;x&quot;)
+        frappe.set_user(&quot;Administrator&quot;)
+
+    def test_get_forecast_requires_leader_role(self):
+        frappe.set_user(self.guest)
+        with self.assertRaises(frappe.PermissionError):
+            get_forecast(project=&quot;x&quot;)
+        frappe.set_user(&quot;Administrator&quot;)
+
+    def test_get_risks_requires_leader_role(self):
+        frappe.set_user(self.guest)
+        with self.assertRaises(frappe.PermissionError):
+            get_risks(project=&quot;x&quot;)
+        frappe.set_user(&quot;Administrator&quot;)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Run, verify fail</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_analytics</code>
+Expected: ImportError.</p>
+<ul>
+<li>[ ] <strong>Step 3: Implement</strong></li>
+</ul>
+<p><code>vernon_tasks/task/api/__init__.py</code>: empty file.</p>
+<p><code>vernon_tasks/task/api/analytics.py</code>:</p>
+<pre><code class="language-python">import frappe
+from vernon_tasks.task.services import (
+    burndown_service,
+    velocity_service,
+    forecast_service,
+    risk_evaluator,
+)
+
+_ALLOWED_ROLES = (&quot;VT Leader&quot;, &quot;VT Manager&quot;)
+_CACHE_TTL = 3600  # 1h
+
+
+def _guard():
+    if not set(frappe.get_roles()) &amp; set(_ALLOWED_ROLES):
+        frappe.throw(&quot;Not authorized&quot;, frappe.PermissionError)
+
+
+def _cache_get_or_set(key: str, fn):
+    cached = frappe.cache().get_value(key)
+    if cached is not None:
+        return cached
+    val = fn()
+    frappe.cache().set_value(key, val, expires_in_sec=_CACHE_TTL)
+    return val
+
+
+@frappe.whitelist()
+def get_burndown(sprint: str) -&gt; dict:
+    _guard()
+    return burndown_service.get_burndown(sprint)
+
+
+@frappe.whitelist()
+def get_velocity_trend(project: str, n: int = 6) -&gt; dict:
+    _guard()
+    key = f&quot;vt_velocity:{project}:{n}&quot;
+    return _cache_get_or_set(key, lambda: velocity_service.get_velocity_trend(project, int(n)))
+
+
+@frappe.whitelist()
+def get_forecast(project: str) -&gt; dict:
+    _guard()
+    key = f&quot;vt_forecast:{project}&quot;
+    return _cache_get_or_set(key, lambda: forecast_service.get_forecast(project))
+
+
+@frappe.whitelist()
+def get_risks(project: str) -&gt; list:
+    _guard()
+    return risk_evaluator.evaluate_risks(project)
+
+
+def invalidate_project_cache(doc, method=None):
+    &quot;&quot;&quot;Hook target — clears velocity + forecast cache for a project.&quot;&quot;&quot;
+    project = getattr(doc, &quot;project&quot;, None) or getattr(doc, &quot;name&quot;, None)
+    if not project:
+        return
+    for n in (3, 6, 12):
+        frappe.cache().delete_value(f&quot;vt_velocity:{project}:{n}&quot;)
+    frappe.cache().delete_value(f&quot;vt_forecast:{project}&quot;)
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Run, verify pass</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks --module vernon_tasks.task.api.test_analytics</code>
+Expected: 4 tests pass.</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/api/__init__.py vernon_tasks/task/api/analytics.py vernon_tasks/task/api/test_analytics.py
+git commit -m &quot;feat(analytics): add whitelisted API endpoints with role gate + cache&quot;
+</code></pre>
+<hr />
+<h2 id="task-9-cache-invalidation-hooks">Task 9: Cache invalidation hooks</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/hooks.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Inspect hooks.py</strong></li>
+</ul>
+<p>Run: <code>cat vernon_tasks/hooks.py</code></p>
+<p>Identify existing <code>doc_events</code> block (may not exist yet).</p>
+<ul>
+<li>[ ] <strong>Step 2: Add doc_events</strong></li>
+</ul>
+<p>Append (or merge into existing dict):</p>
+<pre><code class="language-python">doc_events = {
+    &quot;VT Sprint&quot;: {
+        &quot;on_update&quot;: &quot;vernon_tasks.task.api.analytics.invalidate_project_cache&quot;,
+    },
+    &quot;VT Task&quot;: {
+        &quot;on_update&quot;: &quot;vernon_tasks.task.api.analytics.invalidate_project_cache&quot;,
+    },
+}
+</code></pre>
+<p>If <code>doc_events</code> already exists, merge new keys into it (don't duplicate the variable).</p>
+<ul>
+<li>[ ] <strong>Step 3: Reload hooks</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; clear-cache &amp;&amp; bench --site &lt;site&gt; migrate</code>
+Expected: Hooks registered without error.</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/hooks.py
+git commit -m &quot;feat(analytics): invalidate velocity/forecast cache on sprint/task updates&quot;
+</code></pre>
+<hr />
+<h2 id="task-10-leader-analytics-page-backend-stub-json">Task 10: Leader Analytics page (backend stub + JSON)</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/page/leader_analytics/__init__.py</code>
+- Create: <code>vernon_tasks/task/page/leader_analytics/leader_analytics.json</code>
+- Create: <code>vernon_tasks/task/page/leader_analytics/leader_analytics.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Page <strong>init</strong></strong></li>
+</ul>
+<p><code>vernon_tasks/task/page/leader_analytics/__init__.py</code>: empty.</p>
+<ul>
+<li>[ ] <strong>Step 2: Page JSON</strong> (mirror <code>leader_dashboard.json</code> shape)</li>
+</ul>
+<p><code>vernon_tasks/task/page/leader_analytics/leader_analytics.json</code>:</p>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;leader-analytics&quot;,
+  &quot;doctype&quot;: &quot;Page&quot;,
+  &quot;module&quot;: &quot;Task&quot;,
+  &quot;page_name&quot;: &quot;leader-analytics&quot;,
+  &quot;title&quot;: &quot;Leader Analytics&quot;,
+  &quot;standard&quot;: &quot;Yes&quot;,
+  &quot;roles&quot;: [
+    {&quot;role&quot;: &quot;VT Leader&quot;},
+    {&quot;role&quot;: &quot;VT Manager&quot;}
+  ]
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Page py (sanity loader)</strong></li>
+</ul>
+<p><code>vernon_tasks/task/page/leader_analytics/leader_analytics.py</code>:</p>
+<pre><code class="language-python">import frappe
+
+_ALLOWED_ROLES = (&quot;VT Leader&quot;, &quot;VT Manager&quot;)
+
+
+def get_context(context):
+    if not set(frappe.get_roles()) &amp; set(_ALLOWED_ROLES):
+        frappe.throw(&quot;Not authorized&quot;, frappe.PermissionError)
+    return context
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Migrate + load</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; migrate</code>
+Expected: Page registered. Visit <code>/app/leader-analytics</code> → blank page (JS comes next task).</p>
+<ul>
+<li>[ ] <strong>Step 5: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/leader_analytics/
+git commit -m &quot;feat(page/leader_analytics): add page scaffold + role gate&quot;
+</code></pre>
+<hr />
+<h2 id="task-11-leader-analytics-page-js">Task 11: Leader Analytics page JS</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/task/page/leader_analytics/leader_analytics.js</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Implement page JS</strong></li>
+</ul>
+<p><code>vernon_tasks/task/page/leader_analytics/leader_analytics.js</code>:</p>
+<pre><code class="language-javascript">frappe.pages['leader-analytics'].on_page_load = function(wrapper) {
+  const page = frappe.ui.make_app_page({
+    parent: wrapper,
+    title: __('Leader Analytics'),
+    single_column: true,
+  });
+
+  const $body = $(wrapper).find('.layout-main-section');
+  $body.html(`
+    &lt;div class=&quot;vt-analytics-toolbar&quot; style=&quot;display:flex;gap:8px;margin-bottom:16px;&quot;&gt;&lt;/div&gt;
+    &lt;div class=&quot;vt-analytics-grid&quot; style=&quot;display:grid;grid-template-columns:1fr 1fr;gap:16px;&quot;&gt;
+      &lt;div class=&quot;vt-card&quot; id=&quot;vt-burndown&quot;&gt;&lt;h5&gt;${__('Burndown')}&lt;/h5&gt;&lt;div class=&quot;chart&quot;&gt;&lt;/div&gt;&lt;div class=&quot;note text-muted small&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;div class=&quot;vt-card&quot; id=&quot;vt-velocity&quot;&gt;&lt;h5&gt;${__('Velocity Trend')}&lt;/h5&gt;&lt;div class=&quot;chart&quot;&gt;&lt;/div&gt;&lt;div class=&quot;note text-muted small&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;div class=&quot;vt-card&quot; id=&quot;vt-forecast&quot;&gt;&lt;h5&gt;${__('Forecast')}&lt;/h5&gt;&lt;div class=&quot;content&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;div class=&quot;vt-card&quot; id=&quot;vt-risks&quot;&gt;&lt;h5&gt;${__('Risks')}&lt;/h5&gt;&lt;div class=&quot;content&quot;&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;/div&gt;
+  `);
+
+  const state = { project: null, sprint: null };
+  const project_field = page.add_field({
+    fieldname: 'project', label: __('Project'), fieldtype: 'Link', options: 'VT Project',
+    change: () =&gt; { state.project = project_field.get_value(); refresh(); },
+  });
+  const sprint_field = page.add_field({
+    fieldname: 'sprint', label: __('Sprint'), fieldtype: 'Link', options: 'VT Sprint',
+    get_query: () =&gt; ({ filters: { project: state.project } }),
+    change: () =&gt; { state.sprint = sprint_field.get_value(); render_burndown(); },
+  });
+
+  function refresh() {
+    if (!state.project) return;
+    render_velocity();
+    render_forecast();
+    render_risks();
+  }
+
+  function call(method, args) {
+    return frappe.call({ method: `vernon_tasks.task.api.analytics.${method}`, args })
+      .then(r =&gt; r.message);
+  }
+
+  function render_burndown() {
+    if (!state.sprint) return;
+    call('get_burndown', { sprint: state.sprint }).then(data =&gt; {
+      $('#vt-burndown .chart').empty();
+      new frappe.Chart('#vt-burndown .chart', {
+        type: 'line',
+        data: {
+          labels: data.labels,
+          datasets: [
+            { name: __('Ideal'), values: data.ideal },
+            { name: __('Remaining'), values: data.remaining },
+          ],
+        },
+        height: 240,
+      });
+      $('#vt-burndown .note').text(
+        data.unestimated_count ? __('{0} tasks unestimated', [data.unestimated_count]) : ''
+      );
+    });
+  }
+
+  function render_velocity() {
+    call('get_velocity_trend', { project: state.project, n: 6 }).then(data =&gt; {
+      $('#vt-velocity .chart').empty();
+      if (!data.sprints.length) {
+        $('#vt-velocity .note').text(__('No closed sprints yet'));
+        return;
+      }
+      new frappe.Chart('#vt-velocity .chart', {
+        type: 'bar',
+        data: {
+          labels: data.sprints,
+          datasets: [{ name: __('Hours'), values: data.velocity }],
+          yMarkers: [{ label: __('avg'), value: data.avg }],
+        },
+        height: 240,
+      });
+      const arrow = data.trend_pct &gt; 0 ? '↑' : (data.trend_pct &lt; 0 ? '↓' : '→');
+      $('#vt-velocity .note').text(__('Avg: {0}h | Trend: {1} {2}%',
+        [data.avg.toFixed(1), arrow, Math.abs(data.trend_pct).toFixed(1)]));
+    });
+  }
+
+  function render_forecast() {
+    call('get_forecast', { project: state.project }).then(data =&gt; {
+      const $c = $('#vt-forecast .content').empty();
+      if (data.insufficient_data) {
+        $c.text(__('Need {0} more closed sprint(s) for forecast', [data.sprints_needed]));
+        return;
+      }
+      $c.html(`
+        &lt;div&gt;&lt;strong&gt;${__('Predicted end')}:&lt;/strong&gt; ${frappe.utils.escape_html(data.predicted_end)}&lt;/div&gt;
+        &lt;div class=&quot;text-muted small&quot;&gt;${__('Range')}: ${frappe.utils.escape_html(data.p_max)} – ${frappe.utils.escape_html(data.p_min)}&lt;/div&gt;
+        &lt;div class=&quot;text-muted small&quot;&gt;${__('Confidence')}: ${(data.confidence * 100).toFixed(0)}%&lt;/div&gt;
+        &lt;div class=&quot;text-muted small&quot;&gt;${__('Remaining')}: ${data.remaining_hours}h / ${__('Avg velocity')}: ${data.avg_velocity}h&lt;/div&gt;
+      `);
+    });
+  }
+
+  function render_risks() {
+    call('get_risks', { project: state.project }).then(risks =&gt; {
+      const $c = $('#vt-risks .content').empty();
+      if (!risks.length) {
+        $c.text(__('No risks detected'));
+        return;
+      }
+      const sev_color = { low: '#6c757d', med: '#fd7e14', high: '#dc3545' };
+      risks.forEach(r =&gt; {
+        $c.append(`
+          &lt;div style=&quot;border-left:4px solid ${sev_color[r.severity] || '#999'};padding:6px 10px;margin-bottom:6px;&quot;&gt;
+            &lt;strong&gt;[${frappe.utils.escape_html(r.type)}]&lt;/strong&gt;
+            ${frappe.utils.escape_html(r.detail)}
+          &lt;/div&gt;
+        `);
+      });
+    });
+  }
+};
+</code></pre>
+<p>Note: All user-controlled output passed through <code>frappe.utils.escape_html</code> to prevent XSS (consistent with the recent <code>7227118 fix(nav): escape label to prevent XSS in page_nav</code> commit pattern).</p>
+<ul>
+<li>[ ] <strong>Step 2: Reload + smoke test</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; clear-cache</code>
+Open <code>/app/leader-analytics</code> in browser as a user with <code>VT Leader</code> role. Pick a project → velocity/forecast/risk panels populate. Pick a sprint → burndown populates.</p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/leader_analytics/leader_analytics.js
+git commit -m &quot;feat(page/leader_analytics): wire 4 panels (burndown, velocity, forecast, risks)&quot;
+</code></pre>
+<hr />
+<h2 id="task-12-workspace-shortcut">Task 12: Workspace shortcut</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/workspace/vernon_tasks/vernon_tasks.json</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Inspect workspace</strong></li>
+</ul>
+<p>Run: <code>cat vernon_tasks/task/workspace/vernon_tasks/vernon_tasks.json | python -m json.tool | head -80</code></p>
+<p>Locate the <code>shortcuts</code> array.</p>
+<ul>
+<li>[ ] <strong>Step 2: Add shortcut</strong></li>
+</ul>
+<p>Append to <code>shortcuts</code>:</p>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;Page&quot;,
+  &quot;link_to&quot;: &quot;leader-analytics&quot;,
+  &quot;label&quot;: &quot;Leader Analytics&quot;,
+  &quot;color&quot;: &quot;Blue&quot;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Migrate</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; migrate</code></p>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/workspace/vernon_tasks/vernon_tasks.json
+git commit -m &quot;feat(workspace): add Leader Analytics shortcut&quot;
+</code></pre>
+<hr />
+<h2 id="task-13-final-verification-docs">Task 13: Final verification + docs</h2>
+<ul>
+<li>[ ] <strong>Step 1: Full test run</strong></li>
+</ul>
+<p>Run: <code>bench --site &lt;site&gt; run-tests --app vernon_tasks</code>
+Expected: All tests pass (existing + new ~19 tests added).</p>
+<ul>
+<li>[ ] <strong>Step 2: Manual acceptance walkthrough</strong></li>
+</ul>
+<p>Open <code>/app/leader-analytics</code>:
+1. Pick a project with ≥3 closed sprints → forecast card shows predicted_end, range, confidence.
+2. Pick a project with &lt;3 closed sprints → forecast shows "Need N more closed sprint(s)".
+3. Pick a sprint → burndown renders ideal + remaining lines, footer shows unestimated count.
+4. Block a task for &gt;3 days → risk panel shows it.
+5. Set project <code>blocked_days_threshold = 30</code> → block disappears.
+6. Log out, log in as user without <code>VT Leader</code> role → API calls return 403 PermissionError.</p>
+<ul>
+<li>[ ] <strong>Step 3: Update API reference doc</strong></li>
+</ul>
+<p>Modify <code>docs/API_REFERENCE.md</code>: append new section for <code>vt_analytics.*</code> endpoints (signature + sample response per spec).</p>
+<ul>
+<li>[ ] <strong>Step 4: Commit docs</strong></li>
+</ul>
+<pre><code class="language-bash">git add docs/API_REFERENCE.md
+git commit -m &quot;docs(api): document analytics endpoints&quot;
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Final summary</strong></li>
+</ul>
+<p>Confirm:
+- 13 commits on branch
+- All tests pass
+- Page loads + 4 panels functional
+- Role gate enforced</p>
+<hr />
+<h2 id="notes-for-implementer">Notes for Implementer</h2>
+<ul>
+<li><strong>Backdating <code>modified</code></strong>: Frappe's <code>db.set_value(..., update_modified=False)</code> is the canonical way to inject backdated <code>modified</code> for test setup. Without <code>update_modified=False</code> Frappe overwrites your value.</li>
+<li><strong>Role creation</strong>: <code>VT Leader</code> may already exist in the role fixture (<code>vernon_tasks/fixtures/role.json</code>); only create if missing.</li>
+<li><strong>Frappe Charts</strong>: globally available as <code>frappe.Chart</code> (no import needed in page JS).</li>
+<li><strong>Cache key format</strong>: keep <code>vt_velocity:&lt;project&gt;:&lt;n&gt;</code> and <code>vt_forecast:&lt;project&gt;</code> exactly — <code>invalidate_project_cache</code> references these literals.</li>
+<li><strong><code>pdca_phase</code>/<code>kanban_status</code> values</strong>: confirm against existing data; the codebase uses uppercase phase (<code>DONE</code>, <code>DO</code>, etc.) and title-case status (<code>Done</code>, <code>In Progress</code>, <code>Blocked</code>).</li>
+</ul>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-11-vernon-analytics-sub-a.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks PWA — P3a Leader Review Queue</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks PWA — P3a Leader Review Queue</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-11-vernon-pwa-p3a-leader-review-design.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-pwa-p3a-leader-review-queue">Vernon Tasks PWA — P3a Leader Review Queue</h1>
+<p><strong>Date:</strong> 2026-05-11
+<strong>Predecessors:</strong> PRs #1–#4 (P0.5, P1a, P1b, P2)</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Mobile review queue at <code>/m/leader</code> for VT Leader / VT Manager</li>
+<li>List tasks pending review (PDCA phase <code>CHECK</code>) in projects user leads</li>
+<li>Approve task inline with single tap</li>
+<li>Reject task with reason modal (required)</li>
+<li>BottomNav: conditional 5th "Leader" tab, visible only when user has leader role</li>
+<li>3 telemetry events</li>
+</ul>
+<p>Non-goals (deferred):</p>
+<ul>
+<li>Team workload + blocked tasks dashboard (P3b)</li>
+<li>Burndown / velocity / forecast / risk charts (P3b)</li>
+<li>Exec analytics — OKR / KPI / health (P3b)</li>
+<li>Team leaderboard for leaders (P3b)</li>
+</ul>
+<h2 id="existing-endpoints-reused">Existing endpoints reused</h2>
+<ul>
+<li><code>vernon_tasks.task.page.leader_review.leader_review.get_review_queue</code> → list of pending tasks</li>
+<li><code>vernon_tasks.task.page.leader_review.leader_review.approve_task(task_name)</code></li>
+<li><code>vernon_tasks.task.page.leader_review.leader_review.reject_task(task_name, reason)</code></li>
+</ul>
+<h2 id="backend-addition">Backend addition</h2>
+<p>Extend <code>boot.py</code> to include user roles:</p>
+<pre><code class="language-python">@frappe.whitelist(allow_guest=True)
+def boot():
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return {&quot;user&quot;: None, &quot;csrf_token&quot;: None, &quot;roles&quot;: []}
+    return {
+        &quot;user&quot;: user,
+        &quot;csrf_token&quot;: frappe.sessions.get_csrf_token(),
+        &quot;roles&quot;: frappe.get_roles(user),
+    }
+</code></pre>
+<p>Backward compatible: prior shape kept, new field added.</p>
+<h2 id="architecture">Architecture</h2>
+<pre><code>pwa/src/
+  api/
+    leader.ts                  # getReviewQueue, approveTask, rejectTask
+    leader.test.ts
+  auth/
+    session.ts                 # MODIFY: Session.roles
+  hooks/
+    useIsLeader.ts             # probes session once, returns boolean
+  components/
+    BottomNav.tsx              # MODIFY: 5-col grid when leader
+    RejectModal.tsx            # reason textarea + submit
+    ReviewQueueRow.tsx         # one card with title/project/priority + Approve/Reject buttons
+  pages/
+    Leader.tsx                 # /m/leader page
+  router.tsx                   # MODIFY: add /m/leader route
+
+vernon_tasks/task/api/
+  telemetry.py                 # MODIFY: 3 new events
+  boot.py                      # MODIFY: include roles
+</code></pre>
+<h2 id="backend-telemetry-events">Backend: telemetry events</h2>
+<p>Append:</p>
+<pre><code>&quot;leader_review_view&quot;,
+&quot;leader_approve&quot;,
+&quot;leader_reject&quot;,
+</code></pre>
+<h2 id="frontend-leader-api-client">Frontend: leader API client</h2>
+<pre><code class="language-typescript">// pwa/src/api/leader.ts
+import { api } from &quot;./client&quot;;
+
+const PAGE = &quot;vernon_tasks.task.page.leader_review.leader_review&quot;;
+
+export interface ReviewItem {
+  name: string;
+  title: string;
+  project: string;
+  priority?: string;
+  deadline?: string;
+  assigned_to: string;
+  pdca_phase: string;
+  kanban_status: string;
+  estimated_hours?: number;
+  review_scheduled_date?: string;
+}
+
+export const fetchReviewQueue = () =&gt;
+  api.get&lt;ReviewItem[]&gt;(`/api/method/${PAGE}.get_review_queue`);
+
+export const approveTask = (task_name: string) =&gt;
+  api.post&lt;{ status: string }&gt;(`/api/method/${PAGE}.approve_task`, { task_name });
+
+export const rejectTask = (task_name: string, reason: string) =&gt;
+  api.post&lt;{ status: string }&gt;(`/api/method/${PAGE}.reject_task`, {
+    task_name,
+    reason,
+  });
+</code></pre>
+<h2 id="frontend-useisleader">Frontend: useIsLeader</h2>
+<pre><code class="language-typescript">import { useEffect, useState } from &quot;react&quot;;
+import { probeSession } from &quot;../auth/session&quot;;
+
+const LEADER_ROLES = [&quot;VT Leader&quot;, &quot;VT Manager&quot;];
+
+export function useIsLeader(): boolean | null {
+  const [isLeader, setIsLeader] = useState&lt;boolean | null&gt;(null);
+  useEffect(() =&gt; {
+    probeSession()
+      .then((s) =&gt; setIsLeader(s.roles?.some((r) =&gt; LEADER_ROLES.includes(r)) ?? false))
+      .catch(() =&gt; setIsLeader(false));
+  }, []);
+  return isLeader;
+}
+</code></pre>
+<h2 id="session-shape-update">Session shape update</h2>
+<pre><code class="language-typescript">export interface Session {
+  user: string | null;
+  csrf_token: string | null;
+  roles?: string[];
+}
+</code></pre>
+<p>Note: optional field for backward compat with old build.</p>
+<h2 id="ui-page-layout">UI: page layout</h2>
+<pre><code>┌──────────────────────────────┐
+│ Leader Review                │
+├──────────────────────────────┤
+│ [Card 1]                     │
+│   Title · Project · Critical │
+│   Due: 11 Mei · Asgn: A      │
+│   [Setujui] [Tolak]          │
+├──────────────────────────────┤
+│ [Card 2]                     │
+│   …                          │
+└──────────────────────────────┘
+Empty: &quot;Tidak ada review tertunda&quot;
+</code></pre>
+<p>Sorted by priority (Critical / High / Medium / Low) — already provided by API.</p>
+<h2 id="rejectmodal">RejectModal</h2>
+<ul>
+<li>Textarea, required, min 5 chars</li>
+<li>Submit → calls rejectTask + closes</li>
+<li>Cancel button + backdrop dismiss</li>
+</ul>
+<h2 id="approval-flow">Approval flow</h2>
+<pre><code>Tap Setujui
+  → confirm dialog &quot;Setujui tugas '&lt;title&gt;'?&quot; (browser confirm)
+  → on confirm: optimistic remove from list + show toast + call approveTask
+  → on error: rollback + toast failed
+Tap Tolak
+  → open RejectModal pre-filled with task name
+  → on submit: optimistic remove + call rejectTask
+  → on error: rollback + toast failed
+</code></pre>
+<h2 id="bottomnav-conditional-5-col">BottomNav conditional 5-col</h2>
+<pre><code class="language-typescript">const TABS_BASE = [
+  { to: &quot;/m/work&quot;, label: t(&quot;nav.tasks&quot;), key: &quot;tasks&quot; },
+  { to: &quot;/m/dashboard&quot;, label: t(&quot;nav.dashboard&quot;), key: &quot;dashboard&quot; },
+  { to: &quot;/m/analytics&quot;, label: t(&quot;nav.analytics&quot;), key: &quot;analytics&quot; },
+  { to: &quot;/m/me&quot;, label: t(&quot;nav.me&quot;), key: &quot;me&quot; },
+];
+const LEADER_TAB = { to: &quot;/m/leader&quot;, label: t(&quot;nav.leader&quot;), key: &quot;leader&quot; };
+
+// in component:
+const tabs = isLeader ? [...TABS_BASE, LEADER_TAB] : TABS_BASE;
+const cols = tabs.length;
+// gridTemplateColumns: `repeat(${cols}, 1fr)`
+</code></pre>
+<p>i18n: <code>"nav.leader": "Leader"</code>.</p>
+<h2 id="error-handling">Error handling</h2>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>UX</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Empty queue</td>
+<td>EmptyState "Tidak ada review tertunda"</td>
+</tr>
+<tr>
+<td>403 (not leader)</td>
+<td>EmptyState "Akses leader diperlukan"</td>
+</tr>
+<tr>
+<td>Offline</td>
+<td>Banner via existing OfflineBanner; queue read-only (mutations disabled)</td>
+</tr>
+<tr>
+<td>Approve 5xx</td>
+<td>Rollback optimistic + toast "Gagal setujui"</td>
+</tr>
+<tr>
+<td>Reject 5xx</td>
+<td>Rollback + toast "Gagal tolak"</td>
+</tr>
+<tr>
+<td>Reject empty reason</td>
+<td>Modal stays open with inline error</td>
+</tr>
+</tbody>
+</table>
+<h2 id="testing">Testing</h2>
+<h3 id="vitest">Vitest</h3>
+<ul>
+<li><code>leader.test.ts</code> — getReviewQueue URL, approve/reject body shape</li>
+<li><code>useIsLeader.test.ts</code> — returns true for VT Leader, false for plain user</li>
+<li><code>RejectModal.test.tsx</code> — submits trimmed reason, blocks empty</li>
+<li><code>BottomNav</code> updated test — 4 tabs when guest, 5 when leader</li>
+</ul>
+<h3 id="pytest">pytest</h3>
+<p>No new backend logic; <code>boot.boot</code> now returns roles. Add one test:</p>
+<ul>
+<li><code>test_boot_includes_roles</code> — boot returns roles array for logged-in user</li>
+</ul>
+<h3 id="playwright-gated">Playwright (gated)</h3>
+<ul>
+<li>Login as leader → /m/leader → see queue or empty state</li>
+</ul>
+<h2 id="bundle-impact">Bundle impact</h2>
+<ul>
+<li>New page + components: ~10 KB</li>
+<li>Main bundle estimate: 306 KB (from 296)</li>
+</ul>
+<h2 id="rollout">Rollout</h2>
+<ol>
+<li>Build + deploy staging</li>
+<li>Pilot leaders run review flow on real CHECK-phase tasks</li>
+<li>Telemetry funnel: views → approve / reject ratio</li>
+<li>Company-wide</li>
+</ol>
+<h2 id="open-questions">Open questions</h2>
+<p>None.</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-11-vernon-pwa-p3a-leader-review-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

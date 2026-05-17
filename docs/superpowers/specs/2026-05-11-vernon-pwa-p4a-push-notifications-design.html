@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks PWA — P4a Push Notifications</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks PWA — P4a Push Notifications</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-11-vernon-pwa-p4a-push-notifications-design.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-pwa-p4a-push-notifications">Vernon Tasks PWA — P4a Push Notifications</h1>
+<p><strong>Date:</strong> 2026-05-11
+<strong>Predecessors:</strong> PRs #1–#8 (P0.5 through P3b + cleanup + docs)</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Users can subscribe to push notifications from the PWA</li>
+<li>New <code>Notification Log</code> entries trigger push delivery to all of that
+  user's subscribed browsers</li>
+<li>VAPID keys stored in <code>VT Settings</code>, generated once via CLI helper</li>
+<li>iOS support: works on iOS 16.4+ Safari when PWA installed via A2HS,
+  with clear UI hint about that requirement</li>
+<li>New telemetry events: <code>push_subscribe_attempt</code>, <code>push_subscribed</code>,
+  <code>push_unsubscribed</code>, <code>push_received</code></li>
+</ul>
+<p>Non-goals (deferred to P4b):</p>
+<ul>
+<li>Per-event-type subscription preferences</li>
+<li>Quiet hours / mute settings</li>
+<li>Notification action buttons (reply / snooze inline)</li>
+<li>Sound preferences</li>
+<li>Badge count sync (separate W3C Badging API)</li>
+</ul>
+<h2 id="phase-placement">Phase placement</h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Scope</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P4a</strong></td>
+<td><strong>Push infra + Notification Log trigger (this spec)</strong></td>
+<td>In progress</td>
+</tr>
+<tr>
+<td>P4b</td>
+<td>Per-event prefs + actions + badging</td>
+<td>Future</td>
+</tr>
+</tbody>
+</table>
+<h2 id="architecture">Architecture</h2>
+<h3 id="backend-additions">Backend additions</h3>
+<pre><code>vernon_tasks/
+  vt_settings/doctype/vt_settings/vt_settings.json
+                                        # MODIFY: add 2 push fields
+  vt_settings/doctype/vernon_push_subscription/
+    __init__.py
+    vernon_push_subscription.json
+    vernon_push_subscription.py
+    test_vernon_push_subscription.py
+  task/api/
+    push.py                             # NEW: get_public_key, subscribe, unsubscribe, is_subscribed
+    test_push.py
+    telemetry.py                        # MODIFY: 4 new events
+    boot.py                             # MODIFY: expose push_public_key
+  task/services/
+    push_sender.py                      # NEW: send_to_user, send_push_for_notification
+    test_push_sender.py
+  commands/
+    __init__.py
+    push_keys.py                        # bench command: vernon-generate-vapid
+  hooks.py                              # MODIFY: doc_events on Notification Log
+                                        # MODIFY: commands tuple
+</code></pre>
+<h3 id="vt-settings-new-fields">VT Settings new fields</h3>
+<pre><code>push_section: Section Break (&quot;Push Notifications&quot;)
+push_vapid_public_key: Data
+push_vapid_private_key: Password
+</code></pre>
+<p>Both hidden from non-System Manager via existing perm structure.</p>
+<h3 id="vernon-push-subscription-doctype">Vernon Push Subscription DocType</h3>
+<pre><code class="language-json">{
+  &quot;doctype&quot;: &quot;DocType&quot;,
+  &quot;name&quot;: &quot;Vernon Push Subscription&quot;,
+  &quot;module&quot;: &quot;VT Settings&quot;,
+  &quot;autoname&quot;: &quot;hash&quot;,
+  &quot;field_order&quot;: [&quot;user&quot;, &quot;endpoint&quot;, &quot;p256dh&quot;, &quot;auth&quot;, &quot;user_agent&quot;, &quot;last_seen&quot;],
+  &quot;fields&quot;: [
+    {&quot;fieldname&quot;: &quot;user&quot;, &quot;fieldtype&quot;: &quot;Link&quot;, &quot;options&quot;: &quot;User&quot;, &quot;reqd&quot;: 1, &quot;in_list_view&quot;: 1, &quot;in_standard_filter&quot;: 1},
+    {&quot;fieldname&quot;: &quot;endpoint&quot;, &quot;fieldtype&quot;: &quot;Long Text&quot;, &quot;reqd&quot;: 1, &quot;unique&quot;: 1},
+    {&quot;fieldname&quot;: &quot;p256dh&quot;, &quot;fieldtype&quot;: &quot;Data&quot;, &quot;reqd&quot;: 1},
+    {&quot;fieldname&quot;: &quot;auth&quot;, &quot;fieldtype&quot;: &quot;Data&quot;, &quot;reqd&quot;: 1},
+    {&quot;fieldname&quot;: &quot;user_agent&quot;, &quot;fieldtype&quot;: &quot;Data&quot;},
+    {&quot;fieldname&quot;: &quot;last_seen&quot;, &quot;fieldtype&quot;: &quot;Datetime&quot;, &quot;default&quot;: &quot;now&quot;}
+  ],
+  &quot;permissions&quot;: [
+    {&quot;role&quot;: &quot;System Manager&quot;, &quot;read&quot;: 1, &quot;write&quot;: 1, &quot;create&quot;: 1, &quot;delete&quot;: 1}
+  ],
+  &quot;track_changes&quot;: 0,
+  &quot;hide_toolbar&quot;: 1
+}
+</code></pre>
+<p>Note: <code>endpoint</code> field gets a unique index. Frappe stores Long Text as
+MEDIUMTEXT — index uses prefix automatically (~255 chars). Endpoints
+are typically ~200 chars so collision risk low.</p>
+<h3 id="pushpy-whitelisted-api">push.py — whitelisted API</h3>
+<pre><code class="language-python">import frappe
+from frappe.utils import now_datetime
+
+
+@frappe.whitelist(allow_guest=True)
+def get_public_key() -&gt; dict:
+    key = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;push_vapid_public_key&quot;) or &quot;&quot;
+    return {&quot;public_key&quot;: key}
+
+
+@frappe.whitelist()
+def subscribe(endpoint: str, p256dh: str, auth: str, user_agent: str = &quot;&quot;) -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        frappe.throw(&quot;Login required&quot;, frappe.PermissionError)
+
+    existing = frappe.db.get_value(&quot;Vernon Push Subscription&quot;, {&quot;endpoint&quot;: endpoint}, &quot;name&quot;)
+    if existing:
+        frappe.db.set_value(&quot;Vernon Push Subscription&quot;, existing, {
+            &quot;user&quot;: user,
+            &quot;p256dh&quot;: p256dh,
+            &quot;auth&quot;: auth,
+            &quot;user_agent&quot;: user_agent,
+            &quot;last_seen&quot;: now_datetime(),
+        })
+        return {&quot;ok&quot;: True, &quot;renewed&quot;: True}
+
+    frappe.get_doc({
+        &quot;doctype&quot;: &quot;Vernon Push Subscription&quot;,
+        &quot;user&quot;: user,
+        &quot;endpoint&quot;: endpoint,
+        &quot;p256dh&quot;: p256dh,
+        &quot;auth&quot;: auth,
+        &quot;user_agent&quot;: user_agent,
+        &quot;last_seen&quot;: now_datetime(),
+    }).insert(ignore_permissions=True)
+    return {&quot;ok&quot;: True, &quot;renewed&quot;: False}
+
+
+@frappe.whitelist()
+def unsubscribe(endpoint: str) -&gt; dict:
+    user = frappe.session.user
+    name = frappe.db.get_value(
+        &quot;Vernon Push Subscription&quot;,
+        {&quot;endpoint&quot;: endpoint, &quot;user&quot;: user},
+        &quot;name&quot;,
+    )
+    if name:
+        frappe.delete_doc(&quot;Vernon Push Subscription&quot;, name, ignore_permissions=True)
+    return {&quot;ok&quot;: True}
+
+
+@frappe.whitelist()
+def is_subscribed(endpoint: str) -&gt; dict:
+    user = frappe.session.user
+    if user == &quot;Guest&quot;:
+        return {&quot;subscribed&quot;: False}
+    return {
+        &quot;subscribed&quot;: bool(
+            frappe.db.exists(
+                &quot;Vernon Push Subscription&quot;,
+                {&quot;endpoint&quot;: endpoint, &quot;user&quot;: user},
+            )
+        ),
+    }
+</code></pre>
+<h3 id="push_senderpy-send-service">push_sender.py — send service</h3>
+<pre><code class="language-python">import json
+import frappe
+from pywebpush import webpush, WebPushException
+
+
+def _vapid() -&gt; tuple[str, str, str]:
+    pub = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;push_vapid_public_key&quot;) or &quot;&quot;
+    priv = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;push_vapid_private_key&quot;) or &quot;&quot;
+    subject = &quot;mailto:&quot; + (frappe.db.get_single_value(&quot;System Settings&quot;, &quot;email_footer_address&quot;) or &quot;vernon@localhost&quot;)
+    return pub, priv, subject
+
+
+def send_to_user(user: str, payload: dict) -&gt; int:
+    &quot;&quot;&quot;Send push to every subscription for a user. Returns count delivered.&quot;&quot;&quot;
+    if user == &quot;Guest&quot;:
+        return 0
+    _pub, priv, subject = _vapid()
+    if not priv:
+        return 0
+
+    subs = frappe.get_all(
+        &quot;Vernon Push Subscription&quot;,
+        filters={&quot;user&quot;: user},
+        fields=[&quot;name&quot;, &quot;endpoint&quot;, &quot;p256dh&quot;, &quot;auth&quot;],
+    )
+    sent = 0
+    for s in subs:
+        try:
+            webpush(
+                subscription_info={
+                    &quot;endpoint&quot;: s[&quot;endpoint&quot;],
+                    &quot;keys&quot;: {&quot;p256dh&quot;: s[&quot;p256dh&quot;], &quot;auth&quot;: s[&quot;auth&quot;]},
+                },
+                data=json.dumps(payload),
+                vapid_private_key=priv,
+                vapid_claims={&quot;sub&quot;: subject},
+                ttl=86400,
+            )
+            sent += 1
+        except WebPushException as e:
+            # 404 / 410: endpoint dead, prune
+            if e.response is not None and e.response.status_code in (404, 410):
+                frappe.delete_doc(
+                    &quot;Vernon Push Subscription&quot;,
+                    s[&quot;name&quot;],
+                    ignore_permissions=True,
+                )
+            else:
+                frappe.log_error(
+                    f&quot;push_sender to {user}: {e}&quot;,
+                    &quot;Vernon Push&quot;,
+                )
+    return sent
+
+
+def send_push_for_notification(doc, method=None):
+    &quot;&quot;&quot;Hook target: dispatched on Notification Log insert.&quot;&quot;&quot;
+    if not doc.for_user or doc.for_user == &quot;Administrator&quot;:
+        return
+    payload = {
+        &quot;title&quot;: &quot;Vernon Tasks&quot;,
+        &quot;body&quot;: doc.subject or &quot;Notifikasi baru&quot;,
+        &quot;url&quot;: _target_url(doc),
+        &quot;tag&quot;: doc.name,
+    }
+    send_to_user(doc.for_user, payload)
+
+
+def _target_url(doc) -&gt; str:
+    if doc.document_type == &quot;VT Task&quot; and doc.document_name:
+        return f&quot;/m/work/{doc.document_name}&quot;
+    return &quot;/m/me/notifications&quot;
+</code></pre>
+<h3 id="hookspy-additions">hooks.py additions</h3>
+<pre><code class="language-python">doc_events = {
+    # existing entries kept …
+    &quot;Notification Log&quot;: {
+        &quot;after_insert&quot;: &quot;vernon_tasks.task.services.push_sender.send_push_for_notification&quot;,
+    },
+}
+
+commands = [
+    &quot;vernon_tasks.commands.push_keys.vernon_generate_vapid&quot;,
+]
+</code></pre>
+<h3 id="cli-command">CLI command</h3>
+<pre><code class="language-python"># vernon_tasks/commands/push_keys.py
+import click
+import frappe
+from frappe.commands import pass_context, get_site
+from py_vapid import Vapid
+
+
+@click.command(&quot;vernon-generate-vapid&quot;)
+@click.option(&quot;--force&quot;, is_flag=True, help=&quot;Overwrite existing keys&quot;)
+@pass_context
+def vernon_generate_vapid(context, force):
+    &quot;&quot;&quot;Generate VAPID keys and store in VT Settings.&quot;&quot;&quot;
+    site = get_site(context)
+    frappe.init(site=site)
+    frappe.connect()
+    try:
+        existing = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;push_vapid_public_key&quot;)
+        if existing and not force:
+            click.echo(f&quot;Public key already set. Use --force to overwrite.&quot;)
+            return
+
+        v = Vapid()
+        v.generate_keys()
+        pub_b64 = v.public_key_b64urlsafe().decode()
+        priv_pem = v.private_pem().decode()
+
+        frappe.db.set_single_value(&quot;VT Settings&quot;, &quot;push_vapid_public_key&quot;, pub_b64)
+        frappe.db.set_single_value(&quot;VT Settings&quot;, &quot;push_vapid_private_key&quot;, priv_pem)
+        frappe.db.commit()
+        click.echo(f&quot;VAPID keys generated. Public:\n{pub_b64}&quot;)
+    finally:
+        frappe.destroy()
+</code></pre>
+<blockquote>
+<p>Note: <code>pywebpush</code> ships <code>py_vapid</code>. Both come from a single <code>pip
+install pywebpush</code> (dependency chain).</p>
+</blockquote>
+<h3 id="bootpy-expose-public-key">boot.py — expose public key</h3>
+<p>Extend <code>boot()</code> to include <code>push_public_key</code> so PWA can <code>applicationServerKey</code> it without an extra round-trip:</p>
+<pre><code class="language-python">@frappe.whitelist(allow_guest=True)
+def boot():
+    user = frappe.session.user
+    pub_key = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;push_vapid_public_key&quot;) or &quot;&quot;
+    if user == &quot;Guest&quot;:
+        return {&quot;user&quot;: None, &quot;csrf_token&quot;: None, &quot;roles&quot;: [], &quot;push_public_key&quot;: pub_key}
+    return {
+        &quot;user&quot;: user,
+        &quot;csrf_token&quot;: frappe.sessions.get_csrf_token(),
+        &quot;roles&quot;: frappe.get_roles(user),
+        &quot;push_public_key&quot;: pub_key,
+    }
+</code></pre>
+<p>Backward compatible (additive field).</p>
+<h3 id="frontend-pushts-api-client">Frontend: push.ts API client</h3>
+<pre><code class="language-typescript">import { api } from &quot;./client&quot;;
+
+const BASE = &quot;/api/method/vernon_tasks.task.api.push&quot;;
+
+export const getPublicKey = () =&gt;
+  api.get&lt;{ public_key: string }&gt;(`${BASE}.get_public_key`);
+
+export const subscribePush = (endpoint: string, p256dh: string, auth: string, user_agent: string) =&gt;
+  api.post&lt;{ ok: boolean; renewed: boolean }&gt;(`${BASE}.subscribe`, {
+    endpoint, p256dh, auth, user_agent,
+  });
+
+export const unsubscribePush = (endpoint: string) =&gt;
+  api.post&lt;{ ok: boolean }&gt;(`${BASE}.unsubscribe`, { endpoint });
+</code></pre>
+<h3 id="frontend-usepush-hook">Frontend: usePush hook</h3>
+<pre><code class="language-typescript">import { useEffect, useState } from &quot;react&quot;;
+import { getPublicKey, subscribePush, unsubscribePush } from &quot;../api/push&quot;;
+
+function urlBase64ToUint8Array(b64: string): Uint8Array {
+  const padding = &quot;=&quot;.repeat((4 - (b64.length % 4)) % 4);
+  const base64 = (b64 + padding).replace(/-/g, &quot;+&quot;).replace(/_/g, &quot;/&quot;);
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i &lt; raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+export type PushState = &quot;unsupported&quot; | &quot;loading&quot; | &quot;denied&quot; | &quot;off&quot; | &quot;on&quot;;
+
+export function usePush() {
+  const [state, setState] = useState&lt;PushState&gt;(&quot;loading&quot;);
+  const [reg, setReg] = useState&lt;ServiceWorkerRegistration | null&gt;(null);
+
+  useEffect(() =&gt; {
+    if (!(&quot;serviceWorker&quot; in navigator) || !(&quot;PushManager&quot; in window)) {
+      setState(&quot;unsupported&quot;);
+      return;
+    }
+    navigator.serviceWorker.ready.then(async (r) =&gt; {
+      setReg(r);
+      const sub = await r.pushManager.getSubscription();
+      if (Notification.permission === &quot;denied&quot;) setState(&quot;denied&quot;);
+      else setState(sub ? &quot;on&quot; : &quot;off&quot;);
+    });
+  }, []);
+
+  async function turnOn() {
+    if (!reg) return;
+    const perm = await Notification.requestPermission();
+    if (perm !== &quot;granted&quot;) {
+      setState(perm === &quot;denied&quot; ? &quot;denied&quot; : &quot;off&quot;);
+      return;
+    }
+    const { public_key } = await getPublicKey();
+    if (!public_key) {
+      setState(&quot;off&quot;);
+      throw new Error(&quot;Server VAPID key missing&quot;);
+    }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(public_key),
+    });
+    const json = sub.toJSON();
+    await subscribePush(
+      sub.endpoint,
+      json.keys?.p256dh ?? &quot;&quot;,
+      json.keys?.auth ?? &quot;&quot;,
+      navigator.userAgent,
+    );
+    setState(&quot;on&quot;);
+  }
+
+  async function turnOff() {
+    if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await unsubscribePush(sub.endpoint);
+      await sub.unsubscribe();
+    }
+    setState(&quot;off&quot;);
+  }
+
+  return { state, turnOn, turnOff };
+}
+</code></pre>
+<h3 id="frontend-pushtoggle-component">Frontend: PushToggle component</h3>
+<pre><code class="language-typescript">import { usePush } from &quot;../hooks/usePush&quot;;
+import { logEvent } from &quot;../telemetry&quot;;
+import { useToast } from &quot;./Toast&quot;;
+import { t } from &quot;../i18n&quot;;
+
+function isIOS(): boolean {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent);
+}
+function isStandalone(): boolean {
+  return window.matchMedia(&quot;(display-mode: standalone)&quot;).matches;
+}
+
+export function PushToggle() {
+  const { state, turnOn, turnOff } = usePush();
+  const { show } = useToast();
+
+  if (state === &quot;unsupported&quot;) {
+    return &lt;p style={{ color: &quot;var(--vt-text-muted)&quot;, fontSize: 13 }}&gt;{t(&quot;push.unsupported&quot;)}&lt;/p&gt;;
+  }
+
+  async function onToggle(target: &quot;on&quot; | &quot;off&quot;) {
+    logEvent(&quot;push_subscribe_attempt&quot;, { target });
+    try {
+      if (target === &quot;on&quot;) {
+        await turnOn();
+        logEvent(&quot;push_subscribed&quot;, {});
+      } else {
+        await turnOff();
+        logEvent(&quot;push_unsubscribed&quot;, {});
+      }
+    } catch (e) {
+      show(t(&quot;push.failed&quot;));
+    }
+  }
+
+  const iosHint = isIOS() &amp;&amp; !isStandalone();
+
+  return (
+    &lt;div style={{ padding: &quot;var(--vt-space-4)&quot;, background: &quot;var(--vt-surface)&quot;, borderRadius: &quot;var(--vt-radius)&quot;, marginTop: &quot;var(--vt-space-3)&quot; }}&gt;
+      &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot; }}&gt;
+        &lt;div&gt;
+          &lt;div style={{ fontWeight: 600 }}&gt;{t(&quot;push.title&quot;)}&lt;/div&gt;
+          &lt;div style={{ fontSize: 13, color: &quot;var(--vt-text-muted)&quot;, marginTop: 4 }}&gt;
+            {state === &quot;on&quot; ? t(&quot;push.status_on&quot;) :
+             state === &quot;denied&quot; ? t(&quot;push.status_denied&quot;) :
+             t(&quot;push.status_off&quot;)}
+          &lt;/div&gt;
+        &lt;/div&gt;
+        {state !== &quot;denied&quot; &amp;&amp; (
+          &lt;button
+            onClick={() =&gt; onToggle(state === &quot;on&quot; ? &quot;off&quot; : &quot;on&quot;)}
+            style={{
+              padding: &quot;8px 14px&quot;,
+              borderRadius: 999,
+              border: 0,
+              background: state === &quot;on&quot; ? &quot;var(--vt-text-muted)&quot; : &quot;var(--vt-primary)&quot;,
+              color: &quot;white&quot;,
+              fontWeight: 600,
+            }}
+          &gt;
+            {state === &quot;on&quot; ? t(&quot;push.turn_off&quot;) : t(&quot;push.turn_on&quot;)}
+          &lt;/button&gt;
+        )}
+      &lt;/div&gt;
+      {iosHint &amp;&amp; (
+        &lt;p style={{ marginTop: 12, fontSize: 12, color: &quot;var(--vt-warn)&quot; }}&gt;
+          {t(&quot;push.ios_hint&quot;)}
+        &lt;/p&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+</code></pre>
+<h3 id="service-worker-push-handler">Service worker push handler</h3>
+<p>Switch vite-plugin-pwa from <code>generateSW</code> to <code>injectManifest</code> to own the
+SW source. New <code>pwa/src/sw.ts</code>:</p>
+<pre><code class="language-typescript">/// &lt;reference lib=&quot;webworker&quot; /&gt;
+import { precacheAndRoute } from &quot;workbox-precaching&quot;;
+import { registerRoute } from &quot;workbox-routing&quot;;
+import { StaleWhileRevalidate } from &quot;workbox-strategies&quot;;
+import { ExpirationPlugin } from &quot;workbox-expiration&quot;;
+
+declare const self: ServiceWorkerGlobalScope;
+
+precacheAndRoute(self.__WB_MANIFEST);
+
+registerRoute(
+  ({ url }) =&gt; url.pathname.startsWith(&quot;/api/method/vernon_tasks.&quot;),
+  new StaleWhileRevalidate({
+    cacheName: `vt-api-${__SW_VERSION__}`,
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 }),
+    ],
+  }),
+);
+
+self.addEventListener(&quot;push&quot;, (event: PushEvent) =&gt; {
+  const data = event.data?.json() ?? {};
+  const title = data.title ?? &quot;Vernon Tasks&quot;;
+  const options: NotificationOptions = {
+    body: data.body ?? &quot;&quot;,
+    tag: data.tag,
+    data: { url: data.url ?? &quot;/m/me/notifications&quot; },
+    icon: &quot;/m/icons/icon-192.png&quot;,
+    badge: &quot;/m/icons/icon-192.png&quot;,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener(&quot;notificationclick&quot;, (event: NotificationEvent) =&gt; {
+  event.notification.close();
+  const url = (event.notification.data as { url?: string })?.url ?? &quot;/m/&quot;;
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: &quot;window&quot;, includeUncontrolled: true })
+      .then((clients) =&gt; {
+        const existing = clients.find((c) =&gt; c.url.includes(url));
+        if (existing) return (existing as WindowClient).focus();
+        return self.clients.openWindow(url);
+      }),
+  );
+});
+
+declare const __SW_VERSION__: string;
+</code></pre>
+<h3 id="viteconfigts-changes">vite.config.ts changes</h3>
+<p>Switch to <code>injectManifest</code>:</p>
+<pre><code class="language-typescript">VitePWA({
+  strategies: &quot;injectManifest&quot;,
+  srcDir: &quot;src&quot;,
+  filename: &quot;sw.ts&quot;,
+  injectManifest: { swSrc: &quot;src/sw.ts&quot;, swDest: &quot;sw.js&quot; },
+  manifest: { /* unchanged */ },
+})
+</code></pre>
+<h3 id="telemetry-events">Telemetry events</h3>
+<p>Backend <code>ALLOWED_EVENTS</code> and frontend <code>TelemetryEvent</code> type both
+get:</p>
+<pre><code>&quot;push_subscribe_attempt&quot;,
+&quot;push_subscribed&quot;,
+&quot;push_unsubscribed&quot;,
+&quot;push_received&quot;,
+</code></pre>
+<p><code>push_received</code> is logged by SW via <code>fetch</code> to the telemetry endpoint
+(fire-and-forget, no await).</p>
+<h3 id="permissions">Permissions</h3>
+<ul>
+<li><code>push.get_public_key</code> allow_guest (read-only metadata)</li>
+<li><code>push.subscribe</code> / <code>unsubscribe</code> / <code>is_subscribed</code>: authenticated</li>
+<li><code>Vernon Push Subscription</code> DocType: System Manager only</li>
+<li>VAPID private key: never exposed to frontend (only public key in boot)</li>
+</ul>
+<h3 id="error-handling">Error handling</h3>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>UX</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Browser unsupported</td>
+<td>UI shows "Browser tidak mendukung"</td>
+</tr>
+<tr>
+<td>User denied permission</td>
+<td>UI shows "Diblokir browser. Atur dari Settings."</td>
+</tr>
+<tr>
+<td>Server VAPID key empty</td>
+<td>turnOn throws; toast "Server belum siap"</td>
+</tr>
+<tr>
+<td>push_sender 404/410</td>
+<td>Subscription auto-pruned</td>
+</tr>
+<tr>
+<td>push_sender other error</td>
+<td>Logged to <code>Error Log</code> (frappe.log_error)</td>
+</tr>
+<tr>
+<td>Push delivered but PWA closed</td>
+<td>Native OS notification appears; tap opens URL</td>
+</tr>
+</tbody>
+</table>
+<h3 id="testing">Testing</h3>
+<h4 id="vitest">Vitest</h4>
+<ul>
+<li><code>push.test.ts</code> — subscribe/unsubscribe URL + body</li>
+<li><code>usePush.test.ts</code> — state machine when PushManager unavailable, when
+  permission denied (mock <code>Notification.permission</code>)</li>
+<li><code>PushToggle.test.tsx</code> — renders correct status text per state</li>
+</ul>
+<h4 id="pytest">pytest</h4>
+<ul>
+<li><code>test_vernon_push_subscription.py</code> — DocType create + unique endpoint</li>
+<li><code>test_push.py</code> — subscribe idempotency (renewed: true), unsubscribe
+  ownership check</li>
+<li><code>test_push_sender.py</code> — send_to_user iterates subscriptions; 404
+  prunes; payload contains expected fields (use unittest.mock for
+  webpush)</li>
+</ul>
+<h3 id="bundle-impact">Bundle impact</h3>
+<ul>
+<li>SW source switch + push handler: ~3 KB</li>
+<li>usePush hook + PushToggle: ~3 KB</li>
+<li>Main bundle estimate: 310 KB (from 304)</li>
+</ul>
+<h3 id="rollout">Rollout</h3>
+<ol>
+<li><code>pip install pywebpush</code> on server (add to <code>pyproject.toml</code>)</li>
+<li><code>bench --site &lt;site&gt; migrate</code> (registers new DocType + VT Settings fields)</li>
+<li><code>bench --site &lt;site&gt; vernon-generate-vapid</code> (writes keys)</li>
+<li><code>./pwa/build-pwa.sh &amp;&amp; bench restart</code></li>
+<li>Pilot user opens <code>/m/me</code>, taps "Aktifkan push"</li>
+<li>Trigger a Notification Log entry (assign a task) — push appears</li>
+<li>Monitor <code>Vernon Telemetry Event</code> for <code>push_subscribed</code> /
+   <code>push_received</code> rates</li>
+</ol>
+<h3 id="known-limitations">Known limitations</h3>
+<ul>
+<li>iOS only delivers push when PWA is installed via A2HS (iOS 16.4+).
+  UI shows hint when iOS user without standalone tries to subscribe.</li>
+<li>Push works only when SW is registered (i.e., after first PWA load).</li>
+<li>macOS Safari currently does not support Web Push (Sequoia adds it).</li>
+<li>Firefox + Chrome desktop/Android: full support.</li>
+</ul>
+<h2 id="open-questions">Open questions</h2>
+<p>None.</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-11-vernon-pwa-p4a-push-notifications-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

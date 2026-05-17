@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Workspace Navigation Implementation Plan</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Workspace Navigation Implementation Plan</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/plans/2026-05-09-workspace-navigation.md</span>
+  </div>
+</header>
+
+<h1 id="workspace-navigation-implementation-plan">Workspace Navigation Implementation Plan</h1>
+<blockquote>
+<p><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (<code>- [ ]</code>) syntax for tracking.</p>
+</blockquote>
+<p><strong>Goal:</strong> Add in-page nav bars to all 4 custom pages and fix missing shortcuts in 2 workspace JSONs.</p>
+<p><strong>Architecture:</strong> A shared public JS file (<code>page_nav.js</code>) exports <code>vt_render_page_nav(page, links)</code>, injected globally via <code>hooks.py app_include_js</code>. Each page calls this once after <code>make_app_page</code>. Workspace JSONs are patched directly — no Python changes beyond hooks.py.</p>
+<p><strong>Tech Stack:</strong> Frappe Framework JS, jQuery (via Frappe), Frappe Workspace JSON fixtures</p>
+<hr />
+<h2 id="file-map">File Map</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Action</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vernon_tasks/public/js/page_nav.js</code></td>
+<td>CREATE</td>
+<td>Shared nav bar renderer</td>
+</tr>
+<tr>
+<td><code>vernon_tasks/hooks.py</code></td>
+<td>MODIFY</td>
+<td>Register public JS</td>
+</tr>
+<tr>
+<td><code>vernon_tasks/workspace/my_projects.json</code></td>
+<td>MODIFY</td>
+<td>Add Leader Dashboard shortcut</td>
+</tr>
+<tr>
+<td><code>vernon_tasks/workspace/overview.json</code></td>
+<td>MODIFY</td>
+<td>Add Leader Review shortcut</td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/page/my_work/my_work.js</code></td>
+<td>MODIFY</td>
+<td>Call <code>vt_render_page_nav</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/page/my_dashboard/my_dashboard.js</code></td>
+<td>MODIFY</td>
+<td>Call <code>vt_render_page_nav</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/page/leader_review/leader_review.js</code></td>
+<td>MODIFY</td>
+<td>Call <code>vt_render_page_nav</code></td>
+</tr>
+<tr>
+<td><code>vernon_tasks/task/page/leader_dashboard/leader_dashboard.js</code></td>
+<td>MODIFY</td>
+<td>Call <code>vt_render_page_nav</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="task-1-create-shared-nav-bar-utility">Task 1: Create shared nav bar utility</h2>
+<p><strong>Files:</strong>
+- Create: <code>vernon_tasks/public/js/page_nav.js</code></p>
+<p>No automated tests for this file (DOM-only, Frappe test infra not set up for JS unit tests). Visual verification in Task 5.</p>
+<ul>
+<li>[ ] <strong>Step 1: Create the public/js directory</strong></li>
+</ul>
+<pre><code class="language-bash">mkdir -p /path/to/apps/vernon_tasks/vernon_tasks/public/js
+</code></pre>
+<p>Replace <code>/path/to/apps</code> with your actual bench apps path.</p>
+<ul>
+<li>[ ] <strong>Step 2: Create <code>vernon_tasks/public/js/page_nav.js</code></strong></li>
+</ul>
+<pre><code class="language-js">/**
+ * vt_render_page_nav — renders a small nav bar at the top of a Frappe page.
+ *
+ * @param {Object} page  - the Frappe page object from frappe.ui.make_app_page()
+ * @param {Array}  links - array of { label: string, route: string, icon: string }
+ *                         route examples: &quot;workspace/My Tasks&quot;, &quot;my-work&quot;, &quot;my-dashboard&quot;
+ */
+window.vt_render_page_nav = function (page, links) {
+    const nav = $('&lt;div class=&quot;vt-page-nav&quot;&gt;&lt;/div&gt;').css({
+        display: &quot;flex&quot;,
+        gap: &quot;8px&quot;,
+        alignItems: &quot;center&quot;,
+        padding: &quot;8px 20px&quot;,
+        background: &quot;var(--subtle-bg)&quot;,
+        borderBottom: &quot;1px solid var(--border-color)&quot;,
+        marginBottom: &quot;4px&quot;,
+        flexWrap: &quot;wrap&quot;,
+    });
+
+    links.forEach(function (link) {
+        const icon_html = link.icon
+            ? `&lt;svg class=&quot;icon icon-sm&quot; style=&quot;margin-right:4px;&quot;&gt;&lt;use href=&quot;#icon-${link.icon}&quot;&gt;&lt;/use&gt;&lt;/svg&gt;`
+            : &quot;&quot;;
+        const btn = $(`&lt;button class=&quot;btn btn-xs btn-default&quot;&gt;${icon_html}${__(link.label)}&lt;/button&gt;`);
+        btn.on(&quot;click&quot;, function () {
+            frappe.set_route(link.route);
+        });
+        nav.append(btn);
+    });
+
+    // Prepend to page.main so it appears above the page container
+    page.main.prepend(nav);
+};
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/public/js/page_nav.js
+git commit -m &quot;feat(nav): add shared vt_render_page_nav utility&quot;
+</code></pre>
+<hr />
+<h2 id="task-2-register-public-js-in-hookspy">Task 2: Register public JS in hooks.py</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/hooks.py</code></p>
+<ul>
+<li>[ ] <strong>Step 1: Open <code>vernon_tasks/hooks.py</code> and add <code>app_include_js</code></strong></li>
+</ul>
+<p>Add this block after <code>app_version = app_version</code> (before <code>required_apps</code>):</p>
+<pre><code class="language-python">app_include_js = [&quot;/assets/vernon_tasks/js/page_nav.js&quot;]
+</code></pre>
+<p>The full top of the file should look like:</p>
+<pre><code class="language-python">from . import __version__ as app_version
+
+app_name = &quot;vernon_tasks&quot;
+app_title = &quot;Vernon Tasks&quot;
+app_publisher = &quot;Vernon Corp&quot;
+app_description = &quot;Task and project management system with OKR, PDCA, and Agile&quot;
+app_email = &quot;dev@vernoncorp.com&quot;
+app_license = &quot;mit&quot;
+app_version = app_version
+
+app_include_js = [&quot;/assets/vernon_tasks/js/page_nav.js&quot;]
+
+required_apps = []
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Build assets so Frappe copies the JS to <code>/assets/</code></strong></li>
+</ul>
+<pre><code class="language-bash">bench build --app vernon_tasks
+</code></pre>
+<p>Expected output contains: <code>✓ Built vernon_tasks</code></p>
+<p>If <code>bench</code> is not on PATH, run from your bench directory: <code>./env/bin/bench build --app vernon_tasks</code></p>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/hooks.py
+git commit -m &quot;feat(nav): register page_nav.js as app_include_js&quot;
+</code></pre>
+<hr />
+<h2 id="task-3-fix-workspace-shortcuts">Task 3: Fix workspace shortcuts</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/workspace/my_projects.json</code>
+- Modify: <code>vernon_tasks/workspace/overview.json</code></p>
+<h3 id="3a-my-projects-add-leader-dashboard-shortcut">3a — My Projects: add Leader Dashboard shortcut</h3>
+<ul>
+<li>[ ] <strong>Step 1: Open <code>vernon_tasks/workspace/my_projects.json</code></strong></li>
+</ul>
+<p>Find the <code>"shortcuts"</code> array. It currently has 7 entries ending with <code>"Review Schedule"</code>.</p>
+<ul>
+<li>[ ] <strong>Step 2: Append the Leader Dashboard shortcut</strong></li>
+</ul>
+<p>Add this object as the last entry in the <code>"shortcuts"</code> array:</p>
+<pre><code class="language-json">{
+  &quot;color&quot;: &quot;Orange&quot;,
+  &quot;icon&quot;: &quot;bar-chart&quot;,
+  &quot;label&quot;: &quot;Leader Dashboard&quot;,
+  &quot;link_to&quot;: &quot;leader-dashboard&quot;,
+  &quot;type&quot;: &quot;Page&quot;
+}
+</code></pre>
+<p>The complete <code>"shortcuts"</code> array should end with:</p>
+<pre><code class="language-json">    ...
+    {
+      &quot;color&quot;: &quot;Grey&quot;,
+      &quot;icon&quot;: &quot;calendar&quot;,
+      &quot;label&quot;: &quot;Review Schedule&quot;,
+      &quot;link_to&quot;: &quot;What To Do Today&quot;,
+      &quot;type&quot;: &quot;Report&quot;
+    },
+    {
+      &quot;color&quot;: &quot;Orange&quot;,
+      &quot;icon&quot;: &quot;bar-chart&quot;,
+      &quot;label&quot;: &quot;Leader Dashboard&quot;,
+      &quot;link_to&quot;: &quot;leader-dashboard&quot;,
+      &quot;type&quot;: &quot;Page&quot;
+    }
+  ]
+</code></pre>
+<h3 id="3b-overview-add-leader-review-shortcut">3b — Overview: add Leader Review shortcut</h3>
+<ul>
+<li>[ ] <strong>Step 3: Open <code>vernon_tasks/workspace/overview.json</code></strong></li>
+</ul>
+<p>Find the <code>"shortcuts"</code> array. It currently has 9 entries ending with <code>"Leader Dashboard"</code>.</p>
+<ul>
+<li>[ ] <strong>Step 4: Append the Leader Review shortcut</strong></li>
+</ul>
+<p>Add this object as the last entry in the <code>"shortcuts"</code> array:</p>
+<pre><code class="language-json">{
+  &quot;color&quot;: &quot;Blue&quot;,
+  &quot;icon&quot;: &quot;check-circle&quot;,
+  &quot;label&quot;: &quot;Leader Review&quot;,
+  &quot;link_to&quot;: &quot;leader-review&quot;,
+  &quot;type&quot;: &quot;Page&quot;
+}
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 5: Reload fixtures in Frappe</strong></li>
+</ul>
+<pre><code class="language-bash">bench --site [your-site-name] migrate
+</code></pre>
+<p>Or for immediate workspace reload without migrate:</p>
+<pre><code class="language-bash">bench --site [your-site-name] reload-doc Task Workspace My\ Projects
+bench --site [your-site-name] reload-doc Project Workspace Overview
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 6: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/workspace/my_projects.json vernon_tasks/workspace/overview.json
+git commit -m &quot;feat(workspace): add Leader Dashboard and Leader Review shortcuts&quot;
+</code></pre>
+<hr />
+<h2 id="task-4-add-nav-bar-to-member-pages">Task 4: Add nav bar to Member pages</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/page/my_work/my_work.js</code>
+- Modify: <code>vernon_tasks/task/page/my_dashboard/my_dashboard.js</code></p>
+<h3 id="4a-my_workjs">4a — my_work.js</h3>
+<ul>
+<li>[ ] <strong>Step 1: Open <code>vernon_tasks/task/page/my_work/my_work.js</code></strong></li>
+</ul>
+<p>Find this block (lines 2–6):</p>
+<pre><code class="language-js">    const page = frappe.ui.make_app_page({
+        parent: wrapper,
+        title: &quot;My Work&quot;,
+        single_column: true,
+    });
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Add nav bar call immediately after <code>make_app_page</code></strong></li>
+</ul>
+<p>Insert after the closing <code>});</code> of <code>make_app_page</code>:</p>
+<pre><code class="language-js">    vt_render_page_nav(page, [
+        { label: &quot;My Tasks&quot;, route: &quot;workspace/My Tasks&quot;, icon: &quot;home&quot; },
+        { label: &quot;My Dashboard&quot;, route: &quot;my-dashboard&quot;, icon: &quot;bar-chart&quot; },
+    ]);
+</code></pre>
+<p>Result should look like:</p>
+<pre><code class="language-js">    const page = frappe.ui.make_app_page({
+        parent: wrapper,
+        title: &quot;My Work&quot;,
+        single_column: true,
+    });
+
+    vt_render_page_nav(page, [
+        { label: &quot;My Tasks&quot;, route: &quot;workspace/My Tasks&quot;, icon: &quot;home&quot; },
+        { label: &quot;My Dashboard&quot;, route: &quot;my-dashboard&quot;, icon: &quot;bar-chart&quot; },
+    ]);
+
+    page.add_button(__(&quot;Refresh&quot;), () =&gt; render_all(), { icon: &quot;refresh&quot; });
+</code></pre>
+<h3 id="4b-my_dashboardjs">4b — my_dashboard.js</h3>
+<ul>
+<li>[ ] <strong>Step 3: Open <code>vernon_tasks/task/page/my_dashboard/my_dashboard.js</code></strong></li>
+</ul>
+<p>Find the same <code>make_app_page</code> block (lines 2–6). Insert the same pattern after it:</p>
+<pre><code class="language-js">    vt_render_page_nav(page, [
+        { label: &quot;My Work&quot;, route: &quot;my-work&quot;, icon: &quot;book-open&quot; },
+        { label: &quot;My Tasks&quot;, route: &quot;workspace/My Tasks&quot;, icon: &quot;home&quot; },
+    ]);
+</code></pre>
+<p>Result:</p>
+<pre><code class="language-js">    const page = frappe.ui.make_app_page({
+        parent: wrapper,
+        title: &quot;My Dashboard&quot;,
+        single_column: true,
+    });
+
+    vt_render_page_nav(page, [
+        { label: &quot;My Work&quot;, route: &quot;my-work&quot;, icon: &quot;book-open&quot; },
+        { label: &quot;My Tasks&quot;, route: &quot;workspace/My Tasks&quot;, icon: &quot;home&quot; },
+    ]);
+
+    page.add_button(__(&quot;Refresh&quot;), () =&gt; render_all(), { icon: &quot;refresh&quot; });
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 4: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/my_work/my_work.js \
+        vernon_tasks/task/page/my_dashboard/my_dashboard.js
+git commit -m &quot;feat(nav): add page nav bar to member pages&quot;
+</code></pre>
+<hr />
+<h2 id="task-5-add-nav-bar-to-leader-pages">Task 5: Add nav bar to Leader pages</h2>
+<p><strong>Files:</strong>
+- Modify: <code>vernon_tasks/task/page/leader_review/leader_review.js</code>
+- Modify: <code>vernon_tasks/task/page/leader_dashboard/leader_dashboard.js</code></p>
+<h3 id="5a-leader_reviewjs">5a — leader_review.js</h3>
+<ul>
+<li>[ ] <strong>Step 1: Open <code>vernon_tasks/task/page/leader_review/leader_review.js</code></strong></li>
+</ul>
+<p>Find the <code>make_app_page</code> block (lines 2–6). Insert after it:</p>
+<pre><code class="language-js">    vt_render_page_nav(page, [
+        { label: &quot;My Projects&quot;, route: &quot;workspace/My Projects&quot;, icon: &quot;home&quot; },
+        { label: &quot;Leader Dashboard&quot;, route: &quot;leader-dashboard&quot;, icon: &quot;bar-chart&quot; },
+    ]);
+</code></pre>
+<p>Result:</p>
+<pre><code class="language-js">    const page = frappe.ui.make_app_page({
+        parent: wrapper,
+        title: &quot;Leader Review&quot;,
+        single_column: true,
+    });
+
+    vt_render_page_nav(page, [
+        { label: &quot;My Projects&quot;, route: &quot;workspace/My Projects&quot;, icon: &quot;home&quot; },
+        { label: &quot;Leader Dashboard&quot;, route: &quot;leader-dashboard&quot;, icon: &quot;bar-chart&quot; },
+    ]);
+
+    page.add_button(__(&quot;Refresh&quot;), () =&gt; render_active_tab(), { icon: &quot;refresh&quot; });
+</code></pre>
+<h3 id="5b-leader_dashboardjs">5b — leader_dashboard.js</h3>
+<ul>
+<li>[ ] <strong>Step 2: Open <code>vernon_tasks/task/page/leader_dashboard/leader_dashboard.js</code></strong></li>
+</ul>
+<p>Find the <code>make_app_page</code> block (lines 2–6). Insert after it:</p>
+<pre><code class="language-js">    vt_render_page_nav(page, [
+        { label: &quot;Leader Review&quot;, route: &quot;leader-review&quot;, icon: &quot;check-circle&quot; },
+        { label: &quot;My Projects&quot;, route: &quot;workspace/My Projects&quot;, icon: &quot;home&quot; },
+    ]);
+</code></pre>
+<p>Result:</p>
+<pre><code class="language-js">    const page = frappe.ui.make_app_page({
+        parent: wrapper,
+        title: &quot;Leader Dashboard&quot;,
+        single_column: true,
+    });
+
+    vt_render_page_nav(page, [
+        { label: &quot;Leader Review&quot;, route: &quot;leader-review&quot;, icon: &quot;check-circle&quot; },
+        { label: &quot;My Projects&quot;, route: &quot;workspace/My Projects&quot;, icon: &quot;home&quot; },
+    ]);
+
+    page.add_button(__(&quot;Refresh&quot;), () =&gt; render_all(), { icon: &quot;refresh&quot; });
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 3: Commit</strong></li>
+</ul>
+<pre><code class="language-bash">git add vernon_tasks/task/page/leader_review/leader_review.js \
+        vernon_tasks/task/page/leader_dashboard/leader_dashboard.js
+git commit -m &quot;feat(nav): add page nav bar to leader pages&quot;
+</code></pre>
+<hr />
+<h2 id="task-6-visual-verification">Task 6: Visual verification</h2>
+<p>No automated JS tests. Verify manually:</p>
+<ul>
+<li>[ ] <strong>Step 1: Restart bench to pick up asset changes</strong></li>
+</ul>
+<pre><code class="language-bash">bench restart
+</code></pre>
+<ul>
+<li>[ ] <strong>Step 2: Open browser, log in as a VT Member user</strong></li>
+</ul>
+<p>Navigate to <code>My Tasks</code> workspace. Verify shortcut list matches spec.</p>
+<ul>
+<li>[ ] <strong>Step 3: Click "My Work" shortcut</strong></li>
+</ul>
+<p>Verify: nav bar appears at top with buttons <code>My Tasks</code> and <code>My Dashboard</code>. Clicking each routes correctly.</p>
+<ul>
+<li>[ ] <strong>Step 4: Click "My Dashboard" from nav bar</strong></li>
+</ul>
+<p>Verify: nav bar shows <code>My Work</code> and <code>My Tasks</code>. Both buttons route correctly.</p>
+<ul>
+<li>[ ] <strong>Step 5: Log in as a VT Leader user</strong></li>
+</ul>
+<p>Navigate to <code>My Projects</code> workspace. Verify <code>Leader Dashboard</code> shortcut is present.</p>
+<ul>
+<li>[ ] <strong>Step 6: Click "Leader Review"</strong></li>
+</ul>
+<p>Verify nav bar: <code>My Projects</code> and <code>Leader Dashboard</code>. Both route correctly.</p>
+<ul>
+<li>[ ] <strong>Step 7: Click "Leader Dashboard" from nav bar</strong></li>
+</ul>
+<p>Verify nav bar: <code>Leader Review</code> and <code>My Projects</code>. Both route correctly.</p>
+<ul>
+<li>[ ] <strong>Step 8: Log in as a VT Manager user</strong></li>
+</ul>
+<p>Navigate to <code>Overview</code> workspace. Verify <code>Leader Review</code> shortcut is present.</p>
+<ul>
+<li>[ ] <strong>Step 9: Click "Leader Review" shortcut</strong></li>
+</ul>
+<p>Verify it routes to the Leader Review page correctly.</p>
+<hr />
+<h2 id="self-review-notes">Self-Review Notes</h2>
+<p><strong>Spec coverage check:</strong>
+- ✅ Workspace shortcut fixes — My Projects (Task 3a), Overview (Task 3b)
+- ✅ Shared nav utility — Task 1
+- ✅ hooks.py registration — Task 2
+- ✅ my_work nav — Task 4a
+- ✅ my_dashboard nav — Task 4b
+- ✅ leader_review nav — Task 5a
+- ✅ leader_dashboard nav — Task 5b
+- ✅ Visual verification — Task 6</p>
+<p><strong>No placeholders found.</strong> All steps have exact code or commands.</p>
+<p><strong>Type consistency:</strong> <code>vt_render_page_nav</code> used consistently across Tasks 1, 4, 5. Route strings consistent with Frappe conventions (<code>workspace/My Tasks</code>, <code>my-work</code>, <code>my-dashboard</code>, etc).</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/plans/2026-05-09-workspace-navigation.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Vernon Tasks PWA — P3b Leader Sprint + Exec Analytics</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks PWA — P3b Leader Sprint + Exec Analytics</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-11-vernon-pwa-p3b-leader-analytics-design.md</span>
+  </div>
+</header>
+
+<h1 id="vernon-tasks-pwa-p3b-leader-sprint-exec-analytics">Vernon Tasks PWA — P3b Leader Sprint + Exec Analytics</h1>
+<p><strong>Date:</strong> 2026-05-11
+<strong>Predecessors:</strong> PRs #1–#5 (P0.5, P1a, P1b, P2, P3a)</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>Convert <code>/m/leader</code> into a tabbed page: <strong>Review</strong> (existing) | <strong>Sprint</strong> | <strong>Exec</strong></li>
+<li>Sprint tab: ProjectPicker (led projects only) + 4 panels</li>
+<li>Burndown (latest sprint of project)</li>
+<li>Team velocity trend (last 6 sprints)</li>
+<li>Forecast (cone of uncertainty)</li>
+<li>Risks list</li>
+<li>Exec tab: visible only to VT Manager</li>
+<li>Health score gauge + breakdown</li>
+<li>OKR rollup table</li>
+<li>KPI picker + trend chart</li>
+<li>2 new backend helpers, no new analytics logic</li>
+<li>3 new telemetry events</li>
+</ul>
+<p>Non-goals (deferred):</p>
+<ul>
+<li>Drag-to-reorder kanban (out)</li>
+<li>Realtime updates (polling only, no socket.io)</li>
+<li>Team leaderboard (defer; existing IC leaderboard sufficient)</li>
+</ul>
+<h2 id="existing-endpoints-reused">Existing endpoints reused</h2>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>analytics.get_burndown(sprint)</code></td>
+<td>Sprint burndown</td>
+</tr>
+<tr>
+<td><code>analytics.get_velocity_trend(project, n)</code></td>
+<td>Team velocity</td>
+</tr>
+<tr>
+<td><code>analytics.get_forecast(project)</code></td>
+<td>Forecast band</td>
+</tr>
+<tr>
+<td><code>analytics.get_risks(project)</code></td>
+<td>Risk items</td>
+</tr>
+<tr>
+<td><code>exec_analytics.get_health_score()</code></td>
+<td>Health composite</td>
+</tr>
+<tr>
+<td><code>exec_analytics.get_okr_rollup(period)</code></td>
+<td>OKR table</td>
+</tr>
+<tr>
+<td><code>exec_analytics.list_kpis()</code></td>
+<td>KPI dropdown</td>
+</tr>
+<tr>
+<td><code>exec_analytics.get_kpi_trend(kpi, n)</code></td>
+<td>KPI line</td>
+</tr>
+</tbody>
+</table>
+<h2 id="new-backend-endpoints">New backend endpoints</h2>
+<p><code>vernon_tasks.task.page.leader_review.leader_review</code>:</p>
+<pre><code class="language-python">@frappe.whitelist()
+def get_my_led_projects() -&gt; list:
+    return _leader_project_names(frappe.session.user)
+
+
+@frappe.whitelist()
+def get_latest_sprint(project: str) -&gt; dict:
+    user = frappe.session.user
+    if not _is_leader_of_project(user, project):
+        frappe.throw(&quot;Not authorized&quot;, frappe.PermissionError)
+    row = frappe.db.sql(
+        &quot;&quot;&quot;
+        SELECT name, title, start_date, end_date, status
+        FROM `tabVT Sprint`
+        WHERE project = %s
+        ORDER BY start_date DESC
+        LIMIT 1
+        &quot;&quot;&quot;,
+        project,
+        as_dict=True,
+    )
+    return row[0] if row else None
+</code></pre>
+<p>Both small additions in existing file. Permission gate identical to <code>get_review_queue</code>.</p>
+<h2 id="architecture-additions">Architecture additions</h2>
+<pre><code>pwa/src/
+  api/
+    leader.ts                       # MODIFY: add getMyLedProjects, getLatestSprint, sprintAnalytics wrappers
+    leaderExec.ts                   # NEW: exec_analytics wrappers (split: lazy-loadable)
+  hooks/
+    useLedProjects.ts               # caches getMyLedProjects
+    useIsManager.ts                 # boolean from session.roles
+  components/
+    BurndownChart.tsx               # recharts LineChart (ideal vs actual)
+    ForecastChart.tsx               # recharts AreaChart for band + Line for projection
+    RiskList.tsx                    # severity-colored card list
+    HealthCard.tsx                  # big score + 3 breakdown bars
+    OkrTable.tsx
+    KpiTrendChart.tsx               # recharts LineChart
+    KpiPicker.tsx
+  pages/
+    Leader.tsx                      # MODIFY: tabs (Review | Sprint | Exec)
+    LeaderSprint.tsx                # NEW Sprint tab content
+    LeaderExec.tsx                  # NEW Exec tab content (lazy)
+</code></pre>
+<h3 id="code-split">Code split</h3>
+<p><code>LeaderSprint</code> and <code>LeaderExec</code> lazy-loaded via <code>React.lazy</code> to keep main bundle stable. Recharts already chunked from P2 — reuses same chunk.</p>
+<h2 id="frontend-leaderts-additions">Frontend: leader.ts additions</h2>
+<pre><code class="language-typescript">const PAGE = &quot;vernon_tasks.task.page.leader_review.leader_review&quot;;
+const ANALYTICS = &quot;vernon_tasks.task.api.analytics&quot;;
+
+export const fetchMyLedProjects = () =&gt;
+  api.get&lt;string[]&gt;(`/api/method/${PAGE}.get_my_led_projects`);
+
+export interface Sprint {
+  name: string;
+  title: string;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
+
+export const fetchLatestSprint = (project: string) =&gt;
+  api.get&lt;Sprint | null&gt;(
+    `/api/method/${PAGE}.get_latest_sprint?project=${encodeURIComponent(project)}`,
+  );
+
+export interface BurndownPoint {
+  day: string;
+  remaining: number;
+  ideal: number;
+}
+
+export const fetchBurndown = (sprint: string) =&gt;
+  api.get&lt;{ points: BurndownPoint[] }&gt;(
+    `/api/method/${ANALYTICS}.get_burndown?sprint=${encodeURIComponent(sprint)}`,
+  );
+
+export interface VelocityTrend {
+  sprints: string[];
+  velocity: number[];
+  avg: number;
+}
+
+export const fetchTeamVelocity = (project: string, n = 6) =&gt;
+  api.get&lt;VelocityTrend&gt;(
+    `/api/method/${ANALYTICS}.get_velocity_trend?project=${encodeURIComponent(project)}&amp;n=${n}`,
+  );
+
+export interface Forecast {
+  projection_date: string | null;
+  lower_date: string | null;
+  upper_date: string | null;
+  confidence: number;
+}
+
+export const fetchForecast = (project: string) =&gt;
+  api.get&lt;Forecast&gt;(
+    `/api/method/${ANALYTICS}.get_forecast?project=${encodeURIComponent(project)}`,
+  );
+
+export interface Risk {
+  type: string;
+  severity: &quot;low&quot; | &quot;medium&quot; | &quot;high&quot;;
+  task: string;
+  detail: string;
+}
+
+export const fetchRisks = (project: string) =&gt;
+  api.get&lt;{ risks: Risk[] }&gt;(
+    `/api/method/${ANALYTICS}.get_risks?project=${encodeURIComponent(project)}`,
+  );
+</code></pre>
+<blockquote>
+<p>Note: actual shapes may vary slightly from existing services. Implementation
+must verify and adjust types to match real return values discovered at
+integration time.</p>
+</blockquote>
+<h2 id="frontend-leaderexects">Frontend: leaderExec.ts</h2>
+<pre><code class="language-typescript">const EXEC = &quot;vernon_tasks.task.api.exec_analytics&quot;;
+
+export interface HealthScore {
+  score: number;
+  okr_pct: number;
+  ontime_pct: number;
+  velocity_health: number;
+}
+
+export const fetchHealthScore = () =&gt;
+  api.get&lt;HealthScore&gt;(`/api/method/${EXEC}.get_health_score`);
+
+export interface OkrRow {
+  objective: string;
+  title: string;
+  owner: string;
+  status: string;
+  progress: number;
+  kr_count: number;
+}
+
+export const fetchOkrRollup = (period?: string) =&gt;
+  api.get&lt;OkrRow[]&gt;(
+    `/api/method/${EXEC}.get_okr_rollup${period ? `?period=${period}` : &quot;&quot;}`,
+  );
+
+export interface KpiMeta {
+  name: string;
+  kpi_name: string;
+  unit: string;
+  frequency: string;
+}
+
+export const fetchKpiList = () =&gt;
+  api.get&lt;KpiMeta[]&gt;(`/api/method/${EXEC}.list_kpis`);
+
+export interface KpiTrend {
+  labels: string[];
+  values: number[];
+  unit: string;
+  kpi_name: string;
+}
+
+export const fetchKpiTrend = (kpi: string, periods = 12) =&gt;
+  api.get&lt;KpiTrend&gt;(
+    `/api/method/${EXEC}.get_kpi_trend?kpi_definition=${encodeURIComponent(kpi)}&amp;periods=${periods}`,
+  );
+</code></pre>
+<h2 id="leader-page-restructure">Leader page restructure</h2>
+<pre><code class="language-typescript">// pages/Leader.tsx (modified)
+const TABS = [
+  { key: &quot;review&quot;, label: &quot;Review&quot; },
+  { key: &quot;sprint&quot;, label: &quot;Sprint&quot; },
+];
+// add &quot;exec&quot; tab only if isManager
+
+const SprintTab = lazy(() =&gt; import(&quot;./LeaderSprint&quot;));
+const ExecTab = lazy(() =&gt; import(&quot;./LeaderExec&quot;));
+</code></pre>
+<p>Existing review queue logic moves into <code>LeaderReviewTab</code> component within
+<code>Leader.tsx</code>.</p>
+<h2 id="sprint-tab-layout">Sprint tab layout</h2>
+<pre><code>ProjectPicker (led projects)
+↓
+[Sprint X — Active] (latest sprint info)
+↓
+BurndownChart
+↓
+Team Velocity (line, last 6)
+↓
+Forecast (date + confidence band)
+↓
+Risk List (severity chips + task title)
+</code></pre>
+<h2 id="exec-tab-layout">Exec tab layout</h2>
+<pre><code>HealthCard (score + 3 breakdown bars)
+↓
+OKR Rollup table (objective, owner, status, progress %)
+↓
+KpiPicker → KpiTrendChart
+</code></pre>
+<h2 id="charts">Charts</h2>
+<ul>
+<li><code>BurndownChart</code>: dual line (ideal dashed, actual solid)</li>
+<li><code>ForecastChart</code>: AreaChart with band + central line</li>
+<li><code>KpiTrendChart</code>: LineChart with unit label on Y-axis</li>
+<li><code>HealthCard</code>: simple SVG circle + 3 ProgressBars (reuse component)</li>
+</ul>
+<h2 id="telemetry-events">Telemetry events</h2>
+<pre><code>&quot;leader_sprint_view&quot;,
+&quot;leader_exec_view&quot;,
+&quot;leader_project_change&quot;,
+</code></pre>
+<h2 id="role-gating">Role gating</h2>
+<ul>
+<li>Sprint tab: gated by <code>useIsLeader</code> (existing)</li>
+<li>Exec tab: gated by new <code>useIsManager</code> (boolean from <code>session.roles</code> contains "VT Manager" or "System Manager")</li>
+<li>Backend endpoints already have <code>_guard()</code> — defense in depth</li>
+</ul>
+<h2 id="error-handling">Error handling</h2>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>UX</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No led projects</td>
+<td>EmptyState "Belum ada proyek yang dipimpin"</td>
+</tr>
+<tr>
+<td>Project picker offline</td>
+<td>Use cached list if available</td>
+</tr>
+<tr>
+<td>403 on exec</td>
+<td>EmptyState "Akses manajer diperlukan"</td>
+</tr>
+<tr>
+<td>Forecast insufficient data</td>
+<td>"Data sprint kurang untuk forecast"</td>
+</tr>
+<tr>
+<td>KPI list empty</td>
+<td>EmptyState "Belum ada KPI terdefinisi"</td>
+</tr>
+<tr>
+<td>Risks empty</td>
+<td>"Tidak ada risiko terdeteksi"</td>
+</tr>
+</tbody>
+</table>
+<h2 id="testing">Testing</h2>
+<h3 id="vitest">Vitest</h3>
+<ul>
+<li><code>leader.test.ts</code> extended for new endpoints</li>
+<li><code>leaderExec.test.ts</code> URLs</li>
+<li><code>useLedProjects.test.ts</code> returns array</li>
+<li><code>useIsManager.test.ts</code> boolean</li>
+<li><code>HealthCard.test.tsx</code> renders score number</li>
+<li><code>OkrTable.test.tsx</code> rows render with progress</li>
+<li><code>RiskList.test.tsx</code> severity color mapping</li>
+<li><code>BurndownChart</code>, <code>ForecastChart</code>, <code>KpiTrendChart</code> smoke render with data</li>
+</ul>
+<h3 id="pytest">pytest</h3>
+<ul>
+<li><code>get_my_led_projects</code> returns list for VT Leader user</li>
+<li><code>get_latest_sprint</code> returns most recent + 403 for non-leader</li>
+</ul>
+<h2 id="bundle-impact">Bundle impact</h2>
+<ul>
+<li>New components: ~25 KB</li>
+<li>Recharts shared chunk already exists from P2 (no additional)</li>
+<li>Lazy code split keeps main stable</li>
+<li>Main bundle estimate: 310 KB (from 302)</li>
+</ul>
+<h2 id="rollout">Rollout</h2>
+<ol>
+<li>Build + deploy staging</li>
+<li>Pilot 1-2 VT Leaders for sprint tab review</li>
+<li>Pilot 1 VT Manager for exec tab review</li>
+<li>Telemetry per-tab views, project switches</li>
+</ol>
+<h2 id="open-questions">Open questions</h2>
+<p>None.</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-11-vernon-pwa-p3b-leader-analytics-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>
