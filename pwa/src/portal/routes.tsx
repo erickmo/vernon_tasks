@@ -3,6 +3,8 @@ import { Dashboard } from "./pages/Dashboard";
 import { NotFound } from "./pages/NotFound";
 import { ComingSoon } from "./pages/ComingSoon";
 import { RequirePermission } from "./guards/RequirePermission";
+import { OKRRoutes } from "./okr/OKRRoutes";
+import { OKRFeatureGate } from "./okr/OKRFeatureGate";
 
 export function PortalRoutes() {
   return (
@@ -10,7 +12,13 @@ export function PortalRoutes() {
       <Route index element={<Dashboard />} />
       <Route
         path="okr/*"
-        element={<RequirePermission perm="okr.read"><ComingSoon domain="OKR" /></RequirePermission>}
+        element={
+          <RequirePermission perm="okr.read">
+            <OKRFeatureGate>
+              <OKRRoutes />
+            </OKRFeatureGate>
+          </RequirePermission>
+        }
       />
       <Route
         path="projects/*"
