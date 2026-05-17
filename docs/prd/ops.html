@@ -201,6 +201,13 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
   <a href="index.html">PRD Index →</a>
 </nav>
 
+<h2 id="portal-asset-symlink">Desktop Portal · Nginx asset symlink</h2>
+<p>For desktop portal deployments, mirror the <code>/m/</code> static-asset pattern:
+create <code>sites/&lt;site&gt;/public/app</code> as a symlink to <code>pwa/dist/</code>
+so Nginx serves <code>/app/assets/*</code> directly (see memory note
+<code>project_frappe_pwa_nginx</code>). Without the symlink, Frappe's catch-all
+<code>website_route_rules</code> intercept asset requests and break the bundle.</p>
+
 <footer>PRD §8–17 · part of <a href="index.html">PRD v1.0</a>.</footer>
 
 </div>
