@@ -1,6 +1,6 @@
 # PRD — Portal Projects Module (P3.1)
 
-**Status:** Draft
+**Status:** Implemented (P3.1)
 **Date:** 2026-05-17
 **Owner:** Vernon Tasks
 **Parent:** [Desktop Portal Foundation (Phase 1)](2026-05-17-desktop-portal-foundation-design.md)
