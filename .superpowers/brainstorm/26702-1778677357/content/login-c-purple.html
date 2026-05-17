@@ -1,0 +1,61 @@
+<h2>Login Page — Option C dengan #9561ab</h2>
+<p class="subtitle">Preview tampilan aktual sebelum lanjut ke task interface</p>
+
+<div class="mockup">
+  <div class="mockup-header">Login Page Preview — Full Screen Immersive</div>
+  <div class="mockup-body" style="padding:0;">
+    <div style="background:linear-gradient(160deg,#2d1540 0%,#4a2870 40%,#9561ab 100%);min-height:480px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;border-radius:0 0 8px 8px;">
+
+      <!-- Decorative circles -->
+      <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;border-radius:50%;background:rgba(149,97,171,0.25);"></div>
+      <div style="position:absolute;bottom:-50px;left:-20px;width:140px;height:140px;border-radius:50%;background:rgba(149,97,171,0.15);"></div>
+      <div style="position:absolute;top:30%;left:-30px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.05);"></div>
+
+      <!-- Logo + Title -->
+      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:28px;z-index:1;">
+        <div style="width:56px;height:56px;border-radius:16px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:12px;">✓</div>
+        <div style="color:white;font-size:20px;font-weight:700;letter-spacing:-0.3px;">Vernon Tasks</div>
+        <div style="color:rgba(255,255,255,0.55);font-size:13px;margin-top:4px;">Selamat datang kembali</div>
+      </div>
+
+      <!-- Glassmorphism Form -->
+      <div style="background:rgba(255,255,255,0.1);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.2);border-radius:20px;padding:28px;width:320px;z-index:1;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+
+        <div style="margin-bottom:16px;">
+          <div style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;letter-spacing:0.5px;margin-bottom:6px;text-transform:uppercase;">Username / Email</div>
+          <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:11px 14px;color:rgba(255,255,255,0.4);font-size:14px;">user@company.com</div>
+        </div>
+
+        <div style="margin-bottom:24px;">
+          <div style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;letter-spacing:0.5px;margin-bottom:6px;text-transform:uppercase;">Password</div>
+          <div style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:11px 14px;color:rgba(255,255,255,0.4);font-size:14px;">••••••••</div>
+        </div>
+
+        <!-- Error state (hidden normally) -->
+        <div style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.4);border-radius:8px;padding:10px 14px;margin-bottom:16px;color:rgba(255,200,200,0.9);font-size:13px;display:none;">
+          Username atau password salah
+        </div>
+
+        <button style="width:100%;background:#9561ab;color:white;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(149,97,171,0.5);letter-spacing:0.2px;">
+          Masuk
+        </button>
+      </div>
+
+      <!-- Footer note -->
+      <div style="color:rgba(255,255,255,0.35);font-size:12px;margin-top:20px;z-index:1;">
+        Hanya untuk karyawan Vernon Corp
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:20px;background:var(--surface,#f8f8f8);border-radius:12px;padding:16px;">
+  <h3 style="margin:0 0 8px;">Catatan desain</h3>
+  <ul style="margin:0;padding-left:20px;color:var(--text-muted,#666);font-size:14px;line-height:1.7;">
+    <li>Background: gradient gelap <code>#2d1540 → #4a2870 → #9561ab</code></li>
+    <li>Form: glassmorphism (blur + border transparan)</li>
+    <li>Tombol: solid <code>#9561ab</code> dengan glow shadow</li>
+    <li>Dark mode dan light mode: dark immersive by default</li>
+    <li>Responsive: center card, max-width 380px</li>
+  </ul>
+</div>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR Operations — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>Operations</strong></div>
+
+<header class="hero">
+  <h1>ADR · Operations</h1>
+  <div class="sub">ADR-012, 013, 014, 018 — telemetry, security, rollout, cache key</div>
+</header>
+
+<article class="adr" id="adr-012">
+  <h2>ADR-012 — Allowlisted client telemetry, 90-day retention</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Need observability for rollout (error rate, install rate, funnel) without external SaaS (privacy + cost). Free-form events risk PII leakage.</p>
+  <div class="section-label">Decision</div>
+  <p>Client calls <code>task.api.telemetry.log_event(event, props)</code>. Server enforces allowlist of ~40 event names. Rate-limit 60/min/user. Storage in <code>Vernon Telemetry Event</code> doctype, daily purge ≥90 days. Report Builder for funnels.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ All data stays in Frappe; no third-party.</li>
+    <li>+ Allowlist prevents accidental PII fields.</li>
+    <li>− No real-time dashboards (ops use Report Builder).</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-013">
+  <h2>ADR-013 — Pre-rollout hardening via <code>security.py</code> guards</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Before company-wide rollout (CSO sign-off), PWA APIs unbounded → potential abuse (brute mutations, large payloads, clickjack on SPA shell).</p>
+  <div class="section-label">Decision</div>
+  <p>Add <code>task/api/security.py</code> with reusable guards: <code>require_login</code>, <code>rate_limit</code>, <code>clamp_int</code>, <code>max_str</code>. Apply per-endpoint table. Inject CSP / X-Frame / Referrer / Permissions headers on <code>/m/*</code> responses.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Defense in depth additive layer; no business logic change.</li>
+    <li>+ Reusable in future endpoints.</li>
+    <li>− Slight per-request overhead (Redis incr). Acceptable.</li>
+  </ul>
+  <p>Out of scope: WAF, DocType permission audit, frontend validation.</p>
+</article>
+
+<article class="adr" id="adr-014">
+  <h2>ADR-014 — Phased PWA rollout P0.5 → P4b behind boot flags</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Big-bang PWA = high risk; pilot data needed before company-wide. Need backout per feature.</p>
+  <div class="section-label">Decision</div>
+  <p>Sequential additive phases: P0.5 → P1a → P1b → P2 → P3a → P3b → P4a → P4b. Each phase behind feature flag exposed via <code>/m/_boot</code>. Pilot gates: error_boundary &lt; 1 %, login_failure &lt; 5 %, install rate ≥ 30 %, no P0 bugs.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Clear ship/measure/decide loop. Per-feature backout via flag.</li>
+    <li>− Coordination overhead per phase; mitigated by spec+plan template.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-018">
+  <h2>ADR-018 — Git-SHA service-worker cache key</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Service workers infamously cache stale assets after deploy. Manual cache versioning forgotten → users stuck on old code.</p>
+  <div class="section-label">Decision</div>
+  <p>Vite build injects <code>VITE_GIT_SHA</code> into SW cache name. Workbox <code>generateSW</code> uses it as <code>cacheId</code>. Every deploy = new SHA = new cache namespace; old cache evicted on activate.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Cache-busting automatic. Rollback possible: revert SHA → SW serves prior cache.</li>
+    <li>− Slight cold-load cost on every deploy (one fresh fetch).</li>
+  </ul>
+</article>
+
+<h2>Superseded / Deprecated</h2>
+<p>None at v1.0. Future records list here when an ADR is replaced.</p>
+
+<nav class="nav-prev-next">
+  <a href="ui-mobile.html">← UI &amp; Mobile</a>
+  <a href="index.html">ADR Index →</a>
+</nav>
+
+<footer>ADR Operations · part of <a href="index.html">ADR v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

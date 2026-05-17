@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR UI &amp; Mobile — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>UI &amp; Mobile</strong></div>
+
+<header class="hero">
+  <h1>ADR · UI &amp; Mobile</h1>
+  <div class="sub">ADR-010, 011, 015, 016, 017 — push, charts, undo, responsive, locale</div>
+</header>
+
+<article class="adr" id="adr-010">
+  <h2>ADR-010 — Web Push (VAPID) over native shells (Capacitor)</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Need push for review queue / assignment / due reminders. iOS Web Push only on PWA installed via A2HS (iOS 16.4+). Native shell = build pipeline, app store distribution.</p>
+  <div class="section-label">Decision</div>
+  <p>Web Push API with VAPID keys generated once via <code>bench vernon-generate-vapid</code> → stored in <code>VT Settings</code>. Backend doctype <code>Vernon Push Subscription</code>. <code>Notification Log.after_insert</code> hook dispatches push. Dead endpoints (404/410) auto-pruned.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Zero app-store overhead. One install path: A2HS.</li>
+    <li>− iOS users must install PWA (≥16.4); modal hints user.</li>
+    <li>− No background sync APIs on iOS (acceptable).</li>
+  </ul>
+  <p>Re-evaluate if iOS adoption blocked → future ADR for Capacitor.</p>
+</article>
+
+<article class="adr" id="adr-011">
+  <h2>ADR-011 — Recharts for charts, lazy-loaded</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Burndown, velocity, KPI trend, leaderboard need responsive interactive charts. Recharts is React-idiomatic but heavy (~357 KB raw).</p>
+  <div class="section-label">Decision</div>
+  <p>Use Recharts. Analytics + Leader pages lazy-loaded via <code>React.lazy</code>. Recharts shared chunk loaded only when entering chart pages. Main bundle pays nothing.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Main bundle stays ~95 KB gz.</li>
+    <li>− First chart-page visit = larger payload; cached after.</li>
+  </ul>
+  <div class="section-label">Alternatives</div>
+  <ul>
+    <li>Chart.js: imperative, harder to compose with React.</li>
+    <li>visx/d3 from scratch: too much custom code.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-015">
+  <h2>ADR-015 — Optimistic UI w/ 5s undo; no offline mutation queue</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>"Complete task" must feel instant on mobile. Real offline write-queue needs conflict resolution + sync layer.</p>
+  <div class="section-label">Decision</div>
+  <p><code>useUndoableMutation</code> shows toast w/ Batalkan button; <code>setTimeout</code> 5 s, then sends real request. If offline → reject up-front, toast "Sambungkan internet dulu". No queued retries.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Sub-100 ms perceived latency on completes.</li>
+    <li>+ Simple mental model; no conflict edge cases.</li>
+    <li>− No "do it offline, sync later" UX (acceptable for current users).</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-016">
+  <h2>ADR-016 — One PWA codebase serves mobile + desktop (breakpoint 768px)</h2>
+  <div class="meta-row">
+    <span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span>
+    <span><strong>Date:</strong> 2026-05-14</span>
+  </div>
+  <div class="section-label">Context</div>
+  <p>Leaders + execs working from laptops want same data as mobile PWA. Separate desktop UI = duplicate effort.</p>
+  <div class="section-label">Decision</div>
+  <p>Single React codebase. <code>useMediaQuery(768)</code> drives layout. &lt;768 px = BottomNav (5 tabs). ≥768 px = <code>TopNav</code> two-tier (Nav1 + Nav2 submenu). Page layouts adapt: Dashboard 2-col grid, Work master-detail ≥900 px. Tab state via <code>useSearchParams</code> for deep-link.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Single shipped artifact; one test matrix + viewport.</li>
+    <li>+ Desktop users get install + offline + push for free.</li>
+    <li>− Layout complexity per page; mitigated by composable layout primitives.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-017">
+  <h2>ADR-017 — id-ID formal locale ("Anda") as baseline</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Vernon Corp is Indonesia-based; primary user language = Bahasa Indonesia. Mixed en/id UI creates cognitive load.</p>
+  <div class="section-label">Decision</div>
+  <p>All user-facing strings = id-ID formal ("Anda", not "kamu"). Dates DD MMM YYYY (16 Mei 2026), times HH:mm. Strings centralized in <code>i18n.ts</code>. English left only in code identifiers + dev docs.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Consistent professional tone; lower friction.</li>
+    <li>− Multi-locale support deferred (no urgent need).</li>
+  </ul>
+</article>
+
+<nav class="nav-prev-next">
+  <a href="data.html">← Domain &amp; Data</a>
+  <a href="operations.html">Operations →</a>
+</nav>
+
+<footer>ADR UI &amp; Mobile · part of <a href="index.html">ADR v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PRD Ops &amp; Rollout — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="admin">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">PRD</a> · <strong>Operations &amp; Rollout</strong></div>
+
+<header class="hero">
+  <h1>PRD §8–17 · Operations &amp; Rollout</h1>
+  <div class="sub">Security, NFR, telemetry, rollout, KPIs, risks, references</div>
+</header>
+
+<h2 id="s8">8. Security Posture</h2>
+<h3>8.1 PWA Response Headers (<code>www/m.py</code>)</h3>
+<pre><code>X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: push=(self), notifications=(self)
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
+                        style-src 'self' 'unsafe-inline'; connect-src 'self';
+                        worker-src 'self';</code></pre>
+
+<h3>8.2 API Guards (<code>task/api/security.py</code>)</h3>
+<table>
+<thead><tr><th>Guard</th><th>Error</th><th>Behavior</th></tr></thead>
+<tbody>
+<tr><td><code>require_login()</code></td><td>403 PermissionError</td><td>Reject Guest</td></tr>
+<tr><td><code>rate_limit(endpoint, max_calls, window=60)</code></td><td>417 ValidationError</td><td>Redis sliding counter</td></tr>
+<tr><td><code>clamp_int(val, lo, hi, name)</code></td><td>417 ValidationError</td><td>Bound check + coerce</td></tr>
+<tr><td><code>max_str(val, limit)</code></td><td>—</td><td>Silent truncate</td></tr>
+</tbody>
+</table>
+
+<h3>8.3 Applied limits</h3>
+<table>
+<thead><tr><th>Endpoint</th><th>Limit / Bound</th></tr></thead>
+<tbody>
+<tr><td><code>complete</code></td><td>30 / min</td></tr>
+<tr><td><code>log_progress</code></td><td>20 / min + <code>note</code> ≤ 1000 chars</td></tr>
+<tr><td><code>snooze</code></td><td>10 / min</td></tr>
+<tr><td><code>push.subscribe</code></td><td>5 / min + <code>endpoint</code> ≤ 2048 chars</td></tr>
+<tr><td><code>push_prefs.update_prefs</code></td><td>20 / min</td></tr>
+<tr><td><code>notifications.list</code></td><td><code>limit ∈ [1,100]</code>, <code>offset ∈ [0,10000]</code></td></tr>
+<tr><td><code>analytics.get_velocity_trend(n)</code></td><td><code>n ∈ [1,24]</code></td></tr>
+<tr><td><code>exec_analytics.get_kpi_trend(periods)</code></td><td><code>periods ∈ [1,24]</code></td></tr>
+<tr><td><code>my_work.search(query)</code></td><td><code>query</code> ≤ 200 chars</td></tr>
+</tbody>
+</table>
+
+<h3>8.4 Service-Worker Cache</h3>
+<ul>
+  <li>App shell precached (5 entries).</li>
+  <li>Runtime: <code>StaleWhileRevalidate</code> on <code>/api/method/vernon_tasks.*</code>, 1-day expiry.</li>
+  <li>Cache name keyed by git SHA → busted on deploy.</li>
+</ul>
+
+<h2 id="s9">9. Non-Functional Requirements</h2>
+<h3>9.1 PWA Performance Budget</h3>
+<table>
+<thead><tr><th>Metric</th><th>Target</th></tr></thead>
+<tbody>
+<tr><td>LCP cold</td><td>&lt; 2.5 s</td></tr>
+<tr><td>LCP warm cache</td><td>&lt; 1.0 s</td></tr>
+<tr><td>INP / FID</td><td>&lt; 100 ms</td></tr>
+<tr><td>CLS</td><td>&lt; 0.1</td></tr>
+<tr><td>Main bundle gzip</td><td>~95 KB</td></tr>
+<tr><td>SW install success</td><td>&gt; 99 %</td></tr>
+<tr><td>Offline read</td><td>100 % cached lists</td></tr>
+</tbody>
+</table>
+
+<h3>9.2 Coding Standards</h3>
+<ul>
+  <li>Layer separation: Controller (validation, db_set) · Service (logic, math) · Page Handler (auth + IO).</li>
+  <li>Functions ≤ 40 lines; no God classes &gt; 300 lines / 5 responsibilities.</li>
+  <li>Named constants only — no magic strings/numbers.</li>
+  <li><code>ignore_permissions=True</code> only inside internal services / scheduled jobs.</li>
+  <li>All whitelisted endpoints call <code>frappe.has_role()</code> / <code>frappe.only_for()</code> at top.</li>
+  <li>Email sends wrapped in try/except.</li>
+  <li>DI for services — settings/config as params.</li>
+</ul>
+
+<h3>9.3 Testing</h3>
+<ul>
+  <li>Backend: <code>bench run-tests --app vernon_tasks</code>. Coverage ≥ 80 %.</li>
+  <li>PWA unit/component: Vitest + happy-dom + @testing-library/react.</li>
+  <li>PWA e2e: Playwright.</li>
+  <li>TypeScript: <code>tsc --noEmit</code> strict.</li>
+</ul>
+
+<h2 id="s10">10. Telemetry &amp; Observability</h2>
+<p>Storage: <code>Vernon Telemetry Event</code> doctype · 90-day retention · daily purge scheduler.</p>
+<p>Allowlisted events (60/min/user):</p>
+<ul>
+  <li><strong>Boot/auth:</strong> pwa_boot, login_success, login_failure, page_view, error_boundary</li>
+  <li><strong>Read:</strong> task_view, dashboard_view, analytics_view</li>
+  <li><strong>Mutate:</strong> task_complete, task_log, task_snooze</li>
+  <li><strong>Search/notif:</strong> search_query, filter_applied, notif_view, notif_tap, notif_mark_all_read</li>
+  <li><strong>Install:</strong> install_prompt_shown, install_accepted, install_dismissed, install_snoozed</li>
+  <li><strong>Leader:</strong> leader_review_view, leader_approve, leader_reject, leader_sprint_view, leader_exec_view, leader_project_change</li>
+  <li><strong>Push:</strong> push_subscribe_attempt, push_subscribed, push_unsubscribed, push_received, push_pref_view, push_pref_changed, push_action_complete</li>
+  <li><strong>Offline:</strong> offline_seen</li>
+  <li><strong>Filters:</strong> analytics_period_change, analytics_project_change</li>
+</ul>
+
+<h2 id="s11">11. Rollout Strategy</h2>
+<h3>11.1 PWA Pilot (P0.5)</h3>
+<ol>
+  <li><strong>Pre-launch:</strong> build green, iOS A2HS works, Android install works, airplane-mode shows cached + banner, session relogin modal opens, <code>pwa_boot</code> events recorded.</li>
+  <li><strong>Pilot:</strong> 1 team (5–10 users), invite-only.</li>
+  <li><strong>Monitor:</strong> <code>error_boundary</code> &lt; 1 % of page_view; <code>login_failure</code> &lt; 5 % post-success.</li>
+  <li><strong>Go/No-Go gates:</strong> error boundary &lt; 1 %, login failure &lt; 5 %, install ≥ 30 %, no P0 bugs.</li>
+  <li><strong>Company rollout:</strong> Desk banner → <code>/m/</code>, email announcement, gradual migration.</li>
+</ol>
+<h3>11.2 Feature Phasing</h3>
+<p>Phases P0.5 → P4b sequential + additive. Each phase behind feature flag resolved via <code>/m/_boot</code>. Responsive-nav (current) requires all of P0.5–P3b.</p>
+
+<h2 id="s12">12. KPIs / Success Metrics</h2>
+<table>
+<thead><tr><th>Layer</th><th>Metric</th><th>Target</th></tr></thead>
+<tbody>
+<tr><td>Adoption</td><td>PWA install in 14d</td><td>≥ 30 %</td></tr>
+<tr><td>Adoption</td><td>Task completes via PWA vs Desk</td><td>≥ 50 %</td></tr>
+<tr><td>Engagement</td><td>DAU in PWA</td><td>rising MoM</td></tr>
+<tr><td>Quality</td><td>Error boundary / page view</td><td>&lt; 1 %</td></tr>
+<tr><td>Quality</td><td>Login failure post-success</td><td>&lt; 5 %</td></tr>
+<tr><td>Perf</td><td>LCP p75 cold</td><td>&lt; 2.5 s</td></tr>
+<tr><td>Reliability</td><td>SW install success</td><td>&gt; 99 %</td></tr>
+<tr><td>Business</td><td>Leader review SLA</td><td>trending down</td></tr>
+<tr><td>Business</td><td>Overdue task ratio</td><td>trending down</td></tr>
+<tr><td>Business</td><td>Company Health Score</td><td>stable ≥ 70</td></tr>
+<tr><td>Engagement</td><td>Streak ≥ 3 sprints</td><td>≥ 40 % active ICs</td></tr>
+</tbody>
+</table>
+
+<h2 id="s13">13. Workspaces (Fixtures)</h2>
+<ul>
+  <li><strong>My Tasks</strong> (Member) — Active Sprints, My Projects, Blocked Escalation, Team Workload, Sprint Velocity, Review Schedule</li>
+  <li><strong>My Projects</strong> (Leader) — project shortcuts + Leader Dashboard</li>
+  <li><strong>Overview</strong> (Manager) — Team Workload, KPI Achievement, Project vs OKR, Point Audit + Leader Review</li>
+</ul>
+
+<h2 id="s14">14. File-Tree Map</h2>
+<pre><code>vernon_tasks/
+├── task/        api, doctype, services, page, report
+├── project/     vt_project, vt_sprint, sprint_task, …
+├── okr/         objective, key_result, kpi_definition, kpi_entry
+├── workforce/   work_profile, user_point_summary, daily_summary
+├── vt_settings/ vt_settings, vernon_telemetry_event, push_subscription, push_preference
+├── workspace/   my_tasks, my_projects, overview
+├── public/js/   page_nav.js
+├── www/         m.py (SPA shell), m/ (Vite output)
+├── hooks.py
+└── pwa/         React + Vite + TS source</code></pre>
+
+<h2 id="s15">15. Risks &amp; Mitigations</h2>
+<table>
+<thead><tr><th>Risk</th><th>L</th><th>I</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>iOS Web Push gating (≥16.4 + A2HS)</td><td>High</td><td>Med</td><td>In-app hint modal; fall back in-app notifs</td></tr>
+<tr><td>SW cache stale post-deploy</td><td>Med</td><td>Med</td><td>Git-SHA cache-key + 1d SWR expiry</td></tr>
+<tr><td>Rate-limit false positives</td><td>Low</td><td>Med</td><td>Tuned per endpoint; retry-after toast</td></tr>
+<tr><td>Forecast accuracy (&lt;3 sprints)</td><td>High</td><td>Low</td><td>"Insufficient data" UX state</td></tr>
+<tr><td>Recharts bundle</td><td>Med</td><td>Med</td><td>Lazy chunks; Analytics tabs only</td></tr>
+<tr><td>Mobile/Desktop layout regression</td><td>Med</td><td>Med</td><td>Playwright e2e both viewports</td></tr>
+<tr><td>Telemetry PII leak</td><td>Low</td><td>High</td><td>Server allowlist; no free-form props</td></tr>
+</tbody>
+</table>
+
+<h2 id="s16">16. Future Considerations</h2>
+<ul>
+  <li>Department / multi-team OKR rollup hierarchy.</li>
+  <li>What-if forecast scenarios (velocity slider).</li>
+  <li>Native iOS / Android shell (Capacitor) if Web Push blocked.</li>
+  <li>Slack / Email digest integrations.</li>
+  <li>Per-objective KPI auto-linking (KPI Entry → Key Result current_value).</li>
+  <li>Bulk leader operations (approve N, reassign N).</li>
+  <li>AI-assisted task triage / priority suggestions.</li>
+</ul>
+
+<h2 id="s17">17. References</h2>
+<ul>
+  <li><code>docs/DEVELOPER_GUIDE.md</code> — engineering setup, conventions</li>
+  <li><code>docs/API_REFERENCE.md</code> — endpoint catalog with payloads</li>
+  <li><code>docs/rollout/pwa-pilot.md</code> — pilot checklist</li>
+  <li><code>docs/superpowers/specs/</code> — 15 design specs</li>
+  <li><code>docs/superpowers/plans/</code> — 11 implementation plans</li>
+  <li><a href="../adr/index.html">ADR</a> — architecture decision records</li>
+  <li><a href="../trd/index.html">TRD</a> — technical requirements</li>
+</ul>
+
+<nav class="nav-prev-next">
+  <a href="features.html">← Features &amp; APIs</a>
+  <a href="index.html">PRD Index →</a>
+</nav>
+
+<footer>PRD §8–17 · part of <a href="index.html">PRD v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

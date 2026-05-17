@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <strong>ADR</strong></div>
+
+<header class="hero">
+  <h1>Architecture Decision Records</h1>
+  <div class="sub">18 decisions, grouped by theme. MADR-lite format.</div>
+  <div class="meta"><span>v1.0</span><span>2026-05-16</span><span>18 ADRs</span></div>
+</header>
+
+<h2>Theme Groups</h2>
+<div class="cards">
+  <a class="card" href="foundation.html">
+    <span class="tag">ADR-001 → 006</span>
+    <h3>Foundation</h3>
+    <p>Frappe choice · Dual UI (Desk + PWA) · React/Vite/TS · Workbox SWR offline · Frappe session auth · TanStack Query cache.</p>
+    <div class="arrow">Open →</div>
+  </a>
+  <a class="card" href="data.html">
+    <span class="tag">ADR-007 → 009</span>
+    <h3>Domain &amp; Data</h3>
+    <p>Layer separation (Controller/Service/Page) · PDCA first-class state machine · Immutable Task Point Log audit trail.</p>
+    <div class="arrow">Open →</div>
+  </a>
+  <a class="card" href="ui-mobile.html">
+    <span class="tag">ADR-010, 011, 015, 016, 017</span>
+    <h3>UI &amp; Mobile</h3>
+    <p>Web Push (VAPID) over native · Recharts lazy · Optimistic UI + 5s undo · Responsive single codebase · id-ID formal locale.</p>
+    <div class="arrow">Open →</div>
+  </a>
+  <a class="card" href="operations.html">
+    <span class="tag">ADR-012, 013, 014, 018</span>
+    <h3>Operations</h3>
+    <p>Allowlisted telemetry · Pre-rollout security guards · Phased rollout behind boot flags · Git-SHA SW cache key.</p>
+    <div class="arrow">Open →</div>
+  </a>
+</div>
+
+<h2>Conventions</h2>
+<table>
+<thead><tr><th>Field</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td><strong>Status</strong></td><td>Proposed · Accepted · Superseded · Deprecated</td></tr>
+<tr><td><strong>Context</strong></td><td>Problem and forces in play</td></tr>
+<tr><td><strong>Decision</strong></td><td>What we chose</td></tr>
+<tr><td><strong>Consequences</strong></td><td>Positive + negative outcomes, what becomes harder</td></tr>
+<tr><td><strong>Alternatives</strong></td><td>Options considered and rejected</td></tr>
+</tbody>
+</table>
+
+<h2>Full Index</h2>
+<ul class="meta-list">
+  <li><span><a href="foundation.html#adr-001">ADR-001</a> Build on Frappe Framework</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="foundation.html#adr-002">ADR-002</a> Dual UI: Desk + Mobile PWA</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="foundation.html#adr-003">ADR-003</a> React 18 + Vite 5 + TypeScript 5</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="foundation.html#adr-004">ADR-004</a> Workbox StaleWhileRevalidate offline</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="foundation.html#adr-005">ADR-005</a> Reuse Frappe session cookie (no JWT)</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="foundation.html#adr-006">ADR-006</a> TanStack Query 5 client cache</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="data.html#adr-007">ADR-007</a> Layer separation Controller/Service/Page</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="data.html#adr-008">ADR-008</a> PDCA first-class state machine</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="data.html#adr-009">ADR-009</a> Immutable Task Point Log</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="ui-mobile.html#adr-010">ADR-010</a> Web Push (VAPID) over native shells</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="ui-mobile.html#adr-011">ADR-011</a> Recharts, lazy-loaded</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="operations.html#adr-012">ADR-012</a> Allowlisted telemetry, 90d retention</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="operations.html#adr-013">ADR-013</a> Pre-rollout security guards</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="operations.html#adr-014">ADR-014</a> Phased rollout behind boot flags</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="ui-mobile.html#adr-015">ADR-015</a> Optimistic UI + 5s undo (no offline queue)</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="ui-mobile.html#adr-016">ADR-016</a> Responsive single codebase (768px breakpoint)</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="ui-mobile.html#adr-017">ADR-017</a> id-ID formal locale baseline</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+  <li><span><a href="operations.html#adr-018">ADR-018</a> Git-SHA service-worker cache key</span><span class="desc"><span class="badge accepted">Accepted</span></span></li>
+</ul>
+
+<h2>Related</h2>
+<ul class="meta-list">
+  <li><span><a href="../prd/index.html">PRD — Product Requirements</a></span><span class="desc">Scope and feature inventory</span></li>
+  <li><span><a href="../trd/index.html">TRD — Technical Requirements</a></span><span class="desc">Implementation specifics</span></li>
+  <li><span><a href="../erd.html">ERD — Entity Relationship Diagram</a></span><span class="desc">Visual doctype graph (referenced by ADR-008, ADR-009)</span></li>
+</ul>
+
+<footer>ADR v1.0 · grouped by theme · 2026-05-16. Legacy monolithic <a href="../ADR.html">ADR.html</a> archived.</footer>
+
+</div>
+</body>
+</html>

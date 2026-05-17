@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PRD Overview — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="all">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">PRD</a> · <strong>Overview</strong></div>
+
+<header class="hero">
+  <h1>PRD §1–3 · Overview</h1>
+  <div class="sub">Executive summary, users &amp; roles, tech stack</div>
+</header>
+
+<h2 id="s1">1. Executive Summary</h2>
+<p><strong>Vernon Tasks</strong> = company-wide task / project / performance platform on <strong>Frappe v15</strong>. Unifies three methodologies under one doctype graph:</p>
+<ol>
+  <li><strong>PDCA Cycle</strong> — Plan-Do-Check-Act lifecycle on every Task, Project, Objective.</li>
+  <li><strong>OKR / KPI</strong> — Strategic objectives + measurable Key Results + KPI definitions, rolled up to company Health Score.</li>
+  <li><strong>Agile Sprints</strong> — Time-boxed iterations with velocity, burndown, forecast analytics.</li>
+</ol>
+<p><strong>Gamified point system</strong> rewards on-time delivery, penalizes late completion / revision cycles. Points feed monthly leaderboards, personal streaks, team velocity.</p>
+<p>Ships <strong>two coordinated UIs</strong>:</p>
+<ul>
+  <li><strong>Frappe Desk</strong> (desktop, Python/Jinja) — 7 custom pages for power users, leaders, execs.</li>
+  <li><strong>Vernon PWA</strong> (mobile-first React) — installable, offline-capable, push-enabled, at <code>/m/</code>.</li>
+</ul>
+<h3>Vision</h3>
+<blockquote>Make execution status, blockers, outcomes visible to every member in real time, on any device — reward consistent delivery with auditable, math-driven points.</blockquote>
+<h3>Non-Goals</h3>
+<ul>
+  <li>External-facing customer portal.</li>
+  <li>Replacement for Frappe HR / ERPNext Projects / generic CRM.</li>
+  <li>Time-tracking for billing (hours = capacity/effort only).</li>
+</ul>
+
+<h2 id="s2">2. Target Users &amp; Roles</h2>
+<table>
+<thead><tr><th>Role</th><th>Profile</th><th>Primary Surface</th><th>Permissions</th></tr></thead>
+<tbody>
+<tr><td><strong>VT Member</strong></td><td>Individual contributor</td><td><code>/m/work</code>, Desk <code>my_work</code>, <code>my_dashboard</code>, <code>my_analytics</code></td><td>CRUD own tasks; transition BACKLOG→PLAN→DO→CHECK; log hours; leaderboard view</td></tr>
+<tr><td><strong>VT Leader</strong></td><td>Project lead</td><td><code>/m/leader</code>, Desk <code>leader_*</code> pages</td><td>+ approve/reject reviews, override points &amp; schedules, team analytics</td></tr>
+<tr><td><strong>VT Manager</strong></td><td>Exec / dept head</td><td>Desk <code>exec_analytics</code></td><td>+ executive analytics, edit <code>VT Settings</code>, system overrides</td></tr>
+<tr><td><strong>System Manager</strong></td><td>Frappe admin</td><td>Frappe Desk</td><td>+ role assignment, fixtures, migrations</td></tr>
+<tr><td><strong>Guest</strong></td><td>Unauthenticated</td><td><code>/m/login</code></td><td>None</td></tr>
+</tbody>
+</table>
+<p>Roles = fixtures auto-created on <code>bench migrate</code>.</p>
+
+<h2 id="s3">3. Tech Stack</h2>
+<div class="grid2">
+<div>
+<h3>Backend</h3>
+<ul>
+  <li>Frappe v15+ · Python 3.11+</li>
+  <li>MariaDB 10.6+ / MySQL 8+</li>
+  <li>Redis (rate-limit via <code>frappe.cache()</code>)</li>
+  <li>Deploy: <code>frappe-bench</code> standard</li>
+</ul>
+<h3>Desk Frontend</h3>
+<ul>
+  <li>Jinja + Frappe asset pipeline</li>
+  <li>7 Frappe Pages + whitelisted Python handlers</li>
+  <li>Frappe Charts built-in</li>
+  <li>Global nav via <code>public/js/page_nav.js</code></li>
+</ul>
+</div>
+<div>
+<h3>PWA Frontend</h3>
+<ul>
+  <li>React 18 + TypeScript 5 + Vite 5</li>
+  <li><code>react-router-dom@6</code></li>
+  <li><code>@tanstack/react-query@5</code> (SWR)</li>
+  <li><code>idb-keyval</code> + Workbox 7</li>
+  <li><code>recharts</code> (lazy)</li>
+  <li>Vitest + Playwright</li>
+  <li>id-ID formal locale</li>
+</ul>
+<h3>Theme</h3>
+<ul>
+  <li><code>--vt-primary: #9561ab</code></li>
+  <li><code>--vt-primary-dark: #2d1540</code></li>
+  <li><code>--vt-bg-light: #f5f0f8</code></li>
+</ul>
+</div>
+</div>
+
+<nav class="nav-prev-next">
+  <a href="index.html">← PRD Index</a>
+  <a href="domain.html">Domain Model →</a>
+</nav>
+
+<footer>PRD §1–3 · part of <a href="index.html">PRD v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

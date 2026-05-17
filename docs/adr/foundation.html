@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR Foundation — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>Foundation</strong></div>
+
+<header class="hero">
+  <h1>ADR · Foundation</h1>
+  <div class="sub">ADR-001 → 006 — framework, dual UI, stack, offline, auth, cache</div>
+</header>
+
+<article class="adr" id="adr-001">
+  <h2>ADR-001 — Build on Frappe Framework</h2>
+  <div class="meta-row">
+    <span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span>
+    <span><strong>Date:</strong> 2026-04 (project inception)</span>
+  </div>
+  <div class="section-label">Context</div>
+  <p>Company-wide tool integrated with existing ERPNext stack. Users, roles, permissions, audit, email already in Frappe. Greenfield = duplicate work.</p>
+  <div class="section-label">Decision</div>
+  <p>Build as Frappe v15 app. Reuse User, Notification Log, permissions, scheduler, Report Builder, REST. Add domain doctypes only.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Zero auth/role work; native CRUD via <code>/api/resource/</code>.</li>
+    <li>+ Built-in workspaces, reports, fixtures, scheduler.</li>
+    <li>− Tied to Frappe upgrade cadence and Python 3.11+.</li>
+    <li>− Dated Desk UX → motivates PWA (ADR-002).</li>
+  </ul>
+  <div class="section-label">Alternatives</div>
+  <ul>
+    <li>Django + DRF: rebuild auth + roles + reporting.</li>
+    <li>SaaS (Asana, Linear): no OKR/KPI integration; no PDCA model.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-002">
+  <h2>ADR-002 — Dual UI: Frappe Desk + Mobile PWA</h2>
+  <div class="meta-row">
+    <span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span>
+    <span><strong>Date:</strong> 2026-05-11</span>
+  </div>
+  <div class="section-label">Context</div>
+  <p>ICs work on phones; leaders + execs on desktop with analytics. Single UI fights both. Frappe Desk = power users; bad mobile-first.</p>
+  <div class="section-label">Decision</div>
+  <p>Keep 7 Frappe Desk pages for desktop power users + leaders/execs. Ship installable React PWA at <code>/m/</code> for mobile-first IC and leader review.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Best UX per surface; backend single source of truth.</li>
+    <li>− Double surface to test (Vitest/Playwright + bench tests).</li>
+    <li>− Risk of UI drift; mitigated by responsive nav (ADR-016).</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-003">
+  <h2>ADR-003 — React 18 + Vite 5 + TypeScript 5 for PWA</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Need fast HMR, small prod bundle, mature ecosystem, type safety.</p>
+  <div class="section-label">Decision</div>
+  <p>React 18 + Vite 5 + TS 5. <code>react-router-dom@6</code>, <code>@tanstack/react-query@5</code>, <code>idb-keyval</code>, Workbox 7, recharts (lazy).</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ ~300 ms dev reload; ~95 KB gz main bundle; Concurrent Suspense.</li>
+    <li>− Adds Node tooling step to deploy pipeline.</li>
+    <li>− Recharts cost mitigated by lazy split (ADR-011).</li>
+  </ul>
+  <div class="section-label">Alternatives</div>
+  <ul>
+    <li>Vue/Svelte: smaller ecosystem for Frappe consultants.</li>
+    <li>Next.js: SSR not needed; SPA served by Frappe.</li>
+    <li>Preact: bundle win but loses React-ecosystem libs.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-004">
+  <h2>ADR-004 — Workbox <code>StaleWhileRevalidate</code> offline strategy</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Mobile users hit spotty networks. Need fast first paint + fresh online + readable offline. Full offline-first w/ sync queue = high complexity, hard write conflicts.</p>
+  <div class="section-label">Decision</div>
+  <p>Workbox 7 <code>generateSW</code>. Precache app shell. Runtime <code>StaleWhileRevalidate</code> on <code>/api/method/vernon_tasks.*</code> with 1-day cache expiry. Mutations rejected when offline; UI disables buttons + toast.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Cached lists render instantly; fresh fetched in background.</li>
+    <li>+ Offline reads always work; no conflict-resolution complexity.</li>
+    <li>− No queued offline writes (deferred).</li>
+    <li>− 1-day staleness window; mitigated by SWR refresh.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-005">
+  <h2>ADR-005 — Reuse Frappe session cookie (no JWT)</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>PWA hosted same-origin as Frappe (<code>/m/</code>). Separate JWT = duplicate user store, refresh-token rotation, key mgmt. Frappe already issues httpOnly <code>sid</code> cookie.</p>
+  <div class="section-label">Decision</div>
+  <p>PWA logs in via <code>POST /api/method/login</code>. Receives <code>sid</code> cookie. All subsequent API calls send cookie automatically. CSRF token fetched via <code>/m/_boot</code>; required on mutations.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Zero auth surface; native Frappe role checks work as-is.</li>
+    <li>+ Single sign-out across Desk + PWA.</li>
+    <li>− Same-origin only; no third-party PWA host.</li>
+    <li>− Session expiry → relogin modal (preserves route state).</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-006">
+  <h2>ADR-006 — TanStack Query 5 for client cache</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Need declarative server-state cache with SWR, optimistic updates, invalidation.</p>
+  <div class="section-label">Decision</div>
+  <p>Use <code>@tanstack/react-query@5</code> as sole client-cache layer. Query keys: <code>["my-work"]</code>, <code>["task", id]</code>, <code>["search", q]</code>, etc. Stale time 5 min. Invalidate on mutation success.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ No Redux/Zustand boilerplate; UI state via React local state.</li>
+    <li>+ Optimistic updates via <code>onMutate</code> + <code>onError</code> rollback.</li>
+    <li>− Two cache layers (RQ in-memory + Workbox SW); coordination via SWR semantics.</li>
+  </ul>
+</article>
+
+<nav class="nav-prev-next">
+  <a href="index.html">← ADR Index</a>
+  <a href="data.html">Domain &amp; Data →</a>
+</nav>
+
+<footer>ADR Foundation · part of <a href="index.html">ADR v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

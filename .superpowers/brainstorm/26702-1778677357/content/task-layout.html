@@ -1,0 +1,158 @@
+<h2>Task Interface Layout</h2>
+<p class="subtitle">Pilih layout untuk halaman daftar tugas (MyWork)</p>
+
+<div class="cards">
+
+  <!-- Option A: Card List dengan header sticky -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f5f0f8;border-radius:8px;overflow:hidden;min-height:260px;display:flex;flex-direction:column;">
+        <!-- Sticky header purple -->
+        <div style="background:linear-gradient(135deg,#2d1540,#9561ab);padding:14px 16px;">
+          <div style="color:rgba(255,255,255,0.7);font-size:10px;margin-bottom:2px;">Senin, 13 Mei</div>
+          <div style="color:white;font-size:14px;font-weight:700;">Halo, Erick 👋</div>
+          <div style="display:flex;gap:6px;margin-top:10px;">
+            <div style="background:rgba(255,255,255,0.15);border-radius:20px;padding:4px 10px;color:white;font-size:10px;">Semua</div>
+            <div style="background:rgba(255,255,255,0.1);border-radius:20px;padding:4px 10px;color:rgba(255,255,255,0.6);font-size:10px;">Terlambat 2</div>
+            <div style="background:rgba(255,255,255,0.1);border-radius:20px;padding:4px 10px;color:rgba(255,255,255,0.6);font-size:10px;">Hari ini 5</div>
+          </div>
+        </div>
+        <!-- Search bar -->
+        <div style="background:white;padding:8px 12px;border-bottom:1px solid #ede8f2;">
+          <div style="background:#f5f0f8;border-radius:8px;padding:7px 10px;font-size:11px;color:#9ca3af;">🔍 Cari tugas...</div>
+        </div>
+        <!-- Task cards -->
+        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;flex:1;overflow:hidden;">
+          <div style="background:white;border-radius:10px;padding:10px 12px;border-left:3px solid #ef4444;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+            <div style="font-size:11px;font-weight:600;color:#111;">Review dokumen kontrak</div>
+            <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Legal · High · +10 pts</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:10px 12px;border-left:3px solid #9561ab;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+            <div style="font-size:11px;font-weight:600;color:#111;">Meeting mingguan tim</div>
+            <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Operasional · Medium</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:10px 12px;border-left:3px solid #d1c4e9;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+            <div style="font-size:11px;font-weight:600;color:#111;">Update laporan bulanan</div>
+            <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Finance · Low</div>
+          </div>
+        </div>
+        <!-- Bottom nav -->
+        <div style="background:white;border-top:1px solid #ede8f2;padding:8px 0;display:flex;justify-content:space-around;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">✓</div><div style="font-size:8px;color:#9561ab;font-weight:600;">Tugas</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">📊</div><div style="font-size:8px;color:#9ca3af;">Dasbor</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">🔔</div><div style="font-size:8px;color:#9ca3af;">Notif</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">👤</div><div style="font-size:8px;color:#9ca3af;">Profil</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Card List + Purple Header</h3>
+      <p>Header gradient purple, filter chips, search bar, task card dengan colored left-border per prioritas. Bottom nav tetap.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Minimal clean white -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:white;border-radius:8px;overflow:hidden;min-height:260px;display:flex;flex-direction:column;">
+        <!-- Top bar minimal -->
+        <div style="padding:14px 16px 10px;background:white;border-bottom:1px solid #f0ebf5;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#1a1a2e;">Tugas Saya</div>
+              <div style="font-size:10px;color:#9ca3af;">13 Mei 2026</div>
+            </div>
+            <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#9561ab,#c084fc);"></div>
+          </div>
+          <div style="background:#f5f0f8;border-radius:8px;padding:7px 10px;font-size:11px;color:#9ca3af;margin-top:10px;">🔍 Cari...</div>
+        </div>
+        <!-- Section overdue -->
+        <div style="padding:10px 14px;flex:1;overflow:hidden;">
+          <div style="font-size:9px;font-weight:700;color:#ef4444;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;">TERLAMBAT</div>
+          <div style="background:#fff5f5;border-radius:10px;padding:10px 12px;margin-bottom:8px;border:1px solid #fee2e2;">
+            <div style="font-size:11px;font-weight:600;color:#111;">Review dokumen kontrak</div>
+            <div style="font-size:10px;color:#ef4444;margin-top:2px;">Jatuh tempo kemarin</div>
+          </div>
+          <div style="font-size:9px;font-weight:700;color:#9561ab;letter-spacing:0.8px;text-transform:uppercase;margin:10px 0 6px;">HARI INI</div>
+          <div style="background:#faf7fc;border-radius:10px;padding:10px 12px;margin-bottom:6px;border:1px solid #ede8f2;">
+            <div style="font-size:11px;font-weight:600;color:#111;">Meeting mingguan tim</div>
+            <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Operasional · Medium</div>
+          </div>
+          <div style="background:#faf7fc;border-radius:10px;padding:10px 12px;border:1px solid #ede8f2;">
+            <div style="font-size:11px;font-weight:600;color:#111;">Update laporan</div>
+            <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Finance · Low</div>
+          </div>
+        </div>
+        <!-- Bottom nav -->
+        <div style="background:white;border-top:1px solid #f0ebf5;padding:8px 0;display:flex;justify-content:space-around;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">✓</div><div style="font-size:8px;color:#9561ab;font-weight:600;">Tugas</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">📊</div><div style="font-size:8px;color:#9ca3af;">Dasbor</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">🔔</div><div style="font-size:8px;color:#9ca3af;">Notif</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">👤</div><div style="font-size:8px;color:#9ca3af;">Profil</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Minimal White + Section Labels</h3>
+      <p>Background putih bersih, section "Terlambat / Hari ini / Mendatang" dengan warna label per section. Lebih readable.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Purple tinted full immersive -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#f5f0f8;border-radius:8px;overflow:hidden;min-height:260px;display:flex;flex-direction:column;">
+        <!-- Full purple header big -->
+        <div style="background:linear-gradient(160deg,#2d1540,#9561ab);padding:16px;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.08);"></div>
+          <div style="color:rgba(255,255,255,0.65);font-size:10px;">Selamat pagi, Erick</div>
+          <div style="color:white;font-size:16px;font-weight:700;margin-top:2px;">5 tugas hari ini</div>
+          <!-- Summary chips -->
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <div style="background:rgba(255,255,255,0.12);border-radius:8px;padding:6px 10px;text-align:center;">
+              <div style="color:white;font-size:13px;font-weight:700;">2</div>
+              <div style="color:rgba(255,255,255,0.6);font-size:9px;">Terlambat</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border-radius:8px;padding:6px 10px;text-align:center;">
+              <div style="color:white;font-size:13px;font-weight:700;">5</div>
+              <div style="color:rgba(255,255,255,0.6);font-size:9px;">Hari ini</div>
+            </div>
+            <div style="background:rgba(255,255,255,0.12);border-radius:8px;padding:6px 10px;text-align:center;">
+              <div style="color:white;font-size:13px;font-weight:700;">8</div>
+              <div style="color:rgba(255,255,255,0.6);font-size:9px;">Mendatang</div>
+            </div>
+          </div>
+        </div>
+        <!-- Search -->
+        <div style="background:#f5f0f8;padding:10px 12px;">
+          <div style="background:white;border-radius:10px;padding:7px 10px;font-size:11px;color:#9ca3af;box-shadow:0 1px 4px rgba(149,97,171,0.12);">🔍 Cari tugas...</div>
+        </div>
+        <!-- Cards on purple tint bg -->
+        <div style="padding:0 12px 10px;display:flex;flex-direction:column;gap:6px;flex:1;overflow:hidden;">
+          <div style="background:white;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 6px rgba(149,97,171,0.1);">
+            <div style="width:8px;height:8px;border-radius:50%;background:#ef4444;flex-shrink:0;"></div>
+            <div style="flex:1;"><div style="font-size:11px;font-weight:600;color:#111;">Review dokumen kontrak</div><div style="font-size:9px;color:#9ca3af;margin-top:1px;">Legal · Terlambat</div></div>
+            <div style="font-size:14px;">›</div>
+          </div>
+          <div style="background:white;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 1px 6px rgba(149,97,171,0.1);">
+            <div style="width:8px;height:8px;border-radius:50%;background:#9561ab;flex-shrink:0;"></div>
+            <div style="flex:1;"><div style="font-size:11px;font-weight:600;color:#111;">Meeting mingguan tim</div><div style="font-size:9px;color:#9ca3af;margin-top:1px;">Operasional · Medium</div></div>
+            <div style="font-size:14px;">›</div>
+          </div>
+        </div>
+        <!-- Bottom nav -->
+        <div style="background:white;border-top:1px solid #ede8f2;padding:8px 0;display:flex;justify-content:space-around;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">✓</div><div style="font-size:8px;color:#9561ab;font-weight:600;">Tugas</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">📊</div><div style="font-size:8px;color:#9ca3af;">Dasbor</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">🔔</div><div style="font-size:8px;color:#9ca3af;">Notif</div></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:14px;">👤</div><div style="font-size:8px;color:#9ca3af;">Profil</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Purple Header + Summary Cards + Tinted BG</h3>
+      <p>Header besar dengan summary stats (terlambat/hari ini/mendatang). Background abu-ungu lembut. Task cards putih dengan dot indicator.</p>
+    </div>
+  </div>
+
+</div>

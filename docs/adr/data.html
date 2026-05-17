@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR Domain &amp; Data — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>Domain &amp; Data</strong></div>
+
+<header class="hero">
+  <h1>ADR · Domain &amp; Data</h1>
+  <div class="sub">ADR-007 → 009 — layers, PDCA state, immutable audit</div>
+</header>
+
+<article class="adr" id="adr-007">
+  <h2>ADR-007 — Strict layer separation: Controller / Service / Page</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Frappe doctype controllers + Page handlers tend to absorb logic → untestable, duplicated, fragile. Vernon adds ~20 doctypes; risk of God classes.</p>
+  <div class="section-label">Decision</div>
+  <ul>
+    <li><strong>Controller</strong> (<code>doctype/&lt;name&gt;.py</code>): validation, <code>db_set</code>, lifecycle hooks. No math.</li>
+    <li><strong>Service</strong> (<code>task/services/*.py</code>): logic, calculations, algorithms. Pure when possible. DI for settings.</li>
+    <li><strong>Page handler</strong> (<code>page/&lt;name&gt;/&lt;name&gt;.py</code>): auth check, request parse, call services, format response.</li>
+  </ul>
+  <p>Function ≤ 40 lines. No class &gt; 300 lines / 5 responsibilities. Named constants only.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Services unit-testable without Frappe boot.</li>
+    <li>+ Easy onboarding.</li>
+    <li>− More files; navigation discipline required.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-008">
+  <h2>ADR-008 — PDCA as first-class state machine on Task &amp; Project</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Free-form status fields drift; can't enforce review gates. Gamified points only fair if every Task funnels through review.</p>
+  <div class="section-label">Decision</div>
+  <p>Define <code>pdca_phase</code> field with strict transition matrix per doctype. Validator rejects illegal transitions. Kanban Status mapped 1:1 from PDCA Phase.</p>
+  <pre><code>VT Task: BACKLOG → PLAN → DO → CHECK → DONE
+                          ↑     │
+                          └─ ACT┘</code></pre>
+  <p>Internal services use <code>db_set("pdca_phase", phase, update_modified=False)</code> to bypass validation only in trusted code paths.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Audit-friendly: every state change traceable.</li>
+    <li>+ Leader review = enforced bottleneck for points.</li>
+    <li>− More transitions to enumerate.</li>
+  </ul>
+</article>
+
+<article class="adr" id="adr-009">
+  <h2>ADR-009 — Immutable Task Point Log for all point math</h2>
+  <div class="meta-row"><span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span></div>
+  <div class="section-label">Context</div>
+  <p>Points feed compensation discussions / leaderboards. Computing from current task fields = no audit; manager overrides leave no trail.</p>
+  <div class="section-label">Decision</div>
+  <p>Every point delta writes append-only row to <code>Task Point Log</code>: task, type (<code>earned</code>/<code>early_bonus</code>/<code>late_penalty</code>/<code>revision_deduction</code>/<code>leader_override</code>), amount, by_user, reason, timestamp. Monthly aggregate cached to <code>User Point Summary</code>.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Full audit. Overrides visible to stakeholders.</li>
+    <li>+ Reconstructable totals if cache lost.</li>
+    <li>− Storage grows linearly; mitigated by indexed reads + monthly rollup.</li>
+  </ul>
+</article>
+
+<p>Visual companion: <a href="../erd.html">ERD diagram</a> shows the 22-doctype graph these decisions shape.</p>
+
+<nav class="nav-prev-next">
+  <a href="foundation.html">← Foundation</a>
+  <a href="ui-mobile.html">UI &amp; Mobile →</a>
+</nav>
+
+<footer>ADR Domain &amp; Data · part of <a href="index.html">ADR v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

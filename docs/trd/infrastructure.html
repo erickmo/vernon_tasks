@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRD Infrastructure — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="admin">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">TRD</a> · <strong>Infrastructure</strong></div>
+
+<header class="hero">
+  <h1>TRD §7–13 · Infrastructure</h1>
+  <div class="sub">Build, service worker, auth, security, perf, observability, deploy</div>
+</header>
+
+<h2 id="s7">7. PWA Build &amp; Bundle</h2>
+
+<h3>7.1 Build pipeline</h3>
+<pre><code># local dev
+cd pwa &amp;&amp; npm install
+npm run dev                 # Vite dev server (proxy to bench)
+
+# prod build
+npm run build               # outputs to vernon_tasks/www/m/
+bench restart               # serve fresh static</code></pre>
+
+<h3>7.2 Bundle budget</h3>
+<table>
+<thead><tr><th>Chunk</th><th>Raw</th><th>gzip</th><th>Loading</th></tr></thead>
+<tbody>
+<tr><td>main</td><td>~304 KB</td><td>~95 KB</td><td>eager</td></tr>
+<tr><td>analytics</td><td>~75 KB</td><td>~23 KB</td><td>React.lazy on /m/analytics</td></tr>
+<tr><td>recharts (shared)</td><td>~357 KB</td><td>~110 KB</td><td>lazy, shared IC + Leader</td></tr>
+<tr><td>LeaderSprint / LeaderExec</td><td>~25 KB combined</td><td>~8 KB</td><td>lazy on tab open</td></tr>
+<tr><td>PushPrefs (P4b)</td><td>~5 KB</td><td>~2 KB</td><td>lazy on /m/me/notifications/settings</td></tr>
+</tbody>
+</table>
+
+<h3>7.3 TypeScript config</h3>
+<ul>
+  <li><code>strict: true</code>, <code>noUncheckedIndexedAccess: true</code></li>
+  <li><code>target: ES2022</code>, <code>module: ESNext</code>, <code>jsx: react-jsx</code></li>
+  <li><code>tsc --noEmit</code> as CI gate</li>
+</ul>
+
+<h2 id="s8">8. Service Worker &amp; Cache</h2>
+
+<h3>8.1 Strategy</h3>
+<ul>
+  <li>Workbox 7 <code>generateSW</code> via <code>vite-plugin-pwa</code>.</li>
+  <li>Precache app shell (HTML, JS, CSS, icons) — 5 entries.</li>
+  <li>Runtime: <code>StaleWhileRevalidate</code> on <code>/api/method/vernon_tasks.*</code>, max-age 1 day, max 50 entries.</li>
+  <li>Cache name: <code>vt-{VITE_GIT_SHA}</code>. Old caches purged on <code>activate</code>.</li>
+  <li>POST mutations bypass cache; fail with network error if offline.</li>
+</ul>
+
+<h3>8.2 Update flow</h3>
+<ol>
+  <li>Deploy → SW fetches new <code>sw.js</code> on next page load.</li>
+  <li><code>install</code> → precache new shell.</li>
+  <li><code>activate</code> → delete caches not matching <code>vt-{new_sha}</code>.</li>
+  <li>Client reloads (no skipWaiting in current config; reload on next visit).</li>
+</ol>
+
+<h2 id="s9">9. Auth &amp; Session</h2>
+
+<h3>9.1 Login flow</h3>
+<div class="diagram">User → POST /api/method/login
+       body: usr=&lt;email&gt;&amp;pwd=&lt;password&gt;
+       ← Set-Cookie: sid=...; HttpOnly; SameSite=Lax
+User → GET /m/_boot
+       cookie: sid=...
+       ← { user, roles, csrf_token, flags }
+       (stored: user/roles → sessionStorage; csrf_token → memory)
+User → any mutation
+       cookie + header X-Frappe-CSRF-Token</div>
+
+<h3>9.2 Session expiry</h3>
+<ul>
+  <li>Any 401/403 from API → ReloginModal opens.</li>
+  <li>Current route + state preserved in modal state.</li>
+  <li>After successful relogin → modal closes, original mutation retried.</li>
+</ul>
+
+<h2 id="s10">10. Security Controls</h2>
+
+<h3>10.1 Response headers (PWA shell)</h3>
+<pre><code>X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: push=(self), notifications=(self)
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
+                        style-src 'self' 'unsafe-inline'; connect-src 'self';
+                        worker-src 'self';</code></pre>
+
+<h3>10.2 API guards</h3>
+<table>
+<thead><tr><th>Endpoint</th><th>require_login</th><th>rate_limit</th><th>Input bounds</th></tr></thead>
+<tbody>
+<tr><td>complete</td><td>✓</td><td>30/min</td><td>—</td></tr>
+<tr><td>log_progress</td><td>✓</td><td>20/min</td><td>note ≤ 1000</td></tr>
+<tr><td>snooze</td><td>✓</td><td>10/min</td><td>days ∈ {1,3,7}</td></tr>
+<tr><td>push.subscribe</td><td>✓</td><td>5/min</td><td>endpoint ≤ 2048</td></tr>
+<tr><td>push_prefs.update_prefs</td><td>✓</td><td>20/min</td><td>Check fields</td></tr>
+<tr><td>notifications.list</td><td>✓</td><td>—</td><td>limit [1,100], offset [0,10000]</td></tr>
+<tr><td>analytics.get_velocity_trend</td><td>VT Leader</td><td>—</td><td>n ∈ [1,24]</td></tr>
+<tr><td>exec_analytics.get_kpi_trend</td><td>VT Manager</td><td>—</td><td>periods ∈ [1,24]</td></tr>
+<tr><td>my_work.search</td><td>✓</td><td>—</td><td>query ≤ 200</td></tr>
+<tr><td>telemetry.log_event</td><td>✓</td><td>60/min</td><td>event in allowlist, props ≤ 2048 bytes</td></tr>
+</tbody>
+</table>
+
+<h3>10.3 Role checks</h3>
+<ul>
+  <li>Leader endpoints: <code>frappe.only_for(["VT Leader", "VT Manager", "System Manager"])</code></li>
+  <li>Manager: <code>frappe.only_for(["VT Manager", "System Manager"])</code></li>
+  <li><code>ignore_permissions=True</code> only inside internal services / scheduler jobs</li>
+</ul>
+
+<h2 id="s11">11. Performance Budget</h2>
+<table>
+<thead><tr><th>Metric</th><th>Target</th><th>Measure</th></tr></thead>
+<tbody>
+<tr><td>LCP cold</td><td>&lt; 2.5 s</td><td>Web Vitals on /m/work</td></tr>
+<tr><td>LCP warm cache</td><td>&lt; 1.0 s</td><td>SW cached response</td></tr>
+<tr><td>INP / FID</td><td>&lt; 100 ms</td><td>Web Vitals p75</td></tr>
+<tr><td>CLS</td><td>&lt; 0.1</td><td>Web Vitals</td></tr>
+<tr><td>Main bundle gzip</td><td>≤ 100 KB</td><td>Vite build report</td></tr>
+<tr><td>SW install</td><td>&gt; 99 % success</td><td>Telemetry <code>sw_install_*</code></td></tr>
+<tr><td>API p95 latency</td><td>&lt; 400 ms</td><td>Frappe access log + APM</td></tr>
+<tr><td>Offline read success</td><td>100 % cached lists</td><td>e2e Playwright</td></tr>
+<tr><td>Cache hit ratio</td><td>&gt; 70 %</td><td>SW telemetry</td></tr>
+</tbody>
+</table>
+
+<h2 id="s12">12. Observability</h2>
+
+<h3>12.1 Telemetry pipeline</h3>
+<ul>
+  <li>Client emits <code>logEvent(event, props)</code> → <code>POST /api/method/...telemetry.log_event</code>.</li>
+  <li>Server validates event name against allowlist; truncates props ≤ 2048 bytes; rate-limits 60/min/user.</li>
+  <li>Stores in <code>Vernon Telemetry Event</code>: user, event, props (JSON), ts.</li>
+  <li>Daily scheduler <code>purge_old_telemetry</code> deletes rows &gt; 90 days.</li>
+  <li>Funnel analysis via Frappe Report Builder.</li>
+</ul>
+
+<h3>12.2 Required reports (pre-launch)</h3>
+<ol>
+  <li><strong>PWA Boot Funnel</strong> — pwa_boot → login_success → page_view</li>
+  <li><strong>Error Rate</strong> — error_boundary count / page_view count</li>
+  <li><strong>Install Funnel</strong> — install_prompt_shown → install_accepted</li>
+  <li><strong>Mutation Health</strong> — task_complete count + failure rate</li>
+  <li><strong>Push Delivery</strong> — push_subscribed vs push_received</li>
+</ol>
+
+<h3>12.3 Server logs</h3>
+<ul>
+  <li>Frappe error log captures stack traces; review daily during pilot.</li>
+  <li>nginx access logs for /m/* — monitor 4xx/5xx ratio.</li>
+</ul>
+
+<h2 id="s13">13. Infrastructure &amp; Deployment</h2>
+
+<h3>13.1 Topology</h3>
+<ul>
+  <li>Standard <code>frappe-bench</code> on Ubuntu 22.04+.</li>
+  <li>MariaDB 10.6+, Redis (queue + cache), nginx → gunicorn workers.</li>
+  <li>Node 18+ on build host (PWA build).</li>
+</ul>
+
+<h3>13.2 Deploy steps</h3>
+<pre><code>cd ~/frappe-bench
+git -C apps/vernon_tasks pull
+cd apps/vernon_tasks/pwa &amp;&amp; npm ci &amp;&amp; npm run build
+cd ~/frappe-bench
+bench --site &lt;site&gt; migrate          # apply schema changes, run patches
+bench --site &lt;site&gt; clear-cache
+bench restart                          # gunicorn + workers</code></pre>
+<p>Service worker auto-busts via git-SHA cache name.</p>
+
+<h3>13.3 VAPID keys (one-time)</h3>
+<pre><code>bench --site &lt;site&gt; execute vernon_tasks.task.api.push.cli_generate_vapid
+# stores public + private keys in VT Settings</code></pre>
+
+<h3>13.4 Rollback</h3>
+<ol>
+  <li><code>git checkout &lt;prev SHA&gt;</code> in apps/vernon_tasks.</li>
+  <li>Rebuild PWA, <code>bench restart</code>.</li>
+  <li>SW activates old cache namespace; users get prior code.</li>
+  <li>Schema migrations: forward-fix in next patch; never rollback migrations destructively.</li>
+</ol>
+
+<nav class="nav-prev-next">
+  <a href="contracts.html">← Contracts</a>
+  <a href="quality.html">Quality →</a>
+</nav>
+
+<footer>TRD §7–13 · part of <a href="index.html">TRD v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

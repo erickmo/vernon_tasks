@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TRD Architecture — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">TRD</a> · <strong>Architecture</strong></div>
+
+<header class="hero">
+  <h1>TRD §1–4 · Architecture</h1>
+  <div class="sub">Scope, system diagram, components, data flow</div>
+</header>
+
+<h2 id="s1">1. Scope &amp; References</h2>
+<p>Engineering requirements implementing the PRD.</p>
+<ul>
+  <li><a href="../prd/index.html">PRD</a> — product scope, users, KPIs, rollout</li>
+  <li><a href="../adr/index.html">ADR</a> — architectural decisions and trade-offs</li>
+  <li><a href="../DEVELOPER_GUIDE.md">DEVELOPER_GUIDE.md</a> — local setup, conventions</li>
+  <li><a href="../API_REFERENCE.md">API_REFERENCE.md</a> — endpoint payload reference</li>
+  <li><a href="../rollout/pwa-pilot.md">rollout/pwa-pilot.md</a> — pilot checklist</li>
+  <li><a href="../erd.html">ERD</a> — visual doctype graph</li>
+  <li><code>docs/superpowers/specs/</code>, <code>docs/superpowers/plans/</code> — per-feature specs &amp; plans</li>
+</ul>
+
+<h2 id="s2">2. System Architecture</h2>
+<h3>2.1 High-level diagram</h3>
+<div class="diagram">┌───────────────────────────────────────────────────────────────────────────┐
+│                              CLIENTS                                       │
+│  ┌────────────────────┐    ┌────────────────────┐    ┌──────────────────┐ │
+│  │  Frappe Desk (web) │    │  Vernon PWA (/m/*) │    │  External tokens │ │
+│  │  Jinja + JS        │    │  React + Vite + TS │    │  Authorization:  │ │
+│  │                    │    │  Workbox SW · IDB  │    │  token k:s       │ │
+│  └────────┬───────────┘    └─────────┬──────────┘    └────────┬─────────┘ │
+└───────────┼──────────────────────────┼─────────────────────────┼──────────┘
+            │ Session cookie + CSRF    │ Session cookie + CSRF   │ Token
+            ▼                          ▼                         ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                       FRAPPE BENCH (nginx + gunicorn)                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │  /api/method/vernon_tasks.&lt;module&gt;.&lt;file&gt;.&lt;fn&gt;     (whitelisted)     │ │
+│  │  /api/resource/&lt;DocType&gt;                           (native CRUD)     │ │
+│  │  /m/* → www/m.py (SPA shell) + www/m/ (Vite output)                  │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │  Page Handlers (auth + IO)                                            │ │
+│  │  Service Layer (point_calculator, scheduling_engine, analytics,…)     │ │
+│  │  Doctype Controllers (validate, db_set, hooks)                        │ │
+│  │  Security Guards (security.py)                                        │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────────────────┐ │
+│  │  Hooks: doc_events · scheduler (daily/hourly) · push_sender          │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+└──────────┬──────────────────────┬──────────────────────┬──────────────────┘
+           │                      │                      │
+           ▼                      ▼                      ▼
+   ┌──────────────┐       ┌──────────────┐       ┌────────────────────┐
+   │  MariaDB     │       │  Redis       │       │  Web Push (VAPID)  │
+   │  10.6+       │       │  cache +     │       │  → user browsers   │
+   │  doctypes    │       │  rate-limit  │       │                    │
+   └──────────────┘       └──────────────┘       └────────────────────┘</div>
+
+<h3>2.2 Request lifecycle (PWA mutation)</h3>
+<ol>
+  <li>User taps "Selesai" on task card.</li>
+  <li><code>useUndoableMutation</code> shows 5s undo toast (no API call yet).</li>
+  <li>After 5s without cancel → React Query <code>onMutate</code> applies optimistic update.</li>
+  <li><code>fetch('/api/method/vernon_tasks.task.api.my_work_mutations.complete', {...})</code> with cookie + <code>X-Frappe-CSRF-Token</code>.</li>
+  <li>Frappe routes → page handler → <code>require_login()</code> → <code>rate_limit("complete", 30)</code> → service.</li>
+  <li>Service mutates VT Task → <code>on_submit</code> triggers <code>point_calculator.calculate_points</code> → row in <code>Task Point Log</code> → User Point Summary update.</li>
+  <li>Response returns. <code>onSuccess</code> invalidates <code>["my-work"]</code> query.</li>
+  <li>If error → <code>onError</code> rollback optimistic state + toast.</li>
+</ol>
+
+<h2 id="s3">3. Component Inventory</h2>
+
+<h3>3.1 Backend Python modules</h3>
+<table>
+<thead><tr><th>Path</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>task/api/security.py</code></td><td>Reusable guards: require_login, rate_limit, clamp_int, max_str</td></tr>
+<tr><td><code>task/api/boot.py</code></td><td>SPA bootstrap: <code>{user, roles, csrf_token, flags}</code></td></tr>
+<tr><td><code>task/api/my_work.py</code></td><td>list / detail / search</td></tr>
+<tr><td><code>task/api/my_work_mutations.py</code></td><td>complete / log_progress / snooze</td></tr>
+<tr><td><code>task/api/notifications.py</code></td><td>list / mark_read / mark_all_read / count_unread</td></tr>
+<tr><td><code>task/api/push.py</code></td><td>get_public_key / subscribe / unsubscribe / is_subscribed</td></tr>
+<tr><td><code>task/api/push_prefs.py</code></td><td>get_prefs / update_prefs</td></tr>
+<tr><td><code>task/api/push_action.py</code></td><td>complete_from_notification</td></tr>
+<tr><td><code>task/api/analytics.py</code></td><td>get_burndown / get_velocity_trend / get_forecast / get_risks</td></tr>
+<tr><td><code>task/api/ic_analytics.py</code></td><td>get_leaderboard / get_personal_velocity / get_streak</td></tr>
+<tr><td><code>task/api/exec_analytics.py</code></td><td>get_okr_rollup / list_kpis / get_kpi_trend / get_health_score</td></tr>
+<tr><td><code>task/api/leader_review.py</code></td><td>get_my_led_projects / get_latest_sprint</td></tr>
+<tr><td><code>task/api/telemetry.py</code></td><td>log_event (allowlist) / purge_old_telemetry</td></tr>
+<tr><td><code>task/services/point_calculator.py</code></td><td>calculate_points / apply_revision_deduction / override_points</td></tr>
+<tr><td><code>task/services/scheduling_engine.py</code></td><td>distribute_task_schedule / override_schedule_entry / generate_recurring_tasks / check_deadline_notifications</td></tr>
+<tr><td><code>task/services/velocity_service.py</code></td><td>sprint &amp; trend calc</td></tr>
+<tr><td><code>task/services/burndown_service.py</code></td><td>daily remaining + ideal line</td></tr>
+<tr><td><code>task/services/forecast_service.py</code></td><td>linear regression + confidence band</td></tr>
+<tr><td><code>task/services/risk_evaluator.py</code></td><td>slip / blocked / overcap detection</td></tr>
+<tr><td><code>task/services/push_sender.py</code></td><td>Web Push dispatch + prune dead endpoints</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 PWA modules</h3>
+<table>
+<thead><tr><th>Path</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>pwa/src/api/client.ts</code></td><td>HTTP wrapper, CSRF header, error mapping</td></tr>
+<tr><td><code>pwa/src/api/tasks.ts</code></td><td>fetchMyWork / fetchTaskDetail / search</td></tr>
+<tr><td><code>pwa/src/api/mutations.ts</code></td><td>completeTask / logProgress / snoozeTask</td></tr>
+<tr><td><code>pwa/src/api/notifications.ts</code></td><td>list / markRead / countUnread</td></tr>
+<tr><td><code>pwa/src/api/push.ts, pushPrefs.ts</code></td><td>subscribe / prefs</td></tr>
+<tr><td><code>pwa/src/api/analytics.ts, dashboard.ts, leader.ts</code></td><td>analytics endpoints</td></tr>
+<tr><td><code>pwa/src/auth/*</code></td><td>session probe, login, route guards</td></tr>
+<tr><td><code>pwa/src/cache/idb.ts</code></td><td>IndexedDB read-cache wrapper</td></tr>
+<tr><td><code>pwa/src/hooks/useUndoableMutation.ts</code></td><td>5s undo window</td></tr>
+<tr><td><code>pwa/src/hooks/useInstallPrompt.ts</code></td><td>A2HS prompt + platform detect</td></tr>
+<tr><td><code>pwa/src/hooks/useMediaQuery.ts</code></td><td>Breakpoint detection (768/900)</td></tr>
+<tr><td><code>pwa/src/hooks/useIsLeader.ts, useIsManager.ts</code></td><td>Role gates from boot</td></tr>
+<tr><td><code>pwa/src/components/*</code></td><td>SwipeRow, TaskActions, LogProgressModal, InstallPrompt, IOSInstallModal, TopNav, BottomNav, Toast, …</td></tr>
+<tr><td><code>pwa/src/pages/*</code></td><td>MyWork/List, MyWork/Detail, Dashboard, Analytics, Leader, Me, Notifications, PushPrefs</td></tr>
+<tr><td><code>pwa/src/router.tsx</code></td><td>Route definitions</td></tr>
+<tr><td><code>pwa/src/telemetry.ts</code></td><td>logEvent + TelemetryEvent union type</td></tr>
+<tr><td><code>pwa/src/theme/*</code></td><td>CSS tokens, light/dark, safe-area, shimmer</td></tr>
+</tbody>
+</table>
+
+<h2 id="s4">4. Data Flow Diagrams</h2>
+
+<h3>4.1 Task completion → points</h3>
+<div class="diagram">PWA / Desk → my_work_mutations.complete(task_id)
+            └─→ security.require_login + rate_limit("complete", 30)
+            └─→ frappe.get_doc("VT Task", task_id).db_set("pdca_phase", "DONE")
+                └─→ doc_event on_submit
+                    └─→ point_calculator.calculate_points(task)
+                        ├─→ base = weight × multiplier
+                        ├─→ early_bonus or late_penalty
+                        ├─→ revision_deduction
+                        └─→ Task Point Log row(s) inserted
+                            └─→ User Point Summary recomputed (or +=)
+            └─→ analytics.invalidate_project_cache(project)
+            └─→ Notification Log inserted (assignee / leader)
+                └─→ after_insert → push_sender.send_push_for_notification
+                    └─→ filter by Vernon Push Preference
+                    └─→ POST to each Vernon Push Subscription endpoint
+                        └─→ dead endpoint (404/410) → prune row</div>
+
+<h3>4.2 Boot &amp; offline read</h3>
+<div class="diagram">PWA load → GET /m/ → www/m.py renders shell + injects CSP headers
+        ↓
+SW activate (cache name = "vt-{git_sha}")
+        ↓
+React mounts → GET /m/_boot → {user, roles, csrf_token, flags}
+        ↓
+useQuery(["my-work"]) → fetch /api/method/...my_work
+   ├─ online  → SW StaleWhileRevalidate: serve cache, fetch fresh, update cache
+   └─ offline → SW returns cached response
+                ↓
+              OfflineBanner shown; StaleBadge if &gt;1h old</div>
+
+<nav class="nav-prev-next">
+  <a href="index.html">← TRD Index</a>
+  <a href="contracts.html">Contracts →</a>
+</nav>
+
+<footer>TRD §1–4 · part of <a href="index.html">TRD v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

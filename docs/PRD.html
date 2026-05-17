@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — PRD v1.0</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --accent: #9561ab;
+    --accent-dark: #2d1540;
+    --accent-light: #f5f0f8;
+    --border: #e5e5e5;
+    --code-bg: #f0ecf3;
+    --table-stripe: #faf7fc;
+    --ok: #16a34a;
+    --warn: #ca8a04;
+    --bad: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161219;
+      --fg: #ecebef;
+      --muted: #9b95a3;
+      --accent: #c084fc;
+      --accent-dark: #1a0d24;
+      --accent-light: #2a1c34;
+      --border: #2e2733;
+      --code-bg: #221a2a;
+      --table-stripe: #1c1622;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell { max-width: 1040px; margin: 0 auto; padding: 32px 28px 96px; }
+  header.hero {
+    background: linear-gradient(160deg, var(--accent-dark) 0%, var(--accent) 100%);
+    color: #fff;
+    padding: 40px 28px;
+    border-radius: 14px;
+    margin-bottom: 32px;
+    box-shadow: 0 8px 32px rgba(149, 97, 171, .2);
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -.02em; }
+  header.hero .sub { opacity: .85; font-size: 15px; }
+  header.hero .meta { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+  header.hero .meta span {
+    background: rgba(255,255,255,.18);
+    padding: 4px 10px; border-radius: 999px; font-size: 12px;
+    backdrop-filter: blur(6px);
+  }
+  h2 {
+    margin: 40px 0 12px;
+    font-size: 22px; letter-spacing: -.01em;
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+  }
+  h3 { margin: 24px 0 8px; font-size: 17px; color: var(--accent); }
+  h4 { margin: 16px 0 6px; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px; border-radius: 4px;
+    font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 16px; border-radius: 8px;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", "Fira Code", Menlo, monospace;
+    font-size: 13px; line-height: 1.5;
+    border: 1px solid var(--border);
+  }
+  pre code { background: transparent; padding: 0; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    font-size: 14px;
+  }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--accent-light); color: var(--accent-dark); font-weight: 600; font-size: 13px; }
+  @media (prefers-color-scheme: dark) {
+    th { color: var(--fg); }
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 4px 0 4px 14px; margin: 12px 0;
+    color: var(--muted); font-style: italic;
+  }
+  .toc {
+    background: var(--accent-light);
+    border-radius: 10px; padding: 16px 20px 16px 36px;
+    margin-bottom: 32px;
+  }
+  .toc h4 { margin-top: 0; }
+  .toc ol { margin: 0; }
+  .toc a { color: var(--accent-dark); text-decoration: none; }
+  @media (prefers-color-scheme: dark) { .toc a { color: var(--accent); } }
+  .toc a:hover { text-decoration: underline; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: rgba(22,163,74,.15); color: var(--ok); }
+  .badge.warn { background: rgba(202,138,4,.15); color: var(--warn); }
+  .badge.bad { background: rgba(220,38,38,.15); color: var(--bad); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+  footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+  .anchor { scroll-margin-top: 16px; }
+</style>
+<script defer src="assets/layout.js"></script>
+</head>
+<body data-root="./" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Vernon Tasks — Product Requirements Document</h1>
+  <div class="sub">PDCA × OKR × Agile · gamified delivery platform · Frappe Desk + Mobile PWA</div>
+  <div class="meta">
+    <span>v1.0</span>
+    <span>2026-05-16</span>
+    <span>Owner: Vernon Corp Internal Tooling</span>
+    <span>Status: Living</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h4>Table of Contents</h4>
+  <ol>
+    <li><a href="#s1">Executive Summary</a></li>
+    <li><a href="#s2">Target Users &amp; Roles</a></li>
+    <li><a href="#s3">Tech Stack</a></li>
+    <li><a href="#s4">Domain Model</a></li>
+    <li><a href="#s5">Feature Inventory</a></li>
+    <li><a href="#s6">Public APIs</a></li>
+    <li><a href="#s7">Hooks &amp; Scheduled Jobs</a></li>
+    <li><a href="#s8">Security Posture</a></li>
+    <li><a href="#s9">Non-Functional Requirements</a></li>
+    <li><a href="#s10">Telemetry &amp; Observability</a></li>
+    <li><a href="#s11">Rollout Strategy</a></li>
+    <li><a href="#s12">KPIs / Success Metrics</a></li>
+    <li><a href="#s13">Workspaces</a></li>
+    <li><a href="#s14">File-Tree Map</a></li>
+    <li><a href="#s15">Risks &amp; Mitigations</a></li>
+    <li><a href="#s16">Future Considerations</a></li>
+    <li><a href="#s17">References</a></li>
+  </ol>
+</nav>
+
+<h2 id="s1" class="anchor">1. Executive Summary</h2>
+<p><strong>Vernon Tasks</strong> = company-wide task / project / performance platform on <strong>Frappe v15</strong>. Unifies three methodologies under one doctype graph:</p>
+<ol>
+  <li><strong>PDCA Cycle</strong> — Plan-Do-Check-Act lifecycle on every Task, Project, Objective.</li>
+  <li><strong>OKR / KPI</strong> — Strategic objectives + measurable Key Results + KPI definitions, rolled up to company Health Score.</li>
+  <li><strong>Agile Sprints</strong> — Time-boxed iterations with velocity, burndown, forecast analytics.</li>
+</ol>
+<p><strong>Gamified point system</strong> rewards on-time delivery, penalizes late completion / revision cycles. Points feed monthly leaderboards, personal streaks, team velocity.</p>
+<p>Ships <strong>two coordinated UIs</strong>:</p>
+<ul>
+  <li><strong>Frappe Desk</strong> (desktop, Python/Jinja) — 7 custom pages for power users, leaders, execs.</li>
+  <li><strong>Vernon PWA</strong> (mobile-first React) — installable, offline-capable, push-enabled, at <code>/m/</code>.</li>
+</ul>
+<h3>Vision</h3>
+<blockquote>Make execution status, blockers, outcomes visible to every member in real time, on any device — reward consistent delivery with auditable, math-driven points.</blockquote>
+<h3>Non-Goals</h3>
+<ul>
+  <li>External-facing customer portal.</li>
+  <li>Replacement for Frappe HR / ERPNext Projects / generic CRM.</li>
+  <li>Time-tracking for billing (hours = capacity/effort only).</li>
+</ul>
+
+<h2 id="s2" class="anchor">2. Target Users &amp; Roles</h2>
+<table>
+  <thead><tr><th>Role</th><th>Profile</th><th>Primary Surface</th><th>Permissions</th></tr></thead>
+  <tbody>
+    <tr><td><strong>VT Member</strong></td><td>Individual contributor</td><td><code>/m/work</code>, Desk <code>my_work</code>, <code>my_dashboard</code>, <code>my_analytics</code></td><td>CRUD own tasks; transition BACKLOG→PLAN→DO→CHECK; log hours; leaderboard view</td></tr>
+    <tr><td><strong>VT Leader</strong></td><td>Project lead</td><td><code>/m/leader</code>, Desk <code>leader_*</code> pages</td><td>+ approve/reject reviews, override points &amp; schedules, team analytics</td></tr>
+    <tr><td><strong>VT Manager</strong></td><td>Exec / dept head</td><td>Desk <code>exec_analytics</code></td><td>+ executive analytics, edit <code>VT Settings</code>, system overrides</td></tr>
+    <tr><td><strong>System Manager</strong></td><td>Frappe admin</td><td>Frappe Desk</td><td>+ role assignment, fixtures, migrations</td></tr>
+    <tr><td><strong>Guest</strong></td><td>Unauthenticated</td><td><code>/m/login</code></td><td>None</td></tr>
+  </tbody>
+</table>
+<p>Roles = fixtures auto-created on <code>bench migrate</code>.</p>
+
+<h2 id="s3" class="anchor">3. Tech Stack</h2>
+<div class="grid2">
+<div>
+<h3>Backend</h3>
+<ul>
+  <li>Frappe v15+ · Python 3.11+</li>
+  <li>MariaDB 10.6+ / MySQL 8+</li>
+  <li>Redis (rate-limit via <code>frappe.cache()</code>)</li>
+  <li>Deploy: <code>frappe-bench</code> standard</li>
+</ul>
+<h3>Desk Frontend</h3>
+<ul>
+  <li>Jinja + Frappe asset pipeline</li>
+  <li>7 Frappe Pages + whitelisted Python handlers</li>
+  <li>Frappe Charts built-in</li>
+  <li>Global nav via <code>public/js/page_nav.js</code></li>
+</ul>
+</div>
+<div>
+<h3>PWA Frontend</h3>
+<ul>
+  <li>React 18 + TypeScript 5 + Vite 5</li>
+  <li><code>react-router-dom@6</code></li>
+  <li><code>@tanstack/react-query@5</code> (SWR)</li>
+  <li><code>idb-keyval</code> + Workbox 7</li>
+  <li><code>recharts</code> (lazy)</li>
+  <li>Vitest + Playwright</li>
+  <li>id-ID formal locale</li>
+</ul>
+<h3>Theme</h3>
+<ul>
+  <li><code>--vt-primary: #9561ab</code></li>
+  <li><code>--vt-primary-dark: #2d1540</code></li>
+  <li><code>--vt-bg-light: #f5f0f8</code></li>
+</ul>
+</div>
+</div>
+
+<h2 id="s4" class="anchor">4. Domain Model</h2>
+
+<h3>4.1 Modules</h3>
+<pre><code>vernon_tasks/
+├── task/        Tasks, Schedule, Points, Recurring
+├── project/     Projects, Sprints, Milestones, Team
+├── okr/         Objectives, Key Results, KPI defs &amp; entries
+├── workforce/   Work profiles, capacities, point summaries
+├── vt_settings/ App-wide configuration (single)
+└── workspace/   My Tasks / My Projects / Overview</code></pre>
+
+<h3>4.2 Doctypes</h3>
+<table>
+<thead><tr><th>Module</th><th>Doctypes</th></tr></thead>
+<tbody>
+<tr><td>task</td><td>VT Task, Task Dependency, Task Schedule Entry, Task Point Log, Recurring Rule</td></tr>
+<tr><td>project</td><td>VT Project, VT Sprint, Sprint Task, Project Team Member, Project Milestone, Project Documentation</td></tr>
+<tr><td>okr</td><td>Objective, Key Result, KPI Definition, KPI Entry</td></tr>
+<tr><td>workforce</td><td>Work Profile, Work Schedule Day, User Point Summary, Daily Summary</td></tr>
+<tr><td>settings &amp; telemetry</td><td>VT Settings (single), Vernon Telemetry Event, Vernon Push Subscription, Vernon Push Preference</td></tr>
+</tbody>
+</table>
+
+<h3>4.3 PDCA State Machines</h3>
+<h4>VT Task</h4>
+<pre><code>BACKLOG → PLAN → DO → CHECK → DONE
+                 ↑     │
+                 └─ ACT┘     (CHECK can return to ACT on rejection)</code></pre>
+<table>
+<thead><tr><th>Kanban Status</th><th>PDCA Phase</th></tr></thead>
+<tbody>
+<tr><td>Backlog</td><td>BACKLOG</td></tr>
+<tr><td>Scheduled</td><td>PLAN</td></tr>
+<tr><td>In Progress</td><td>DO</td></tr>
+<tr><td>In Review</td><td>CHECK</td></tr>
+<tr><td>Revision</td><td>ACT</td></tr>
+<tr><td>Done</td><td>DONE</td></tr>
+</tbody>
+</table>
+<h4>VT Project</h4>
+<p><code>PLAN → DO → CHECK → (ACT | CLOSED)</code> · <code>ACT → PLAN | DO</code></p>
+
+<h3>4.4 Point Calculation</h3>
+<pre><code>base               = weight × weight_multiplier
+early_bonus        = base × early_bonus_rate × max(0, days_early)
+late_penalty       = base × late_penalty_rate × max(0, days_late)
+revision_deduction = base × revision_deduct_rate × revision_count
+earned             = base + early_bonus − late_penalty − revision_deduction</code></pre>
+<p>Defaults (in <code>VT Settings</code>): <code>weight_multiplier=10</code>, <code>early_bonus_rate=0.05</code>, <code>late_penalty_rate=0.08</code>, <code>revision_deduct_rate=0.10</code>.</p>
+<p>Every transaction writes row to <code>Task Point Log</code> (types: <code>earned</code>, <code>early_bonus</code>, <code>late_penalty</code>, <code>revision_deduction</code>, <code>leader_override</code>). Monthly aggregate → <code>User Point Summary</code>.</p>
+
+<h3>4.5 Scheduling &amp; Capacity</h3>
+<ul>
+  <li>Distribute <code>estimated_hours</code> evenly across assignee's working days (from Work Profile).</li>
+  <li>Manual daily overrides auto-rebalance remainder.</li>
+  <li>Capacity conflict = scheduled hours &gt; daily target; surfaced to leaders.</li>
+  <li>Recurring tasks generated daily by scheduler from <code>Recurring Rule</code>.</li>
+</ul>
+
+<h2 id="s5" class="anchor">5. Feature Inventory</h2>
+
+<h3>5.1 Shipped — Desk</h3>
+<table>
+<thead><tr><th>#</th><th>Feature</th><th>Page</th><th>Roles</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>My Work — daily queue + PDCA quick-actions</td><td><code>my_work</code></td><td>Member+</td></tr>
+<tr><td>2</td><td>My Dashboard — personal stats, 7-day chart, hours donut</td><td><code>my_dashboard</code></td><td>Member+</td></tr>
+<tr><td>3</td><td>My Analytics — leaderboard, personal velocity, streak</td><td><code>my_analytics</code></td><td>Member+</td></tr>
+<tr><td>4</td><td>Leader Dashboard — pending review, approval rate, leaderboard, overdue</td><td><code>leader_dashboard</code></td><td>Leader+</td></tr>
+<tr><td>5</td><td>Leader Review — queue, workload, blocked, approve/reject</td><td><code>leader_review</code></td><td>Leader+</td></tr>
+<tr><td>6</td><td>Leader Analytics — burndown, velocity, forecast, risks</td><td><code>leader_analytics</code></td><td>Leader+</td></tr>
+<tr><td>7</td><td>Exec Analytics — OKR roll-up, KPI trends, Health Score</td><td><code>exec_analytics</code></td><td>Manager</td></tr>
+<tr><td>8</td><td>Workspace shortcuts + global in-page nav</td><td><code>page_nav.js</code></td><td>All</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 Shipped — PWA Phases</h3>
+<table>
+<thead><tr><th>Phase</th><th>Scope</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>P0.5 Foundation</td><td>Login, My Work read-only, onboarding, offline cache, telemetry</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P1a Mutations + Install</td><td>Complete / Log / Snooze + 5s undo; A2HS prompt</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P1b Search + Notifications</td><td>Debounced search, filter sheet, Notif Log screen, unread badge</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P2 Dashboard + IC Analytics</td><td>Summary cards, sprint kanban, leaderboard / velocity / streak</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P3a Leader Review</td><td><code>/m/leader</code> review queue, approve/reject with reason</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P3b Leader Sprint + Exec</td><td>Tabbed: Review / Sprint / Exec (Health Score, OKR, KPI)</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P4a Push</td><td>VAPID, Web Push subscribe, Notif Log → push, dead-endpoint prune</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P4b Push Refinements</td><td>Per-event prefs, notification action buttons (Complete / View)</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>CSO Security Audit</td><td><code>security.py</code> guards; CSP + X-Frame headers on <code>/m/*</code></td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>Login + Task UI Redesign</td><td>Glassmorphism login, purple gradient header, accent task cards</td><td><span class="badge ok">Shipped</span></td></tr>
+</tbody>
+</table>
+
+<h3>5.3 Active Branch — Mobile/Desktop Responsive Nav</h3>
+<p>Branch: <code>feat/desktop-responsive-nav</code> · Spec: <code>docs/superpowers/specs/2026-05-14-mobile-desktop-responsive-nav-design.md</code></p>
+<ul>
+  <li>One codebase, two layouts. Breakpoint = <strong>768 px</strong> via <code>useMediaQuery</code>.</li>
+  <li><strong>&lt;768 px</strong>: BottomNav (Dashboard / Leader* / Work / Analytics / Me).</li>
+  <li><strong>≥768 px</strong>: <code>TopNav</code> two-tier — Nav1 primary + Nav2 submenu for Analytics, Leader, Me.</li>
+  <li>Tab state via <code>useSearchParams</code> → deep-link + refresh-persist.</li>
+  <li>Responsive layouts: Dashboard 2-col grid; Work master-detail (list + inline detail ≥900 px).</li>
+  <li>AC: no layout shift on resize; BottomNav hidden ≥768 px; TopNav hidden &lt;768 px.</li>
+</ul>
+
+<h2 id="s6" class="anchor">6. Public APIs</h2>
+<p>All endpoints whitelisted Python methods at <code>POST /api/method/vernon_tasks.&lt;module&gt;.&lt;file&gt;.&lt;fn&gt;</code>. Auth via session cookie or <code>Authorization: token &lt;key&gt;:&lt;secret&gt;</code>. CSRF on mutations.</p>
+
+<h3>6.1 IC / Member</h3>
+<ul>
+  <li><code>task.page.my_work.my_work</code> — get_my_day, get_what_to_do_today, get_my_blocked_tasks, start_task, submit_for_review</li>
+  <li><code>task.page.my_dashboard.my_dashboard</code> — get_employee_stats, get_daily_completions, get_hours_summary, get_sprint_kanban</li>
+  <li><code>task.api.ic_analytics</code> — get_leaderboard(period, limit), get_personal_velocity(project, n), get_streak(project)</li>
+</ul>
+
+<h3>6.2 Leader</h3>
+<ul>
+  <li><code>task.page.leader_dashboard.leader_dashboard</code> — get_leader_stats, get_phase_distribution, get_team_leaderboard, get_overdue_tasks</li>
+  <li><code>task.page.leader_review.leader_review</code> — get_review_queue, get_team_workload, get_team_blocked_tasks, approve_task, reject_task</li>
+  <li><code>task.api.analytics</code> — get_burndown(sprint), get_velocity_trend(project, n=6), get_forecast(project), get_risks(project)</li>
+  <li><code>task.api.leader_review</code> — get_my_led_projects, get_latest_sprint(project)</li>
+</ul>
+
+<h3>6.3 Executive (Manager only)</h3>
+<ul>
+  <li><code>task.api.exec_analytics</code> — get_okr_rollup(period), list_kpis, get_kpi_trend(kpi, periods=12), get_health_score</li>
+</ul>
+
+<h3>6.4 PWA Mobile</h3>
+<ul>
+  <li><code>task.api.boot.boot</code> — <code>{user, roles, csrf_token}</code></li>
+  <li><code>task.api.my_work</code> — list, detail(task_id), search(query, priority, project, due_range)</li>
+  <li><code>task.api.my_work_mutations</code> — complete(task_id), log_progress(task_id, hours, note), snooze(task_id, days∈{1,3,7})</li>
+  <li><code>task.api.notifications</code> — list, mark_read, mark_all_read, count_unread (30s cache)</li>
+  <li><code>task.api.push</code> — get_public_key, subscribe, unsubscribe, is_subscribed</li>
+  <li><code>task.api.push_prefs</code> — get_prefs, update_prefs</li>
+  <li><code>task.api.push_action</code> — complete_from_notification(task_id)</li>
+  <li><code>task.api.telemetry</code> — log_event(event, props), allowlisted, 60/min/user</li>
+</ul>
+
+<h3>6.5 Standard Frappe REST</h3>
+<p>All Vernon doctypes expose <code>/api/resource/&lt;DocType&gt;</code> CRUD with native permission enforcement.</p>
+
+<h3>6.6 Health Score Formula</h3>
+<pre><code>score = okr_pct × 0.40
+      + ontime_pct × 0.30          (DONE last 90d, completion ≤ deadline)
+      + velocity_health × 0.30     (50 + clamp(avg trend_pct, -50, 50))</code></pre>
+
+<h2 id="s7" class="anchor">7. Hooks &amp; Scheduled Jobs</h2>
+<h3>Doc events</h3>
+<table>
+<thead><tr><th>Doctype</th><th>Event</th><th>Handler</th></tr></thead>
+<tbody>
+<tr><td>VT Task</td><td>on_submit</td><td>point_calculator.calculate_points</td></tr>
+<tr><td>VT Task</td><td>on_update</td><td>scheduling_engine.on_task_update, analytics.invalidate_project_cache</td></tr>
+<tr><td>VT Project</td><td>validate</td><td>vt_project.validate_team</td></tr>
+<tr><td>VT Sprint</td><td>on_update</td><td>analytics.invalidate_project_cache</td></tr>
+<tr><td>Notification Log</td><td>after_insert</td><td>push_sender.send_push_for_notification</td></tr>
+</tbody>
+</table>
+<h3>Scheduler</h3>
+<ul>
+  <li><strong>Daily:</strong> generate_recurring_tasks, check_overdue_tasks, generate_daily_summaries, purge_old_telemetry (90-day)</li>
+  <li><strong>Hourly:</strong> check_deadline_notifications (email reminders)</li>
+</ul>
+<h3>App includes</h3>
+<ul>
+  <li><code>assets/vernon_tasks/js/page_nav.js</code> — global Desk nav-bar injector</li>
+</ul>
+
+<h2 id="s8" class="anchor">8. Security Posture</h2>
+
+<h3>8.1 PWA Response Headers (<code>www/m.py</code>)</h3>
+<pre><code>X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: push=(self), notifications=(self)
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
+                        style-src 'self' 'unsafe-inline'; connect-src 'self';
+                        worker-src 'self';</code></pre>
+
+<h3>8.2 API Guards (<code>task/api/security.py</code>)</h3>
+<table>
+<thead><tr><th>Guard</th><th>Error</th><th>Behavior</th></tr></thead>
+<tbody>
+<tr><td><code>require_login()</code></td><td>403 PermissionError</td><td>Reject Guest</td></tr>
+<tr><td><code>rate_limit(endpoint, max_calls, window=60)</code></td><td>417 ValidationError</td><td>Redis sliding counter</td></tr>
+<tr><td><code>clamp_int(val, lo, hi, name)</code></td><td>417 ValidationError</td><td>Bound check + coerce</td></tr>
+<tr><td><code>max_str(val, limit)</code></td><td>—</td><td>Silent truncate</td></tr>
+</tbody>
+</table>
+
+<h3>8.3 Applied limits</h3>
+<table>
+<thead><tr><th>Endpoint</th><th>Limit / Bound</th></tr></thead>
+<tbody>
+<tr><td><code>complete</code></td><td>30 / min</td></tr>
+<tr><td><code>log_progress</code></td><td>20 / min + <code>note</code> ≤ 1000 chars</td></tr>
+<tr><td><code>snooze</code></td><td>10 / min</td></tr>
+<tr><td><code>push.subscribe</code></td><td>5 / min + <code>endpoint</code> ≤ 2048 chars</td></tr>
+<tr><td><code>push_prefs.update_prefs</code></td><td>20 / min</td></tr>
+<tr><td><code>notifications.list</code></td><td><code>limit ∈ [1,100]</code>, <code>offset ∈ [0,10000]</code></td></tr>
+<tr><td><code>analytics.get_velocity_trend(n)</code></td><td><code>n ∈ [1,24]</code></td></tr>
+<tr><td><code>exec_analytics.get_kpi_trend(periods)</code></td><td><code>periods ∈ [1,24]</code></td></tr>
+<tr><td><code>my_work.search(query)</code></td><td><code>query</code> ≤ 200 chars</td></tr>
+</tbody>
+</table>
+
+<h3>8.4 Service-Worker Cache</h3>
+<ul>
+  <li>App shell precached (5 entries).</li>
+  <li>Runtime: <code>StaleWhileRevalidate</code> on <code>/api/method/vernon_tasks.*</code>, 1-day expiry.</li>
+  <li>Cache name keyed by git SHA → busted on deploy.</li>
+</ul>
+
+<h2 id="s9" class="anchor">9. Non-Functional Requirements</h2>
+
+<h3>9.1 PWA Performance Budget</h3>
+<table>
+<thead><tr><th>Metric</th><th>Target</th></tr></thead>
+<tbody>
+<tr><td>LCP cold</td><td>&lt; 2.5 s</td></tr>
+<tr><td>LCP warm cache</td><td>&lt; 1.0 s</td></tr>
+<tr><td>INP / FID</td><td>&lt; 100 ms</td></tr>
+<tr><td>CLS</td><td>&lt; 0.1</td></tr>
+<tr><td>Main bundle gzip</td><td>~95 KB (304 KB raw)</td></tr>
+<tr><td>Analytics chunk</td><td>lazy ~23 KB gz</td></tr>
+<tr><td>Recharts chunk</td><td>lazy + shared, ~357 KB raw</td></tr>
+<tr><td>SW install success</td><td>&gt; 99 %</td></tr>
+<tr><td>Offline read</td><td>100 % cached lists</td></tr>
+</tbody>
+</table>
+
+<h3>9.2 Coding Standards</h3>
+<ul>
+  <li>Layer separation: Controller (validation, db_set) · Service (logic, math) · Page Handler (auth + IO).</li>
+  <li>Functions ≤ 40 lines; no God classes &gt; 300 lines / 5 responsibilities.</li>
+  <li>Named constants only — no magic strings/numbers.</li>
+  <li><code>ignore_permissions=True</code> only inside internal services / scheduled jobs.</li>
+  <li>All whitelisted endpoints call <code>frappe.has_role()</code> / <code>frappe.only_for()</code> at top.</li>
+  <li>Email sends wrapped in try/except (silent skip if mail unconfigured).</li>
+  <li>DI for services — settings/config as params, never instantiated inline.</li>
+</ul>
+
+<h3>9.3 Testing</h3>
+<ul>
+  <li>Backend: <code>bench run-tests --app vernon_tasks</code>. Coverage ≥ 80 % on services + security.</li>
+  <li>PWA unit/component: Vitest + happy-dom + @testing-library/react.</li>
+  <li>PWA e2e: Playwright (<code>PWA_BASE_URL</code>, <code>PWA_TEST_USER</code>, <code>PWA_TEST_PASS</code>).</li>
+  <li>TypeScript: <code>tsc --noEmit</code> strict.</li>
+</ul>
+
+<h2 id="s10" class="anchor">10. Telemetry &amp; Observability</h2>
+<p>Storage: <code>Vernon Telemetry Event</code> doctype · 90-day retention · daily purge scheduler.</p>
+<p>Allowlisted events (60/min/user):</p>
+<ul>
+  <li><strong>Boot/auth:</strong> pwa_boot, login_success, login_failure, page_view, error_boundary</li>
+  <li><strong>Read:</strong> task_view, dashboard_view, analytics_view</li>
+  <li><strong>Mutate:</strong> task_complete, task_log, task_snooze</li>
+  <li><strong>Search/notif:</strong> search_query, filter_applied, notif_view, notif_tap, notif_mark_all_read</li>
+  <li><strong>Install:</strong> install_prompt_shown, install_accepted, install_dismissed, install_snoozed</li>
+  <li><strong>Leader:</strong> leader_review_view, leader_approve, leader_reject, leader_sprint_view, leader_exec_view, leader_project_change</li>
+  <li><strong>Push:</strong> push_subscribe_attempt, push_subscribed, push_unsubscribed, push_received, push_pref_view, push_pref_changed, push_action_complete</li>
+  <li><strong>Offline:</strong> offline_seen</li>
+  <li><strong>Filters:</strong> analytics_period_change, analytics_project_change</li>
+</ul>
+<p>Funnel analysis via Frappe Report Builder.</p>
+
+<h2 id="s11" class="anchor">11. Rollout Strategy</h2>
+
+<h3>11.1 PWA Pilot (P0.5)</h3>
+<ol>
+  <li><strong>Pre-launch:</strong> build green, iOS A2HS works, Android install works, airplane-mode shows cached + banner, session relogin modal opens, <code>pwa_boot</code> events recorded.</li>
+  <li><strong>Pilot:</strong> 1 team (5–10 users), invite-only.</li>
+  <li><strong>Monitor:</strong> <code>error_boundary</code> &lt; 1 % of page_view; <code>login_failure</code> &lt; 5 % post-success.</li>
+  <li><strong>Go/No-Go gates:</strong>
+    <ul>
+      <li>error boundary &lt; 1 %</li>
+      <li>login failure &lt; 5 %</li>
+      <li>install rate ≥ 30 %</li>
+      <li>no open P0 bugs</li>
+    </ul>
+  </li>
+  <li><strong>Company rollout:</strong> Desk banner → <code>/m/</code>, email announcement, gradual migration.</li>
+</ol>
+
+<h3>11.2 Feature Phasing</h3>
+<p>Phases P0.5 → P4b sequential + additive. Each phase behind feature flag resolved via <code>/m/_boot</code>. Responsive-nav (current) requires all of P0.5–P3b.</p>
+
+<h2 id="s12" class="anchor">12. KPIs / Success Metrics</h2>
+<table>
+<thead><tr><th>Layer</th><th>Metric</th><th>Target</th></tr></thead>
+<tbody>
+<tr><td>Adoption</td><td>PWA install in 14d</td><td>≥ 30 %</td></tr>
+<tr><td>Adoption</td><td>Task completes via PWA vs Desk</td><td>≥ 50 %</td></tr>
+<tr><td>Engagement</td><td>DAU in PWA</td><td>rising MoM</td></tr>
+<tr><td>Quality</td><td>Error boundary / page view</td><td>&lt; 1 %</td></tr>
+<tr><td>Quality</td><td>Login failure post-success</td><td>&lt; 5 %</td></tr>
+<tr><td>Perf</td><td>LCP p75 cold</td><td>&lt; 2.5 s</td></tr>
+<tr><td>Reliability</td><td>SW install success</td><td>&gt; 99 %</td></tr>
+<tr><td>Business</td><td>Leader review SLA (CHECK→DONE/ACT)</td><td>trending down</td></tr>
+<tr><td>Business</td><td>Overdue task ratio</td><td>trending down</td></tr>
+<tr><td>Business</td><td>Company Health Score</td><td>stable ≥ 70</td></tr>
+<tr><td>Engagement</td><td>Streak ≥ 3 sprints</td><td>≥ 40 % active ICs</td></tr>
+</tbody>
+</table>
+
+<h2 id="s13" class="anchor">13. Workspaces (Fixtures)</h2>
+<ul>
+  <li><strong>My Tasks</strong> (Member) — Active Sprints, My Projects, Blocked Escalation, Team Workload, Sprint Velocity, Review Schedule</li>
+  <li><strong>My Projects</strong> (Leader) — project shortcuts + Leader Dashboard</li>
+  <li><strong>Overview</strong> (Manager) — Team Workload, KPI Achievement, Project vs OKR, Point Audit + Leader Review</li>
+</ul>
+
+<h2 id="s14" class="anchor">14. File-Tree Map</h2>
+<pre><code>vernon_tasks/
+├── task/
+│   ├── api/        my_work, my_work_mutations, notifications, push,
+│   │               push_prefs, push_action, telemetry, boot,
+│   │               analytics, ic_analytics, exec_analytics,
+│   │               leader_review, security
+│   ├── doctype/    vt_task, task_dependency, task_schedule_entry,
+│   │               task_point_log, recurring_rule
+│   ├── services/   point_calculator, scheduling_engine,
+│   │               velocity_service, burndown_service,
+│   │               forecast_service, risk_evaluator, push_sender
+│   ├── page/       my_work, my_dashboard, my_analytics,
+│   │               leader_dashboard, leader_review,
+│   │               leader_analytics, exec_analytics
+│   └── report/     blocked_tasks_escalation, leader_review_schedule,
+│                   point_override_audit
+├── project/        vt_project, vt_sprint, sprint_task, …
+├── okr/            objective, key_result, kpi_definition, kpi_entry
+├── workforce/      work_profile, user_point_summary, daily_summary
+├── vt_settings/    vt_settings, vernon_telemetry_event,
+│                   vernon_push_subscription, vernon_push_preference
+├── workspace/      my_tasks, my_projects, overview
+├── public/js/      page_nav.js
+├── www/            m.py (SPA shell), m/ (Vite output, git-ignored)
+├── hooks.py
+└── pwa/            React + Vite + TS source</code></pre>
+
+<h2 id="s15" class="anchor">15. Risks &amp; Mitigations</h2>
+<table>
+<thead><tr><th>Risk</th><th>L</th><th>I</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>iOS Web Push gating (≥16.4 + A2HS)</td><td>High</td><td>Med</td><td>In-app hint modal; fall back in-app notifs</td></tr>
+<tr><td>SW cache stale post-deploy</td><td>Med</td><td>Med</td><td>Git-SHA cache-key + 1d SWR expiry</td></tr>
+<tr><td>Rate-limit false positives</td><td>Low</td><td>Med</td><td>Tuned per endpoint; retry-after toast</td></tr>
+<tr><td>Forecast accuracy (&lt;3 sprints)</td><td>High</td><td>Low</td><td>"Insufficient data" UX state</td></tr>
+<tr><td>Recharts bundle</td><td>Med</td><td>Med</td><td>Lazy chunks; Analytics tabs only</td></tr>
+<tr><td>Mobile/Desktop layout regression</td><td>Med</td><td>Med</td><td>Playwright e2e both viewports</td></tr>
+<tr><td>Telemetry PII leak</td><td>Low</td><td>High</td><td>Server allowlist; no free-form props</td></tr>
+</tbody>
+</table>
+
+<h2 id="s16" class="anchor">16. Future Considerations</h2>
+<ul>
+  <li>Department / multi-team OKR rollup hierarchy.</li>
+  <li>What-if forecast scenarios (velocity slider).</li>
+  <li>Native iOS / Android shell (Capacitor) if Web Push blocked.</li>
+  <li>Slack / Email digest integrations.</li>
+  <li>Per-objective KPI auto-linking (KPI Entry → Key Result current_value).</li>
+  <li>Bulk leader operations (approve N, reassign N).</li>
+  <li>AI-assisted task triage / priority suggestions.</li>
+</ul>
+
+<h2 id="s17" class="anchor">17. References</h2>
+<ul>
+  <li><code>docs/DEVELOPER_GUIDE.md</code> — engineering setup, conventions</li>
+  <li><code>docs/API_REFERENCE.md</code> — endpoint catalog with payloads</li>
+  <li><code>docs/rollout/pwa-pilot.md</code> — pilot checklist</li>
+  <li><code>docs/superpowers/specs/</code> — 15 design specs</li>
+  <li><code>docs/superpowers/plans/</code> — 11 implementation plans</li>
+  <li><code>docs/ADR.html</code> — architecture decision records</li>
+  <li><code>CLAUDE.md</code> — project conventions</li>
+</ul>
+
+<footer>
+Vernon Tasks PRD v1.0 · generated 2026-05-16 · synthesized from full <code>docs/</code> tree.
+</footer>
+
+</div>
+</body>
+</html>

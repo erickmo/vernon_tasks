@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PRD Features &amp; APIs — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="all">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">PRD</a> · <strong>Features &amp; APIs</strong></div>
+
+<header class="hero">
+  <h1>PRD §5–7 · Features &amp; APIs</h1>
+  <div class="sub">Desk pages, PWA phases, public APIs, hooks</div>
+</header>
+
+<h2 id="s5">5. Feature Inventory</h2>
+
+<h3>5.1 Shipped — Desk</h3>
+<table>
+<thead><tr><th>#</th><th>Feature</th><th>Page</th><th>Roles</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>My Work — daily queue + PDCA quick-actions</td><td><code>my_work</code></td><td>Member+</td></tr>
+<tr><td>2</td><td>My Dashboard — personal stats, 7-day chart, hours donut</td><td><code>my_dashboard</code></td><td>Member+</td></tr>
+<tr><td>3</td><td>My Analytics — leaderboard, personal velocity, streak</td><td><code>my_analytics</code></td><td>Member+</td></tr>
+<tr><td>4</td><td>Leader Dashboard — pending review, approval rate, leaderboard, overdue</td><td><code>leader_dashboard</code></td><td>Leader+</td></tr>
+<tr><td>5</td><td>Leader Review — queue, workload, blocked, approve/reject</td><td><code>leader_review</code></td><td>Leader+</td></tr>
+<tr><td>6</td><td>Leader Analytics — burndown, velocity, forecast, risks</td><td><code>leader_analytics</code></td><td>Leader+</td></tr>
+<tr><td>7</td><td>Exec Analytics — OKR roll-up, KPI trends, Health Score</td><td><code>exec_analytics</code></td><td>Manager</td></tr>
+<tr><td>8</td><td>Workspace shortcuts + global in-page nav</td><td><code>page_nav.js</code></td><td>All</td></tr>
+</tbody>
+</table>
+
+<h3>5.2 Shipped — PWA Phases</h3>
+<table>
+<thead><tr><th>Phase</th><th>Scope</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>P0.5 Foundation</td><td>Login, My Work read-only, onboarding, offline cache, telemetry</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P1a Mutations + Install</td><td>Complete / Log / Snooze + 5s undo; A2HS prompt</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P1b Search + Notifications</td><td>Debounced search, filter sheet, Notif Log screen, unread badge</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P2 Dashboard + IC Analytics</td><td>Summary cards, sprint kanban, leaderboard / velocity / streak</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P3a Leader Review</td><td><code>/m/leader</code> review queue, approve/reject with reason</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P3b Leader Sprint + Exec</td><td>Tabbed: Review / Sprint / Exec (Health Score, OKR, KPI)</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P4a Push</td><td>VAPID, Web Push subscribe, Notif Log → push, dead-endpoint prune</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P4b Push Refinements</td><td>Per-event prefs, notification action buttons (Complete / View)</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>CSO Security Audit</td><td><code>security.py</code> guards; CSP + X-Frame headers on <code>/m/*</code></td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>Login + Task UI Redesign</td><td>Glassmorphism login, purple gradient header, accent task cards</td><td><span class="badge ok">Shipped</span></td></tr>
+</tbody>
+</table>
+
+<h3>5.3 Active Branch — Mobile/Desktop Responsive Nav</h3>
+<p>Branch: <code>feat/desktop-responsive-nav</code> · Spec: <code>docs/superpowers/specs/2026-05-14-mobile-desktop-responsive-nav-design.md</code></p>
+<ul>
+  <li>One codebase, two layouts. Breakpoint = <strong>768 px</strong> via <code>useMediaQuery</code>.</li>
+  <li><strong>&lt;768 px</strong>: BottomNav (Dashboard / Leader* / Work / Analytics / Me).</li>
+  <li><strong>≥768 px</strong>: <code>TopNav</code> two-tier — Nav1 primary + Nav2 submenu for Analytics, Leader, Me.</li>
+  <li>Tab state via <code>useSearchParams</code> → deep-link + refresh-persist.</li>
+  <li>Responsive layouts: Dashboard 2-col grid; Work master-detail (list + inline detail ≥900 px).</li>
+  <li>AC: no layout shift on resize; BottomNav hidden ≥768 px; TopNav hidden &lt;768 px.</li>
+</ul>
+
+<h2 id="s6">6. Public APIs</h2>
+<p>All endpoints whitelisted Python methods at <code>POST /api/method/vernon_tasks.&lt;module&gt;.&lt;file&gt;.&lt;fn&gt;</code>. Auth via session cookie or <code>Authorization: token &lt;key&gt;:&lt;secret&gt;</code>. CSRF on mutations.</p>
+
+<h3>6.1 IC / Member</h3>
+<ul>
+  <li><code>task.page.my_work.my_work</code> — get_my_day, get_what_to_do_today, get_my_blocked_tasks, start_task, submit_for_review</li>
+  <li><code>task.page.my_dashboard.my_dashboard</code> — get_employee_stats, get_daily_completions, get_hours_summary, get_sprint_kanban</li>
+  <li><code>task.api.ic_analytics</code> — get_leaderboard(period, limit), get_personal_velocity(project, n), get_streak(project)</li>
+</ul>
+
+<h3>6.2 Leader</h3>
+<ul>
+  <li><code>task.page.leader_dashboard.leader_dashboard</code> — get_leader_stats, get_phase_distribution, get_team_leaderboard, get_overdue_tasks</li>
+  <li><code>task.page.leader_review.leader_review</code> — get_review_queue, get_team_workload, get_team_blocked_tasks, approve_task, reject_task</li>
+  <li><code>task.api.analytics</code> — get_burndown(sprint), get_velocity_trend(project, n=6), get_forecast(project), get_risks(project)</li>
+  <li><code>task.api.leader_review</code> — get_my_led_projects, get_latest_sprint(project)</li>
+</ul>
+
+<h3>6.3 Executive (Manager only)</h3>
+<ul>
+  <li><code>task.api.exec_analytics</code> — get_okr_rollup(period), list_kpis, get_kpi_trend(kpi, periods=12), get_health_score</li>
+</ul>
+
+<h3>6.4 PWA Mobile</h3>
+<ul>
+  <li><code>task.api.boot.boot</code> — <code>{user, roles, csrf_token}</code></li>
+  <li><code>task.api.my_work</code> — list, detail(task_id), search(query, priority, project, due_range)</li>
+  <li><code>task.api.my_work_mutations</code> — complete(task_id), log_progress(task_id, hours, note), snooze(task_id, days∈{1,3,7})</li>
+  <li><code>task.api.notifications</code> — list, mark_read, mark_all_read, count_unread (30s cache)</li>
+  <li><code>task.api.push</code> — get_public_key, subscribe, unsubscribe, is_subscribed</li>
+  <li><code>task.api.push_prefs</code> — get_prefs, update_prefs</li>
+  <li><code>task.api.push_action</code> — complete_from_notification(task_id)</li>
+  <li><code>task.api.telemetry</code> — log_event(event, props), allowlisted, 60/min/user</li>
+</ul>
+
+<h3>6.5 Standard Frappe REST</h3>
+<p>All Vernon doctypes expose <code>/api/resource/&lt;DocType&gt;</code> CRUD with native permission enforcement.</p>
+
+<h3>6.6 Health Score Formula</h3>
+<pre><code>score = okr_pct × 0.40
+      + ontime_pct × 0.30          (DONE last 90d, completion ≤ deadline)
+      + velocity_health × 0.30     (50 + clamp(avg trend_pct, -50, 50))</code></pre>
+
+<h2 id="s7">7. Hooks &amp; Scheduled Jobs</h2>
+<h3>Doc events</h3>
+<table>
+<thead><tr><th>Doctype</th><th>Event</th><th>Handler</th></tr></thead>
+<tbody>
+<tr><td>VT Task</td><td>on_submit</td><td>point_calculator.calculate_points</td></tr>
+<tr><td>VT Task</td><td>on_update</td><td>scheduling_engine.on_task_update, analytics.invalidate_project_cache</td></tr>
+<tr><td>VT Project</td><td>validate</td><td>vt_project.validate_team</td></tr>
+<tr><td>VT Sprint</td><td>on_update</td><td>analytics.invalidate_project_cache</td></tr>
+<tr><td>Notification Log</td><td>after_insert</td><td>push_sender.send_push_for_notification</td></tr>
+</tbody>
+</table>
+<h3>Scheduler</h3>
+<ul>
+  <li><strong>Daily:</strong> generate_recurring_tasks, check_overdue_tasks, generate_daily_summaries, purge_old_telemetry (90-day)</li>
+  <li><strong>Hourly:</strong> check_deadline_notifications (email reminders)</li>
+</ul>
+<h3>App includes</h3>
+<ul>
+  <li><code>assets/vernon_tasks/js/page_nav.js</code> — global Desk nav-bar injector</li>
+</ul>
+
+<nav class="nav-prev-next">
+  <a href="domain.html">← Domain Model</a>
+  <a href="ops.html">Operations &amp; Rollout →</a>
+</nav>
+
+<footer>PRD §5–7 · part of <a href="index.html">PRD v1.0</a>.</footer>
+
+</div>
+</body>
+</html>

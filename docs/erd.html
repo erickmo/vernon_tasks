@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ERD — Vernon Tasks</title>
+<link rel="stylesheet" href="assets/style.css" />
+<style>
+  .erd-wrap {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    overflow: auto;
+    margin: 20px 0;
+  }
+  .erd-wrap svg { display: block; min-width: 1280px; max-width: 100%; height: auto; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    background: var(--accent-light); border-radius: 10px;
+    padding: 14px 18px; margin: 16px 0;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .legend-swatch { width: 18px; height: 14px; border-radius: 3px; border: 1px solid rgba(0,0,0,.15); }
+  .doctype-table th { width: 20%; }
+  .rel-table td:nth-child(1), .rel-table td:nth-child(3) { font-family: "JetBrains Mono", Menlo, monospace; font-size: 12px; }
+  .rel-table td:nth-child(2) { text-align: center; font-weight: 700; color: var(--accent); }
+</style>
+<script defer src="assets/layout.js"></script>
+</head>
+<body data-root="./" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="index.html">Docs</a> · <strong>ERD</strong></div>
+
+<header class="hero">
+  <h1>Entity Relationship Diagram</h1>
+  <div class="sub">Vernon Tasks doctype graph · modules · relationships</div>
+  <div class="meta"><span>v1.0</span><span>2026-05-16</span><span>22 doctypes · 5 modules</span></div>
+</header>
+
+<h2>Module Legend</h2>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch" style="background:#c4b5fd"></span>task</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#a7f3d0"></span>project</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#fde68a"></span>okr</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#fecaca"></span>workforce</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#bae6fd"></span>vt_settings / telemetry</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#e5e7eb"></span>Frappe core (User, Notification Log)</div>
+</div>
+
+<h2>Diagram</h2>
+<div class="erd-wrap">
+<svg viewBox="0 0 1480 1100" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, Inter, sans-serif" font-size="11">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9561ab"/>
+    </marker>
+    <marker id="one" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <line x1="2" y1="0" x2="2" y2="10" stroke="#9561ab" stroke-width="1.5"/>
+    </marker>
+    <style>
+      .box { stroke: #2d1540; stroke-width: 1; }
+      .single { stroke-dasharray: 4 3; }
+      .title { font-weight: 700; font-size: 12px; fill: #2d1540; }
+      .field { fill: #1a1a1a; font-size: 10px; }
+      .pk { font-weight: 700; fill: #2d1540; }
+      .fk { fill: #9561ab; }
+      .rel { stroke: #9561ab; stroke-width: 1.5; fill: none; }
+      .label { fill: #6b6b6b; font-size: 10px; font-style: italic; }
+      .mod-label { font-weight: 700; font-size: 13px; fill: #4a2870; letter-spacing: .05em; }
+      .frap { fill: #e5e7eb; stroke: #6b6b6b; }
+    </style>
+  </defs>
+
+  <!-- ====== MODULE: task (left) ====== -->
+  <text x="40" y="34" class="mod-label">TASK MODULE</text>
+
+  <!-- VT Task (central) -->
+  <g>
+    <rect x="40" y="50" width="220" height="200" rx="6" fill="#c4b5fd" class="box"/>
+    <text x="50" y="68" class="title">VT Task</text>
+    <line x1="40" y1="78" x2="260" y2="78" stroke="#2d1540"/>
+    <text x="50" y="94" class="pk">▸ name (PK)</text>
+    <text x="50" y="108" class="field">title, description</text>
+    <text x="50" y="122" class="field">pdca_phase, kanban_status</text>
+    <text x="50" y="136" class="field">weight, priority</text>
+    <text x="50" y="150" class="field">deadline, completion_date</text>
+    <text x="50" y="164" class="field">estimated_hours, actual_hours</text>
+    <text x="50" y="178" class="field">earned_points, revision_count</text>
+    <text x="50" y="192" class="field">rejection_note</text>
+    <text x="50" y="208" class="fk">→ assigned_to (User)</text>
+    <text x="50" y="222" class="fk">→ project (VT Project)</text>
+    <text x="50" y="236" class="fk">→ sprint (VT Sprint)</text>
+  </g>
+
+  <!-- Task Dependency -->
+  <g>
+    <rect x="290" y="50" width="200" height="100" rx="6" fill="#c4b5fd" class="box"/>
+    <text x="300" y="68" class="title">Task Dependency · child</text>
+    <line x1="290" y1="78" x2="490" y2="78" stroke="#2d1540"/>
+    <text x="300" y="94" class="fk">→ parent (VT Task)</text>
+    <text x="300" y="108" class="fk">→ depends_on (VT Task)</text>
+    <text x="300" y="122" class="field">dependency_type</text>
+    <text x="300" y="136" class="field">created_on</text>
+  </g>
+
+  <!-- Task Schedule Entry -->
+  <g>
+    <rect x="290" y="170" width="200" height="100" rx="6" fill="#c4b5fd" class="box"/>
+    <text x="300" y="188" class="title">Task Schedule Entry · child</text>
+    <line x1="290" y1="198" x2="490" y2="198" stroke="#2d1540"/>
+    <text x="300" y="214" class="fk">→ parent (VT Task)</text>
+    <text x="300" y="228" class="field">date</text>
+    <text x="300" y="242" class="field">hours</text>
+    <text x="300" y="256" class="field">is_override</text>
+  </g>
+
+  <!-- Task Point Log -->
+  <g>
+    <rect x="40" y="290" width="220" height="120" rx="6" fill="#c4b5fd" class="box"/>
+    <text x="50" y="308" class="title">Task Point Log (immutable)</text>
+    <line x1="40" y1="318" x2="260" y2="318" stroke="#2d1540"/>
+    <text x="50" y="334" class="pk">▸ name (PK)</text>
+    <text x="50" y="348" class="fk">→ task (VT Task)</text>
+    <text x="50" y="362" class="field">type, amount, reason</text>
+    <text x="50" y="376" class="fk">→ by_user (User)</text>
+    <text x="50" y="390" class="field">ts</text>
+  </g>
+
+  <!-- Recurring Rule -->
+  <g>
+    <rect x="290" y="290" width="200" height="120" rx="6" fill="#c4b5fd" class="box"/>
+    <text x="300" y="308" class="title">Recurring Rule</text>
+    <line x1="290" y1="318" x2="490" y2="318" stroke="#2d1540"/>
+    <text x="300" y="334" class="pk">▸ name (PK)</text>
+    <text x="300" y="348" class="field">frequency (daily/weekly/monthly)</text>
+    <text x="300" y="362" class="field">weekday / monthday</text>
+    <text x="300" y="376" class="field">title_template, weight</text>
+    <text x="300" y="390" class="fk">→ default_assignee (User)</text>
+  </g>
+
+  <!-- ====== MODULE: project (top-right) ====== -->
+  <text x="560" y="34" class="mod-label">PROJECT MODULE</text>
+
+  <g>
+    <rect x="560" y="50" width="220" height="160" rx="6" fill="#a7f3d0" class="box"/>
+    <text x="570" y="68" class="title">VT Project</text>
+    <line x1="560" y1="78" x2="780" y2="78" stroke="#2d1540"/>
+    <text x="570" y="94" class="pk">▸ name (PK)</text>
+    <text x="570" y="108" class="field">title, pdca_phase</text>
+    <text x="570" y="122" class="field">start_date, end_date</text>
+    <text x="570" y="136" class="field">blocked_days_threshold</text>
+    <text x="570" y="150" class="field">slip_pct_threshold</text>
+    <text x="570" y="164" class="field">capacity_pct_threshold</text>
+    <text x="570" y="178" class="fk">→ owner (User)</text>
+    <text x="570" y="192" class="fk">→ objective (Objective)</text>
+  </g>
+
+  <g>
+    <rect x="810" y="50" width="200" height="100" rx="6" fill="#a7f3d0" class="box"/>
+    <text x="820" y="68" class="title">VT Sprint</text>
+    <line x1="810" y1="78" x2="1010" y2="78" stroke="#2d1540"/>
+    <text x="820" y="94" class="pk">▸ name (PK)</text>
+    <text x="820" y="108" class="fk">→ project (VT Project)</text>
+    <text x="820" y="122" class="field">start_date, end_date</text>
+    <text x="820" y="136" class="field">status</text>
+  </g>
+
+  <g>
+    <rect x="810" y="170" width="200" height="80" rx="6" fill="#a7f3d0" class="box"/>
+    <text x="820" y="188" class="title">Sprint Task · child</text>
+    <line x1="810" y1="198" x2="1010" y2="198" stroke="#2d1540"/>
+    <text x="820" y="214" class="fk">→ parent (VT Sprint)</text>
+    <text x="820" y="228" class="fk">→ task (VT Task)</text>
+  </g>
+
+  <g>
+    <rect x="560" y="230" width="220" height="80" rx="6" fill="#a7f3d0" class="box"/>
+    <text x="570" y="248" class="title">Project Team Member · child</text>
+    <line x1="560" y1="258" x2="780" y2="258" stroke="#2d1540"/>
+    <text x="570" y="274" class="fk">→ parent (VT Project)</text>
+    <text x="570" y="288" class="fk">→ user (User)</text>
+    <text x="570" y="302" class="field">role (Leader/Member)</text>
+  </g>
+
+  <g>
+    <rect x="810" y="270" width="200" height="80" rx="6" fill="#a7f3d0" class="box"/>
+    <text x="820" y="288" class="title">Project Milestone · child</text>
+    <line x1="810" y1="298" x2="1010" y2="298" stroke="#2d1540"/>
+    <text x="820" y="314" class="fk">→ parent (VT Project)</text>
+    <text x="820" y="328" class="field">title, target_date</text>
+    <text x="820" y="342" class="field">achieved</text>
+  </g>
+
+  <g>
+    <rect x="560" y="330" width="220" height="80" rx="6" fill="#a7f3d0" class="box"/>
+    <text x="570" y="348" class="title">Project Documentation</text>
+    <line x1="560" y1="358" x2="780" y2="358" stroke="#2d1540"/>
+    <text x="570" y="374" class="fk">→ project (VT Project)</text>
+    <text x="570" y="388" class="field">title, url / attachment</text>
+    <text x="570" y="402" class="fk">→ created_by (User)</text>
+  </g>
+
+  <!-- ====== MODULE: okr (mid-right) ====== -->
+  <text x="1060" y="34" class="mod-label">OKR MODULE</text>
+
+  <g>
+    <rect x="1060" y="50" width="220" height="120" rx="6" fill="#fde68a" class="box"/>
+    <text x="1070" y="68" class="title">Objective</text>
+    <line x1="1060" y1="78" x2="1280" y2="78" stroke="#2d1540"/>
+    <text x="1070" y="94" class="pk">▸ name (PK)</text>
+    <text x="1070" y="108" class="field">title, description</text>
+    <text x="1070" y="122" class="field">pdca_phase, period</text>
+    <text x="1070" y="136" class="fk">→ owner (User)</text>
+    <text x="1070" y="150" class="field">progress_pct (derived)</text>
+  </g>
+
+  <g>
+    <rect x="1060" y="190" width="220" height="120" rx="6" fill="#fde68a" class="box"/>
+    <text x="1070" y="208" class="title">Key Result</text>
+    <line x1="1060" y1="218" x2="1280" y2="218" stroke="#2d1540"/>
+    <text x="1070" y="234" class="pk">▸ name (PK)</text>
+    <text x="1070" y="248" class="fk">→ objective (Objective)</text>
+    <text x="1070" y="262" class="field">title, unit</text>
+    <text x="1070" y="276" class="field">target_value, current_value</text>
+    <text x="1070" y="290" class="field">progress_pct</text>
+  </g>
+
+  <g>
+    <rect x="1060" y="330" width="220" height="100" rx="6" fill="#fde68a" class="box"/>
+    <text x="1070" y="348" class="title">KPI Definition</text>
+    <line x1="1060" y1="358" x2="1280" y2="358" stroke="#2d1540"/>
+    <text x="1070" y="374" class="pk">▸ name (PK)</text>
+    <text x="1070" y="388" class="field">kpi_name, unit</text>
+    <text x="1070" y="402" class="field">frequency (daily/weekly/...)</text>
+    <text x="1070" y="416" class="fk">→ owner (User)</text>
+  </g>
+
+  <g>
+    <rect x="1060" y="450" width="220" height="100" rx="6" fill="#fde68a" class="box"/>
+    <text x="1070" y="468" class="title">KPI Entry</text>
+    <line x1="1060" y1="478" x2="1280" y2="478" stroke="#2d1540"/>
+    <text x="1070" y="494" class="pk">▸ name (PK)</text>
+    <text x="1070" y="508" class="fk">→ kpi_definition (KPI Definition)</text>
+    <text x="1070" y="522" class="field">value, date</text>
+    <text x="1070" y="536" class="fk">→ recorded_by (User)</text>
+  </g>
+
+  <!-- ====== MODULE: workforce (bottom-left) ====== -->
+  <text x="40" y="454" class="mod-label">WORKFORCE MODULE</text>
+
+  <g>
+    <rect x="40" y="470" width="220" height="140" rx="6" fill="#fecaca" class="box"/>
+    <text x="50" y="488" class="title">Work Profile</text>
+    <line x1="40" y1="498" x2="260" y2="498" stroke="#2d1540"/>
+    <text x="50" y="514" class="pk">▸ name (PK)</text>
+    <text x="50" y="528" class="fk">→ user (User) · 1:1</text>
+    <text x="50" y="542" class="field">daily_target_hours</text>
+    <text x="50" y="556" class="field">weekly_capacity</text>
+    <text x="50" y="570" class="field">timezone</text>
+    <text x="50" y="584" class="field">effective_from</text>
+  </g>
+
+  <g>
+    <rect x="290" y="470" width="200" height="100" rx="6" fill="#fecaca" class="box"/>
+    <text x="300" y="488" class="title">Work Schedule Day · child</text>
+    <line x1="290" y1="498" x2="490" y2="498" stroke="#2d1540"/>
+    <text x="300" y="514" class="fk">→ parent (Work Profile)</text>
+    <text x="300" y="528" class="field">weekday (Mon..Sun)</text>
+    <text x="300" y="542" class="field">is_working_day</text>
+    <text x="300" y="556" class="field">hours</text>
+  </g>
+
+  <g>
+    <rect x="40" y="640" width="220" height="120" rx="6" fill="#fecaca" class="box"/>
+    <text x="50" y="658" class="title">User Point Summary</text>
+    <line x1="40" y1="668" x2="260" y2="668" stroke="#2d1540"/>
+    <text x="50" y="684" class="pk">▸ name (PK)</text>
+    <text x="50" y="698" class="fk">→ user (User)</text>
+    <text x="50" y="712" class="field">month (YYYY-MM)</text>
+    <text x="50" y="726" class="field">total_earned, total_bonus</text>
+    <text x="50" y="740" class="field">total_penalty, total_override</text>
+    <text x="50" y="754" class="field">net_points</text>
+  </g>
+
+  <g>
+    <rect x="290" y="640" width="200" height="100" rx="6" fill="#fecaca" class="box"/>
+    <text x="300" y="658" class="title">Daily Summary</text>
+    <line x1="290" y1="668" x2="490" y2="668" stroke="#2d1540"/>
+    <text x="300" y="684" class="pk">▸ name (PK)</text>
+    <text x="300" y="698" class="fk">→ user (User)</text>
+    <text x="300" y="712" class="field">date</text>
+    <text x="300" y="726" class="field">hours_logged, tasks_done</text>
+  </g>
+
+  <!-- ====== MODULE: vt_settings / telemetry (right column) ====== -->
+  <text x="560" y="454" class="mod-label">SETTINGS &amp; TELEMETRY</text>
+
+  <g>
+    <rect x="560" y="470" width="220" height="160" rx="6" fill="#bae6fd" class="box single"/>
+    <text x="570" y="488" class="title">VT Settings (single)</text>
+    <line x1="560" y1="498" x2="780" y2="498" stroke="#2d1540"/>
+    <text x="570" y="514" class="field">weight_multiplier</text>
+    <text x="570" y="528" class="field">early_bonus_rate</text>
+    <text x="570" y="542" class="field">late_penalty_rate</text>
+    <text x="570" y="556" class="field">revision_deduct_rate</text>
+    <text x="570" y="570" class="field">default_daily_target_hours</text>
+    <text x="570" y="584" class="field">default_*_threshold (3 fields)</text>
+    <text x="570" y="598" class="field">push_vapid_public_key</text>
+    <text x="570" y="612" class="field">push_vapid_private_key</text>
+  </g>
+
+  <g>
+    <rect x="810" y="470" width="200" height="120" rx="6" fill="#bae6fd" class="box"/>
+    <text x="820" y="488" class="title">Vernon Telemetry Event</text>
+    <line x1="810" y1="498" x2="1010" y2="498" stroke="#2d1540"/>
+    <text x="820" y="514" class="pk">▸ name (PK)</text>
+    <text x="820" y="528" class="fk">→ user (User)</text>
+    <text x="820" y="542" class="field">event (allowlisted)</text>
+    <text x="820" y="556" class="field">props (JSON ≤ 2048b)</text>
+    <text x="820" y="570" class="field">ts · purge &gt;90d</text>
+  </g>
+
+  <g>
+    <rect x="560" y="650" width="220" height="120" rx="6" fill="#bae6fd" class="box"/>
+    <text x="570" y="668" class="title">Vernon Push Subscription</text>
+    <line x1="560" y1="678" x2="780" y2="678" stroke="#2d1540"/>
+    <text x="570" y="694" class="pk">▸ name (PK)</text>
+    <text x="570" y="708" class="fk">→ user (User)</text>
+    <text x="570" y="722" class="field">endpoint (unique, ≤2048)</text>
+    <text x="570" y="736" class="field">p256dh, auth</text>
+    <text x="570" y="750" class="field">user_agent, last_seen</text>
+  </g>
+
+  <g>
+    <rect x="810" y="650" width="200" height="120" rx="6" fill="#bae6fd" class="box"/>
+    <text x="820" y="668" class="title">Vernon Push Preference</text>
+    <line x1="810" y1="678" x2="1010" y2="678" stroke="#2d1540"/>
+    <text x="820" y="694" class="pk">▸ name (PK)</text>
+    <text x="820" y="708" class="fk">→ user (User) · 1:1</text>
+    <text x="820" y="722" class="field">event_assignment</text>
+    <text x="820" y="736" class="field">event_mention</text>
+    <text x="820" y="750" class="field">event_due, event_review</text>
+  </g>
+
+  <!-- ====== Frappe core ====== -->
+  <text x="1060" y="584" class="mod-label">FRAPPE CORE</text>
+
+  <g>
+    <rect x="1060" y="600" width="220" height="80" rx="6" class="frap"/>
+    <text x="1070" y="618" class="title">User</text>
+    <line x1="1060" y1="628" x2="1280" y2="628" stroke="#6b6b6b"/>
+    <text x="1070" y="644" class="pk">▸ name (PK = email)</text>
+    <text x="1070" y="658" class="field">full_name, language</text>
+    <text x="1070" y="672" class="field">enabled, roles</text>
+  </g>
+
+  <g>
+    <rect x="1060" y="700" width="220" height="100" rx="6" class="frap"/>
+    <text x="1070" y="718" class="title">Notification Log</text>
+    <line x1="1060" y1="728" x2="1280" y2="728" stroke="#6b6b6b"/>
+    <text x="1070" y="744" class="pk">▸ name (PK)</text>
+    <text x="1070" y="758" class="fk">→ for_user (User)</text>
+    <text x="1070" y="772" class="field">subject, type, document_type</text>
+    <text x="1070" y="786" class="field">read, ts</text>
+  </g>
+
+  <!-- ====== RELATIONSHIPS (arrows) ====== -->
+  <!-- VT Task → child tables -->
+  <path d="M 260 130 L 290 100" class="rel" marker-end="url(#arr)"/>
+  <text x="262" y="120" class="label">1:N</text>
+  <path d="M 260 175 L 290 220" class="rel" marker-end="url(#arr)"/>
+  <text x="262" y="200" class="label">1:N</text>
+  <path d="M 150 250 L 150 290" class="rel" marker-end="url(#arr)"/>
+  <text x="155" y="276" class="label">1:N</text>
+
+  <!-- VT Task ↔ User (assigned_to) — draw to Frappe User far right via bend -->
+  <path d="M 260 215 Q 800 480 1060 640" class="rel" marker-end="url(#arr)"/>
+  <text x="700" y="430" class="label">VT Task.assigned_to → User (N:1)</text>
+
+  <!-- VT Task → VT Project -->
+  <path d="M 260 225 L 560 135" class="rel" marker-end="url(#arr)"/>
+  <text x="390" y="170" class="label">project N:1</text>
+
+  <!-- VT Task ↔ VT Sprint via Sprint Task -->
+  <path d="M 1010 210 L 1010 245" class="rel" marker-end="url(#arr)"/>
+  <text x="1015" y="232" class="label">VT Sprint 1:N Sprint Task</text>
+
+  <path d="M 810 210 Q 600 200 260 200" class="rel" marker-end="url(#arr)"/>
+  <text x="370" y="195" class="label">Sprint Task.task → VT Task (N:1)</text>
+
+  <!-- VT Project → VT Sprint -->
+  <path d="M 780 100 L 810 100" class="rel" marker-end="url(#arr)"/>
+  <text x="782" y="92" class="label">1:N</text>
+
+  <!-- VT Project → Project Team Member -->
+  <path d="M 670 210 L 670 230" class="rel" marker-end="url(#arr)"/>
+  <text x="675" y="225" class="label">1:N</text>
+
+  <!-- VT Project → Project Milestone -->
+  <path d="M 780 170 L 810 280" class="rel" marker-end="url(#arr)"/>
+  <text x="790" y="220" class="label">1:N</text>
+
+  <!-- VT Project → Project Documentation -->
+  <path d="M 670 210 Q 660 280 670 330" class="rel" marker-end="url(#arr)"/>
+  <text x="675" y="320" class="label">1:N</text>
+
+  <!-- VT Project → Objective -->
+  <path d="M 780 130 L 1060 100" class="rel" marker-end="url(#arr)"/>
+  <text x="900" y="100" class="label">project.objective N:1</text>
+
+  <!-- Objective → Key Result -->
+  <path d="M 1170 170 L 1170 190" class="rel" marker-end="url(#arr)"/>
+  <text x="1175" y="186" class="label">1:N</text>
+
+  <!-- KPI Definition → KPI Entry -->
+  <path d="M 1170 430 L 1170 450" class="rel" marker-end="url(#arr)"/>
+  <text x="1175" y="446" class="label">1:N</text>
+
+  <!-- Work Profile → Work Schedule Day -->
+  <path d="M 260 530 L 290 520" class="rel" marker-end="url(#arr)"/>
+  <text x="262" y="525" class="label">1:N</text>
+
+  <!-- Work Profile → User -->
+  <path d="M 260 525 Q 800 520 1060 640" class="rel" marker-end="url(#arr)"/>
+  <text x="610" y="498" class="label">Work Profile 1:1 User</text>
+
+  <!-- User Point Summary → User -->
+  <path d="M 260 695 Q 800 700 1060 660" class="rel" marker-end="url(#arr)"/>
+  <text x="600" y="730" class="label">User Point Summary N:1 User</text>
+
+  <!-- Task Point Log → VT Task -->
+  <path d="M 150 290 L 150 250" class="rel" marker-end="url(#arr)"/>
+
+  <!-- Task Point Log → User -->
+  <path d="M 260 375 Q 900 480 1060 640" class="rel" marker-end="url(#arr)"/>
+  <text x="650" y="465" class="label">Task Point Log.by_user → User</text>
+
+  <!-- Notification Log → User -->
+  <path d="M 1170 700 L 1170 680" class="rel" marker-end="url(#arr)"/>
+
+  <!-- Vernon Push Subscription → User -->
+  <path d="M 780 705 Q 920 690 1060 660" class="rel" marker-end="url(#arr)"/>
+  <text x="830" y="685" class="label">push_sub N:1 User</text>
+
+  <!-- Vernon Push Preference → User -->
+  <path d="M 1010 700 Q 1040 670 1060 660" class="rel" marker-end="url(#arr)"/>
+  <text x="1015" y="688" class="label">1:1</text>
+
+  <!-- Telemetry → User -->
+  <path d="M 1010 530 Q 1050 580 1060 640" class="rel" marker-end="url(#arr)"/>
+  <text x="1015" y="568" class="label">N:1</text>
+
+  <!-- Hook: Notification Log.after_insert → push_sender → Push Subscription (informational dashed) -->
+  <path d="M 1060 750 Q 880 730 780 720" stroke="#16a34a" stroke-width="1.5" fill="none" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+  <text x="850" y="745" class="label" fill="#16a34a">hook: after_insert → push_sender → subscriptions</text>
+
+  <!-- Hook: VT Task.on_submit → Task Point Log (informational dashed) -->
+  <path d="M 150 250 L 150 290" stroke="#16a34a" stroke-width="1.5" fill="none" stroke-dasharray="5 4"/>
+
+</svg>
+</div>
+
+<h2>Doctype Reference</h2>
+<table class="doctype-table">
+<thead><tr><th>Doctype</th><th>Module</th><th>Type</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>VT Task</code></td><td>task</td><td>Main</td><td>Core task entity. PDCA phase, Kanban status, weight, deadline, assignment, points.</td></tr>
+<tr><td><code>Task Dependency</code></td><td>task</td><td>Child of VT Task</td><td>Blocks-blocked links between tasks.</td></tr>
+<tr><td><code>Task Schedule Entry</code></td><td>task</td><td>Child of VT Task</td><td>Daily hour distribution across calendar days.</td></tr>
+<tr><td><code>Task Point Log</code></td><td>task</td><td>Append-only</td><td>Immutable audit of every point delta.</td></tr>
+<tr><td><code>Recurring Rule</code></td><td>task</td><td>Main</td><td>Template for auto-generating recurring task instances.</td></tr>
+<tr><td><code>VT Project</code></td><td>project</td><td>Main</td><td>Project with PDCA phase, linked sprints, thresholds.</td></tr>
+<tr><td><code>VT Sprint</code></td><td>project</td><td>Main</td><td>Time-boxed iteration.</td></tr>
+<tr><td><code>Sprint Task</code></td><td>project</td><td>Child of VT Sprint</td><td>Maps VT Task to a sprint.</td></tr>
+<tr><td><code>Project Team Member</code></td><td>project</td><td>Child of VT Project</td><td>Per-project role (Leader/Member).</td></tr>
+<tr><td><code>Project Milestone</code></td><td>project</td><td>Child of VT Project</td><td>Named milestone with target date.</td></tr>
+<tr><td><code>Project Documentation</code></td><td>project</td><td>Main</td><td>Docs attached to project.</td></tr>
+<tr><td><code>Objective</code></td><td>okr</td><td>Main</td><td>OKR objective with PDCA phase and owner.</td></tr>
+<tr><td><code>Key Result</code></td><td>okr</td><td>Main</td><td>Measurable result with target / current value.</td></tr>
+<tr><td><code>KPI Definition</code></td><td>okr</td><td>Main</td><td>Metric definition (unit, frequency).</td></tr>
+<tr><td><code>KPI Entry</code></td><td>okr</td><td>Main</td><td>Single KPI data point.</td></tr>
+<tr><td><code>Work Profile</code></td><td>workforce</td><td>Main (1:1 with User)</td><td>Daily target hours, working schedule.</td></tr>
+<tr><td><code>Work Schedule Day</code></td><td>workforce</td><td>Child of Work Profile</td><td>Per-weekday config (working day + hours).</td></tr>
+<tr><td><code>User Point Summary</code></td><td>workforce</td><td>Main</td><td>Monthly point aggregate per user.</td></tr>
+<tr><td><code>Daily Summary</code></td><td>workforce</td><td>Main</td><td>Daily hours logged + tasks completed.</td></tr>
+<tr><td><code>VT Settings</code></td><td>vt_settings</td><td>Single</td><td>All multipliers, rates, thresholds, VAPID keys.</td></tr>
+<tr><td><code>Vernon Telemetry Event</code></td><td>vt_settings</td><td>Append-only</td><td>Client-emitted, allowlisted events. 90-day retention.</td></tr>
+<tr><td><code>Vernon Push Subscription</code></td><td>vt_settings</td><td>Main</td><td>Web Push endpoint per browser/user.</td></tr>
+<tr><td><code>Vernon Push Preference</code></td><td>vt_settings</td><td>Main (1:1)</td><td>Per-user event-type toggles.</td></tr>
+<tr><td><code>User</code> · <code>Notification Log</code></td><td>frappe core</td><td>Native</td><td>Reused from Frappe.</td></tr>
+</tbody>
+</table>
+
+<h2>Key Relationships</h2>
+<table class="rel-table">
+<thead><tr><th>From</th><th>Card.</th><th>To</th><th>Via</th></tr></thead>
+<tbody>
+<tr><td>VT Task</td><td>N:1</td><td>User</td><td><code>assigned_to</code></td></tr>
+<tr><td>VT Task</td><td>N:1</td><td>VT Project</td><td><code>project</code></td></tr>
+<tr><td>VT Task</td><td>N:M</td><td>VT Sprint</td><td>via <code>Sprint Task</code></td></tr>
+<tr><td>VT Task</td><td>N:M</td><td>VT Task</td><td>via <code>Task Dependency</code> (blocks/blocked-by)</td></tr>
+<tr><td>VT Task</td><td>1:N</td><td>Task Schedule Entry</td><td>child table</td></tr>
+<tr><td>VT Task</td><td>1:N</td><td>Task Point Log</td><td>append on hook <code>on_submit</code></td></tr>
+<tr><td>VT Project</td><td>1:N</td><td>VT Sprint</td><td><code>project</code> on sprint</td></tr>
+<tr><td>VT Project</td><td>N:1</td><td>Objective</td><td><code>objective</code> (optional)</td></tr>
+<tr><td>Objective</td><td>1:N</td><td>Key Result</td><td><code>objective</code> on KR</td></tr>
+<tr><td>KPI Definition</td><td>1:N</td><td>KPI Entry</td><td><code>kpi_definition</code></td></tr>
+<tr><td>Work Profile</td><td>1:1</td><td>User</td><td><code>user</code> unique</td></tr>
+<tr><td>Work Profile</td><td>1:N</td><td>Work Schedule Day</td><td>child table</td></tr>
+<tr><td>User Point Summary</td><td>N:1</td><td>User</td><td>aggregated monthly</td></tr>
+<tr><td>Notification Log</td><td>1:N</td><td>Vernon Push Subscription</td><td>via <code>after_insert</code> hook → push_sender</td></tr>
+<tr><td>Vernon Push Preference</td><td>1:1</td><td>User</td><td>filters which events trigger push</td></tr>
+</tbody>
+</table>
+
+<h2>Hook-Driven Side Effects</h2>
+<ul>
+  <li><code>VT Task.on_submit</code> → <code>point_calculator.calculate_points</code> → inserts <code>Task Point Log</code> rows → updates <code>User Point Summary</code>.</li>
+  <li><code>VT Task.on_update</code> → <code>scheduling_engine.on_task_update</code> + <code>analytics.invalidate_project_cache</code>.</li>
+  <li><code>VT Project.validate</code> → <code>vt_project.validate_team</code>.</li>
+  <li><code>VT Sprint.on_update</code> → analytics cache invalidation.</li>
+  <li><code>Notification Log.after_insert</code> → <code>push_sender.send_push_for_notification</code> → filters via <code>Vernon Push Preference</code> → dispatches to all <code>Vernon Push Subscription</code> rows for user → prunes dead endpoints (404/410).</li>
+</ul>
+
+<h2>Indexes (key)</h2>
+<ul>
+  <li><code>VT Task</code>: <code>(assigned_to, pdca_phase)</code>, <code>(project, sprint)</code>, <code>(deadline)</code></li>
+  <li><code>Task Schedule Entry</code>: <code>(parent, date)</code></li>
+  <li><code>Task Point Log</code>: <code>(task, ts)</code>, <code>(by_user, ts)</code></li>
+  <li><code>VT Sprint</code>: <code>(project, end_date desc)</code></li>
+  <li><code>User Point Summary</code>: <code>(user, month)</code> unique</li>
+  <li><code>Vernon Telemetry Event</code>: <code>(event, ts)</code>, <code>(user, ts)</code></li>
+  <li><code>Vernon Push Subscription</code>: <code>(endpoint)</code> unique</li>
+  <li><code>Vernon Push Preference</code>: <code>(user)</code> unique</li>
+</ul>
+
+<h2>Related Docs</h2>
+<ul class="meta-list">
+  <li><span><a href="prd/domain.html">PRD §4 — Domain Model</a></span><span class="desc">Module &amp; doctype inventory in narrative form</span></li>
+  <li><span><a href="trd/contracts.html">TRD §5 — Database Schema</a></span><span class="desc">Critical fields, indexes, retention</span></li>
+  <li><span><a href="adr/data.html">ADR Domain &amp; Data</a></span><span class="desc">PDCA state machine + immutable point log decisions</span></li>
+</ul>
+
+<footer>ERD v1.0 · synthesized from doctype tree on 2026-05-16. SVG inline — pan via horizontal scroll on narrow viewports.</footer>
+
+</div>
+</body>
+</html>

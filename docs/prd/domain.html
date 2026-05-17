@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PRD Domain — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">PRD</a> · <strong>Domain Model</strong></div>
+
+<header class="hero">
+  <h1>PRD §4 · Domain Model</h1>
+  <div class="sub">Modules, doctypes, PDCA, point math, scheduling</div>
+</header>
+
+<p>Visual companion: <a href="../erd.html">ERD diagram</a>.</p>
+
+<h2 id="s41">4.1 Modules</h2>
+<pre><code>vernon_tasks/
+├── task/        Tasks, Schedule, Points, Recurring
+├── project/     Projects, Sprints, Milestones, Team
+├── okr/         Objectives, Key Results, KPI defs &amp; entries
+├── workforce/   Work profiles, capacities, point summaries
+├── vt_settings/ App-wide configuration (single)
+└── workspace/   My Tasks / My Projects / Overview</code></pre>
+
+<h2 id="s42">4.2 Doctypes</h2>
+<table>
+<thead><tr><th>Module</th><th>Doctypes</th></tr></thead>
+<tbody>
+<tr><td>task</td><td>VT Task, Task Dependency, Task Schedule Entry, Task Point Log, Recurring Rule</td></tr>
+<tr><td>project</td><td>VT Project, VT Sprint, Sprint Task, Project Team Member, Project Milestone, Project Documentation</td></tr>
+<tr><td>okr</td><td>Objective, Key Result, KPI Definition, KPI Entry</td></tr>
+<tr><td>workforce</td><td>Work Profile, Work Schedule Day, User Point Summary, Daily Summary</td></tr>
+<tr><td>settings &amp; telemetry</td><td>VT Settings (single), Vernon Telemetry Event, Vernon Push Subscription, Vernon Push Preference</td></tr>
+</tbody>
+</table>
+
+<h2 id="s43">4.3 PDCA State Machines</h2>
+<h3>VT Task</h3>
+<pre><code>BACKLOG → PLAN → DO → CHECK → DONE
+                 ↑     │
+                 └─ ACT┘     (CHECK can return to ACT on rejection)</code></pre>
+<table>
+<thead><tr><th>Kanban Status</th><th>PDCA Phase</th></tr></thead>
+<tbody>
+<tr><td>Backlog</td><td>BACKLOG</td></tr>
+<tr><td>Scheduled</td><td>PLAN</td></tr>
+<tr><td>In Progress</td><td>DO</td></tr>
+<tr><td>In Review</td><td>CHECK</td></tr>
+<tr><td>Revision</td><td>ACT</td></tr>
+<tr><td>Done</td><td>DONE</td></tr>
+</tbody>
+</table>
+<h3>VT Project</h3>
+<p><code>PLAN → DO → CHECK → (ACT | CLOSED)</code> · <code>ACT → PLAN | DO</code></p>
+
+<h2 id="s44">4.4 Point Calculation</h2>
+<pre><code>base               = weight × weight_multiplier
+early_bonus        = base × early_bonus_rate × max(0, days_early)
+late_penalty       = base × late_penalty_rate × max(0, days_late)
+revision_deduction = base × revision_deduct_rate × revision_count
+earned             = base + early_bonus − late_penalty − revision_deduction</code></pre>
+<p>Defaults (in <code>VT Settings</code>): <code>weight_multiplier=10</code>, <code>early_bonus_rate=0.05</code>, <code>late_penalty_rate=0.08</code>, <code>revision_deduct_rate=0.10</code>.</p>
+<p>Every transaction writes row to <code>Task Point Log</code> (types: <code>earned</code>, <code>early_bonus</code>, <code>late_penalty</code>, <code>revision_deduction</code>, <code>leader_override</code>). Monthly aggregate → <code>User Point Summary</code>.</p>
+
+<h2 id="s45">4.5 Scheduling &amp; Capacity</h2>
+<ul>
+  <li>Distribute <code>estimated_hours</code> evenly across assignee's working days (from Work Profile).</li>
+  <li>Manual daily overrides auto-rebalance remainder.</li>
+  <li>Capacity conflict = scheduled hours &gt; daily target; surfaced to leaders.</li>
+  <li>Recurring tasks generated daily by scheduler from <code>Recurring Rule</code>.</li>
+</ul>
+
+<nav class="nav-prev-next">
+  <a href="overview.html">← Overview</a>
+  <a href="features.html">Features &amp; APIs →</a>
+</nav>
+
+<footer>PRD §4 · part of <a href="index.html">PRD v1.0</a>.</footer>
+
+</div>
+</body>
+</html>
