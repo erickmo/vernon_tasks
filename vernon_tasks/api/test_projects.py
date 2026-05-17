@@ -1,7 +1,7 @@
 import frappe
 import unittest
 from datetime import date
-from vernon_tasks.api.projects import list_projects
+from vernon_tasks.api.projects import list_projects, get_project_with_relations
 
 
 class TestListProjects(unittest.TestCase):
@@ -39,3 +39,24 @@ class TestListProjects(unittest.TestCase):
         result = list_projects({"statuses": ["Closed"]})
         for r in result:
             self.assertEqual(r["status"], "Closed")
+
+
+class TestGetProjectWithRelations(unittest.TestCase):
+    def test_returns_project_summary_and_counts(self):
+        existing = frappe.get_all("VT Project", filters={"title": "Test Proj P3"}, limit=1)
+        self.assertTrue(existing)
+        name = existing[0]["name"]
+        result = get_project_with_relations(name)
+        self.assertIn("project", result)
+        self.assertIn("linked_objective_summary", result)
+        self.assertIn("counts", result)
+        self.assertEqual(result["project"]["name"], name)
+        c = result["counts"]
+        for k in ("team_members", "milestones", "sprints", "documentation"):
+            self.assertIn(k, c)
+        # No objective linked → summary None
+        self.assertIsNone(result["linked_objective_summary"])
+
+    def test_unknown_raises(self):
+        with self.assertRaises(frappe.DoesNotExistError):
+            get_project_with_relations("NONEXISTENT-PROJ")

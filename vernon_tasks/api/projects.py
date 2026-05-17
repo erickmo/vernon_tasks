@@ -62,3 +62,37 @@ def list_projects(filters=None):
         LIMIT 500
     """
     return frappe.db.sql(sql, params, as_dict=True)
+
+
+@frappe.whitelist()
+def get_project_with_relations(name):
+    if not frappe.db.exists("VT Project", name):
+        raise frappe.DoesNotExistError(f"VT Project {name} not found")
+    project = frappe.get_doc("VT Project", name).as_dict()
+
+    linked_objective_summary = None
+    obj_name = project.get("objective")
+    if obj_name and frappe.db.exists("Objective", obj_name):
+        obj = frappe.db.get_value(
+            "Objective", obj_name,
+            ["name", "title", "period", "status"], as_dict=True
+        )
+        avg_progress = frappe.db.sql(
+            "SELECT COALESCE(AVG(progress_percent), 0) AS avg FROM `tabKey Result` WHERE objective = %s",
+            obj_name, as_dict=True
+        )
+        obj["avg_kr_progress"] = float(avg_progress[0]["avg"]) if avg_progress else 0.0
+        linked_objective_summary = obj
+
+    counts = {
+        "team_members": frappe.db.count("Project Team Member", {"parent": name}),
+        "milestones": frappe.db.count("Project Milestone", {"parent": name}),
+        "sprints": frappe.db.count("VT Sprint", {"project": name}),
+        "documentation": frappe.db.count("Project Documentation", {"parent": name}),
+    }
+
+    return {
+        "project": project,
+        "linked_objective_summary": linked_objective_summary,
+        "counts": counts,
+    }
