@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { fetchPushPrefs, updatePushPrefs, PushPrefs } from "../api/pushPrefs";
-import { Skeleton } from "../components/Skeleton";
-import { useToast } from "../components/Toast";
-import { t, StringKey } from "../i18n";
-import { logEvent } from "../telemetry";
+import { fetchPushPrefs, updatePushPrefs, PushPrefs } from "../../api/pushPrefs";
+import { Skeleton } from "../../components/Skeleton";
+import { useToast } from "../../components/Toast";
+import { t, StringKey } from "../../i18n";
+import { logEvent } from "../../telemetry";
 
 const FIELDS: Array<{ key: keyof PushPrefs; labelKey: StringKey }> = [
   { key: "event_assignment", labelKey: "pref.assignment" },

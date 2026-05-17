@@ -6,18 +6,18 @@ import {
   fetchVelocity,
   fetchStreak,
   Period,
-} from "../api/analytics";
-import { fetchDailyCompletions } from "../api/dashboard";
-import { Tabs } from "../components/Tabs";
-import { LeaderboardTable } from "../components/LeaderboardTable";
-import { VelocityChart } from "../components/VelocityChart";
-import { StreakChart } from "../components/StreakChart";
-import { ProjectPicker } from "../components/ProjectPicker";
-import { Skeleton } from "../components/Skeleton";
-import { EmptyState } from "../components/EmptyState";
-import { useUserProjects } from "../hooks/useUserProjects";
-import { t } from "../i18n";
-import { logEvent } from "../telemetry";
+} from "../../api/analytics";
+import { fetchDailyCompletions } from "../../api/dashboard";
+import { Tabs } from "../../components/Tabs";
+import { LeaderboardTable } from "../../components/LeaderboardTable";
+import { VelocityChart } from "../../components/VelocityChart";
+import { StreakChart } from "../../components/StreakChart";
+import { ProjectPicker } from "../../components/ProjectPicker";
+import { Skeleton } from "../../components/Skeleton";
+import { EmptyState } from "../../components/EmptyState";
+import { useUserProjects } from "../../hooks/useUserProjects";
+import { t } from "../../i18n";
+import { logEvent } from "../../telemetry";
 
 type TabKey = "leaderboard" | "velocity" | "streak";
 

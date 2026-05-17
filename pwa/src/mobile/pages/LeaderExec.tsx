@@ -5,14 +5,14 @@ import {
   fetchOkrRollup,
   fetchKpiList,
   fetchKpiTrend,
-} from "../api/leaderExec";
-import { HealthCard } from "../components/HealthCard";
-import { OkrTable } from "../components/OkrTable";
-import { KpiPicker } from "../components/KpiPicker";
-import { KpiTrendChart } from "../components/KpiTrendChart";
-import { Skeleton } from "../components/Skeleton";
-import { EmptyState } from "../components/EmptyState";
-import { logEvent } from "../telemetry";
+} from "../../api/leaderExec";
+import { HealthCard } from "../../components/HealthCard";
+import { OkrTable } from "../../components/OkrTable";
+import { KpiPicker } from "../../components/KpiPicker";
+import { KpiTrendChart } from "../../components/KpiTrendChart";
+import { Skeleton } from "../../components/Skeleton";
+import { EmptyState } from "../../components/EmptyState";
+import { logEvent } from "../../telemetry";
 
 function SectionHeader({ title }: { title: string }) {
   return (

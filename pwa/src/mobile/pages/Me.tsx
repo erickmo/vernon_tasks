@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { logout, probeSession } from "../auth/session";
-import { useUnreadCount } from "../hooks/useUnreadCount";
-import { PushToggle } from "../components/PushToggle";
-import { t } from "../i18n";
+import { logout, probeSession } from "../../auth/session";
+import { useUnreadCount } from "../../hooks/useUnreadCount";
+import { PushToggle } from "../../components/PushToggle";
+import { t } from "../../i18n";
 
 function getInitials(name: string | null): string {
   if (!name) return "?";

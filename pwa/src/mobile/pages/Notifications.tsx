@@ -6,14 +6,14 @@ import {
   markRead,
   markAllRead,
   Notification,
-} from "../api/notifications";
-import { NotificationRow } from "../components/NotificationRow";
-import { Skeleton } from "../components/Skeleton";
-import { EmptyState } from "../components/EmptyState";
-import { PullToRefresh } from "../components/PullToRefresh";
-import { useToast } from "../components/Toast";
-import { t } from "../i18n";
-import { logEvent } from "../telemetry";
+} from "../../api/notifications";
+import { NotificationRow } from "../../components/NotificationRow";
+import { Skeleton } from "../../components/Skeleton";
+import { EmptyState } from "../../components/EmptyState";
+import { PullToRefresh } from "../../components/PullToRefresh";
+import { useToast } from "../../components/Toast";
+import { t } from "../../i18n";
+import { logEvent } from "../../telemetry";
 
 export function NotificationsPage() {
   const q = useQuery({

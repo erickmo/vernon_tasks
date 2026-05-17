@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchTaskDetail } from "../../api/tasks";
-import { completeTask, logProgress, snoozeTask, SnoozeDays } from "../../api/mutations";
-import { Skeleton } from "../../components/Skeleton";
-import { EmptyState } from "../../components/EmptyState";
-import { TaskActions } from "../../components/TaskActions";
-import { LogProgressModal } from "../../components/LogProgressModal";
-import { useToast } from "../../components/Toast";
-import { useCompleteCounter } from "../../hooks/useCompleteCounter";
-import { fmtDate, fmtTime, t } from "../../i18n";
-import { logEvent } from "../../telemetry";
+import { fetchTaskDetail } from "../../../api/tasks";
+import { completeTask, logProgress, snoozeTask, SnoozeDays } from "../../../api/mutations";
+import { Skeleton } from "../../../components/Skeleton";
+import { EmptyState } from "../../../components/EmptyState";
+import { TaskActions } from "../../../components/TaskActions";
+import { LogProgressModal } from "../../../components/LogProgressModal";
+import { useToast } from "../../../components/Toast";
+import { useCompleteCounter } from "../../../hooks/useCompleteCounter";
+import { fmtDate, fmtTime, t } from "../../../i18n";
+import { logEvent } from "../../../telemetry";
 
 const STATUS_COLORS: Record<string, string> = {
   Backlog: "#94a3b8",

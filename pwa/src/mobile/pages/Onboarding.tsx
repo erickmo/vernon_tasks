@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { t } from "../i18n";
+import { t } from "../../i18n";
 
 const SLIDES = [
   { title: t("onboarding.welcome.title"), body: t("onboarding.welcome.body"), cta: "Lanjut" },

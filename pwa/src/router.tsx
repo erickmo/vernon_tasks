@@ -3,17 +3,17 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AuthGuard } from "./auth/guard";
 import { LoginPage } from "./auth/login";
 import { AppShell } from "./AppShell";
-import { MyWorkList } from "./pages/MyWork/List";
-import { MyWorkDetail } from "./pages/MyWork/Detail";
-import { Onboarding } from "./pages/Onboarding";
-import { MePage } from "./pages/Me";
-import { NotificationsPage } from "./pages/Notifications";
-import { DashboardPage } from "./pages/Dashboard";
-import { LeaderPage } from "./pages/Leader";
-import { PushPrefsPage } from "./pages/PushPrefs";
+import { MyWorkList } from "./mobile/pages/MyWork/List";
+import { MyWorkDetail } from "./mobile/pages/MyWork/Detail";
+import { Onboarding } from "./mobile/pages/Onboarding";
+import { MePage } from "./mobile/pages/Me";
+import { NotificationsPage } from "./mobile/pages/Notifications";
+import { DashboardPage } from "./mobile/pages/Dashboard";
+import { LeaderPage } from "./mobile/pages/Leader";
+import { PushPrefsPage } from "./mobile/pages/PushPrefs";
 
 const AnalyticsPage = lazy(() =>
-  import("./pages/Analytics").then((m) => ({ default: m.AnalyticsPage })),
+  import("./mobile/pages/Analytics").then((m) => ({ default: m.AnalyticsPage })),
 );
 
 function LazyAnalytics() {

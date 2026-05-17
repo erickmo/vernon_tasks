@@ -6,17 +6,17 @@ import {
   fetchTeamVelocity,
   fetchForecast,
   fetchRisks,
-} from "../api/leader";
-import { useLedProjects } from "../hooks/useLedProjects";
-import { ProjectPicker } from "../components/ProjectPicker";
-import { BurndownChart } from "../components/BurndownChart";
-import { ForecastChart } from "../components/ForecastChart";
-import { RiskList } from "../components/RiskList";
-import { VelocityChart } from "../components/VelocityChart";
-import { Skeleton } from "../components/Skeleton";
-import { EmptyState } from "../components/EmptyState";
-import { fmtDate } from "../i18n";
-import { logEvent } from "../telemetry";
+} from "../../api/leader";
+import { useLedProjects } from "../../hooks/useLedProjects";
+import { ProjectPicker } from "../../components/ProjectPicker";
+import { BurndownChart } from "../../components/BurndownChart";
+import { ForecastChart } from "../../components/ForecastChart";
+import { RiskList } from "../../components/RiskList";
+import { VelocityChart } from "../../components/VelocityChart";
+import { Skeleton } from "../../components/Skeleton";
+import { EmptyState } from "../../components/EmptyState";
+import { fmtDate } from "../../i18n";
+import { logEvent } from "../../telemetry";
 
 function SectionHeader({ title }: { title: string }) {
   return (

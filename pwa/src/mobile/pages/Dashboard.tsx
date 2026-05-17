@@ -4,12 +4,12 @@ import {
   fetchEmployeeStats,
   fetchSprintKanban,
   type KanbanItem,
-} from "../api/dashboard";
-import { Skeleton } from "../components/Skeleton";
-import { EmptyState } from "../components/EmptyState";
-import { PullToRefresh } from "../components/PullToRefresh";
-import { fmtDate, t } from "../i18n";
-import { logEvent } from "../telemetry";
+} from "../../api/dashboard";
+import { Skeleton } from "../../components/Skeleton";
+import { EmptyState } from "../../components/EmptyState";
+import { PullToRefresh } from "../../components/PullToRefresh";
+import { fmtDate, t } from "../../i18n";
+import { logEvent } from "../../telemetry";
 
 /* ── Design tokens (dashboard-local) ─────────────────────── */
 const BG       = "var(--vt-bg)";

@@ -1,32 +1,32 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { MyWorkDetail } from "./Detail";
-import { fetchMyWork, MyWork, TaskCard as TaskCardT } from "../../api/tasks";
-import { completeTask, logProgress, snoozeTask, SnoozeDays } from "../../api/mutations";
+import { fetchMyWork, MyWork, TaskCard as TaskCardT } from "../../../api/tasks";
+import { completeTask, logProgress, snoozeTask, SnoozeDays } from "../../../api/mutations";
 import {
   fetchSearchResults,
   filtersActive,
   SearchFilters,
-} from "../../api/search";
-import { Skeleton } from "../../components/Skeleton";
-import { EmptyState } from "../../components/EmptyState";
-import { StaleBadge } from "../../components/StaleBadge";
-import { PullToRefresh } from "../../components/PullToRefresh";
-import { SwipeRow } from "../../components/SwipeRow";
-import { TaskActions } from "../../components/TaskActions";
-import { LogProgressModal } from "../../components/LogProgressModal";
-import { InstallPrompt } from "../../components/InstallPrompt";
-import { SearchBar } from "../../components/SearchBar";
-import { FilterSheet } from "../../components/FilterSheet";
-import { ActiveFilterChips } from "../../components/ActiveFilterChips";
-import { useToast } from "../../components/Toast";
-import { useUndoableMutation } from "../../hooks/useUndoableMutation";
-import { useCompleteCounter } from "../../hooks/useCompleteCounter";
-import { useDebounce } from "../../hooks/useDebounce";
-import { greeting, fmtDate, t } from "../../i18n";
-import { logEvent } from "../../telemetry";
+} from "../../../api/search";
+import { Skeleton } from "../../../components/Skeleton";
+import { EmptyState } from "../../../components/EmptyState";
+import { StaleBadge } from "../../../components/StaleBadge";
+import { PullToRefresh } from "../../../components/PullToRefresh";
+import { SwipeRow } from "../../../components/SwipeRow";
+import { TaskActions } from "../../../components/TaskActions";
+import { LogProgressModal } from "../../../components/LogProgressModal";
+import { InstallPrompt } from "../../../components/InstallPrompt";
+import { SearchBar } from "../../../components/SearchBar";
+import { FilterSheet } from "../../../components/FilterSheet";
+import { ActiveFilterChips } from "../../../components/ActiveFilterChips";
+import { useToast } from "../../../components/Toast";
+import { useUndoableMutation } from "../../../hooks/useUndoableMutation";
+import { useCompleteCounter } from "../../../hooks/useCompleteCounter";
+import { useDebounce } from "../../../hooks/useDebounce";
+import { greeting, fmtDate, t } from "../../../i18n";
+import { logEvent } from "../../../telemetry";
 
 const HEADER_H = 96;
 
