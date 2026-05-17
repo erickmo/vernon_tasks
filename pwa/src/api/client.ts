@@ -46,7 +46,21 @@ async function request<T>(method: string, url: string, body?: unknown, retry = t
   return (json && "message" in json ? json.message : json) as T;
 }
 
+function withQuery(url: string, params?: Record<string, string | undefined>): string {
+  if (!params) return url;
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null) qs.append(k, v);
+  }
+  const s = qs.toString();
+  if (!s) return url;
+  return url.includes("?") ? `${url}&${s}` : `${url}?${s}`;
+}
+
 export const api = {
-  get: <T>(url: string) => request<T>("GET", url),
+  get: <T>(url: string, params?: Record<string, string | undefined>) =>
+    request<T>("GET", withQuery(url, params)),
   post: <T>(url: string, body?: unknown) => request<T>("POST", url, body ?? {}),
+  put: <T>(url: string, body?: unknown) => request<T>("PUT", url, body ?? {}),
+  delete: <T>(url: string) => request<T>("DELETE", url),
 };
