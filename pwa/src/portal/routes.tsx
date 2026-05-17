@@ -5,6 +5,8 @@ import { ComingSoon } from "./pages/ComingSoon";
 import { RequirePermission } from "./guards/RequirePermission";
 import { OKRRoutes } from "./okr/OKRRoutes";
 import { OKRFeatureGate } from "./okr/OKRFeatureGate";
+import { ProjectRoutes } from "./projects/ProjectRoutes";
+import { ProjectsFeatureGate } from "./projects/ProjectsFeatureGate";
 
 export function PortalRoutes() {
   return (
@@ -22,7 +24,13 @@ export function PortalRoutes() {
       />
       <Route
         path="projects/*"
-        element={<RequirePermission perm="project.read"><ComingSoon domain="Projects" /></RequirePermission>}
+        element={
+          <RequirePermission perm="project.read">
+            <ProjectsFeatureGate>
+              <ProjectRoutes />
+            </ProjectsFeatureGate>
+          </RequirePermission>
+        }
       />
       <Route
         path="workforce/*"
