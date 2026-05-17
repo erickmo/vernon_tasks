@@ -24,7 +24,7 @@ function wrap(initial: string) {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[initial]}>
         <Routes>
-          <Route path="/app/*" element={<PortalShell />} />
+          <Route path="/portal/*" element={<PortalShell />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -32,23 +32,23 @@ function wrap(initial: string) {
 }
 
 describe("PortalShell", () => {
-  it("renders TopBar + Dashboard at /app", async () => {
-    wrap("/app");
+  it("renders TopBar + Dashboard at /portal", async () => {
+    wrap("/portal");
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: /dashboard/i })).toBeInTheDocument(),
     );
     expect(document.querySelector(".portal-topbar")).toBeInTheDocument();
   });
 
-  it("renders ComingSoon for /app/okr", async () => {
-    wrap("/app/okr");
+  it("renders ComingSoon for /portal/okr", async () => {
+    wrap("/portal/okr");
     await waitFor(() =>
       expect(screen.getByText(/okr — coming soon/i)).toBeInTheDocument(),
     );
   });
 
-  it("renders NotFound for unknown /app/xyz", async () => {
-    wrap("/app/xyz");
+  it("renders NotFound for unknown /portal/xyz", async () => {
+    wrap("/portal/xyz");
     await waitFor(() =>
       expect(screen.getByText(/page not found/i)).toBeInTheDocument(),
     );

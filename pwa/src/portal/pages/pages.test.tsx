@@ -31,7 +31,7 @@ describe("portal pages", () => {
         <NotFound />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute("href", "/app");
+    expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute("href", "/portal");
   });
   it("ErrorPage shows retry button and reports message", () => {
     render(<ErrorPage message="boom" onRetry={() => {}} />);

@@ -11,7 +11,7 @@
 
 Vernon Tasks today ships a mobile-first PWA mounted at `/m/*` (React + Vite, in `pwa/`), targeting worker-level task execution. Managers, admins, and PMOs need a desktop-class interface for strategic, multi-domain work (OKR overview, project planning, workforce analytics, reporting) that mobile UI cannot serve well.
 
-**Goal:** Establish a desktop portal at `/app/*` inside the existing `pwa/` codebase — sharing auth, API, cache, i18n, telemetry, and component primitives with the mobile PWA — while providing a separate layout shell, navigation, and permission model tailored to manager/admin workflows. This PRD covers the foundation; each domain (OKR, Projects, Workforce, Reports) will be specced and implemented as a separate sub-PRD.
+**Goal:** Establish a desktop portal at `/portal/*` inside the existing `pwa/` codebase — sharing auth, API, cache, i18n, telemetry, and component primitives with the mobile PWA — while providing a separate layout shell, navigation, and permission model tailored to manager/admin workflows. This PRD covers the foundation; each domain (OKR, Projects, Workforce, Reports) will be specced and implemented as a separate sub-PRD.
 
 **Non-goals (Phase 1):**
 - Domain content (OKR/Projects/Workforce/Reports pages — stubs only)
@@ -28,7 +28,7 @@ Vernon Tasks today ships a mobile-first PWA mounted at `/m/*` (React + Vite, in 
 |---------|--------------|
 | Manager | Review OKR progress, monitor team workload, approve project plans |
 | Admin / PMO | Configure projects, manage roles, run cross-domain reports |
-| Worker (transient) | May land on `/app/*` from a link — gracefully redirected to `/m/*` |
+| Worker (transient) | May land on `/portal/*` from a link — gracefully redirected to `/m/*` |
 
 Access is permission-gated, not role-gated: any user with a matching permission key sees the corresponding nav item and route.
 
@@ -43,7 +43,7 @@ Single Vite entry (`pwa/src/main.tsx`) and single bundle. The top-level router b
 **Top-level routes:**
 ```
 /m/*    → <MobileShell>   (existing)
-/app/*  → <PortalShell>   (new, React.lazy)
+/portal/*  → <PortalShell>   (new, React.lazy)
 /       → redirect by viewport + role hint
 ```
 
@@ -63,7 +63,7 @@ pwa/src/
     ├── routes.tsx            portal sub-router
     ├── nav.ts                nav registry (key, label, path, icon, permission)
     ├── guards/
-    │   ├── PortalGuard.tsx   auth + viewport guard for /app/*
+    │   ├── PortalGuard.tsx   auth + viewport guard for /portal/*
     │   └── RequirePermission.tsx
     ├── layouts/              PageLayout, SplitLayout, FullBleed
     └── pages/
@@ -77,13 +77,13 @@ Existing `pwa/src/pages/` are moved under `pwa/src/mobile/pages/` as part of P1.
 
 ### 3.3 Backend Wiring
 
-- `vernon_tasks/hooks.py`: extend `website_route_rules` with `/app/<path:app_path>` → `vernon_tasks.www.app.app` (mirror of `m.py`).
+- `vernon_tasks/hooks.py`: extend `website_route_rules` with `/portal/<path:portal_path>` → `vernon_tasks.www.portal` (mirror of `m.py`).
 - New files:
-  - `vernon_tasks/www/app/__init__.py`
-  - `vernon_tasks/www/app/app.py` (serves the same `pwa/dist/index.html`)
-  - `vernon_tasks/www/app/app.html`
-- Nginx static asset symlink: `sites/{site}/public/app` → `pwa/dist/` (same pattern as `/m/`, per memory `project_frappe_pwa_nginx`).
-- Feature flag: `portal_enabled` in VT Settings; when off, `/app/*` returns 404 (or redirects to `/m/`).
+  - `vernon_tasks/www/portal.py (sibling of www/m.py)`
+  - `vernon_tasks/www/portal.py` (serves the same `pwa/dist/index.html`)
+  - `vernon_tasks/www/portal.html`
+- Nginx static asset symlink: `sites/{site}/public/portal` → `pwa/dist/` (same pattern as `/m/`, per memory `project_frappe_pwa_nginx`).
+- Feature flag: `portal_enabled` in VT Settings; when off, `/portal/*` returns 404 (or redirects to `/m/`).
 
 ---
 
@@ -95,7 +95,7 @@ Existing `pwa/src/pages/` are moved under `pwa/src/mobile/pages/` as part of P1.
 - Renders `<TopBar />` + `<Outlet />` for sub-routes.
 
 ### 4.2 `<TopBar>` (left → right)
-- `Logo` — click navigates to `/app/`.
+- `Logo` — click navigates to `/portal/`.
 - `PrimaryNav` — horizontal items from `portal/nav.ts`, filtered by permission.
 - Spacer.
 - `<GlobalSearch>` — `cmd+k` opens dialog. Phase 1: stub dialog with "coming soon".
@@ -106,11 +106,11 @@ Existing `pwa/src/pages/` are moved under `pwa/src/mobile/pages/` as part of P1.
 
 ```ts
 export const portalNav: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', path: '/app',          permission: null },
-  { key: 'okr',       label: 'OKR',       path: '/app/okr',      permission: 'okr.read' },
-  { key: 'projects',  label: 'Projects',  path: '/app/projects', permission: 'project.read' },
-  { key: 'workforce', label: 'Workforce', path: '/app/workforce',permission: 'workforce.read' },
-  { key: 'reports',   label: 'Reports',   path: '/app/reports',  permission: 'report.read' },
+  { key: 'dashboard', label: 'Dashboard', path: '/portal',          permission: null },
+  { key: 'okr',       label: 'OKR',       path: '/portal/okr',      permission: 'okr.read' },
+  { key: 'projects',  label: 'Projects',  path: '/portal/projects', permission: 'project.read' },
+  { key: 'workforce', label: 'Workforce', path: '/portal/workforce',permission: 'workforce.read' },
+  { key: 'reports',   label: 'Reports',   path: '/portal/reports',  permission: 'report.read' },
 ];
 ```
 
@@ -122,7 +122,7 @@ Standard page wrapper used by every domain page: title, breadcrumb, actions slot
 
 ### 4.5 Guards
 
-- `<PortalGuard>` at root of `/app/*`: unauthenticated → `/login?next=...`; viewport <1024 → `/m/`.
+- `<PortalGuard>` at root of `/portal/*`: unauthenticated → `/login?next=...`; viewport <1024 → `/m/`.
 - `<RequirePermission perm="...">` per route: missing permission → `<PermissionDenied>` page.
 
 ---
@@ -225,7 +225,7 @@ Shared `<EmptyState icon title description action />` in `components/`. All doma
   - All permissions → full menu.
 
 ### 7.3 E2E (playwright, existing `pwa/e2e/`)
-- `portal-shell.spec.ts`: login → land `/app` → nav click → URL update → permission-denied flow → switch-to-mobile flow.
+- `portal-shell.spec.ts`: login → land `/portal` → nav click → URL update → permission-denied flow → switch-to-mobile flow.
 
 ### 7.4 Backend
 - `vernon_tasks/api/test_auth.py` — `get_user_permissions` returns correct keys per Frappe role.
@@ -273,7 +273,7 @@ Shared `<EmptyState icon title description action />` in `components/`. All doma
 ## 11. Open Questions
 
 - Are permission keys versioned alongside the backend, or shipped as a separate config? (Default: collocated with `vernon_tasks/api/auth.py`.)
-- Should `/` root redirect prefer viewport (desktop → `/app`, mobile → `/m`) or role (manager → `/app`, worker → `/m`)? (Default: viewport-first, role as tiebreaker.)
+- Should `/` root redirect prefer viewport (desktop → `/portal`, mobile → `/m`) or role (manager → `/portal`, worker → `/m`)? (Default: viewport-first, role as tiebreaker.)
 - Notification bell content for portal — same feed as mobile or filtered to manager-relevant events? (Default: same feed Phase 1; filter in P2+.)
 
 ---

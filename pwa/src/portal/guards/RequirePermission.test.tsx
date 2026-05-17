@@ -19,10 +19,10 @@ describe("RequirePermission", () => {
   it("renders children when permission present", () => {
     mockPerms(["okr.read"]);
     render(
-      <MemoryRouter initialEntries={["/app/okr"]}>
+      <MemoryRouter initialEntries={["/portal/okr"]}>
         <Routes>
           <Route
-            path="/app/okr"
+            path="/portal/okr"
             element={
               <RequirePermission perm="okr.read">
                 <div>OKR Page</div>
@@ -38,10 +38,10 @@ describe("RequirePermission", () => {
   it("renders PermissionDenied when permission missing", () => {
     mockPerms([]);
     render(
-      <MemoryRouter initialEntries={["/app/okr"]}>
+      <MemoryRouter initialEntries={["/portal/okr"]}>
         <Routes>
           <Route
-            path="/app/okr"
+            path="/portal/okr"
             element={
               <RequirePermission perm="okr.read">
                 <div>OKR Page</div>

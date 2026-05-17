@@ -6,7 +6,7 @@ export function NotFound() {
     <EmptyState
       title="Page not found"
       description="The page you’re looking for doesn’t exist in the portal."
-      action={<Link to="/app">Go to portal home</Link>}
+      action={<Link to="/portal">Go to portal home</Link>}
     />
   );
 }

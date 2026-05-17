@@ -21,26 +21,26 @@ const WORKER_USER = process.env.E2E_WORKER_USER || "";
 const WORKER_PASS = process.env.E2E_WORKER_PASS || "";
 
 test.describe("portal shell", () => {
-  test("manager lands at /app dashboard and can navigate", async ({ page }) => {
+  test("manager lands at /portal dashboard and can navigate", async ({ page }) => {
     await loginAs(page, MANAGER_USER, MANAGER_PASS);
-    await page.goto("/app");
+    await page.goto("/portal");
     await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible();
 
     await page.getByRole("link", { name: "OKR" }).click();
-    await expect(page).toHaveURL(/\/app\/okr/);
+    await expect(page).toHaveURL(/\/portal\/okr/);
     await expect(page.getByText(/okr — coming soon/i)).toBeVisible();
   });
 
-  test("unknown /app route shows NotFound", async ({ page }) => {
+  test("unknown /portal route shows NotFound", async ({ page }) => {
     await loginAs(page, MANAGER_USER, MANAGER_PASS);
-    await page.goto("/app/this-does-not-exist");
+    await page.goto("/portal/this-does-not-exist");
     await expect(page.getByText(/page not found/i)).toBeVisible();
   });
 
   test("missing permission shows PermissionDenied", async ({ page }) => {
     test.skip(!WORKER_USER, "E2E_WORKER_USER not configured — skipping permission-denied check");
     await loginAs(page, WORKER_USER, WORKER_PASS);
-    await page.goto("/app/okr");
+    await page.goto("/portal/okr");
     await expect(page.getByText(/permission required/i)).toBeVisible();
   });
 });

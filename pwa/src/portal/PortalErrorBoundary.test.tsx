@@ -12,12 +12,12 @@ describe("PortalErrorBoundary", () => {
     const spy = vi.spyOn(telemetry, "trackPortalError");
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
-      <PortalErrorBoundary path="/app/x">
+      <PortalErrorBoundary path="/portal/x">
         <Bomb />
       </PortalErrorBoundary>,
     );
     expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-    expect(spy).toHaveBeenCalledWith("/app/x", expect.stringContaining("kaboom"));
+    expect(spy).toHaveBeenCalledWith("/portal/x", expect.stringContaining("kaboom"));
     errSpy.mockRestore();
   });
 });

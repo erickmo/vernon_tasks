@@ -19,10 +19,10 @@ describe("PortalGuard", () => {
   it("renders children when authed + desktop", () => {
     setup({ authed: true, desktop: true });
     render(
-      <MemoryRouter initialEntries={["/app"]}>
+      <MemoryRouter initialEntries={["/portal"]}>
         <Routes>
           <Route
-            path="/app/*"
+            path="/portal/*"
             element={
               <PortalGuard>
                 <div>portal</div>
@@ -40,10 +40,10 @@ describe("PortalGuard", () => {
   it("redirects to /login when unauth", () => {
     setup({ authed: false, desktop: true });
     render(
-      <MemoryRouter initialEntries={["/app"]}>
+      <MemoryRouter initialEntries={["/portal"]}>
         <Routes>
           <Route
-            path="/app/*"
+            path="/portal/*"
             element={
               <PortalGuard>
                 <div>portal</div>
@@ -61,10 +61,10 @@ describe("PortalGuard", () => {
   it("redirects to /m when mobile viewport", () => {
     setup({ authed: true, desktop: false });
     render(
-      <MemoryRouter initialEntries={["/app"]}>
+      <MemoryRouter initialEntries={["/portal"]}>
         <Routes>
           <Route
-            path="/app/*"
+            path="/portal/*"
             element={
               <PortalGuard>
                 <div>portal</div>

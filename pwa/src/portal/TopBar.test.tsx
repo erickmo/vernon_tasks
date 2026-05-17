@@ -40,6 +40,6 @@ describe("TopBar", () => {
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole("link", { name: "OKR" }));
-    expect(spy).toHaveBeenCalledWith("okr", "/app/okr");
+    expect(spy).toHaveBeenCalledWith("okr", "/portal/okr");
   });
 });

@@ -9,13 +9,13 @@ export function TopBar() {
 
   return (
     <header className="portal-topbar" role="banner">
-      <Link to="/app" className="portal-topbar__logo">Vernon</Link>
+      <Link to="/portal" className="portal-topbar__logo">Vernon</Link>
       <nav className="portal-topbar__nav" aria-label="Primary">
         {items.map((it) => (
           <NavLink
             key={it.key}
             to={it.path}
-            end={it.path === "/app"}
+            end={it.path === "/portal"}
             onClick={() => telemetry.trackPortalNavClick(it.key, it.path)}
           >
             {it.label}

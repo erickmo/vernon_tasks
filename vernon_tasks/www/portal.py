@@ -7,7 +7,7 @@ sitemap = 0
 
 
 def get_context(context):
-    """Serve the built PWA index.html for /app/* routes (SPA fallback).
+    """Serve the built PWA index.html for /portal/* routes (SPA fallback).
 
     Gated by VT Settings.portal_enabled. When the flag is off, redirect
     visitors to the mobile entry point at /m/.

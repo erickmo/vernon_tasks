@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship the umbrella desktop portal foundation at `/app/*` inside the existing `pwa/` codebase — shell, topbar nav, auth/permission, error boundaries, telemetry, and domain stubs — behind the `portal_enabled` feature flag.
+**Goal:** Ship the umbrella desktop portal foundation at `/portal/*` inside the existing `pwa/` codebase — shell, topbar nav, auth/permission, error boundaries, telemetry, and domain stubs — behind the `portal_enabled` feature flag.
 
-**Architecture:** Approach A — single Vite SPA, multi-shell routing. `pwa/src/router.tsx` branches `/m/*` to the existing `<MobileShell>` and `/app/*` to a lazy-loaded `<PortalShell>`. Shared primitives (auth, api, cache, theme, i18n, telemetry, atoms) live at `pwa/src/`; portal-specific layout and pages live under `pwa/src/portal/`.
+**Architecture:** Approach A — single Vite SPA, multi-shell routing. `pwa/src/router.tsx` branches `/m/*` to the existing `<MobileShell>` and `/portal/*` to a lazy-loaded `<PortalShell>`. Shared primitives (auth, api, cache, theme, i18n, telemetry, atoms) live at `pwa/src/`; portal-specific layout and pages live under `pwa/src/portal/`.
 
 **Tech Stack:** Frappe Framework (Python), React + Vite (`pwa/`), TypeScript, react-query, react-router, vitest + MSW, Playwright.
 
@@ -30,10 +30,10 @@ Insert into the `fields` array of the VT Settings DocType JSON (next to other fe
 ```json
 {
   "fieldname": "portal_enabled",
-  "label": "Enable Desktop Portal (/app)",
+  "label": "Enable Desktop Portal (/portal)",
   "fieldtype": "Check",
   "default": "0",
-  "description": "When enabled, /app/* serves the desktop portal. When disabled, requests to /app/* redirect to /m/."
+  "description": "When enabled, /portal/* serves the desktop portal. When disabled, requests to /portal/* redirect to /m/."
 }
 ```
 
@@ -166,12 +166,12 @@ git commit -m "feat(api): get_user_permissions returns role-derived permission k
 
 ---
 
-## Task 3: Frappe routing for `/app/*`
+## Task 3: Frappe routing for `/portal/*`
 
 **Files:**
-- Create: `vernon_tasks/www/app/__init__.py`
-- Create: `vernon_tasks/www/app/app.py`
-- Create: `vernon_tasks/www/app/app.html`
+- Create: `vernon_tasks/www/portal.py (sibling of www/m.py)`
+- Create: `vernon_tasks/www/portal.py`
+- Create: `vernon_tasks/www/portal.html`
 - Modify: `vernon_tasks/hooks.py` (extend `website_route_rules`)
 
 - [ ] **Step 1: Inspect existing `/m/` page for parity**
@@ -181,9 +181,9 @@ Expected: tiny Python + HTML that serves the PWA index. Mirror its shape.
 
 - [ ] **Step 2: Create portal www module**
 
-Create `vernon_tasks/www/app/__init__.py` (empty file).
+Create `vernon_tasks/www/portal.py (sibling of www/m.py)` (empty file).
 
-Create `vernon_tasks/www/app/app.py`:
+Create `vernon_tasks/www/portal.py`:
 
 ```python
 import frappe
@@ -199,7 +199,7 @@ def get_context(context):
     return context
 ```
 
-Create `vernon_tasks/www/app/app.html` (mirror `m.html` — load the PWA bundle):
+Create `vernon_tasks/www/portal.html` (mirror `m.html` — load the PWA bundle):
 
 ```html
 {% extends "templates/web.html" %}
@@ -217,8 +217,8 @@ In `vernon_tasks/hooks.py`, find existing `website_route_rules` (added for `/m/*
 
 ```python
 website_route_rules += [
-    {"from_route": "/app/<path:app_path>", "to_route": "app"},
-    {"from_route": "/app",                 "to_route": "app"},
+    {"from_route": "/portal/<path:portal_path>", "to_route": "portal"},
+    {"from_route": "/portal",                 "to_route": "portal"},
 ]
 ```
 
@@ -235,7 +235,7 @@ frappe.db.set_single_value("VT Settings", "portal_enabled", 1)
 frappe.db.commit()
 EOF
 bench --site <site> clear-cache
-curl -sI http://<site>/app | head -1
+curl -sI http://<site>/portal | head -1
 ```
 Expected: `HTTP/1.1 200 OK`. With `portal_enabled=0`, expect `302` to `/m/`.
 
@@ -243,15 +243,15 @@ Expected: `HTTP/1.1 200 OK`. With `portal_enabled=0`, expect `302` to `/m/`.
 
 Append to `docs/prd/ops.html` (or create `docs/rollout/portal-asset-symlink.html`) a one-liner deployment note:
 
-> `sites/<site>/public/app` → symlink to `pwa/dist/` (mirror of `/m/` per memory `project_frappe_pwa_nginx`).
+> `sites/<site>/public/portal` → symlink to `pwa/dist/` (mirror of `/m/` per memory `project_frappe_pwa_nginx`).
 
 (Plain HTML snippet, consistent with existing docs hub HTML format.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add vernon_tasks/www/app/ vernon_tasks/hooks.py docs/
-git commit -m "feat(routing): mount /app/* for desktop portal with portal_enabled gate"
+git add vernon_tasks/www/portal/ vernon_tasks/hooks.py docs/
+git commit -m "feat(routing): mount /portal/* for desktop portal with portal_enabled gate"
 ```
 
 ---
@@ -557,29 +557,29 @@ describe("portal telemetry events", () => {
 
   it("trackPortalPageView emits 'portal.page_view' with path", () => {
     const spy = vi.spyOn(telemetry, "track");
-    telemetry.trackPortalPageView("/app/okr");
-    expect(spy).toHaveBeenCalledWith("portal.page_view", { path: "/app/okr" });
+    telemetry.trackPortalPageView("/portal/okr");
+    expect(spy).toHaveBeenCalledWith("portal.page_view", { path: "/portal/okr" });
   });
 
   it("trackPortalNavClick emits 'portal.nav_click' with key+path", () => {
     const spy = vi.spyOn(telemetry, "track");
-    telemetry.trackPortalNavClick("okr", "/app/okr");
-    expect(spy).toHaveBeenCalledWith("portal.nav_click", { key: "okr", path: "/app/okr" });
+    telemetry.trackPortalNavClick("okr", "/portal/okr");
+    expect(spy).toHaveBeenCalledWith("portal.nav_click", { key: "okr", path: "/portal/okr" });
   });
 
   it("trackPortalPermissionDenied emits with required perm", () => {
     const spy = vi.spyOn(telemetry, "track");
-    telemetry.trackPortalPermissionDenied("/app/okr", "okr.read");
+    telemetry.trackPortalPermissionDenied("/portal/okr", "okr.read");
     expect(spy).toHaveBeenCalledWith("portal.permission_denied", {
-      path: "/app/okr",
+      path: "/portal/okr",
       required_perm: "okr.read",
     });
   });
 
   it("trackPortalError emits with path+message", () => {
     const spy = vi.spyOn(telemetry, "track");
-    telemetry.trackPortalError("/app/okr", "boom");
-    expect(spy).toHaveBeenCalledWith("portal.error", { path: "/app/okr", message: "boom" });
+    telemetry.trackPortalError("/portal/okr", "boom");
+    expect(spy).toHaveBeenCalledWith("portal.error", { path: "/portal/okr", message: "boom" });
   });
 });
 ```
@@ -675,11 +675,11 @@ export interface NavItem {
 }
 
 export const portalNav: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", path: "/app",           permission: null },
-  { key: "okr",       label: "OKR",       path: "/app/okr",       permission: "okr.read" },
-  { key: "projects",  label: "Projects",  path: "/app/projects",  permission: "project.read" },
-  { key: "workforce", label: "Workforce", path: "/app/workforce", permission: "workforce.read" },
-  { key: "reports",   label: "Reports",   path: "/app/reports",   permission: "report.read" },
+  { key: "dashboard", label: "Dashboard", path: "/portal",           permission: null },
+  { key: "okr",       label: "OKR",       path: "/portal/okr",       permission: "okr.read" },
+  { key: "projects",  label: "Projects",  path: "/portal/projects",  permission: "project.read" },
+  { key: "workforce", label: "Workforce", path: "/portal/workforce", permission: "workforce.read" },
+  { key: "reports",   label: "Reports",   path: "/portal/reports",   permission: "report.read" },
 ];
 
 export function filterNavByPermissions(
@@ -736,9 +736,9 @@ describe("RequirePermission", () => {
   it("renders children when permission present", () => {
     mockPerms(["okr.read"]);
     render(
-      <MemoryRouter initialEntries={["/app/okr"]}>
+      <MemoryRouter initialEntries={["/portal/okr"]}>
         <Routes>
-          <Route path="/app/okr" element={
+          <Route path="/portal/okr" element={
             <RequirePermission perm="okr.read"><div>OKR Page</div></RequirePermission>
           }/>
         </Routes>
@@ -750,9 +750,9 @@ describe("RequirePermission", () => {
   it("renders PermissionDenied when permission missing", () => {
     mockPerms([]);
     render(
-      <MemoryRouter initialEntries={["/app/okr"]}>
+      <MemoryRouter initialEntries={["/portal/okr"]}>
         <Routes>
-          <Route path="/app/okr" element={
+          <Route path="/portal/okr" element={
             <RequirePermission perm="okr.read"><div>OKR Page</div></RequirePermission>
           }/>
         </Routes>
@@ -881,9 +881,9 @@ describe("PortalGuard", () => {
   it("renders children when authed + desktop", () => {
     setup({ authed: true, desktop: true });
     render(
-      <MemoryRouter initialEntries={["/app"]}>
+      <MemoryRouter initialEntries={["/portal"]}>
         <Routes>
-          <Route path="/app/*" element={<PortalGuard><div>portal</div></PortalGuard>}/>
+          <Route path="/portal/*" element={<PortalGuard><div>portal</div></PortalGuard>}/>
           <Route path="/login" element={<div>login page</div>}/>
           <Route path="/m" element={<div>mobile</div>}/>
         </Routes>
@@ -895,9 +895,9 @@ describe("PortalGuard", () => {
   it("redirects to /login when unauth", () => {
     setup({ authed: false, desktop: true });
     render(
-      <MemoryRouter initialEntries={["/app"]}>
+      <MemoryRouter initialEntries={["/portal"]}>
         <Routes>
-          <Route path="/app/*" element={<PortalGuard><div>portal</div></PortalGuard>}/>
+          <Route path="/portal/*" element={<PortalGuard><div>portal</div></PortalGuard>}/>
           <Route path="/login" element={<div>login page</div>}/>
           <Route path="/m" element={<div>mobile</div>}/>
         </Routes>
@@ -909,9 +909,9 @@ describe("PortalGuard", () => {
   it("redirects to /m when mobile viewport", () => {
     setup({ authed: true, desktop: false });
     render(
-      <MemoryRouter initialEntries={["/app"]}>
+      <MemoryRouter initialEntries={["/portal"]}>
         <Routes>
-          <Route path="/app/*" element={<PortalGuard><div>portal</div></PortalGuard>}/>
+          <Route path="/portal/*" element={<PortalGuard><div>portal</div></PortalGuard>}/>
           <Route path="/login" element={<div>login page</div>}/>
           <Route path="/m" element={<div>mobile</div>}/>
         </Routes>
@@ -1100,7 +1100,7 @@ describe("TopBar", () => {
     const spy = vi.spyOn(telemetry, "trackPortalNavClick");
     render(<MemoryRouter><TopBar /></MemoryRouter>);
     await userEvent.click(screen.getByRole("link", { name: "OKR" }));
-    expect(spy).toHaveBeenCalledWith("okr", "/app/okr");
+    expect(spy).toHaveBeenCalledWith("okr", "/portal/okr");
   });
 });
 ```
@@ -1126,13 +1126,13 @@ export function TopBar() {
 
   return (
     <header className="portal-topbar" role="banner">
-      <Link to="/app" className="portal-topbar__logo">Vernon</Link>
+      <Link to="/portal" className="portal-topbar__logo">Vernon</Link>
       <nav className="portal-topbar__nav" aria-label="Primary">
         {items.map((it) => (
           <NavLink
             key={it.key}
             to={it.path}
-            end={it.path === "/app"}
+            end={it.path === "/portal"}
             onClick={() => trackPortalNavClick(it.key, it.path)}
           >
             {it.label}
@@ -1191,7 +1191,7 @@ describe("portal pages", () => {
   });
   it("NotFound shows link to portal home", () => {
     render(<MemoryRouter><NotFound /></MemoryRouter>);
-    expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute("href", "/app");
+    expect(screen.getByRole("link", { name: /home/i })).toHaveAttribute("href", "/portal");
   });
   it("ErrorPage shows retry button and reports message", () => {
     render(<ErrorPage message="boom" onRetry={() => {}} />);
@@ -1252,7 +1252,7 @@ export function NotFound() {
     <EmptyState
       title="Page not found"
       description="The page you’re looking for doesn’t exist in the portal."
-      action={<Link to="/app">Go to portal home</Link>}
+      action={<Link to="/portal">Go to portal home</Link>}
     />
   );
 }
@@ -1336,12 +1336,12 @@ describe("PortalErrorBoundary", () => {
     // Silence React's expected error log noise.
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
-      <PortalErrorBoundary path="/app/x">
+      <PortalErrorBoundary path="/portal/x">
         <Bomb />
       </PortalErrorBoundary>
     );
     expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
-    expect(spy).toHaveBeenCalledWith("/app/x", expect.stringContaining("kaboom"));
+    expect(spy).toHaveBeenCalledWith("/portal/x", expect.stringContaining("kaboom"));
     errSpy.mockRestore();
   });
 });
@@ -1447,21 +1447,21 @@ function wrap(initial: string) {
 }
 
 describe("PortalShell", () => {
-  it("renders TopBar + Dashboard at /app", async () => {
-    wrap("/app");
+  it("renders TopBar + Dashboard at /portal", async () => {
+    wrap("/portal");
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: /dashboard/i })).toBeInTheDocument()
     );
     expect(screen.getByRole("banner")).toBeInTheDocument();
   });
 
-  it("renders ComingSoon for /app/okr", async () => {
-    wrap("/app/okr");
+  it("renders ComingSoon for /portal/okr", async () => {
+    wrap("/portal/okr");
     await waitFor(() => expect(screen.getByText(/okr — coming soon/i)).toBeInTheDocument());
   });
 
-  it("renders NotFound for unknown /app/xyz", async () => {
-    wrap("/app/xyz");
+  it("renders NotFound for unknown /portal/xyz", async () => {
+    wrap("/portal/xyz");
     await waitFor(() => expect(screen.getByText(/page not found/i)).toBeInTheDocument());
   });
 });
@@ -1560,7 +1560,7 @@ git commit -m "feat(portal): PortalShell with sub-router, guard, error boundary,
 
 ---
 
-## Task 16: Top-level router wiring (`/app/*` → lazy PortalShell)
+## Task 16: Top-level router wiring (`/portal/*` → lazy PortalShell)
 
 **Files:**
 - Modify: `pwa/src/router.tsx`
@@ -1579,10 +1579,10 @@ import { lazy } from "react";
 const PortalShell = lazy(() => import("./portal/PortalShell"));
 ```
 
-Add a route entry for `/app/*` that renders `<PortalShell />` (matching the existing pattern used for `/m/*`). Example (adapt to existing structure):
+Add a route entry for `/portal/*` that renders `<PortalShell />` (matching the existing pattern used for `/m/*`). Example (adapt to existing structure):
 
 ```tsx
-<Route path="/app/*" element={<PortalShell />} />
+<Route path="/portal/*" element={<PortalShell />} />
 ```
 
 Root `/` redirect rule (only change if router currently has a static redirect; otherwise leave existing logic):
@@ -1593,7 +1593,7 @@ Root `/` redirect rule (only change if router currently has a static redirect; o
   path="/"
   element={
     typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches
-      ? <Navigate to="/app" replace />
+      ? <Navigate to="/portal" replace />
       : <Navigate to="/m/" replace />
   }
 />
@@ -1608,7 +1608,7 @@ Expected: 0 type errors, all tests pass.
 
 ```bash
 git add pwa/src/router.tsx
-git commit -m "feat(router): mount /app/* with lazy PortalShell; viewport-aware root redirect"
+git commit -m "feat(router): mount /portal/* with lazy PortalShell; viewport-aware root redirect"
 ```
 
 ---
@@ -1689,20 +1689,20 @@ async function loginAsManager(page) {
 }
 
 test.describe("portal shell", () => {
-  test("manager lands at /app dashboard and can navigate", async ({ page }) => {
+  test("manager lands at /portal dashboard and can navigate", async ({ page }) => {
     await loginAsManager(page);
-    await page.goto("/app");
+    await page.goto("/portal");
     await expect(page.getByRole("heading", { name: /dashboard/i })).toBeVisible();
     await expect(page.getByRole("banner")).toBeVisible();
 
     await page.getByRole("link", { name: "OKR" }).click();
-    await expect(page).toHaveURL(/\/app\/okr/);
+    await expect(page).toHaveURL(/\/portal\/okr/);
     await expect(page.getByText(/okr — coming soon/i)).toBeVisible();
   });
 
-  test("unknown /app route shows NotFound", async ({ page }) => {
+  test("unknown /portal route shows NotFound", async ({ page }) => {
     await loginAsManager(page);
-    await page.goto("/app/this-does-not-exist");
+    await page.goto("/portal/this-does-not-exist");
     await expect(page.getByText(/page not found/i)).toBeVisible();
   });
 
@@ -1713,7 +1713,7 @@ test.describe("portal shell", () => {
     await page.fill('input[name="pwd"]', process.env.E2E_WORKER_PASS || "worker");
     await page.click('button[type="submit"]');
     await page.waitForLoadState("networkidle");
-    await page.goto("/app/okr");
+    await page.goto("/portal/okr");
     await expect(page.getByText(/permission required/i)).toBeVisible();
   });
 });
@@ -1793,12 +1793,12 @@ Expected: all green.
 - [ ] **Step 2: Manual smoke**
 
 With `portal_enabled=1` and a manager-role user logged in:
-- `GET /app` → Dashboard renders, topbar visible.
-- `GET /app/okr` → "OKR — coming soon".
-- `GET /app/this-does-not-exist` → NotFound.
-- Logout and `GET /app` → redirect `/login?next=/app`.
-- Set viewport <1024 and `GET /app` → redirect `/m/`.
-- Set `portal_enabled=0` → `GET /app` redirects `/m/`.
+- `GET /portal` → Dashboard renders, topbar visible.
+- `GET /portal/okr` → "OKR — coming soon".
+- `GET /portal/this-does-not-exist` → NotFound.
+- Logout and `GET /portal` → redirect `/login?next=/portal`.
+- Set viewport <1024 and `GET /portal` → redirect `/m/`.
+- Set `portal_enabled=0` → `GET /portal` redirects `/m/`.
 
 Record any deviations as bugs in `.wolf/buglog.json` per project rule.
 
@@ -1826,8 +1826,8 @@ Run:
 git push -u origin HEAD
 gh pr create --title "feat(portal): desktop portal foundation (Phase 1)" --body "$(cat <<'EOF'
 ## Summary
-- Mount /app/* desktop portal in pwa/ via Approach A (single SPA, multi-shell routing).
-- Topbar nav, permission-filtered, with /app/okr, /app/projects, /app/workforce, /app/reports stubs.
+- Mount /portal/* desktop portal in pwa/ via Approach A (single SPA, multi-shell routing).
+- Topbar nav, permission-filtered, with /portal/okr, /portal/projects, /portal/workforce, /portal/reports stubs.
 - get_user_permissions API + react-query-backed usePermissions hook.
 - PortalGuard (auth + desktop viewport), RequirePermission, PortalErrorBoundary, telemetry events.
 - Feature-flagged via VT Settings `portal_enabled` (default off).
@@ -1836,7 +1836,7 @@ gh pr create --title "feat(portal): desktop portal foundation (Phase 1)" --body 
 - [ ] vitest passes with portal/ ≥80% line coverage
 - [ ] playwright portal-shell.spec passes for manager and worker users
 - [ ] backend test_auth passes
-- [ ] manual smoke: /app, /app/okr, /app/xyz, unauth redirect, mobile-viewport redirect, flag-off redirect
+- [ ] manual smoke: /portal, /portal/okr, /portal/xyz, unauth redirect, mobile-viewport redirect, flag-off redirect
 EOF
 )"
 ```

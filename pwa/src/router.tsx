@@ -39,7 +39,7 @@ function RootRedirect() {
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
     window.matchMedia("(min-width: 1024px)").matches;
-  return <Navigate to={isDesktop ? "/app" : "/m/work"} replace />;
+  return <Navigate to={isDesktop ? "/portal" : "/m/work"} replace />;
 }
 
 function OnboardingGate() {
@@ -53,7 +53,7 @@ export const router = createBrowserRouter([
   { path: "/", element: <RootRedirect /> },
   { path: "/m/login", element: <LoginPage /> },
   { path: "/m/onboarding", element: <OnboardingGate /> },
-  { path: "/app/*", element: <LazyPortalShell /> },
+  { path: "/portal/*", element: <LazyPortalShell /> },
   {
     element: <AuthGuard />,
     children: [
