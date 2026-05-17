@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR Portal Projects Stack — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>Portal Projects Stack</strong></div>
+
+<header class="hero">
+  <h1>ADR · Portal Projects Stack</h1>
+  <div class="sub">ADR-020 — UI composition strategy for the desktop portal Projects module (P3.1)</div>
+</header>
+
+<article class="adr" id="adr-020">
+  <h2>ADR-020 — Portal Projects reuses Portal OKR composition (Approach A) — vanilla React Query + composed UI</h2>
+  <div class="meta-row">
+    <span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span>
+    <span><strong>Date:</strong> 2026-05-17</span>
+    <span><strong>Spec:</strong> <a href="../superpowers/specs/2026-05-17-portal-projects-p3-design.md">Portal Projects P3.1 PRD</a></span>
+    <span><strong>Related:</strong> <a href="portal-okr-stack.html#adr-019">ADR-019</a></span>
+  </div>
+  <div class="section-label">Context</div>
+  <p>The P3.1 portal Projects module needs the same shape as P2 OKR: master–detail list, multi-criteria filtering, bulk row selection, inline status/PDCA edits, and a create/edit form. It additionally renders a compact linked-Objective summary inside the project detail. The decision is whether to (a) repeat the OKR composition pattern, or (b) extract a generic master-detail abstraction (<code>MasterDetailLayout</code>, generic table/filters/bulk-actions) now that we have a second instance.</p>
+  <div class="section-label">Decision</div>
+  <p>Adopt <strong>Approach A</strong> — same vanilla React Query + composed primitives as P2 OKR. Reuse: the existing <code>components/</code> Table/Button/Input/EmptyState/PageLayout/PageSkeleton; <code>react-hook-form</code> + <code>zod</code> from P2; the <code>useObjective</code> hook from <code>pwa/src/portal/okr/hooks/</code> (no copy) to power the linked-OKR preview. Do <strong>not</strong> extract a shared <code>MasterDetailLayout</code> / <code>GenericTable</code> / <code>GenericFiltersBar</code> abstraction yet — defer until a third domain (Workforce or Reports) demonstrates a real third instance and a real pain point.</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Zero new top-level dependency; stays within the <code>projects</code> chunk ≤120 KB gz budget.</li>
+    <li>+ Cross-domain consistency — Projects looks and behaves like OKR; managers learn once.</li>
+    <li>+ Cross-domain reuse is concrete (<code>useObjective</code> consumed directly), validating the loose-coupling model.</li>
+    <li>− Mild duplication across <code>portal/okr/FiltersBar.tsx</code> ↔ <code>portal/projects/FiltersBar.tsx</code>, same for <code>Table</code> + <code>BulkActions</code>. Accepted; revisit when a 3rd domain ships (consolidation rule of three).</li>
+    <li>− No free virtualization — project lists are bounded (≤500 per page server-side) so this is not a near-term concern.</li>
+  </ul>
+  <div class="section-label">Alternatives</div>
+  <ul>
+    <li><strong>Extract shared <code>MasterDetailLayout</code> + <code>GenericTable</code> + <code>GenericFiltersBar</code> now</strong> — rejected as premature. Two instances are not enough signal to design a correct abstraction; the cost of a wrong abstraction is higher than the cost of a third near-duplicate. Re-evaluate at P4 (Workforce).</li>
+    <li><strong>TanStack Table v8</strong> — column models, headless, virtualizable. Rejected for P3.1 for the same reasons as ADR-019: bounded scale (&lt;100 rows per page typical, 500 max), and consistency with the OKR module.</li>
+    <li><strong>AG Grid Community</strong> — heavy bundle, license surface for enterprise features; rejected.</li>
+  </ul>
+</article>
+
+<nav class="nav-prev-next">
+  <a href="index.html">← ADR Index</a>
+</nav>
+
+<footer>ADR Portal Projects Stack · part of <a href="index.html">ADR v1.0</a>.</footer>
+
+</div>
+</body>
+</html>
