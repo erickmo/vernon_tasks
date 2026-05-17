@@ -48,3 +48,18 @@ def list_objectives(filters=None):
         LIMIT 500
     """
     return frappe.db.sql(sql, params, as_dict=True)
+
+
+@frappe.whitelist()
+def get_objective_with_krs(name):
+    if not frappe.db.exists("Objective", name):
+        raise frappe.DoesNotExistError(f"Objective {name} not found")
+    obj = frappe.get_doc("Objective", name).as_dict()
+    krs = frappe.get_all(
+        "Key Result",
+        filters={"objective": name},
+        fields=["name", "metric", "target_value", "current_value", "unit",
+                "progress_percent", "modified"],
+        order_by="modified asc",
+    )
+    return {"objective": obj, "key_results": krs}

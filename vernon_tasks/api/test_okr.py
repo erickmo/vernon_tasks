@@ -1,7 +1,7 @@
 import frappe
 import unittest
 from datetime import date
-from vernon_tasks.api.okr import list_objectives
+from vernon_tasks.api.okr import list_objectives, get_objective_with_krs
 
 
 class TestListObjectives(unittest.TestCase):
@@ -37,3 +37,19 @@ class TestListObjectives(unittest.TestCase):
         result = list_objectives({"statuses": ["Closed"]})
         for r in result:
             self.assertEqual(r["status"], "Closed")
+
+
+class TestGetObjectiveWithKrs(unittest.TestCase):
+    def test_returns_objective_and_kr_list(self):
+        existing = frappe.get_all("Objective", filters={"title": "Test OKR 2026-Q2"}, limit=1)
+        self.assertTrue(existing, "Seed objective missing — run TestListObjectives.setUpClass first")
+        name = existing[0]["name"]
+        result = get_objective_with_krs(name)
+        self.assertIn("objective", result)
+        self.assertIn("key_results", result)
+        self.assertEqual(result["objective"]["name"], name)
+        self.assertIsInstance(result["key_results"], list)
+
+    def test_unknown_raises(self):
+        with self.assertRaises(frappe.DoesNotExistError):
+            get_objective_with_krs("NONEXISTENT-OBJ")
