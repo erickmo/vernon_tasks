@@ -182,6 +182,22 @@ useQuery(["my-work"]) → fetch /api/method/...my_work
 </tbody>
 </table>
 
+<h3>Portal Projects (P3.1, Planned) — Technical Surface</h3>
+<table>
+<thead><tr><th>Aspect</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Route</td><td><code>/portal/projects/*</code> (list, <code>/new</code>, <code>/:id/edit</code>); selection in <code>?proj=&lt;name&gt;</code></td></tr>
+<tr><td>Schema migration</td><td>None — existing <code>VT Project</code> doctype sufficient</td></tr>
+<tr><td>API (whitelisted)</td><td><code>vernon_tasks.api.projects.list_projects</code>, <code>get_project_with_relations</code>, <code>bulk_update_projects</code></td></tr>
+<tr><td>Frontend</td><td><code>pwa/src/portal/projects/</code> (Routes, FeatureGate, List, Table, Detail, Editor, FiltersBar, BulkActions, ObjectiveLink; <code>api/</code>, <code>hooks/</code>, <code>lib/projectStatus.ts</code>)</td></tr>
+<tr><td>Cache keys</td><td><code>['projects', 'list', filters]</code>, <code>['projects', 'detail', name]</code></td></tr>
+<tr><td>Bundle chunk</td><td><code>projects</code> (vite <code>manualChunks</code>) ≤120 KB gz</td></tr>
+<tr><td>Feature flag</td><td><code>VT Settings.portal_projects_enabled</code> (Check, default 0); independent of <code>portal_enabled</code> and <code>portal_okr_enabled</code></td></tr>
+<tr><td>Permission keys</td><td><code>project.read</code> (list/detail), <code>project.write</code> (create/update/inline/bulk)</td></tr>
+<tr><td>Cross-domain</td><td>Consumes <code>useObjective</code> hook from <code>pwa/src/portal/okr/hooks/</code> to render linked-Objective summary; no shared abstraction layer Phase 1 (see ADR-020)</td></tr>
+</tbody>
+</table>
+
 <nav class="nav-prev-next">
   <a href="index.html">← TRD Index</a>
   <a href="contracts.html">Contracts →</a>
