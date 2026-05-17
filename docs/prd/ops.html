@@ -202,11 +202,26 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 </nav>
 
 <h2 id="portal-asset-symlink">Desktop Portal · Nginx asset symlink</h2>
-<p>For desktop portal deployments, mirror the <code>/m/</code> static-asset pattern:
-create <code>sites/&lt;site&gt;/public/app</code> as a symlink to <code>pwa/dist/</code>
-so Nginx serves <code>/app/assets/*</code> directly (see memory note
-<code>project_frappe_pwa_nginx</code>). Without the symlink, Frappe's catch-all
-<code>website_route_rules</code> intercept asset requests and break the bundle.</p>
+<p><strong>Architecture note:</strong> <code>/app/</code> and <code>/m/</code> serve the
+<em>same</em> built PWA bundle (single SPA, branches by URL prefix inside the React
+router). The built assets live at <code>vernon_tasks/www/m/assets/</code> (Vite output
+target), reached in production via the existing <code>sites/&lt;site&gt;/public/m</code>
+symlink chain documented in memory note <code>project_frappe_pwa_nginx</code>.</p>
+<p>For desktop portal deployments, expose those same assets under <code>/app/assets/</code>.
+Pick one of:</p>
+<ul>
+  <li><strong>(a) Primary — mirror the <code>/m/</code> symlink pattern:</strong>
+    create <code>sites/&lt;site&gt;/public/app</code> as a symlink pointing to the
+    same target as the existing <code>sites/&lt;site&gt;/public/m</code> symlink
+    (i.e. <code>vernon_tasks/www/m/</code>). Nginx then serves
+    <code>/app/assets/*</code> directly with zero extra config.</li>
+  <li><strong>(b) Alternative — Nginx <code>alias</code>:</strong> add a
+    <code>location /app/assets/</code> block that aliases the same directory used by
+    <code>/m/assets/</code>. Useful where symlinks under <code>sites/public</code> are
+    undesirable.</li>
+</ul>
+<p>Without one of these, Frappe's catch-all <code>website_route_rules</code> intercept
+asset requests and break the bundle.</p>
 
 <footer>PRD §8–17 · part of <a href="index.html">PRD v1.0</a>.</footer>
 
