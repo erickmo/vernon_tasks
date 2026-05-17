@@ -5,3 +5,9 @@ src/**/*.js
 src/**/*.d.ts
 !src/vite-env.d.ts
 vite.config.js
+
+# vitest coverage output
+coverage/
+# playwright artifacts
+test-results/
+playwright-report/
