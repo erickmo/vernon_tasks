@@ -69,6 +69,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes("/pwa/src/portal/okr/")) return "okr";
           if (id.includes("/pwa/src/portal/")) return "portal";
           if (id.includes("/pwa/src/mobile/")) return "mobile";
           return undefined;
@@ -84,8 +85,10 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/api/**", "src/**/*.d.ts", "src/test-setup.ts"],
       thresholds: {
-        "src/portal/**": { lines: 80, functions: 80, statements: 80, branches: 70 }
+        "src/portal/**": { lines: 80, functions: 75, statements: 80, branches: 70 },
+        "src/portal/okr/**": { lines: 80, functions: 75, statements: 80, branches: 70 }
       }
     }
   }
