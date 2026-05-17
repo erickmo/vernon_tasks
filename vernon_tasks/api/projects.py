@@ -1,5 +1,9 @@
 import frappe
 
+from vernon_tasks.okr.pdca import next_pdca_phase
+
+VALID_PROJECT_STATUSES = {"Open", "On Track", "At Risk", "Closed"}
+
 
 @frappe.whitelist()
 def list_projects(filters=None):
@@ -96,3 +100,58 @@ def get_project_with_relations(name):
         "linked_objective_summary": linked_objective_summary,
         "counts": counts,
     }
+
+
+@frappe.whitelist()
+def bulk_update_projects(names, payload):
+    if isinstance(names, str):
+        import json
+        names = json.loads(names)
+    if isinstance(payload, str):
+        import json
+        payload = json.loads(payload)
+    if not isinstance(names, list) or not names:
+        return {"updated": [], "skipped": []}
+    payload = payload or {}
+
+    target_status = payload.get("status")
+    target_pdca = payload.get("pdca_phase")
+
+    if target_status and target_status not in VALID_PROJECT_STATUSES:
+        frappe.throw(f"Invalid status: {target_status}", frappe.ValidationError)
+
+    updated = []
+    skipped = []
+    for name in names:
+        if not frappe.has_permission("VT Project", "write", doc=name):
+            skipped.append({"name": name, "reason": "no_permission"})
+            continue
+
+        changes = {}
+        if target_status:
+            changes["status"] = target_status
+
+        if target_pdca:
+            if target_pdca == "__next__":
+                current = frappe.db.get_value("VT Project", name, "pdca_phase")
+                nxt = next_pdca_phase(current)
+                if nxt is None:
+                    skipped.append({
+                        "name": name,
+                        "reason": "already_closed" if current == "CLOSED" else "invalid_phase",
+                    })
+                    continue
+                changes["pdca_phase"] = nxt
+            else:
+                changes["pdca_phase"] = target_pdca
+
+        if not changes:
+            skipped.append({"name": name, "reason": "no_changes"})
+            continue
+
+        for field, value in changes.items():
+            frappe.db.set_value("VT Project", name, field, value)
+        updated.append({"name": name, "changes": changes})
+
+    frappe.db.commit()
+    return {"updated": updated, "skipped": skipped}
