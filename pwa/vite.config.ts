@@ -80,6 +80,13 @@ export default defineConfig({
     environment: "happy-dom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
-    exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**"]
+    exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**"],
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      thresholds: {
+        "src/portal/**": { lines: 80, functions: 80, statements: 80, branches: 70 }
+      }
+    }
   }
 });
