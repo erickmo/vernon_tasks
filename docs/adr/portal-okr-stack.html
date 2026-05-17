@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR Portal OKR Stack — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>Portal OKR Stack</strong></div>
+
+<header class="hero">
+  <h1>ADR · Portal OKR Stack</h1>
+  <div class="sub">ADR-019 — UI composition strategy for the desktop portal OKR module (P2)</div>
+</header>
+
+<article class="adr" id="adr-019">
+  <h2>ADR-019 — Portal OKR uses vanilla React Query + composed UI (Approach A) over TanStack Table</h2>
+  <div class="meta-row">
+    <span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span>
+    <span><strong>Date:</strong> 2026-05-17</span>
+    <span><strong>Spec:</strong> <a href="../superpowers/specs/2026-05-17-portal-okr-p2-design.md">Portal OKR P2 PRD</a></span>
+  </div>
+  <div class="section-label">Context</div>
+  <p>The P2 portal OKR module needs a master–detail list, multi-criteria filtering, bulk row selection, inline editing on Key Results, and create/edit forms. Two stack options:</p>
+  <ul>
+    <li><strong>A — Vanilla React Query + composed primitives</strong> (existing <code>components/</code> Table, Button, Input, EmptyState).</li>
+    <li><strong>B — TanStack Table v8 + column models</strong> (purpose-built for sortable, filterable, paginated, virtualized grids).</li>
+  </ul>
+  <div class="section-label">Decision</div>
+  <p>Adopt <strong>Approach A</strong>. Expected scale is &lt;100 Objectives per active period; virtualization and column-model abstractions are not needed at this volume. The shared <code>components/Table</code> and react-query already cover the load. Reserve Approach B as an upgrade path if pain becomes real (≥500 rows, perceptible jank, or column-model reuse across modules).</p>
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Zero new top-level dependency; smaller bundle (≤120 KB gz target for the <code>okr</code> chunk).</li>
+    <li>+ Style consistency with mobile PWA — single component library, single design language.</li>
+    <li>+ Easier for new contributors — no column-model API to learn.</li>
+    <li>− Hand-rolled sort/filter/bulk-select logic in <code>ObjectiveTable.tsx</code>; risk of duplication if Projects/Workforce sub-PRDs need the same.</li>
+    <li>− No free virtualization — will need to revisit at ≥500 rows.</li>
+  </ul>
+  <div class="section-label">Alternatives</div>
+  <ul>
+    <li><strong>TanStack Table v8</strong> — column models, headless, virtualizable. Rejected for P2 due to scale fit and bundle cost; promoted to candidate if P3/P4 modules require shared grid abstractions.</li>
+    <li><strong>AG Grid Community</strong> — feature-rich but heavy bundle and license surface area for enterprise features; rejected.</li>
+    <li><strong>Material React Table</strong> — pulls MUI; conflicts with existing design system; rejected.</li>
+  </ul>
+</article>
+
+<nav class="nav-prev-next">
+  <a href="index.html">← ADR Index</a>
+</nav>
+
+<footer>ADR Portal OKR Stack · part of <a href="index.html">ADR v1.0</a>.</footer>
+
+</div>
+</body>
+</html>
