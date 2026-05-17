@@ -65,7 +65,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "../vernon_tasks/www/m"),
     emptyOutDir: true,
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("/pwa/src/portal/")) return "portal";
+          if (id.includes("/pwa/src/mobile/")) return "mobile";
+          return undefined;
+        }
+      }
+    }
   },
   test: {
     environment: "happy-dom",
