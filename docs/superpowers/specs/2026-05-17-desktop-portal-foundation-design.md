@@ -1,6 +1,6 @@
 # PRD — Desktop Portal Foundation (Phase 1)
 
-**Status:** Draft
+**Status:** Implemented (Phase 1)
 **Date:** 2026-05-17
 **Owner:** Vernon Tasks
 **Scope:** Umbrella PRD — portal shell, routing, auth, permissions, design system wiring. Domain features (OKR, Projects, Workforce, Reports) are out of scope and will follow as sub-PRDs.
