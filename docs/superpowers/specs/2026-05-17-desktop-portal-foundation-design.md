@@ -248,7 +248,7 @@ Shared `<EmptyState icon title description action />` in `components/`. All doma
 ### Phases
 1. **P1 — Foundation (this PRD):** route mount, shell, topbar, auth/permission, error boundaries, dashboard stub with "coming soon" cards per domain. Ship behind `portal_enabled` feature flag in VT Settings.
 2. **P2 — OKR sub-PRD** ([spec](2026-05-17-portal-okr-p2-design.md)).
-3. **P3 — Projects sub-PRD.**
+3. **P3 — Projects sub-PRD** ([spec](2026-05-17-portal-projects-p3-design.md)).
 4. **P4 — Workforce sub-PRD.**
 5. **P5 — Reports sub-PRD.**
 
