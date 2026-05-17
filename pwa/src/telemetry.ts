@@ -1,4 +1,5 @@
 import { api } from "./api/client";
+import * as self from "./telemetry";
 
 export type TelemetryEvent =
   | "pwa_boot"
@@ -38,7 +39,11 @@ export type TelemetryEvent =
   | "push_received"
   | "push_pref_view"
   | "push_pref_changed"
-  | "push_action_complete";
+  | "push_action_complete"
+  | "portal.page_view"
+  | "portal.nav_click"
+  | "portal.permission_denied"
+  | "portal.error";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -46,4 +51,17 @@ export function logEvent(event: TelemetryEvent, props: Record<string, unknown> =
     .catch(() => {
       /* swallow */
     });
+}
+
+export function trackPortalPageView(path: string) {
+  self.logEvent("portal.page_view", { path });
+}
+export function trackPortalNavClick(key: string, path: string) {
+  self.logEvent("portal.nav_click", { key, path });
+}
+export function trackPortalPermissionDenied(path: string, required_perm: string) {
+  self.logEvent("portal.permission_denied", { path, required_perm });
+}
+export function trackPortalError(path: string, message: string) {
+  self.logEvent("portal.error", { path, message });
 }
