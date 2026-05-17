@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { ObjectiveLink } from "./ObjectiveLink";
 import * as okrApi from "../okr/api/objectives";
+import * as telemetry from "../../telemetry";
 
 const detail = {
   objective: { name: "OBJ-1", title: "Linked Obj", period: "2026-Q2", status: "Open", pdca_phase: "PLAN" },
@@ -35,5 +36,14 @@ describe("ObjectiveLink", () => {
     vi.spyOn(okrApi, "getObjectiveWithKrs").mockImplementation(() => new Promise(() => {}));
     wrap(<ObjectiveLink projectName="P-1" objectiveName="OBJ-1" />);
     expect(document.querySelector('[data-testid="objective-link-skeleton"]')).not.toBeNull();
+  });
+
+  it("emits objective_link_click on Link click", async () => {
+    vi.spyOn(okrApi, "getObjectiveWithKrs").mockResolvedValue(detail as any);
+    const spy = vi.spyOn(telemetry, "trackProjectsObjectiveLinkClick");
+    wrap(<ObjectiveLink projectName="P-1" objectiveName="OBJ-1" />);
+    await waitFor(() => expect(screen.getByText(/linked obj/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("link"));
+    expect(spy).toHaveBeenCalledWith("P-1", "OBJ-1");
   });
 });
