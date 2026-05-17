@@ -21,7 +21,8 @@
     "login_branding_section",
     "login_headline",
     "login_subtext",
-    "portal_enabled"
+    "portal_enabled",
+    "portal_okr_enabled"
   ],
   "fields": [
     {
@@ -130,6 +131,13 @@
       "fieldtype": "Check",
       "default": "0",
       "description": "When enabled, /app/* serves the desktop portal. When disabled, requests to /app/* redirect to /m/."
+    },
+    {
+      "fieldname": "portal_okr_enabled",
+      "label": "Enable Portal OKR (/portal/okr)",
+      "fieldtype": "Check",
+      "default": "0",
+      "description": "When enabled, /portal/okr serves the OKR module. When disabled, renders Coming Soon stub."
     }
   ],
   "issingle": 1,

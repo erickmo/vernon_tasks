@@ -43,7 +43,14 @@ export type TelemetryEvent =
   | "portal.page_view"
   | "portal.nav_click"
   | "portal.permission_denied"
-  | "portal.error";
+  | "portal.error"
+  | "okr.list_view"
+  | "okr.detail_view"
+  | "okr.kr_update"
+  | "okr.objective_create"
+  | "okr.objective_edit"
+  | "okr.bulk_pdca_advance"
+  | "okr.permission_denied";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -64,4 +71,26 @@ export function trackPortalPermissionDenied(path: string, required_perm: string)
 }
 export function trackPortalError(path: string, message: string) {
   self.logEvent("portal.error", { path, message });
+}
+
+export function trackOkrListView(filters_count: number) {
+  self.logEvent("okr.list_view", { filters_count });
+}
+export function trackOkrDetailView(name: string) {
+  self.logEvent("okr.detail_view", { name });
+}
+export function trackOkrKrUpdate(kr_name: string, delta: number) {
+  self.logEvent("okr.kr_update", { kr_name, delta });
+}
+export function trackOkrObjectiveCreate(name: string) {
+  self.logEvent("okr.objective_create", { name });
+}
+export function trackOkrObjectiveEdit(name: string) {
+  self.logEvent("okr.objective_edit", { name });
+}
+export function trackOkrBulkPdca(count: number, from_to_pairs: [string, string][]) {
+  self.logEvent("okr.bulk_pdca_advance", { count, from_to_pairs });
+}
+export function trackOkrPermissionDenied(path: string, action: string) {
+  self.logEvent("okr.permission_denied", { path, action });
 }

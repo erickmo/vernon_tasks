@@ -4,10 +4,12 @@
   "creation": "2026-05-07 00:00:00.000000",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["title","period","column_break_1","objective_owner","status","pdca_phase","description_section","description"],
+  "field_order": ["title","period","period_start","period_end","column_break_1","objective_owner","status","pdca_phase","description_section","description"],
   "fields": [
     {"fieldname": "title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
     {"fieldname": "period", "fieldtype": "Data", "label": "Period", "description": "e.g. 2026-Q2 or 2026", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "period_start", "fieldtype": "Date", "label": "Period Start", "description": "Auto-filled from period string; editable."},
+    {"fieldname": "period_end", "fieldtype": "Date", "label": "Period End", "description": "Auto-filled from period string; editable."},
     {"fieldname": "column_break_1", "fieldtype": "Column Break"},
     {"fieldname": "objective_owner", "fieldtype": "Link", "label": "Owner", "options": "User", "reqd": 1, "in_list_view": 1},
     {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Open\nOn Track\nAt Risk\nClosed", "default": "Open", "in_list_view": 1},

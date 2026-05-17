@@ -22,7 +22,7 @@
   <h1>Implementation Tracker</h1>
   <div class="sub">PRD / TRD / ADR items mapped to code + tests.</div>
   <div class="meta">
-    <span>Last updated 2026-05-16</span>
+    <span>Last updated 2026-05-17</span>
     <span>Source: PRD v1.0 + TRD + ADR</span>
     <span>216/216 backend tests</span>
     <span>88/88 PWA tests</span>
@@ -66,6 +66,15 @@
     <tr><td class="id">PRD-017</td><td>CSO Security Audit — security.py guards, CSP/X-Frame</td><td><span class="badge ok">complete</span></td><td>ADR-011</td><td><code>task/api/security.py</code> + <code>test_security.py</code></td></tr>
     <tr><td class="id">PRD-018</td><td>Login + Task UI Redesign — glassmorphism, purple, accent cards</td><td><span class="badge ok">complete</span></td><td>—</td><td>commits 52588ef…1fc12ca</td></tr>
     <tr><td class="id">PRD-019</td><td>Mobile/Desktop Responsive Nav — 768px breakpoint, TopNav/BottomNav</td><td><span class="badge ok">complete</span></td><td>ADR-016</td><td>merge acf48f4; <code>useMediaQuery</code>, <code>TopNav.test.tsx</code></td></tr>
+  </tbody>
+</table>
+
+<h2>Desktop Portal — Sub-PRDs</h2>
+<table>
+  <thead><tr><th>ID</th><th>Module</th><th>Status</th><th>Spec</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td class="id">PORTAL-P1</td><td>Foundation — shell, topbar, auth/permission, error boundaries</td><td><span class="badge warn">in progress</span></td><td><a href="superpowers/specs/2026-05-17-desktop-portal-foundation-design.md">spec</a></td><td>Branch <code>feat/desktop-portal-foundation</code></td></tr>
+    <tr><td class="id">PORTAL-P2</td><td>OKR — list/detail/filters, inline KR autosave, bulk PDCA, create/edit Objective</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-17-portal-okr-p2-design.md">spec</a></td><td>Branch <code>feat/portal-okr-p2</code>; flag <code>portal_okr_enabled</code></td></tr>
   </tbody>
 </table>
 
@@ -161,6 +170,7 @@
     <tr><td class="id">ADR-010</td><td>Data layer (see docs/adr/data.html)</td><td><span class="badge ok">complete</span></td></tr>
     <tr><td class="id">ADR-011</td><td>Security guards + CSP headers</td><td><span class="badge ok">complete</span></td></tr>
     <tr><td class="id">ADR-016</td><td>Responsive nav (768px breakpoint)</td><td><span class="badge ok">complete</span></td></tr>
+    <tr><td class="id">ADR-019</td><td>Portal OKR vanilla React Query + composed UI (over TanStack Table)</td><td><span class="badge bad">accepted (not yet implemented)</span></td></tr>
   </tbody>
 </table>
 

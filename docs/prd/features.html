@@ -62,6 +62,15 @@
   <li>AC: no layout shift on resize; BottomNav hidden ≥768 px; TopNav hidden &lt;768 px.</li>
 </ul>
 
+<h3>5.4 Planned — Desktop Portal Sub-PRDs</h3>
+<table>
+<thead><tr><th>Module</th><th>Scope</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Portal Foundation (P1)</td><td>Shell, topbar, routing, auth/permission, error boundaries — mounts at <code>/portal/*</code></td><td><span class="badge ok">Spec</span> — <a href="../superpowers/specs/2026-05-17-desktop-portal-foundation-design.md">spec</a></td></tr>
+<tr><td>Portal OKR (P2)</td><td>Desktop OKR view: list, detail, filters, inline KR autosave, create/edit Objective, bulk PDCA. Mounts at <code>/portal/okr/*</code> behind <code>okr.read</code> / <code>okr.write</code>.</td><td><span class="badge warn">Draft</span> — <a href="../superpowers/specs/2026-05-17-portal-okr-p2-design.md">spec</a></td></tr>
+</tbody>
+</table>
+
 <h2 id="s6">6. Public APIs</h2>
 <p>All endpoints whitelisted Python methods at <code>POST /api/method/vernon_tasks.&lt;module&gt;.&lt;file&gt;.&lt;fn&gt;</code>. Auth via session cookie or <code>Authorization: token &lt;key&gt;:&lt;secret&gt;</code>. CSRF on mutations.</p>
 
