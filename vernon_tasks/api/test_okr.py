@@ -1,7 +1,7 @@
 import frappe
 import unittest
 from datetime import date
-from vernon_tasks.api.okr import list_objectives, get_objective_with_krs
+from vernon_tasks.api.okr import list_objectives, get_objective_with_krs, bulk_advance_pdca
 
 
 class TestListObjectives(unittest.TestCase):
@@ -53,3 +53,30 @@ class TestGetObjectiveWithKrs(unittest.TestCase):
     def test_unknown_raises(self):
         with self.assertRaises(frappe.DoesNotExistError):
             get_objective_with_krs("NONEXISTENT-OBJ")
+
+
+class TestBulkAdvancePdca(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.names = []
+        for phase in ("PLAN", "DO", "CLOSED"):
+            doc = frappe.get_doc({
+                "doctype": "Objective",
+                "title": f"PDCA test {phase}",
+                "period": "2026-Q3",
+                "objective_owner": "Administrator",
+                "status": "Open",
+                "pdca_phase": phase,
+            }).insert(ignore_permissions=True)
+            cls.names.append((doc.name, phase))
+
+    def test_advances_and_skips_closed(self):
+        names = [n for n, _ in self.names]
+        result = bulk_advance_pdca(names)
+        self.assertIn("advanced", result)
+        self.assertIn("skipped", result)
+        skipped_names = [s["name"] for s in result["skipped"]]
+        closed_name = next(n for n, p in self.names if p == "CLOSED")
+        self.assertIn(closed_name, skipped_names)
+        plan_name = next(n for n, p in self.names if p == "PLAN")
+        self.assertEqual(frappe.db.get_value("Objective", plan_name, "pdca_phase"), "DO")

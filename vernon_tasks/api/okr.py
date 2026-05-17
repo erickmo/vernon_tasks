@@ -1,5 +1,7 @@
 import frappe
 
+from vernon_tasks.okr.pdca import next_pdca_phase
+
 
 @frappe.whitelist()
 def list_objectives(filters=None):
@@ -63,3 +65,29 @@ def get_objective_with_krs(name):
         order_by="modified asc",
     )
     return {"objective": obj, "key_results": krs}
+
+
+@frappe.whitelist()
+def bulk_advance_pdca(names):
+    if isinstance(names, str):
+        import json
+        names = json.loads(names)
+    if not isinstance(names, list) or not names:
+        return {"advanced": [], "skipped": []}
+
+    advanced = []
+    skipped = []
+    for name in names:
+        if not frappe.has_permission("Objective", "write", doc=name):
+            skipped.append({"name": name, "reason": "no_permission"})
+            continue
+        current = frappe.db.get_value("Objective", name, "pdca_phase")
+        nxt = next_pdca_phase(current)
+        if nxt is None:
+            skipped.append({"name": name, "reason": "already_closed" if current == "CLOSED" else "invalid_phase"})
+            continue
+        frappe.db.set_value("Objective", name, "pdca_phase", nxt)
+        advanced.append({"name": name, "from": current, "to": nxt})
+
+    frappe.db.commit()
+    return {"advanced": advanced, "skipped": skipped}
