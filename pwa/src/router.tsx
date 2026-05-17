@@ -11,10 +11,12 @@ import { NotificationsPage } from "./mobile/pages/Notifications";
 import { DashboardPage } from "./mobile/pages/Dashboard";
 import { LeaderPage } from "./mobile/pages/Leader";
 import { PushPrefsPage } from "./mobile/pages/PushPrefs";
+import { PageSkeleton } from "./components/PageSkeleton";
 
 const AnalyticsPage = lazy(() =>
   import("./mobile/pages/Analytics").then((m) => ({ default: m.AnalyticsPage })),
 );
+const PortalShell = lazy(() => import("./portal/PortalShell"));
 
 function LazyAnalytics() {
   return (
@@ -22,6 +24,22 @@ function LazyAnalytics() {
       <AnalyticsPage />
     </Suspense>
   );
+}
+
+function LazyPortalShell() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <PortalShell />
+    </Suspense>
+  );
+}
+
+function RootRedirect() {
+  const isDesktop =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(min-width: 1024px)").matches;
+  return <Navigate to={isDesktop ? "/app" : "/m/work"} replace />;
 }
 
 function OnboardingGate() {
@@ -32,8 +50,10 @@ function OnboardingGate() {
 }
 
 export const router = createBrowserRouter([
+  { path: "/", element: <RootRedirect /> },
   { path: "/m/login", element: <LoginPage /> },
   { path: "/m/onboarding", element: <OnboardingGate /> },
+  { path: "/app/*", element: <LazyPortalShell /> },
   {
     element: <AuthGuard />,
     children: [
