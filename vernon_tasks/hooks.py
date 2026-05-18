@@ -83,8 +83,6 @@ scheduler_events = {
     ],
 }
 
-# home_page = "m"  # removed: guest now sees native Web Page
-
 website_route_rules = [
     {"from_route": "/m/login", "to_route": "m"},
     {"from_route": "/m/onboarding", "to_route": "m"},

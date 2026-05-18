@@ -139,9 +139,15 @@ def setup_web_pages():
             "published": 1,
             "main_section": """<section style="max-width:700px;margin:0 auto;padding:60px 20px;">
   <h2>Hubungi Kami</h2>
-  <p>Ingin tahu lebih lanjut? Isi form di bawah ini.</p>
-  <iframe src="/kontak-form" style="width:100%;min-height:500px;border:none;"
-          title="Form Hubungi Kami"></iframe>
+  <p>Ingin tahu lebih lanjut? Klik tombol di bawah untuk mengisi formulir kontak kami.</p>
+  <a href="/kontak-form" class="btn btn-primary btn-lg"
+     style="display:inline-block;margin-top:16px;">
+    Isi Formulir Kontak
+  </a>
+  <p style="margin-top:24px;color:#666;font-size:0.9rem;">
+    Atau email kami langsung di
+    <a href="mailto:hello@vernoncorp.com">hello@vernoncorp.com</a>
+  </p>
 </section>""",
         },
     ]
@@ -220,16 +226,29 @@ def setup_route_meta():
 
 
 def setup_portal_settings():
+    """Configure Portal Settings: login redirect and default role.
+
+    Idempotent: only writes if values differ from current state.
+    """
     ps = frappe.get_doc("Portal Settings")
-    ps.login_redirect = "/portal"
-    ps.logout_redirect = "/"
-    # default_role field may not exist in all Frappe versions; use try/except
+    changed = False
+    if ps.login_redirect != "/portal":
+        ps.login_redirect = "/portal"
+        changed = True
+    if getattr(ps, "logout_redirect", None) != "/":
+        ps.logout_redirect = "/"
+        changed = True
     try:
-        ps.default_role = "VT Member"
+        if ps.default_role != "VT Member":
+            ps.default_role = "VT Member"
+            changed = True
     except AttributeError:
-        pass
-    ps.save(ignore_permissions=True)
-    print("✓ Configured Portal Settings: login_redirect=/portal, logout_redirect=/")
+        frappe.log("Portal Settings has no default_role field; skipping.")
+    if changed:
+        ps.save(ignore_permissions=True)
+        print("✓ Configured Portal Settings: login_redirect=/portal, logout_redirect=/")
+    else:
+        print("✓ Portal Settings already configured correctly, skipping")
 
 
 def execute():
