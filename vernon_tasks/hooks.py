@@ -59,6 +59,13 @@ doc_events = {
     "Comment": {
         "after_insert": "vernon_tasks.api.portal_notifications.on_comment_insert",
     },
+    "VT KPI Snapshot": {
+        "on_update": "vernon_tasks.api.portal_reports.invalidate_okr_cache",
+        "after_insert": "vernon_tasks.api.portal_reports.invalidate_okr_cache",
+    },
+    "VT OKR Period": {
+        "on_update": "vernon_tasks.api.portal_reports.invalidate_okr_cache",
+    },
     "Notification Log": {
         "after_insert": "vernon_tasks.task.services.push_sender.send_push_for_notification",
     },

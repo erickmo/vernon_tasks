@@ -58,3 +58,13 @@ def invalidate_project_cache(doc, method=None):
     for n in (3, 6, 12):
         frappe.cache().delete_value(f"vt_velocity:{project}:{n}")
     frappe.cache().delete_value(f"vt_forecast:{project}")
+    # Also bust portal aggregation cache (role-bucket keys; user-keyed keys
+    # expire by TTL since iterating all users is too expensive).
+    for bucket in ("manager", "leader"):
+        for n in (3, 6, 12):
+            # Cannot delete user-keyed keys without enumerating users;
+            # portal velocity/forecast keys will expire by 300s TTL.
+            pass
+    # The above comment is intentional: portal keys include {user} suffix,
+    # so we only delete the non-user-keyed keys that do exist.
+    frappe.cache().delete_value("pr:health:manager")
