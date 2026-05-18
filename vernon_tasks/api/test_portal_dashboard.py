@@ -48,3 +48,21 @@ class TestTeamPulse(unittest.TestCase):
         with patch("frappe.get_roles", return_value=["VT Member"]):
             with self.assertRaises(frappe.PermissionError):
                 get_unassigned_tasks(project=None)
+
+
+class TestTimeline(unittest.TestCase):
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def test_timeline_returns_dict_keyed_by_date(self):
+        from vernon_tasks.api.portal_dashboard import get_my_tasks_timeline
+        result = get_my_tasks_timeline(days_back=3, days_forward=3)
+        self.assertIsInstance(result, dict)
+        for v in result.values():
+            self.assertIsInstance(v, list)
+
+    def test_portfolio_requires_manager(self):
+        from vernon_tasks.api.portal_dashboard import get_portfolio_summary
+        with patch("frappe.get_roles", return_value=["VT Leader"]):
+            with self.assertRaises(frappe.PermissionError):
+                get_portfolio_summary()

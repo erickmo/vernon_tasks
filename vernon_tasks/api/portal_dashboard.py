@@ -1,5 +1,5 @@
 # vernon_tasks/api/portal_dashboard.py
-from datetime import date
+from datetime import date, timedelta
 import frappe
 
 ROLE_MANAGER = "VT Manager"
@@ -7,8 +7,9 @@ ROLE_LEADER  = "VT Leader"
 ROLE_MEMBER  = "VT Member"
 
 ROLE_SYSTEM_MANAGER = "System Manager"
-DOCTYPE_TASK   = "VT Task"
-DOCTYPE_SPRINT = "VT Sprint"
+DOCTYPE_TASK    = "VT Task"
+DOCTYPE_SPRINT  = "VT Sprint"
+DOCTYPE_PROJECT = "VT Project"
 DOCTYPE_OKR    = "VT OKR"
 CACHE_TTL_SECONDS = 60
 
@@ -167,3 +168,75 @@ def get_unassigned_tasks(project: str | None = None) -> list:
         limit=20,
     )
     return tasks
+
+
+@frappe.whitelist()
+def get_my_tasks_timeline(days_back: int = 3, days_forward: int = 3) -> dict:
+    """Tasks grouped by deadline date for H-N..H+N timeline."""
+    user  = frappe.session.user
+    today = date.today()
+    start = (today - timedelta(days=int(days_back))).isoformat()
+    end   = (today + timedelta(days=int(days_forward))).isoformat()
+
+    tasks = frappe.db.get_all(
+        DOCTYPE_TASK,
+        filters={
+            "assigned_to": user,
+            "deadline": ["between", [start, end]],
+        },
+        fields=["name", "title", "deadline", "pdca_phase", "kanban_status"],
+        order_by="deadline asc",
+    )
+
+    result: dict[str, list] = {}
+    for t in tasks:
+        key = str(t["deadline"]) if t.get("deadline") else "no_date"
+        result.setdefault(key, []).append({
+            "id": t["name"],
+            "title": t["title"],
+            "pdca_phase": t.get("pdca_phase", ""),
+            "done": t.get("kanban_status") == "Done",
+        })
+    return result
+
+
+@frappe.whitelist()
+def get_portfolio_summary() -> list:
+    """Project list with RAG status. Manager only."""
+    roles = set(frappe.get_roles(frappe.session.user))
+    if not _is_manager(roles):
+        raise frappe.PermissionError("Manager role required")
+
+    projects = frappe.db.get_all(
+        DOCTYPE_PROJECT,
+        filters={"status": ["!=", "Closed"]},
+        fields=["name", "title", "status"],
+        order_by="creation desc",
+    )
+
+    result = []
+    for p in projects:
+        total = frappe.db.count(DOCTYPE_TASK, filters={"project": p["name"]}) or 0
+        done  = frappe.db.count(DOCTYPE_TASK,
+                                 filters={"project": p["name"], "kanban_status": "Done"}) or 0
+        pct   = round(done / total * 100) if total else 0
+        rag   = "green" if pct >= 70 else ("amber" if pct >= 40 else "red")
+
+        sprint = frappe.db.get_value(
+            DOCTYPE_SPRINT,
+            filters={"project": p["name"], "status": "Active"},
+            fieldname=["name", "title", "end_date"],
+            as_dict=True,
+        )
+        result.append({
+            "project": p["name"],
+            "title": p["title"],
+            "progress_pct": pct,
+            "rag": rag,
+            "sprint_title": sprint.get("title") if sprint else None,
+            "sprint_days_remaining": (
+                max(0, (sprint["end_date"] - date.today()).days)
+                if sprint and sprint.get("end_date") else None
+            ),
+        })
+    return result
