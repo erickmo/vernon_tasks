@@ -68,7 +68,13 @@ export type TelemetryEvent =
   | "sprints.task_rank_change"
   | "sprints.task_board_axis_toggle"
   | "sprints.burndown_view"
-  | "sprints.rank_rebalance";
+  | "sprints.rank_rebalance"
+  | "tasks.detail_view"
+  | "tasks.task_updated"
+  | "tasks.task_created"
+  | "tasks.comment_added"
+  | "tasks.comment_deleted"
+  | "tasks.panel_closed";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -167,4 +173,23 @@ export function trackBurndownView(sprint: string) {
 }
 export function trackRankRebalance(sprint: string, axis: "kanban" | "pdca", column: string) {
   self.logEvent("sprints.rank_rebalance", { sprint, axis, column });
+}
+
+export function trackTaskDetailView(task: string, sprint: string) {
+  self.logEvent("tasks.detail_view", { task, sprint });
+}
+export function trackTaskUpdated(task: string, changed_fields: string[]) {
+  self.logEvent("tasks.task_updated", { task, changed_fields });
+}
+export function trackTaskCreated(task: string, sprint: string, project: string) {
+  self.logEvent("tasks.task_created", { task, sprint, project });
+}
+export function trackCommentAdded(task: string) {
+  self.logEvent("tasks.comment_added", { task });
+}
+export function trackCommentDeleted(task: string) {
+  self.logEvent("tasks.comment_deleted", { task });
+}
+export function trackTaskPanelClosed(task: string, open_duration_ms: number) {
+  self.logEvent("tasks.panel_closed", { task, open_duration_ms });
 }

@@ -4,7 +4,7 @@ import { createTask } from "./api/tasks";
 import type { KanbanStatus, PdcaPhase, SprintDetail, TaskCardData } from "../sprints/api/types";
 import type { CreateTaskPayload } from "./api/types";
 
-// TODO(Task 12): import trackTaskCreated from telemetry once implemented
+import { trackTaskCreated } from "../../telemetry";
 
 const PRIORITY_OPTIONS = ["Low", "Medium", "High", "Critical"] as const;
 const PDCA_OPTIONS: PdcaPhase[] = ["BACKLOG", "PLAN", "DO", "CHECK", "ACT", "DONE"];
@@ -110,7 +110,7 @@ export function TaskCreateModal({
         };
       });
 
-      // TODO(Task 12): trackTaskCreated(result.name, sprintId, projectId);
+      trackTaskCreated(result.name, sprintId, projectId);
 
       onCreated(result.name);
       onClose();

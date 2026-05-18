@@ -8,7 +8,7 @@ import { CommentThread } from "./CommentThread";
 import type { KanbanStatus, PdcaPhase, SprintDetail, TaskCardData } from "../sprints/api/types";
 import type { UpdateTaskPayload } from "./api/types";
 
-// TODO(Task 12): import trackTaskDetailView, trackTaskPanelClosed, trackTaskUpdated from telemetry
+import { trackTaskDetailView, trackTaskPanelClosed, trackTaskUpdated } from "../../telemetry";
 
 const KANBAN_OPTIONS: KanbanStatus[] = [
   "Backlog",
@@ -54,13 +54,15 @@ export function TaskDetailPanel({
     }
   }, [data?.task.title]);
 
-  // TODO(Task 12): trackTaskDetailView(taskName) on mount
+  useEffect(() => {
+    trackTaskDetailView(taskName, sprintId);
+  }, [taskName, sprintId]);
 
   // Escape key closes panel
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        // TODO(Task 12): trackTaskPanelClosed(taskName)
+        trackTaskPanelClosed(taskName, 0);
         onClose();
       }
     }
@@ -108,7 +110,7 @@ export function TaskDetailPanel({
     try {
       const result = await updateTask(taskName, payload);
       qc.setQueryData(["taskDetail", taskName], result);
-      // TODO(Task 12): trackTaskUpdated(taskName, Object.keys(payload))
+      trackTaskUpdated(taskName, Object.keys(payload));
     } catch {
       // Rollback on error
       qc.setQueryData(["taskDetail", taskName], prevTaskDetail);
@@ -158,7 +160,7 @@ export function TaskDetailPanel({
   const comments = entries.filter((e) => e.type === "comment") as import("./api/types").CommentEntry[];
 
   return (
-    <div className="task-detail-panel" ref={panelRef} aria-label="Task detail panel">
+    <div role="dialog" aria-label="Task detail panel" className="task-detail-panel" ref={panelRef}>
       {/* Header */}
       <div className="task-detail-panel__header">
         <span className="task-detail-panel__task-name">{task.name}</span>

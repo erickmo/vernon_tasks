@@ -6,7 +6,7 @@ import {
 } from "../api/tasks";
 import type { ActivityEntry } from "../api/types";
 
-// TODO(Task 12): import trackCommentAdded, trackCommentDeleted from telemetry when available
+import { trackCommentAdded, trackCommentDeleted } from "../../../telemetry";
 
 export function useTaskComments(taskName: string | null) {
   const qc = useQueryClient();
@@ -23,7 +23,7 @@ export function useTaskComments(taskName: string | null) {
     mutationFn: (content: string) => apiAddComment(taskName!, content),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key });
-      // TODO(Task 12): trackCommentAdded(taskName!)
+      trackCommentAdded(taskName!);
     },
   });
 
@@ -31,7 +31,7 @@ export function useTaskComments(taskName: string | null) {
     mutationFn: (comment_name: string) => apiDeleteComment(comment_name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key });
-      // TODO(Task 12): trackCommentDeleted(taskName!)
+      trackCommentDeleted(taskName!);
     },
   });
 
