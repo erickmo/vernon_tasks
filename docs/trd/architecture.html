@@ -198,6 +198,24 @@ useQuery(["my-work"]) → fetch /api/method/...my_work
 </tbody>
 </table>
 
+<h3>Portal Sprints (P3.2, Implemented) — Technical Surface</h3>
+<table>
+<thead><tr><th>Aspect</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td>Route</td><td>Nested under projects: <code>/portal/projects/:projectId/sprints</code> (board), <code>/sprints/:sprintId</code> (detail with Board/Burndown tabs)</td></tr>
+<tr><td>Schema migration</td><td>Patch <code>v1_x.add_vt_task_kanban_rank</code> adds <code>VT Task.kanban_rank</code> (Float) for fractional indexing</td></tr>
+<tr><td>API (whitelisted)</td><td><code>vernon_tasks.api.sprints.list_sprints</code>, <code>get_sprint</code>, <code>create_sprint</code>, <code>update_sprint</code>, <code>list_sprint_tasks</code>, <code>move_task</code> (status/rank), <code>get_sprint_burndown</code> (cached + version-log lookback), <code>rebalance_column</code> (rank collision)</td></tr>
+<tr><td>Frontend</td><td><code>pwa/src/portal/sprints/</code> — Routes, FeatureGate, SprintBoard, SprintCard, SprintEditor, SprintDetail, TaskBoard (axis toggle), TaskCard, BurndownChart (inline SVG); <code>api/</code>, <code>hooks/</code> (useSprintBoard, useTaskBoard, useBurndown), <code>lib/rank.ts</code></td></tr>
+<tr><td>Drag-drop</td><td><code>@dnd-kit/core</code> + <code>@dnd-kit/sortable</code>; optimistic React Query mutation with rollback on error</td></tr>
+<tr><td>Rank strategy</td><td>Fractional float between neighbors; collision threshold triggers <code>rebalance_column</code> server-side</td></tr>
+<tr><td>Cache keys</td><td><code>['sprints', 'list', projectId]</code>, <code>['sprints', 'detail', id]</code>, <code>['sprints', 'tasks', sprintId]</code>, <code>['sprints', 'burndown', sprintId]</code></td></tr>
+<tr><td>Bundle chunk</td><td><code>sprints</code> (vite <code>manualChunks</code>)</td></tr>
+<tr><td>Feature flag</td><td><code>VT Settings.portal_sprints_enabled</code> (Check, default 0); independent of <code>portal_projects_enabled</code></td></tr>
+<tr><td>Permission keys</td><td>Reuses <code>project.read</code>/<code>project.write</code> for sprint CRUD; <code>move_task</code> guarded by PDCA-driven kanban model (see commit 4575452)</td></tr>
+<tr><td>Telemetry</td><td><code>sprint_board_view</code>, <code>sprint_create</code>, <code>task_move</code>, <code>burndown_view</code> via <code>pwa/src/telemetry.ts</code></td></tr>
+</tbody>
+</table>
+
 <nav class="nav-prev-next">
   <a href="index.html">← TRD Index</a>
   <a href="contracts.html">Contracts →</a>
