@@ -274,6 +274,23 @@ class TestOnVtTaskUpdate(unittest.TestCase):
 
         self.assertEqual(_notif_count(self.user_b, "task_review"), 0)
 
+    def test_assigned_to_change_a_to_b_notifies_b_not_a(self):
+        """Reassigning from user A to user B: B gets notification, A does not."""
+        user_a = _make_user("user_a_notif@test.com")
+        user_b = _make_user("user_b_notif@test.com")
+        task_name = _make_task("Reassign Task", assigned_to=user_a)
+        _enable_flag(1)
+
+        task = frappe.get_doc("VT Task", task_name)
+        task.assigned_to = user_b
+        task.save(ignore_permissions=True)
+
+        notif_for_b = _notif_count(user_b, event_type="task_assigned", reference_name=task_name)
+        notif_for_a = _notif_count(user_a, event_type="task_assigned", reference_name=task_name)
+
+        self.assertEqual(notif_for_b, 1)
+        self.assertEqual(notif_for_a, 0)
+
 
 # ---------------------------------------------------------------------------
 # on_vt_sprint_update tests
@@ -666,3 +683,12 @@ class TestFeatureFlagGuard(unittest.TestCase):
                     mark_all_read()
         finally:
             _enable_flag(1)
+
+    def test_count_unread_returns_zero_for_guest_when_flag_on(self):
+        """count_unread returns {"count": 0} for Guest when flag is on (no PermissionError)."""
+        _enable_flag(1)
+        with patch("frappe.session") as mock_session:
+            mock_session.user = "Guest"
+            from vernon_tasks.api.portal_notifications import count_unread
+            result = count_unread()
+        self.assertEqual(result, {"count": 0})

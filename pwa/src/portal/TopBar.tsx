@@ -4,6 +4,22 @@ import * as telemetry from "../telemetry";
 import { portalNav, filterNavByPermissions } from "./nav";
 import { NotificationsFeatureGate } from "./notifications/NotificationsFeatureGate";
 import { NotificationBell } from "./notifications/NotificationBell";
+import { useNotificationCount } from "./notifications/hooks/useNotificationCount";
+
+const NOTIFICATIONS_NAV_KEY = "notifications";
+
+function NavBadge() {
+  const { data: count } = useNotificationCount();
+  if (!count || count <= 0) return null;
+  return (
+    <span
+      className="portal-topbar__nav-badge"
+      aria-label={`${count} unread notifications`}
+    >
+      {count}
+    </span>
+  );
+}
 
 export function TopBar() {
   const { hasPermission } = permsHook.usePermissions();
@@ -21,6 +37,11 @@ export function TopBar() {
             onClick={() => telemetry.trackPortalNavClick(it.key, it.path)}
           >
             {it.label}
+            {it.key === NOTIFICATIONS_NAV_KEY && (
+              <NotificationsFeatureGate>
+                <NavBadge />
+              </NotificationsFeatureGate>
+            )}
           </NavLink>
         ))}
       </nav>

@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import type { PortalNotification } from "./api/portalNotifications";
 
@@ -24,8 +25,15 @@ function EventIcon({ eventType }: { eventType: PortalNotification["event_type"] 
   );
 }
 
+const TASK_EVENTS: ReadonlySet<PortalNotification["event_type"]> = new Set([
+  "task_assigned",
+  "task_review",
+  "comment",
+]);
+
 export function NotificationItem({ notification, onRead }: Props) {
-  const { name, event_type, message, is_read, creation } = notification;
+  const navigate = useNavigate();
+  const { name, event_type, message, is_read, creation, reference_name } = notification;
   const isUnread = is_read === 0;
 
   const creationDate = new Date(creation.replace(" ", "T"));
@@ -33,6 +41,11 @@ export function NotificationItem({ notification, onRead }: Props) {
 
   function handleClick() {
     onRead(name);
+    if (TASK_EVENTS.has(event_type)) {
+      navigate(`/portal/projects?task=${reference_name}`);
+    } else {
+      navigate("/portal/projects");
+    }
   }
 
   return (

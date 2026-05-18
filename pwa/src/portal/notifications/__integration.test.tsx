@@ -6,9 +6,10 @@ import { NotificationsFeatureGate } from "./NotificationsFeatureGate";
 import { NotificationsPage } from "./NotificationsPage";
 import { NotificationBell } from "./NotificationBell";
 
-vi.mock("../../hooks/useVtSettings", () => ({
-  useVtSettings: vi.fn(),
+const { mockGetFeatureFlag } = vi.hoisted(() => ({
+  mockGetFeatureFlag: vi.fn(async () => ({ enabled: true })),
 }));
+
 vi.mock("./api/portalNotifications", () => ({
   portalNotificationsApi: {
     listNotifications: vi.fn(async () => ({
@@ -29,27 +30,15 @@ vi.mock("./api/portalNotifications", () => ({
     countUnread: vi.fn(async () => ({ count: 1 })),
     markAllRead: vi.fn(async () => ({ ok: true })),
     markRead: vi.fn(async () => ({ ok: true })),
-    getFeatureFlag: vi.fn(async () => ({ enabled: true })),
+    getFeatureFlag: mockGetFeatureFlag,
   },
 }));
 vi.mock("./hooks/useNotificationCount", () => ({
   useNotificationCount: () => 1,
 }));
 
-import { useVtSettings } from "../../hooks/useVtSettings";
-const mockVtSettings = vi.mocked(useVtSettings);
-
-function renderWithFlag(enabled: 0 | 1) {
-  mockVtSettings.mockReturnValue({
-    isLoading: false,
-    data: {
-      portal_enabled: 1,
-      portal_okr_enabled: 1,
-      portal_projects_enabled: 1,
-      portal_sprints_enabled: 1,
-      portal_notifications_enabled: enabled,
-    },
-  } as ReturnType<typeof useVtSettings>);
+function renderWithFlag(enabled: boolean) {
+  mockGetFeatureFlag.mockResolvedValue({ enabled });
 
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -75,23 +64,21 @@ describe("Portal Notifications integration", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("renders NotificationsPage when flag enabled", async () => {
-    renderWithFlag(1);
+    renderWithFlag(true);
     await waitFor(() => {
       expect(screen.getByText(/integration task assigned/i)).toBeDefined();
     });
   });
 
-  it("renders null (not found fallback) when flag disabled", () => {
-    renderWithFlag(0);
+  it("renders null (not found fallback) when flag disabled", async () => {
+    renderWithFlag(false);
     // Feature gate returns null — child not rendered
+    await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText(/integration task assigned/i)).toBeNull();
   });
 
   it("bell click opens notification panel", async () => {
-    mockVtSettings.mockReturnValue({
-      isLoading: false,
-      data: { portal_notifications_enabled: 1 },
-    } as ReturnType<typeof useVtSettings>);
+    mockGetFeatureFlag.mockResolvedValue({ enabled: true });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -103,6 +90,10 @@ describe("Portal Notifications integration", () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /notifications/i })).toBeTruthy();
+    });
 
     const bell = screen.getByRole("button", { name: /notifications/i });
     fireEvent.click(bell);

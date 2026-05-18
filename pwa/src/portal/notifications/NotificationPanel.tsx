@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNotifications } from "./hooks/useNotifications";
+import { useNotifications, notificationsQueryKey } from "./hooks/useNotifications";
 import { portalNotificationsApi } from "./api/portalNotifications";
 import { NotificationItem } from "./NotificationItem";
 import type { PortalNotification } from "./api/portalNotifications";
@@ -22,12 +22,11 @@ function SkeletonRow() {
   );
 }
 
+const PANEL_PARAMS = { limit: 5, offset: 0 } as const;
+
 export function NotificationPanel({ onClose }: Props) {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, refetch } = useNotifications({
-    limit: 5,
-    offset: 0,
-  });
+  const { data, isLoading, isError, refetch } = useNotifications(PANEL_PARAMS);
 
   const items: PortalNotification[] = data?.results ?? [];
   const totalUnread: number = data?.total_unread ?? 0;
@@ -42,7 +41,7 @@ export function NotificationPanel({ onClose }: Props) {
     const notif = items.find((n) => n.name === name);
     // Optimistic update
     queryClient.setQueryData(
-      ["portal", "notif", "list", { limit: 5, offset: 0 }],
+      notificationsQueryKey(PANEL_PARAMS),
       (old: typeof data) => {
         if (!old) return old;
         return {
