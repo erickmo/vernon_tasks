@@ -32,26 +32,30 @@ function renderBell() {
 describe("NotificationBell", () => {
   beforeEach(() => vi.clearAllMocks());
 
+  function makeCount(n: number) {
+    return { data: n, isLoading: false, isError: false } as unknown as ReturnType<typeof useNotificationCount>;
+  }
+
   it("renders without badge when count is 0", () => {
-    mockCount.mockReturnValue(0 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(0));
     renderBell();
     expect(document.querySelector(".notif-bell__badge")).toBeNull();
   });
 
   it("renders badge with correct count when count > 0", () => {
-    mockCount.mockReturnValue(3 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(3));
     renderBell();
     expect(screen.getByText("3")).toBeDefined();
   });
 
   it("badge shows 99+ when count >= 100", () => {
-    mockCount.mockReturnValue(100 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(100));
     renderBell();
     expect(screen.getByText("99+")).toBeDefined();
   });
 
   it("click opens panel (aria-expanded becomes true)", () => {
-    mockCount.mockReturnValue(2 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(2));
     renderBell();
     const btn = screen.getByRole("button", { name: /notifications/i });
     fireEvent.click(btn);
@@ -59,7 +63,7 @@ describe("NotificationBell", () => {
   });
 
   it("second click closes panel", () => {
-    mockCount.mockReturnValue(0 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(0));
     renderBell();
     const btn = screen.getByRole("button", { name: /notifications/i });
     fireEvent.click(btn);
@@ -69,7 +73,7 @@ describe("NotificationBell", () => {
   });
 
   it("Escape key closes panel", async () => {
-    mockCount.mockReturnValue(0 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(0));
     renderBell();
     const btn = screen.getByRole("button", { name: /notifications/i });
     fireEvent.click(btn);
@@ -81,14 +85,14 @@ describe("NotificationBell", () => {
   });
 
   it("aria-label reflects count when unread > 0", () => {
-    mockCount.mockReturnValue(3 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(3));
     renderBell();
     const btn = screen.getByRole("button");
     expect(btn.getAttribute("aria-label")).toBe("Notifications — 3 unread");
   });
 
   it("aria-label is plain Notifications when count is 0", () => {
-    mockCount.mockReturnValue(0 as unknown as ReturnType<typeof useNotificationCount>);
+    mockCount.mockReturnValue(makeCount(0));
     renderBell();
     const btn = screen.getByRole("button");
     expect(btn.getAttribute("aria-label")).toBe("Notifications");

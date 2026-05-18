@@ -6,8 +6,16 @@ import { NotificationsFeatureGate } from "./NotificationsFeatureGate";
 import { NotificationsPage } from "./NotificationsPage";
 import { NotificationBell } from "./NotificationBell";
 
-const { mockGetFeatureFlag } = vi.hoisted(() => ({
-  mockGetFeatureFlag: vi.fn(async () => ({ enabled: true })),
+const { mockUseVtSettings } = vi.hoisted(() => ({
+  mockUseVtSettings: vi.fn(() => ({
+    data: { portal_notifications_enabled: true },
+    isLoading: false,
+    isError: false,
+  })),
+}));
+
+vi.mock("../../hooks/useVtSettings", () => ({
+  useVtSettings: mockUseVtSettings,
 }));
 
 vi.mock("./api/portalNotifications", () => ({
@@ -30,15 +38,19 @@ vi.mock("./api/portalNotifications", () => ({
     countUnread: vi.fn(async () => ({ count: 1 })),
     markAllRead: vi.fn(async () => ({ ok: true })),
     markRead: vi.fn(async () => ({ ok: true })),
-    getFeatureFlag: mockGetFeatureFlag,
   },
 }));
+
 vi.mock("./hooks/useNotificationCount", () => ({
-  useNotificationCount: () => 1,
+  useNotificationCount: () => ({ data: 1, isLoading: false, isError: false }),
 }));
 
 function renderWithFlag(enabled: boolean) {
-  mockGetFeatureFlag.mockResolvedValue({ enabled });
+  mockUseVtSettings.mockReturnValue({
+    data: { portal_notifications_enabled: enabled },
+    isLoading: false,
+    isError: false,
+  });
 
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -72,13 +84,17 @@ describe("Portal Notifications integration", () => {
 
   it("renders null (not found fallback) when flag disabled", async () => {
     renderWithFlag(false);
-    // Feature gate returns null — child not rendered
-    await new Promise((r) => setTimeout(r, 0));
-    expect(screen.queryByText(/integration task assigned/i)).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText(/integration task assigned/i)).toBeNull();
+    });
   });
 
   it("bell click opens notification panel", async () => {
-    mockGetFeatureFlag.mockResolvedValue({ enabled: true });
+    mockUseVtSettings.mockReturnValue({
+      data: { portal_notifications_enabled: true },
+      isLoading: false,
+      isError: false,
+    });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(

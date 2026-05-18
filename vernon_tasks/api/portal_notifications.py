@@ -9,6 +9,7 @@ from vernon_tasks.task.api.security import clamp_int
 _UNREAD_CACHE_KEY = "vt:portal:notif:unread:{user}"
 _FLAG_CACHE_KEY = "vt:portal:notif:flag"
 _VALID_EVENT_TYPES = {"task_assigned", "task_review", "sprint_status", "comment"}
+_SPRINT_FANOUT_WARN_THRESHOLD = 100
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -136,19 +137,15 @@ def on_vt_task_update(doc, method):
     old_status = before.kanban_status or ""
     if new_status != old_status and new_status in ("Done", "Revision"):
         assigned_to = doc.assigned_to or ""
-        if not assigned_to:
-            return
-        if new_status == "Done":
-            action = "approved"
-        else:
-            action = "rejected"
-        queue_notification(
-            user=assigned_to,
-            event_type="task_review",
-            reference_doctype="VT Task",
-            reference_name=doc.name,
-            message=f"Your task was {action}: {doc.title}",
-        )
+        if assigned_to:
+            action = "approved" if new_status == "Done" else "rejected"
+            queue_notification(
+                user=assigned_to,
+                event_type="task_review",
+                reference_doctype="VT Task",
+                reference_name=doc.name,
+                message=f"Your task was {action}: {doc.title}",
+            )
 
 
 def on_vt_sprint_update(doc, method):
@@ -184,7 +181,7 @@ def on_vt_sprint_update(doc, method):
     )
     recipients = list({r for r in rows if r and r != "Guest"})
 
-    if len(recipients) > 100:
+    if len(recipients) > _SPRINT_FANOUT_WARN_THRESHOLD:
         frappe.log_error(
             f"Sprint {doc.name} has {len(recipients)} task owners — "
             "consider async queue for large sprint notifications (P4d).",
@@ -212,9 +209,12 @@ def on_comment_insert(doc, method):
     if doc.reference_doctype != "VT Task":
         return
 
-    assigned_to = frappe.db.get_value(
-        "VT Task", doc.reference_name, "assigned_to"
+    task_fields = frappe.db.get_value(
+        "VT Task", doc.reference_name, ["assigned_to", "title"], as_dict=True
     )
+    if not task_fields:
+        return
+    assigned_to = task_fields.get("assigned_to") or ""
     if not assigned_to:
         return
 
@@ -225,9 +225,7 @@ def on_comment_insert(doc, method):
     commenter_name = (
         frappe.db.get_value("User", doc.comment_by, "full_name") or doc.comment_by
     )
-    task_title = (
-        frappe.db.get_value("VT Task", doc.reference_name, "title") or doc.reference_name
-    )
+    task_title = task_fields.get("title") or doc.reference_name
 
     queue_notification(
         user=assigned_to,

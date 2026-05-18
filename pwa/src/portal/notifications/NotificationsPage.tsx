@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { portalNotificationsApi, type PortalNotification } from "./api/portalNotifications";
 import { NotificationItem } from "./NotificationItem";
@@ -29,9 +29,11 @@ export function NotificationsPage() {
   const [totalUnread, setTotalUnread] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  async function loadPage(newOffset: number, append = false) {
+  const loadPage = useCallback(async (newOffset: number, append = false) => {
     setIsLoading(true);
+    setError(null);
     try {
       const result = await portalNotificationsApi.listNotifications({
         limit: PAGE_SIZE,
@@ -46,10 +48,12 @@ export function NotificationsPage() {
       } else {
         setItems(result.results);
       }
+    } catch {
+      setError("Failed to load notifications. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [activeTab.eventTypeFilter, onlyUnread]);
 
   // Reload on filter or unread-only change
   useEffect(() => {
@@ -57,7 +61,7 @@ export function NotificationsPage() {
     setItems([]);
     loadPage(0, false);
     telemetry.trackNotifPageView(activeTab.eventTypeFilter, onlyUnread);
-  }, [activeTab, onlyUnread]);
+  }, [activeTab, onlyUnread, loadPage]);
 
   function handleTabChange(tab: FilterTab) {
     telemetry.trackNotifFilterChange(activeTab.eventTypeFilter, tab.eventTypeFilter);
@@ -140,6 +144,19 @@ export function NotificationsPage() {
       </div>
 
       <div className="notif-page__list">
+        {error && (
+          <div className="notif-page__error" role="alert">
+            <p>{error}</p>
+            <button
+              type="button"
+              className="notif-page__retry"
+              onClick={() => loadPage(offset, false)}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {items.map((notif) => (
           <NotificationItem
             key={notif.name}

@@ -1,16 +1,22 @@
 import { describe, it, expect, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NotificationsFeatureGate } from "./NotificationsFeatureGate";
+import type { VtSettings } from "../../hooks/useVtSettings";
 
-vi.mock("./api/portalNotifications", () => ({
-  portalNotificationsApi: {
-    getFeatureFlag: vi.fn(),
-  },
+type MockSettingsReturn = { data: VtSettings | undefined; isLoading: boolean; isError: boolean };
+
+const { mockUseVtSettings } = vi.hoisted(() => ({
+  mockUseVtSettings: vi.fn<() => MockSettingsReturn>(() => ({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+  })),
 }));
 
-import { portalNotificationsApi } from "./api/portalNotifications";
-const mockGetFeatureFlag = vi.mocked(portalNotificationsApi.getFeatureFlag);
+vi.mock("../../hooks/useVtSettings", () => ({
+  useVtSettings: mockUseVtSettings,
+}));
 
 function renderGate(children = <div>Notification Bell</div>) {
   const qc = new QueryClient({
@@ -23,9 +29,21 @@ function renderGate(children = <div>Notification Bell</div>) {
   );
 }
 
+const BASE_SETTINGS: VtSettings = {
+  portal_enabled: true,
+  portal_okr_enabled: true,
+  portal_projects_enabled: true,
+  portal_sprints_enabled: true,
+  portal_notifications_enabled: true,
+};
+
 describe("NotificationsFeatureGate", () => {
   it("renders children when flag is enabled", async () => {
-    mockGetFeatureFlag.mockResolvedValue({ enabled: true });
+    mockUseVtSettings.mockReturnValue({
+      data: { ...BASE_SETTINGS, portal_notifications_enabled: true },
+      isLoading: false,
+      isError: false,
+    });
 
     const { findByText } = renderGate();
 
@@ -33,20 +51,26 @@ describe("NotificationsFeatureGate", () => {
   });
 
   it("renders null when flag is disabled", async () => {
-    mockGetFeatureFlag.mockResolvedValue({ enabled: false });
+    mockUseVtSettings.mockReturnValue({
+      data: { ...BASE_SETTINGS, portal_notifications_enabled: false },
+      isLoading: false,
+      isError: false,
+    });
 
     const { container, queryByText } = renderGate();
 
-    // Wait for the query to settle
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(queryByText("Notification Bell")).toBeNull();
-    expect(container.firstChild).toBeNull();
+    await waitFor(() => {
+      expect(queryByText("Notification Bell")).toBeNull();
+      expect(container.firstChild).toBeNull();
+    });
   });
 
   it("renders null while loading (query pending)", () => {
-    // Never resolves → stays in loading state
-    mockGetFeatureFlag.mockReturnValue(new Promise(() => {}));
+    mockUseVtSettings.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
 
     const { container } = renderGate();
 
@@ -54,13 +78,17 @@ describe("NotificationsFeatureGate", () => {
   });
 
   it("renders null on error", async () => {
-    mockGetFeatureFlag.mockRejectedValue(new Error("network error"));
+    mockUseVtSettings.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    });
 
     const { container, queryByText } = renderGate();
 
-    await new Promise((r) => setTimeout(r, 0));
-
-    expect(queryByText("Notification Bell")).toBeNull();
-    expect(container.firstChild).toBeNull();
+    await waitFor(() => {
+      expect(queryByText("Notification Bell")).toBeNull();
+      expect(container.firstChild).toBeNull();
+    });
   });
 });

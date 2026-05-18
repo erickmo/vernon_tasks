@@ -1,15 +1,10 @@
 import { type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { portalNotificationsApi } from "./api/portalNotifications";
+import { useVtSettings } from "../../hooks/useVtSettings";
 
 export function NotificationsFeatureGate({ children }: { children: ReactNode }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["portal", "notif", "featureFlag"],
-    queryFn: () => portalNotificationsApi.getFeatureFlag(),
-    staleTime: 60_000,
-  });
+  const { data, isLoading, isError } = useVtSettings();
 
   if (isLoading || isError) return null;
-  if (data?.enabled !== true) return null;
+  if (!data?.portal_notifications_enabled) return null;
   return <>{children}</>;
 }

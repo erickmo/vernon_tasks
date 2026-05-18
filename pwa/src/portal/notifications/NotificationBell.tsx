@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+
+const PANEL_Z_INDEX = 9999;
 import { createPortal } from "react-dom";
 import { useNotificationCount } from "./hooks/useNotificationCount";
 import { NotificationPanel } from "./NotificationPanel";
@@ -9,8 +11,7 @@ export function NotificationBell() {
   const [panelPos, setPanelPos] = useState({ top: 0, right: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const openedAt = useRef<number>(0);
-  const count = useNotificationCount();
-  const unreadCount = typeof count === "number" ? count : 0;
+  const { data: unreadCount = 0 } = useNotificationCount();
 
   const badgeLabel = unreadCount >= 100 ? "99+" : String(unreadCount);
   const ariaLabel =
@@ -92,7 +93,7 @@ export function NotificationBell() {
               position: "fixed",
               top: panelPos.top,
               right: panelPos.right,
-              zIndex: 9999,
+              zIndex: PANEL_Z_INDEX,
             }}
           >
             <NotificationPanel onClose={handleClose} />
