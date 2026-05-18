@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: Portal Dashboard P6 — Role-Aware Dashboard</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Spec: Portal Dashboard P6 — Role-Aware Dashboard</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-19-portal-dashboard-p6-design.html</span>
+  </div>
+</header>
+
+<h1 id="portal-dashboard-p6">Portal Dashboard P6 — Design Spec</h1>
+
+<p><strong>Date:</strong> 2026-05-19<br/>
+<strong>Status:</strong> Draft — approved by user<br/>
+<strong>Owner:</strong> Erick Mo</p>
+
+<h2 id="1-scope">1. Scope</h2>
+
+<p>Redesign halaman <code>/portal</code> (Dashboard) dari placeholder card "Coming soon" menjadi dashboard fungsional yang:</p>
+<ul>
+<li>Menampilkan konten berdasarkan role aktif user di masing-masing project</li>
+<li>Mendukung satu user dengan multi-role lintas project (Owner di satu project, Leader di project lain, Member di project lain)</li>
+<li>Menerapkan top-down workflow: Leader context → Owner context → Member context (urutan default, bisa di-reorder)</li>
+<li>Responsive: full sidebar (≥1024px) → icon rail (768–1023px) → bottom nav (&lt;768px)</li>
+<li>Light theme dengan glassmorphism dan purple/indigo accent</li>
+</ul>
+
+<p><strong>Out of scope (P6):</strong></p>
+<ul>
+<li>Role rename di Frappe backend (<code>VT Manager</code> → <code>Project Owner</code> dll) — dilakukan terpisah</li>
+<li>Drag-reorder persistensi ke server — disimpan di <code>localStorage</code> saja untuk P6</li>
+<li>Gamification/points widget — sudah ada di mobile PWA, tidak duplikasi di portal</li>
+</ul>
+
+<h2 id="2-role-model">2. Role Model</h2>
+
+<p>Tiga role Frappe yang sudah ada, dengan rename label (backend tetap sama):</p>
+
+<table>
+<thead><tr><th>Frappe Role</th><th>Label Portal</th><th>Singkatan</th><th>Warna</th></tr></thead>
+<tbody>
+<tr><td><code>VT Manager</code> / <code>System Manager</code></td><td>Project Owner</td><td>Owner</td><td>Indigo/Purple</td></tr>
+<tr><td><code>VT Leader</code></td><td>Project Leader</td><td>Leader</td><td>Sky/Blue</td></tr>
+<tr><td><code>VT Member</code> / <code>Employee</code></td><td>Project Member</td><td>Member</td><td>Green</td></tr>
+</tbody>
+</table>
+
+<p>Satu user bisa memiliki lebih dari satu role sekaligus (lintas project yang berbeda). Dashboard menampilkan semua context yang relevan secara bersamaan dalam section terpisah.</p>
+
+<h2 id="3-information-architecture">3. Information Architecture</h2>
+
+<h3 id="31-layout-shell">3.1 Layout Shell</h3>
+
+<pre><code>┌──────────────────────────────────────────────────────┐
+│ [60px sidebar] │ [topbar 50px]                        │
+│                ├──────────────────────────────────────│
+│  Logo          │ Summary Bar (5 stat cards)            │
+│  ⚡ Dashboard  │ "Drag hint"                           │
+│  🎯 OKR        │ ─────────────────────────────────────│
+│  📁 Projects   │ Section ①: As Project Leader         │
+│  📊 Reports    │   Team Pulse + Unassigned Tasks       │
+│  👥 Workforce  │ ─────────────────────────────────────│
+│  🔔 Notif      │ Section ②: As Project Owner          │
+│  [Avatar]      │   OKR Progress + Project Portfolio    │
+│                │ ─────────────────────────────────────│
+│                │ Section ③: As Project Member         │
+│                │   My Tasks + Timeline 7 Hari          │
+└──────────────────────────────────────────────────────┘
+</code></pre>
+
+<h3 id="32-responsive-breakpoints">3.2 Responsive Breakpoints</h3>
+
+<table>
+<thead><tr><th>Breakpoint</th><th>Sidebar</th><th>Grid</th></tr></thead>
+<tbody>
+<tr><td>≥1024px (Desktop)</td><td>60px icon rail dengan label tooltip</td><td>Layout penuh seperti di atas</td></tr>
+<tr><td>768–1023px (Tablet)</td><td>60px icon-only (tanpa tooltip)</td><td>Summary 3 kolom, section full width</td></tr>
+<tr><td>&lt;768px (Mobile)</td><td>Sidebar hilang → bottom nav bar 5 item</td><td>Single column, section stack vertikal</td></tr>
+</tbody>
+</table>
+
+<p>Catatan: root redirect (<code>router.tsx</code>) sudah ada — mobile (&lt;1024px) diarahkan ke <code>/m/work</code>. Portal tetap accessible di mobile via URL langsung; bottom nav hanya untuk kasus itu.</p>
+
+<h2 id="4-components">4. Components</h2>
+
+<h3 id="41-summary-bar">4.1 Summary Bar</h3>
+
+<p>5 metric card horizontal, full width. Data diambil dari satu API call aggregated.</p>
+
+<table>
+<thead><tr><th>Metric</th><th>Source</th><th>Color</th></tr></thead>
+<tbody>
+<tr><td>Team Blocked</td><td>Tasks dengan status blocked di project yang user lead</td><td>Red</td></tr>
+<tr><td>Unassigned Tasks</td><td>Tasks tanpa <code>assigned_to</code> di sprint aktif yang user lead</td><td>Amber</td></tr>
+<tr><td>OKR Org</td><td>Rata-rata progress semua OKR aktif</td><td>Gradient purple</td></tr>
+<tr><td>Overdue Saya</td><td>Tasks <code>assigned_to=me</code> dengan <code>deadline &lt; today</code></td><td>Red</td></tr>
+<tr><td>Sprint — hari tersisa</td><td>Sprint aktif terdekat untuk user</td><td>Amber</td></tr>
+</tbody>
+</table>
+
+<p>Jika user tidak memiliki role Leader: "Team Blocked" dan "Unassigned Tasks" disembunyikan, diganti metric relevan (poin, rank).</p>
+
+<h3 id="42-section-as-leader">4.2 Section: As Project Leader</h3>
+
+<p>Hanya ditampilkan jika user memiliki role <code>VT Leader</code> atau <code>VT Manager</code> di minimal satu project.</p>
+
+<p><strong>Team Pulse:</strong></p>
+<ul>
+<li>Grid 3 kolom member card</li>
+<li>Tiap card: avatar, nama, task aktif, PDCA phase badge, status (on track / blocked / idle)</li>
+<li>Card blocked: border merah, tombol "Bantu" (link ke task detail)</li>
+<li>Card waiting review: tombol "Review" (link ke task)</li>
+<li>Data dari <code>portal_tasks.get_team_pulse(project_id)</code> — endpoint baru</li>
+</ul>
+
+<p><strong>Unassigned Tasks:</strong></p>
+<ul>
+<li>List tasks di sprint aktif tanpa <code>assigned_to</code></li>
+<li>Tiap row: PDCA badge, nama task, sprint label, tombol "Assign"</li>
+<li>Tombol "Assign" buka modal assign (re-use komponen existing)</li>
+<li>Data dari <code>portal_tasks.get_unassigned_tasks(project_id)</code></li>
+</ul>
+
+<p><strong>Project selector:</strong> Jika user lead lebih dari satu project, tampil dropdown di header section untuk ganti project.</p>
+
+<h3 id="43-section-as-owner">4.3 Section: As Project Owner</h3>
+
+<p>Hanya ditampilkan jika user memiliki role <code>VT Manager</code> atau <code>System Manager</code>.</p>
+
+<p><strong>OKR Progress + Trend:</strong></p>
+<ul>
+<li>List semua OKR aktif: nama, persentase, progress bar, trend arrow (↑↓→) vs minggu lalu</li>
+<li>OKR di bawah threshold (&lt;30% dengan deadline dalam 2 minggu) diberi border merah + label "🚨 At Risk"</li>
+<li>Data dari endpoint <code>okr.get_okr_summary()</code> yang sudah ada, tambah field <code>trend_delta</code></li>
+</ul>
+
+<p><strong>Project Portfolio:</strong></p>
+<ul>
+<li>List semua project yang user steer: nama, sprint aktif, sisa hari, progress bar, RAG status dot</li>
+<li>RAG: Green (≥70%), Amber (40–69%), Red (&lt;40%)</li>
+<li>Data dari <code>projects.get_portfolio_summary()</code> — endpoint baru</li>
+</ul>
+
+<h3 id="44-section-as-member">4.4 Section: As Project Member</h3>
+
+<p>Selalu ditampilkan untuk semua user (setiap user adalah member di minimal satu project).</p>
+
+<p><strong>My Tasks:</strong></p>
+<ul>
+<li>List tasks <code>assigned_to=me</code>, diurutkan: overdue dulu → due today → upcoming</li>
+<li>Maksimal 5 ditampilkan, "+N lainnya" link ke full task list</li>
+<li>Tiap row: checkbox (toggle done via existing API), nama task, PDCA badge</li>
+<li>Row overdue: border merah subtle</li>
+<li>Data dari <code>portal_tasks.get_my_tasks()</code> yang sudah ada</li>
+</ul>
+
+<p><strong>Timeline 7 Hari:</strong></p>
+<ul>
+<li>Horizontal scroll, 7 kolom: H-3, H-2, H-1, Hari Ini, H+1, H+2, H+3</li>
+<li>Tiap kolom: label hari, tanggal, task chip (nama task + PDCA badge)</li>
+<li>Warna: H-3 s/d H-1 merah (overdue), Hari Ini ungu highlight, H+1 dst abu-abu normal</li>
+<li>Data dari <code>portal_tasks.get_my_tasks_timeline(days_back=3, days_forward=3)</code> — endpoint baru</li>
+</ul>
+
+<h3 id="45-drag-reorder">4.5 Drag-Reorder Sections</h3>
+
+<ul>
+<li>Setiap section punya drag handle (⠿) di kiri header</li>
+<li>Implementasi: HTML5 Drag and Drop API (sudah di mockup, tidak perlu library)</li>
+<li>Urutan disimpan ke <code>localStorage</code> key <code>vt_dashboard_section_order</code> sebagai array <code>['leader','owner','member']</code></li>
+<li>Default order: <code>['leader', 'owner', 'member']</code></li>
+<li>Section yang tidak applicable (user tidak punya role itu) tidak ditampilkan sama sekali</li>
+</ul>
+
+<h3 id="46-collapse-expand">4.6 Collapse/Expand Sections</h3>
+
+<ul>
+<li>Klik header section → toggle collapse</li>
+<li>State disimpan ke <code>localStorage</code> key <code>vt_dashboard_collapsed</code> sebagai object <code>{leader: false, owner: true, member: false}</code></li>
+<li>Badge di header tetap visible saat collapsed (blocked count, unassigned count, dll)</li>
+</ul>
+
+<h2 id="5-api-endpoints">5. API Endpoints</h2>
+
+<table>
+<thead><tr><th>Endpoint</th><th>Method</th><th>Auth</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>portal_dashboard.get_summary()</code></td><td>GET</td><td>Session</td><td>5 metric cards dalam satu call. Cache 60s per user.</td></tr>
+<tr><td><code>portal_tasks.get_team_pulse(project_id)</code></td><td>GET</td><td>Leader+</td><td>Member list dengan task aktif dan status. Existing endpoint diperluas.</td></tr>
+<tr><td><code>portal_tasks.get_unassigned_tasks(project_id)</code></td><td>GET</td><td>Leader+</td><td>Tasks tanpa assigned_to di sprint aktif.</td></tr>
+<tr><td><code>portal_tasks.get_my_tasks_timeline(days_back, days_forward)</code></td><td>GET</td><td>Session</td><td>Tasks grouped by deadline date, range H-N s/d H+N.</td></tr>
+<tr><td><code>projects.get_portfolio_summary()</code></td><td>GET</td><td>Manager</td><td>Project list dengan RAG + sprint info.</td></tr>
+<tr><td><code>okr.get_okr_summary()</code></td><td>GET</td><td>okr.read</td><td>Sudah ada. Tambah field <code>trend_delta</code> (float, perubahan vs 7 hari lalu).</td></tr>
+</tbody>
+</table>
+
+<p>Semua endpoint cache invalidation mengikuti pola yang sudah ada (<code>frappe.cache().set_value</code> + hook <code>on_update</code>).</p>
+
+<h2 id="6-frontend-components">6. Frontend Components</h2>
+
+<pre><code>pwa/src/portal/dashboard/
+  DashboardPage.tsx          ← replace existing placeholder
+  DashboardPage.test.tsx
+  SummaryBar.tsx
+  SummaryBar.test.tsx
+  sections/
+    LeaderSection.tsx        ← Team Pulse + Unassigned
+    LeaderSection.test.tsx
+    OwnerSection.tsx         ← OKR + Portfolio
+    OwnerSection.test.tsx
+    MemberSection.tsx        ← My Tasks + Timeline
+    MemberSection.test.tsx
+  widgets/
+    TeamPulseGrid.tsx
+    UnassignedTaskList.tsx
+    OkrProgressList.tsx
+    PortfolioList.tsx
+    MyTaskList.tsx
+    TaskTimeline.tsx
+  hooks/
+    useDashboardSummary.ts
+    useTeamPulse.ts
+    useUnassignedTasks.ts
+    useMyTasksTimeline.ts
+    usePortfolioSummary.ts
+    useSectionOrder.ts       ← localStorage drag-order state
+    useSectionCollapse.ts    ← localStorage collapse state
+</code></pre>
+
+<h2 id="7-data-flow">7. Data Flow</h2>
+
+<pre><code>DashboardPage mount
+  → usePermissions() → determine visible sections
+  → useSectionOrder() → read localStorage, apply default
+  → useSectionCollapse() → read localStorage
+  → render SummaryBar (useDashboardSummary)
+  → render sections in order:
+      LeaderSection (if hasRole VT Leader or VT Manager)
+        → useTeamPulse(projectId)
+        → useUnassignedTasks(projectId)
+      OwnerSection (if hasRole VT Manager or System Manager)
+        → useOkrSummary() [existing]
+        → usePortfolioSummary()
+      MemberSection (always)
+        → useMyTasks() [existing]
+        → useMyTasksTimeline()
+</code></pre>
+
+<h2 id="8-styling">8. Styling</h2>
+
+<ul>
+<li><strong>Theme:</strong> Light — background <code>#f4f3ff</code>, surface <code>#ffffff</code>, border subtle</li>
+<li><strong>Glass cards:</strong> <code>background: rgba(255,255,255,0.72)</code>, <code>backdrop-filter: blur(20px)</code>, shadow <code>0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(124,58,237,0.06)</code></li>
+<li><strong>Accent:</strong> Indigo <code>#6366f1</code> / Purple <code>#7c3aed</code> / Violet <code>#8b5cf6</code></li>
+<li><strong>Leader color:</strong> Blue <code>#2563eb</code> (strip + badges)</li>
+<li><strong>Owner color:</strong> Purple <code>#7c3aed</code> (strip + badges)</li>
+<li><strong>Member color:</strong> Green <code>#16a34a</code> (strip + badges)</li>
+<li>CSS variables mengikuti pola yang sudah ada di <code>pwa/src/portal/</code></li>
+</ul>
+
+<h2 id="9-testing">9. Testing</h2>
+
+<p><strong>Unit tests (Vitest + happy-dom):</strong></p>
+<ul>
+<li><code>SummaryBar</code>: renders correct metric count, hides leader metrics if no leader role</li>
+<li><code>LeaderSection</code>: hidden jika tidak ada role leader, shows blocked count, shows unassigned list</li>
+<li><code>OwnerSection</code>: hidden jika tidak ada role owner, renders OKR trend arrows</li>
+<li><code>MemberSection</code>: always visible, renders task list + timeline</li>
+<li><code>useSectionOrder</code>: returns default order, persists to localStorage, reorders on drag</li>
+<li><code>TaskTimeline</code>: maps tasks ke hari yang benar, colors overdue red</li>
+</ul>
+
+<p><strong>Integration tests (Python):</strong></p>
+<ul>
+<li><code>test_portal_dashboard.py</code>: 3 skenario — Manager (semua section visible), Leader (no Owner section), Member-only (only Member section)</li>
+<li>Test <code>get_summary()</code> returns correct counts per role</li>
+<li>Test <code>get_team_pulse()</code> returns blocked flag correctly</li>
+<li>Test <code>get_my_tasks_timeline()</code> groups by deadline date</li>
+</ul>
+
+<h2 id="10-feature-flag">10. Feature Flag</h2>
+
+<p>Gate: <code>VT Settings.portal_dashboard_v2_enabled</code> (Check, default 0).<br/>
+Jika off: tampilkan Dashboard placeholder existing.<br/>
+Jika on: tampilkan DashboardPage baru.<br/>
+Flag independent dari flag portal lain.</p>
+
+<h2 id="11-open-questions">11. Open Questions</h2>
+
+<ul>
+<li><strong>Q1:</strong> Role rename (VT Manager → Project Owner) — apakah dilakukan di P6 atau terpisah? Saat ini spec ini menggunakan label display saja, Frappe role tetap.</li>
+<li><strong>Q2:</strong> Jika user lead &gt;1 project di Leader section — apakah aggregate semua project atau pilih satu via dropdown? Spec ini default aggregate, dropdown sebagai enhancement.</li>
+<li><strong>Q3:</strong> Timeline: apakah tasks dari semua project atau hanya project aktif? Default: semua project di mana user adalah member.</li>
+</ul>
+
+<h2 id="12-phasing">12. Phasing</h2>
+
+<table>
+<thead><tr><th>Sub-phase</th><th>Scope</th><th>Deliverable</th></tr></thead>
+<tbody>
+<tr><td>P6.1</td><td>Shell + Summary Bar + MemberSection (My Tasks + Timeline)</td><td>Dashboard fungsional untuk semua user</td></tr>
+<tr><td>P6.2</td><td>LeaderSection (Team Pulse + Unassigned)</td><td>PM workflow terpenuhi</td></tr>
+<tr><td>P6.3</td><td>OwnerSection (OKR + Portfolio) + drag-reorder</td><td>COO/Owner workflow terpenuhi</td></tr>
+</tbody>
+</table>
+
+</div>
+</body>
+</html>
