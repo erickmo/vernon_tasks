@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { TaskCard } from "./TaskCard";
 import type { TaskCardData } from "./api/types";
 
@@ -18,5 +18,24 @@ describe("TaskCard", () => {
   it("shows muted state when not draggable", () => {
     const { container } = render(<TaskCard task={t} draggable={false} />);
     expect(container.querySelector(".task-card--muted")).not.toBeNull();
+  });
+
+  it("calls onTaskOpen with task name on click", () => {
+    const onTaskOpen = vi.fn();
+    const task: TaskCardData = {
+      name: "VT-TASK-7",
+      title: "Clickable",
+      assigned_to: null,
+      kanban_status: "Backlog",
+      pdca_phase: "BACKLOG",
+      kanban_rank: 1000,
+      estimated_hours: 2,
+      weight: 1,
+      priority: "Medium",
+      deadline: null,
+    };
+    render(<TaskCard task={task} draggable={false} onTaskOpen={onTaskOpen} />);
+    fireEvent.click(screen.getByText("Clickable"));
+    expect(onTaskOpen).toHaveBeenCalledWith("VT-TASK-7");
   });
 });
