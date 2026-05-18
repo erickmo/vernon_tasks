@@ -26,7 +26,8 @@
     "portal_projects_enabled",
     "portal_sprints_enabled",
     "portal_notifications_enabled",
-    "portal_reports_enabled"
+    "portal_reports_enabled",
+    "portal_dashboard_v2_enabled"
   ],
   "fields": [
     {
@@ -167,6 +168,12 @@
       "fieldname": "portal_reports_enabled",
       "fieldtype": "Check",
       "label": "Enable Portal Reports (P5)"
+    },
+    {
+      "default": "0",
+      "fieldname": "portal_dashboard_v2_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Portal Dashboard V2"
     }
   ],
   "issingle": 1,

@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import { Dashboard } from "./pages/Dashboard";
+import { DashboardV2Gate } from "./dashboard/DashboardV2Gate";
 import { NotFound } from "./pages/NotFound";
 import { ComingSoon } from "./pages/ComingSoon";
 import { RequirePermission } from "./guards/RequirePermission";
@@ -14,7 +14,7 @@ import { ReportsRoutes } from "./reports/ReportsRoutes";
 export function PortalRoutes() {
   return (
     <Routes>
-      <Route index element={<Dashboard />} />
+      <Route index element={<DashboardV2Gate />} />
       <Route
         path="okr/*"
         element={
