@@ -30,6 +30,7 @@ ROLE_MANAGER = "VT Manager"
 ROLE_LEADER = "VT Leader"
 ROLE_MEMBER = "VT Member"
 DOCTYPE_TASK = "VT Task"
+DOCTYPE_SPRINT = "VT Sprint"
 DOCTYPE_USER = "User"
 
 
@@ -159,3 +160,51 @@ def update_task(task, payload):
         frappe.db.set_value(DOCTYPE_TASK, task, updates, update_modified=True)
 
     return get_task_detail(task)
+
+
+@frappe.whitelist()
+def create_task(payload):
+    payload = _parse_payload(payload)
+
+    if not str(payload.get("title", "")).strip():
+        frappe.throw("title is required")
+
+    sprint_name = payload.get("sprint")
+    project_name = payload.get("project")
+    if not sprint_name:
+        frappe.throw("sprint is required")
+    if not project_name:
+        frappe.throw("project is required")
+
+    sprint = frappe.get_doc(DOCTYPE_SPRINT, sprint_name)
+    role = _get_user_role(project_name)
+
+    if role == "Member" and sprint.status != "Active":
+        raise frappe.PermissionError("Members can only create tasks in Active sprints")
+
+    doc = frappe.get_doc({
+        "doctype": DOCTYPE_TASK,
+        "title": payload["title"].strip(),
+        "sprint": sprint_name,
+        "project": project_name,
+        "priority": payload.get("priority", "Medium"),
+        "estimated_hours": payload.get("estimated_hours", 1.0),
+        "deadline": payload.get("deadline") or None,
+        "assigned_to": payload.get("assigned_to") or frappe.session.user,
+        "pdca_phase": payload.get("pdca_phase", "BACKLOG"),
+        "kanban_status": payload.get("kanban_status", "Backlog"),
+        "kanban_rank": None,
+    }).insert(ignore_permissions=True)
+
+    task_data = frappe.db.get_value(
+        DOCTYPE_TASK, doc.name,
+        ["name", "title", "assigned_to", "kanban_status", "pdca_phase",
+         "kanban_rank", "estimated_hours", "priority", "deadline"],
+        as_dict=True,
+    )
+    if task_data.get("deadline"):
+        task_data["deadline"] = str(task_data["deadline"])
+    if not task_data.get("kanban_rank"):
+        task_data["kanban_rank"] = None
+
+    return {"name": doc.name, "task": task_data}

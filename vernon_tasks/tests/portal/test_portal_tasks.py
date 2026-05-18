@@ -199,3 +199,74 @@ class TestUpdateTask(unittest.TestCase, _TaskFixturesMixin):
         frappe.set_user(self.manager)
         result = update_task(self.task, json.dumps({"kanban_status": "In Progress"}))
         self.assertEqual(result["task"]["pdca_phase"], "DO")
+
+
+class TestCreateTask(unittest.TestCase, _TaskFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = "manager_p33@test.local"
+        cls.member_owner = "member_own_p33@test.local"
+        cls._ensure_user(cls.manager, "VT Manager")
+        cls._ensure_user(cls.member_owner, "VT Member")
+        cls.project = cls._ensure_project()
+        cls.active_sprint = cls._ensure_sprint(cls.project, "SP-create-active-p33", "Active")
+        cls.planning_sprint = cls._ensure_sprint(cls.project, "SP-create-planning-p33", "Planning")
+
+    def test_manager_can_create_task(self):
+        from vernon_tasks.api.portal_tasks import create_task
+        frappe.set_user(self.manager)
+        result = create_task(json.dumps({
+            "sprint": self.active_sprint,
+            "project": self.project,
+            "title": "Created by manager",
+            "priority": "High",
+            "estimated_hours": 3.0,
+        }))
+        self.assertIn("name", result)
+        self.assertIn("task", result)
+        self.assertEqual(result["task"]["title"], "Created by manager")
+        self.assertEqual(result["task"]["priority"], "High")
+        self.assertIsNone(result["task"]["kanban_rank"])
+
+    def test_member_can_create_in_active_sprint(self):
+        from vernon_tasks.api.portal_tasks import create_task
+        frappe.set_user(self.member_owner)
+        result = create_task(json.dumps({
+            "sprint": self.active_sprint,
+            "project": self.project,
+            "title": "Member active task",
+        }))
+        self.assertIn("name", result)
+        self.assertEqual(result["task"]["assigned_to"], self.member_owner)
+
+    def test_member_cannot_create_in_planning_sprint(self):
+        from vernon_tasks.api.portal_tasks import create_task
+        frappe.set_user(self.member_owner)
+        with self.assertRaises(frappe.PermissionError):
+            create_task(json.dumps({
+                "sprint": self.planning_sprint,
+                "project": self.project,
+                "title": "Should fail",
+            }))
+
+    def test_missing_title_raises_validation_error(self):
+        from vernon_tasks.api.portal_tasks import create_task
+        frappe.set_user(self.manager)
+        with self.assertRaises(frappe.ValidationError):
+            create_task(json.dumps({
+                "sprint": self.active_sprint,
+                "project": self.project,
+                "title": "",
+            }))
+
+    def test_returned_shape_matches_task_card_data(self):
+        from vernon_tasks.api.portal_tasks import create_task
+        frappe.set_user(self.manager)
+        result = create_task(json.dumps({
+            "sprint": self.active_sprint,
+            "project": self.project,
+            "title": "Shape test task",
+        }))
+        for key in ("name", "title", "assigned_to", "kanban_status", "pdca_phase",
+                    "kanban_rank", "estimated_hours", "priority", "deadline"):
+            self.assertIn(key, result["task"], f"missing key: {key}")
