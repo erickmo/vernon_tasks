@@ -2,6 +2,8 @@ import { NavLink, Link } from "react-router-dom";
 import * as permsHook from "../auth/usePermissions";
 import * as telemetry from "../telemetry";
 import { portalNav, filterNavByPermissions } from "./nav";
+import { NotificationsFeatureGate } from "./notifications/NotificationsFeatureGate";
+import { NotificationBell } from "./notifications/NotificationBell";
 
 export function TopBar() {
   const { hasPermission } = permsHook.usePermissions();
@@ -24,7 +26,9 @@ export function TopBar() {
       </nav>
       <div className="portal-topbar__spacer" />
       <button type="button" className="portal-topbar__search" aria-label="Search">⌘K</button>
-      <button type="button" className="portal-topbar__bell" aria-label="Notifications">🔔</button>
+      <NotificationsFeatureGate>
+        <NotificationBell />
+      </NotificationsFeatureGate>
       <button type="button" className="portal-topbar__profile" aria-label="Profile">👤</button>
     </header>
   );
