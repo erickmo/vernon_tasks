@@ -1,5 +1,6 @@
 import frappe
 import time
+from datetime import date as _date
 
 VALID_SPRINT_STATUSES = {"Planning", "Active", "Review", "Closed"}
 
@@ -167,3 +168,59 @@ def bulk_update_sprints(names, payload):
         except frappe.PermissionError:
             skipped.append({"name": name, "reason": "no_permission"})
     return {"updated": updated, "skipped": skipped}
+
+
+VALID_KANBAN_STATUSES = {"Backlog", "Scheduled", "In Progress", "In Review", "Revision", "Done", "Blocked"}
+VALID_PDCA_PHASES = {"BACKLOG", "PLAN", "DO", "CHECK", "ACT", "DONE"}
+
+
+def _check_move_permission(task_doc):
+    user = frappe.session.user
+    user_roles = set(frappe.get_roles(user))
+    if {"VT Manager", "VT Leader"} & user_roles:
+        return
+    if "VT Member" in user_roles and task_doc.assigned_to == user:
+        return
+    raise frappe.PermissionError("Not allowed to move this task")
+
+
+@frappe.whitelist()
+def move_task(task, kanban_status=None, pdca_phase=None, kanban_rank=None, sprint=None):
+    if not frappe.db.exists("VT Task", task):
+        raise frappe.DoesNotExistError(f"VT Task {task} not found")
+    doc = frappe.get_doc("VT Task", task)
+    _check_move_permission(doc)
+
+    if kanban_status is not None:
+        if kanban_status not in VALID_KANBAN_STATUSES:
+            frappe.throw(f"Invalid kanban_status: {kanban_status}")
+        doc.kanban_status = kanban_status
+        if kanban_status == "Done" and not doc.completion_date:
+            doc.completion_date = _date.today()
+
+    if pdca_phase is not None:
+        if pdca_phase not in VALID_PDCA_PHASES:
+            frappe.throw(f"Invalid pdca_phase: {pdca_phase}")
+        doc.pdca_phase = pdca_phase
+
+    if kanban_rank is not None:
+        doc.kanban_rank = float(kanban_rank)
+
+    if sprint is not None:
+        doc.sprint = sprint or None
+
+    doc.save()
+    _invalidate_burndown(doc.sprint)
+    return {
+        "name": doc.name,
+        "kanban_status": doc.kanban_status,
+        "pdca_phase": doc.pdca_phase,
+        "kanban_rank": doc.kanban_rank,
+        "sprint": doc.sprint,
+        "completion_date": str(doc.completion_date) if doc.completion_date else None,
+    }
+
+
+def _invalidate_burndown(sprint):
+    if sprint:
+        frappe.cache().delete_value(f"burndown:{sprint}")

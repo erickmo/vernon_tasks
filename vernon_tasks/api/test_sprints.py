@@ -156,3 +156,33 @@ class TestBulkUpdateSprints(unittest.TestCase, _SprintFixturesMixin):
         res = bulk_update_sprints([self.s_a], {"status": "Bogus"})
         self.assertEqual(res["updated"], [])
         self.assertEqual(res["skipped"][0]["reason"], "invalid_status")
+
+
+class TestMoveTask(unittest.TestCase, _SprintFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.project = cls._ensure_project()
+        cls.sprint = cls._ensure_sprint(cls.project, "S-move", date(2026, 9, 1), date(2026, 9, 14), "Active")
+        cls.task = frappe.get_doc({
+            "doctype": "VT Task",
+            "title": "T-move",
+            "project": cls.project,
+            "sprint": cls.sprint,
+            "assigned_to": "Administrator",
+            "kanban_status": "Backlog",
+            "pdca_phase": "PLAN",
+            "estimated_hours": 2,
+            "kanban_rank": 1000.0,
+        }).insert(ignore_permissions=True)
+
+    def test_move_changes_kanban_status_and_rank(self):
+        from vernon_tasks.api.sprints import move_task
+        out = move_task(self.task.name, kanban_status="In Progress", kanban_rank=2500.0)
+        self.assertEqual(out["kanban_status"], "In Progress")
+        self.assertEqual(out["kanban_rank"], 2500.0)
+
+    def test_move_to_done_sets_completion_date(self):
+        from vernon_tasks.api.sprints import move_task
+        move_task(self.task.name, kanban_status="Done")
+        completion = frappe.db.get_value("VT Task", self.task.name, "completion_date")
+        self.assertIsNotNone(completion)
