@@ -26,6 +26,12 @@ TASK_DETAIL_FIELDS = [
     "estimated_hours", "kanban_rank",
 ]
 
+ROLE_MANAGER = "VT Manager"
+ROLE_LEADER = "VT Leader"
+ROLE_MEMBER = "VT Member"
+DOCTYPE_TASK = "VT Task"
+DOCTYPE_USER = "User"
+
 
 def _parse_payload(payload):
     if payload is None:
@@ -38,74 +44,42 @@ def _parse_payload(payload):
 def _get_user_role(project):
     user = frappe.session.user
     user_roles = set(frappe.get_roles(user))
-    if "VT Manager" in user_roles:
+    if ROLE_MANAGER in user_roles:
         return "Manager"
-    if "VT Leader" in user_roles:
+    if ROLE_LEADER in user_roles:
         return "Leader"
-    if "VT Member" in user_roles:
+    if ROLE_MEMBER in user_roles:
         return "Member"
     return None
 
 
 def _get_user_role_for_task(task_name):
-    project = frappe.db.get_value("VT Task", task_name, "project")
+    project = frappe.db.get_value(DOCTYPE_TASK, task_name, "project")
     return _get_user_role(project)
 
 
 def _permitted_fields(task_doc, project, role):
     if role in ("Manager", "Leader"):
-        return ["title", "deadline", "assigned_to", "kanban_status", "priority",
-                "estimated_hours", "pdca_phase"]
+        return list(TASK_MUTABLE_FIELDS_MANAGER_LEADER)
     if role == "Member" and task_doc.assigned_to == frappe.session.user:
-        return ["title", "kanban_status", "pdca_phase"]
+        return list(TASK_MUTABLE_FIELDS_MEMBER)
     return []
 
 
 def _assert_task_readable(task):
-    if not frappe.db.exists("VT Task", task):
-        frappe.throw(f"VT Task {task} not found")
+    if not frappe.db.exists(DOCTYPE_TASK, task):
+        frappe.throw(f"{DOCTYPE_TASK} {task} not found")
 
 
-@frappe.whitelist()
-def get_task_detail(task):
-    _assert_task_readable(task)
-    task_doc = frappe.get_doc("VT Task", task)
-    role = _get_user_role(task_doc.project)
-    fields = _permitted_fields(task_doc, task_doc.project, role)
-
-    task_data = frappe.db.get_value(
-        "VT Task", task,
-        TASK_DETAIL_FIELDS,
-        as_dict=True,
-    )
-    assigned_to_full_name = None
-    if task_data.get("assigned_to"):
-        assigned_to_full_name = frappe.db.get_value(
-            "User", task_data["assigned_to"], "full_name"
-        )
-    task_data["assigned_to_full_name"] = assigned_to_full_name
-
-    for f in ("deadline", "completion_date"):
-        if task_data.get(f):
-            task_data[f] = str(task_data[f])
-
-    return {"task": task_data, "permitted_fields": fields}
-
-
-@frappe.whitelist()
-def update_task(task, payload):
-    payload = _parse_payload(payload)
-    _assert_task_readable(task)
-    task_doc = frappe.get_doc("VT Task", task)
-    role = _get_user_role(task_doc.project)
-    allowed = set(_permitted_fields(task_doc, task_doc.project, role))
-
+def _apply_task_updates(task_doc, payload, allowed):
+    """Validate payload fields and return a dict of field→value updates."""
     for field in payload:
         if field not in TASK_MUTABLE_FIELDS_MANAGER_LEADER:
             continue
         if field not in allowed:
             raise frappe.PermissionError(
-                f"Not allowed to update field '{field}' as {role or 'non-member'}"
+                f"Not allowed to update field '{field}' as "
+                f"{frappe.session.user or 'non-member'}"
             )
 
     updates = {}
@@ -142,7 +116,46 @@ def update_task(task, payload):
     if "deadline" in payload:
         updates["deadline"] = payload["deadline"] or None
 
+    return updates
+
+
+@frappe.whitelist()
+def get_task_detail(task):
+    _assert_task_readable(task)
+    task_data = frappe.db.get_value(
+        DOCTYPE_TASK, task,
+        TASK_DETAIL_FIELDS,
+        as_dict=True,
+    )
+    role = _get_user_role(task_data.get("project"))
+    task_doc_stub = frappe._dict({"assigned_to": task_data.get("assigned_to")})
+    fields = _permitted_fields(task_doc_stub, task_data.get("project"), role)
+
+    assigned_to_full_name = None
+    if task_data.get("assigned_to"):
+        assigned_to_full_name = frappe.db.get_value(
+            DOCTYPE_USER, task_data["assigned_to"], "full_name"
+        )
+    task_data["assigned_to_full_name"] = assigned_to_full_name
+
+    for f in ("deadline", "completion_date"):
+        if task_data.get(f):
+            task_data[f] = str(task_data[f])
+
+    return {"task": task_data, "permitted_fields": fields}
+
+
+@frappe.whitelist()
+def update_task(task, payload):
+    payload = _parse_payload(payload)
+    _assert_task_readable(task)
+    task_doc = frappe.get_doc(DOCTYPE_TASK, task)
+    role = _get_user_role(task_doc.project)
+    allowed = set(_permitted_fields(task_doc, task_doc.project, role))
+
+    updates = _apply_task_updates(task_doc, payload, allowed)
+
     if updates:
-        frappe.db.set_value("VT Task", task, updates, update_modified=True)
+        frappe.db.set_value(DOCTYPE_TASK, task, updates, update_modified=True)
 
     return get_task_detail(task)

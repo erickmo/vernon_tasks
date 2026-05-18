@@ -67,10 +67,8 @@ class _TaskFixturesMixin:
             "assigned_to": assigned_to,
         }).insert(ignore_permissions=True).name
 
-
-class TestGetTaskDetail(unittest.TestCase, _TaskFixturesMixin):
     @classmethod
-    def setUpClass(cls):
+    def _setup_common_fixtures(cls, sprint_name):
         cls.manager = "manager_p33@test.local"
         cls.member_owner = "member_own_p33@test.local"
         cls.member_other = "member_other_p33@test.local"
@@ -78,7 +76,13 @@ class TestGetTaskDetail(unittest.TestCase, _TaskFixturesMixin):
         cls._ensure_user(cls.member_owner, "VT Member")
         cls._ensure_user(cls.member_other, "VT Member")
         cls.project = cls._ensure_project()
-        cls.sprint = cls._ensure_sprint(cls.project, "SP-detail-p33")
+        cls.sprint = cls._ensure_sprint(cls.project, sprint_name)
+
+
+class TestGetTaskDetail(unittest.TestCase, _TaskFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls._setup_common_fixtures("SP-detail-p33")
         cls.task = cls._ensure_task("Task detail test", cls.project, cls.sprint, cls.member_owner)
 
     def test_manager_gets_full_permitted_fields(self):
@@ -122,14 +126,7 @@ class TestGetTaskDetail(unittest.TestCase, _TaskFixturesMixin):
 class TestUpdateTask(unittest.TestCase, _TaskFixturesMixin):
     @classmethod
     def setUpClass(cls):
-        cls.manager = "manager_p33@test.local"
-        cls.member_owner = "member_own_p33@test.local"
-        cls.member_other = "member_other_p33@test.local"
-        cls._ensure_user(cls.manager, "VT Manager")
-        cls._ensure_user(cls.member_owner, "VT Member")
-        cls._ensure_user(cls.member_other, "VT Member")
-        cls.project = cls._ensure_project()
-        cls.sprint = cls._ensure_sprint(cls.project, "SP-update-p33")
+        cls._setup_common_fixtures("SP-update-p33")
         cls.task = cls._ensure_task("Task update test", cls.project, cls.sprint, cls.member_owner)
 
     def test_manager_can_update_all_mutable_fields(self):
@@ -178,6 +175,8 @@ class TestUpdateTask(unittest.TestCase, _TaskFixturesMixin):
     def test_done_status_sets_completion_date(self):
         from vernon_tasks.api.portal_tasks import update_task
         frappe.set_user(self.manager)
+        # Reset completion_date first so this test is deterministic
+        frappe.db.set_value("VT Task", self.task, "completion_date", None)
         result = update_task(self.task, json.dumps({"kanban_status": "Done"}))
         self.assertIsNotNone(result["task"]["completion_date"])
 
@@ -186,3 +185,17 @@ class TestUpdateTask(unittest.TestCase, _TaskFixturesMixin):
         frappe.set_user(self.manager)
         with self.assertRaises(frappe.ValidationError):
             update_task(self.task, json.dumps({"title": "   "}))
+
+    def test_done_status_does_not_overwrite_existing_completion_date(self):
+        from vernon_tasks.api.portal_tasks import update_task
+        frappe.set_user(self.manager)
+        existing_date = "2026-01-15"
+        frappe.db.set_value("VT Task", self.task, "completion_date", existing_date)
+        result = update_task(self.task, json.dumps({"kanban_status": "Done"}))
+        self.assertEqual(result["task"]["completion_date"], existing_date)
+
+    def test_update_kanban_status_syncs_pdca_phase(self):
+        from vernon_tasks.api.portal_tasks import update_task
+        frappe.set_user(self.manager)
+        result = update_task(self.task, json.dumps({"kanban_status": "In Progress"}))
+        self.assertEqual(result["task"]["pdca_phase"], "DO")
