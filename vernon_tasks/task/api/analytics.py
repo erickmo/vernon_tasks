@@ -68,3 +68,7 @@ def invalidate_project_cache(doc, method=None):
     # The above comment is intentional: portal keys include {user} suffix,
     # so we only delete the non-user-keyed keys that do exist.
     frappe.cache().delete_value("pr:health:manager")
+    # Bust portal velocity + forecasts cache (role-bucket keys, not user-keyed)
+    for bucket in ("manager", "leader"):
+        frappe.cache().delete_value(f"pr:vel:{bucket}")
+        frappe.cache().delete_value(f"pr:forecasts:{bucket}")
