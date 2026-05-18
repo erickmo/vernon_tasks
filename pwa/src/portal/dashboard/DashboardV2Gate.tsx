@@ -14,8 +14,7 @@ export function DashboardV2Gate() {
     staleTime: 5 * 60_000,
   });
 
-  if (flag.data?.portal_dashboard_v2_enabled === 1) {
-    return <DashboardPage />;
-  }
+  if (flag.isLoading) return <div className="db-root" />;
+  if (flag.data?.portal_dashboard_v2_enabled === 1) return <DashboardPage />;
   return null;
 }

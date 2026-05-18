@@ -212,6 +212,7 @@ def get_portfolio_summary() -> list:
         filters={"status": ["!=", "Closed"]},
         fields=["name", "title", "status"],
         order_by="creation desc",
+        limit=30,
     )
 
     result = []
