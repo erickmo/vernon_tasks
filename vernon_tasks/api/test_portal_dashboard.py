@@ -8,6 +8,7 @@ class TestPortalDashboardSummary(unittest.TestCase):
     def setUp(self):
         self.user = "Administrator"
         frappe.set_user(self.user)
+        frappe.cache().delete_value(f"portal_dashboard_summary_{frappe.session.user}")
 
     def test_get_summary_returns_expected_keys(self):
         from vernon_tasks.api.portal_dashboard import get_summary
