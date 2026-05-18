@@ -74,7 +74,7 @@ export function ProjectDetail({ name }: ProjectDetailProps) {
       <section className="projects-detail__counts">
         <div>Team: <strong>{counts.team_members}</strong></div>
         <div>Milestones: <strong>{counts.milestones}</strong></div>
-        <div>Sprints: <strong>{counts.sprints}</strong></div>
+        <div>Sprints: <strong>{counts.sprints}</strong> <Link to={`${encodeURIComponent(name)}/sprints`}>Sprints</Link></div>
         <div>Docs: <strong>{counts.documentation}</strong></div>
       </section>
     </article>

@@ -47,6 +47,14 @@ describe("ProjectDetail", () => {
     expect(screen.getByText("Team:").parentElement?.textContent).toContain("3");
   });
 
+  it("shows Sprints nav link", async () => {
+    mockPerms(["project.read"]);
+    vi.spyOn(projApi, "getProjectWithRelations").mockResolvedValue(detail as any);
+    wrap(<ProjectDetail name="P-1" />);
+    await waitFor(() => expect(screen.getByRole("heading", { name: /alpha/i })).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: /sprints/i })).toBeInTheDocument();
+  });
+
   it("renders ObjectiveLink when objective set", async () => {
     mockPerms(["project.read"]);
     const linkedDetail = {
