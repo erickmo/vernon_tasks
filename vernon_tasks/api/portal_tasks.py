@@ -33,6 +33,12 @@ DOCTYPE_TASK = "VT Task"
 DOCTYPE_SPRINT = "VT Sprint"
 DOCTYPE_USER = "User"
 
+SPRINT_STATUS_ACTIVE = "Active"
+TASK_DEFAULT_PRIORITY = "Medium"
+TASK_DEFAULT_HOURS = 1.0
+TASK_DEFAULT_KANBAN_STATUS = "Backlog"
+TASK_DEFAULT_PDCA_PHASE = "BACKLOG"
+
 
 def _parse_payload(payload):
     if payload is None:
@@ -162,6 +168,20 @@ def update_task(task, payload):
     return get_task_detail(task)
 
 
+def _build_task_card_response(doc_name):
+    task_data = frappe.db.get_value(
+        DOCTYPE_TASK, doc_name,
+        ["name", "title", "assigned_to", "kanban_status", "pdca_phase",
+         "kanban_rank", "estimated_hours", "priority", "deadline"],
+        as_dict=True,
+    )
+    if task_data.get("deadline"):
+        task_data["deadline"] = str(task_data["deadline"])
+    if not task_data.get("kanban_rank"):
+        task_data["kanban_rank"] = None
+    return task_data
+
+
 @frappe.whitelist()
 def create_task(payload):
     payload = _parse_payload(payload)
@@ -179,7 +199,7 @@ def create_task(payload):
     sprint = frappe.get_doc(DOCTYPE_SPRINT, sprint_name)
     role = _get_user_role(project_name)
 
-    if role == "Member" and sprint.status != "Active":
+    if role == "Member" and sprint.status != SPRINT_STATUS_ACTIVE:
         raise frappe.PermissionError("Members can only create tasks in Active sprints")
 
     doc = frappe.get_doc({
@@ -187,24 +207,13 @@ def create_task(payload):
         "title": payload["title"].strip(),
         "sprint": sprint_name,
         "project": project_name,
-        "priority": payload.get("priority", "Medium"),
-        "estimated_hours": payload.get("estimated_hours", 1.0),
+        "priority": payload.get("priority", TASK_DEFAULT_PRIORITY),
+        "estimated_hours": payload.get("estimated_hours", TASK_DEFAULT_HOURS),
         "deadline": payload.get("deadline") or None,
         "assigned_to": payload.get("assigned_to") or frappe.session.user,
-        "pdca_phase": payload.get("pdca_phase", "BACKLOG"),
-        "kanban_status": payload.get("kanban_status", "Backlog"),
+        "pdca_phase": payload.get("pdca_phase", TASK_DEFAULT_PDCA_PHASE),
+        "kanban_status": payload.get("kanban_status", TASK_DEFAULT_KANBAN_STATUS),
         "kanban_rank": None,
     }).insert(ignore_permissions=True)
 
-    task_data = frappe.db.get_value(
-        DOCTYPE_TASK, doc.name,
-        ["name", "title", "assigned_to", "kanban_status", "pdca_phase",
-         "kanban_rank", "estimated_hours", "priority", "deadline"],
-        as_dict=True,
-    )
-    if task_data.get("deadline"):
-        task_data["deadline"] = str(task_data["deadline"])
-    if not task_data.get("kanban_rank"):
-        task_data["kanban_rank"] = None
-
-    return {"name": doc.name, "task": task_data}
+    return {"name": doc.name, "task": _build_task_card_response(doc.name)}
