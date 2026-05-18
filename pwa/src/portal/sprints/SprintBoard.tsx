@@ -1,10 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { DndContext, PointerSensor, KeyboardSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useSprintBoard } from "./hooks/useSprintBoard";
 import { SprintCard } from "./SprintCard";
+import { SprintEditor } from "./SprintEditor";
 import type { SprintRow, SprintStatus } from "./api/types";
 import * as telemetry from "../../telemetry";
 
@@ -23,6 +25,8 @@ function DraggableSprint({ row }: { row: SprintRow }) {
 export function SprintBoard() {
   const { projectId } = useParams<{ projectId: string }>();
   const { data = [], isLoading, moveSprint } = useSprintBoard(projectId ?? "");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const qc = useQueryClient();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
@@ -47,6 +51,19 @@ export function SprintBoard() {
   }
 
   return (
+    <>
+      <button onClick={() => setEditorOpen(true)}>+ New sprint</button>
+      {editorOpen && (
+        <SprintEditor
+          mode="create"
+          projectId={projectId ?? ""}
+          onClose={() => setEditorOpen(false)}
+          onSaved={() => {
+            setEditorOpen(false);
+            qc.invalidateQueries({ queryKey: ["sprintBoard", projectId] });
+          }}
+        />
+      )}
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
       <div className="sprint-board">
         {COLUMNS.map(col => {
@@ -62,5 +79,6 @@ export function SprintBoard() {
         })}
       </div>
     </DndContext>
+    </>
   );
 }

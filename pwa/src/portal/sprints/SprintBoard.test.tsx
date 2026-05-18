@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SprintBoard } from "./SprintBoard";
@@ -12,6 +12,7 @@ vi.mock("./api/sprints", () => ({
       status: "Active", goal: "", modified: "2026-05-15", task_count: 2, open_hours: 4, completed_hours: 2 },
   ]),
   bulkUpdateSprints: vi.fn(async () => ({ updated: ["SP-1"], skipped: [] })),
+  createSprint: vi.fn(async () => ({ name: "SP-new" })),
 }));
 
 function renderWithRoute() {
@@ -42,5 +43,11 @@ describe("SprintBoard", () => {
     const activeCol = screen.getByTestId("col-Active");
     expect(planningCol).toHaveTextContent("S One");
     expect(activeCol).toHaveTextContent("S Two");
+  });
+  it("opens SprintEditor on '+ New sprint' click", async () => {
+    renderWithRoute();
+    await waitFor(() => expect(screen.getByText("Planning")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new sprint/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
