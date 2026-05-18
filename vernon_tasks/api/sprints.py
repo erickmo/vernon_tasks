@@ -174,13 +174,29 @@ def bulk_update_sprints(names, payload):
 VALID_KANBAN_STATUSES = {"Backlog", "Scheduled", "In Progress", "In Review", "Revision", "Done", "Blocked"}
 VALID_PDCA_PHASES = {"BACKLOG", "PLAN", "DO", "CHECK", "ACT", "DONE"}
 
+# Reverse of vt_task.PDCA_KANBAN_MAP. "Blocked" is a transient flag, not a PDCA phase.
+KANBAN_TO_PDCA = {
+    "Backlog": "BACKLOG",
+    "Scheduled": "PLAN",
+    "In Progress": "DO",
+    "In Review": "CHECK",
+    "Revision": "ACT",
+    "Done": "DONE",
+}
 
-def _check_move_permission(task_doc):
+# Member can drive the task through DO/CHECK/Revision. Leader+ required to mark Done.
+LEADER_ONLY_PDCA = {"DONE"}
+
+
+def _check_move_permission(task_doc, target_pdca=None):
     user = frappe.session.user
     user_roles = set(frappe.get_roles(user))
-    if {"VT Manager", "VT Leader"} & user_roles:
+    is_leader = bool({"VT Manager", "VT Leader"} & user_roles)
+    if is_leader:
         return
     if "VT Member" in user_roles and task_doc.assigned_to == user:
+        if target_pdca in LEADER_ONLY_PDCA:
+            raise frappe.PermissionError("Only Leader/Manager can mark task Done")
         return
     raise frappe.PermissionError("Not allowed to move this task")
 
@@ -190,19 +206,34 @@ def move_task(task, kanban_status=None, pdca_phase=None, kanban_rank=None, sprin
     if not frappe.db.exists("VT Task", task):
         raise frappe.DoesNotExistError(f"VT Task {task} not found")
     doc = frappe.get_doc("VT Task", task)
-    _check_move_permission(doc)
 
+    # kanban_status drives pdca_phase (server auto-syncs kanban_status from pdca_phase via VT Task validate).
+    # "Blocked" is special — it sets kanban_status directly without touching pdca_phase.
+    target_pdca = pdca_phase
+    set_blocked = False
     if kanban_status is not None:
         if kanban_status not in VALID_KANBAN_STATUSES:
             frappe.throw(f"Invalid kanban_status: {kanban_status}")
-        doc.kanban_status = kanban_status
-        if kanban_status == "Done" and not doc.completion_date:
+        if kanban_status == "Blocked":
+            set_blocked = True
+        else:
+            mapped = KANBAN_TO_PDCA.get(kanban_status)
+            if mapped is None:
+                frappe.throw(f"No PDCA mapping for kanban_status: {kanban_status}")
+            target_pdca = mapped
+
+    _check_move_permission(doc, target_pdca=target_pdca)
+
+    if set_blocked:
+        doc.kanban_status = "Blocked"
+    if target_pdca is not None:
+        if target_pdca not in VALID_PDCA_PHASES:
+            frappe.throw(f"Invalid pdca_phase: {target_pdca}")
+        doc.pdca_phase = target_pdca
+        if target_pdca == "DONE" and not doc.completion_date:
             doc.completion_date = _date.today()
 
-    if pdca_phase is not None:
-        if pdca_phase not in VALID_PDCA_PHASES:
-            frappe.throw(f"Invalid pdca_phase: {pdca_phase}")
-        doc.pdca_phase = pdca_phase
+    # Legacy block removed: target_pdca already handles pdca_phase. Below kept for read-back below.
 
     if kanban_rank is not None:
         doc.kanban_rank = float(kanban_rank)

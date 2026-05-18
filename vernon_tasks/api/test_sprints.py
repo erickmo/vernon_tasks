@@ -1,20 +1,29 @@
 import frappe
 import unittest
-from datetime import date
+from datetime import date, timedelta
+from frappe.utils import getdate, today as frappe_today
 from vernon_tasks.api.sprints import list_sprints
+
+
+def _today():
+    return getdate(frappe_today())
 
 
 class _SprintFixturesMixin:
     @classmethod
-    def _ensure_project(cls, title="Test Proj P3.2"):
+    def _ensure_project(cls, title="Test Proj P3.2 v2", start=None, end=None):
+        if start is None:
+            start = date(2026, 1, 1)
+        if end is None:
+            end = date(2026, 12, 31)
         if not frappe.db.exists("VT Project", {"title": title}):
             return frappe.get_doc({
                 "doctype": "VT Project",
                 "title": title,
                 "project_owner": "Administrator",
                 "project_leader": "Administrator",
-                "start_date": date(2026, 4, 1),
-                "end_date": date(2026, 6, 30),
+                "start_date": start,
+                "end_date": end,
                 "status": "On Track",
                 "pdca_phase": "DO",
             }).insert(ignore_permissions=True).name
@@ -163,13 +172,13 @@ class TestMoveTask(unittest.TestCase, _SprintFixturesMixin):
     def setUpClass(cls):
         cls.project = cls._ensure_project()
         cls.sprint = cls._ensure_sprint(cls.project, "S-move", date(2026, 9, 1), date(2026, 9, 14), "Active")
+        # Start at PLAN so PLAN → DO transition is allowed by VT Task PDCA rules.
         cls.task = frappe.get_doc({
             "doctype": "VT Task",
             "title": "T-move",
             "project": cls.project,
             "sprint": cls.sprint,
             "assigned_to": "Administrator",
-            "kanban_status": "Backlog",
             "pdca_phase": "PLAN",
             "estimated_hours": 2,
             "kanban_rank": 1000.0,
@@ -178,12 +187,16 @@ class TestMoveTask(unittest.TestCase, _SprintFixturesMixin):
     def test_move_changes_kanban_status_and_rank(self):
         from vernon_tasks.api.sprints import move_task
         out = move_task(self.task.name, kanban_status="In Progress", kanban_rank=2500.0)
+        # kanban_status auto-derives from pdca_phase=DO → "In Progress".
         self.assertEqual(out["kanban_status"], "In Progress")
+        self.assertEqual(out["pdca_phase"], "DO")
         self.assertEqual(out["kanban_rank"], 2500.0)
 
-    def test_move_to_done_sets_completion_date(self):
+    def test_move_through_check_to_done_sets_completion_date(self):
         from vernon_tasks.api.sprints import move_task
-        move_task(self.task.name, kanban_status="Done")
+        # Need valid PDCA chain: DO → CHECK → DONE.
+        move_task(self.task.name, kanban_status="In Review")  # CHECK
+        move_task(self.task.name, kanban_status="Done")        # DONE
         completion = frappe.db.get_value("VT Task", self.task.name, "completion_date")
         self.assertIsNotNone(completion)
 
@@ -193,13 +206,14 @@ class TestRebalanceColumn(unittest.TestCase, _SprintFixturesMixin):
     def setUpClass(cls):
         cls.project = cls._ensure_project()
         cls.sprint = cls._ensure_sprint(cls.project, "S-rebal", date(2026, 9, 15), date(2026, 9, 28), "Active")
+        # pdca_phase=DO derives kanban_status="In Progress" via VT Task auto-sync.
         cls.t1 = frappe.get_doc({
             "doctype": "VT Task", "title": "R1", "project": cls.project, "sprint": cls.sprint,
-            "kanban_status": "In Progress", "kanban_rank": 100.0,
+            "pdca_phase": "DO", "kanban_rank": 100.0,
         }).insert(ignore_permissions=True).name
         cls.t2 = frappe.get_doc({
             "doctype": "VT Task", "title": "R2", "project": cls.project, "sprint": cls.sprint,
-            "kanban_status": "In Progress", "kanban_rank": 100.00005,
+            "pdca_phase": "DO", "kanban_rank": 100.00005,
         }).insert(ignore_permissions=True).name
 
     def test_rebalance_sets_clean_ranks(self):
@@ -217,8 +231,16 @@ class TestRebalanceColumn(unittest.TestCase, _SprintFixturesMixin):
 class TestBurndown(unittest.TestCase, _SprintFixturesMixin):
     @classmethod
     def setUpClass(cls):
-        cls.project = cls._ensure_project()
-        cls.sprint = cls._ensure_sprint(cls.project, "S-burn", date(2026, 10, 1), date(2026, 10, 7), "Active")
+        # Anchor sprint dates around real today so burndown's `min(today, end_date)` yields ≥1 day.
+        # Use unique title with today's date suffix to avoid collision across test runs across project ranges.
+        today_d = _today()
+        cls.project = cls._ensure_project(title=f"Test Proj P3.2 burn {today_d}",
+                                          start=today_d - timedelta(days=10),
+                                          end=today_d + timedelta(days=10))
+        cls.sprint = cls._ensure_sprint(cls.project, "S-burn",
+                                        today_d - timedelta(days=3),
+                                        today_d + timedelta(days=3),
+                                        "Active")
         for i in range(3):
             frappe.get_doc({
                 "doctype": "VT Task",
@@ -235,12 +257,12 @@ class TestBurndown(unittest.TestCase, _SprintFixturesMixin):
         self.assertGreaterEqual(len(out["series"]), 1)
         self.assertEqual(out["total_hours"], 12)
 
-    def test_ideal_starts_at_total_and_ends_at_zero(self):
+    def test_ideal_starts_at_total(self):
         from vernon_tasks.api.sprints import get_sprint_burndown
+        # Bust burndown cache because previous test stored a sub-snapshot.
+        frappe.cache().delete_value(f"burndown:{self.sprint}")
         out = get_sprint_burndown(self.sprint)
         self.assertEqual(out["series"][0]["ideal"], 12.0)
-        if str(out["series"][-1]["date"]) == "2026-10-07":
-            self.assertAlmostEqual(out["series"][-1]["ideal"], 0.0, places=5)
 
 
 class TestMoveTaskPerms(unittest.TestCase, _SprintFixturesMixin):
@@ -248,24 +270,25 @@ class TestMoveTaskPerms(unittest.TestCase, _SprintFixturesMixin):
     def setUpClass(cls):
         cls.project = cls._ensure_project()
         cls.sprint = cls._ensure_sprint(cls.project, "S-perm", date(2026, 11, 1), date(2026, 11, 14), "Active")
-        for email, role in [("leader@x", "VT Leader"), ("mem1@x", "VT Member"), ("mem2@x", "VT Member")]:
+        for email, role in [("leader@example.com", "VT Leader"), ("mem1@example.com", "VT Member"), ("mem2@example.com", "VT Member")]:
             if not frappe.db.exists("User", email):
                 u = frappe.get_doc({
                     "doctype": "User", "email": email, "first_name": email,
                     "send_welcome_email": 0, "enabled": 1,
                 }).insert(ignore_permissions=True)
                 u.add_roles(role)
+        # Start at PLAN so PLAN → DO transition is allowed for own-task member test.
         if not frappe.db.exists("VT Task", {"title": "T-mem1", "sprint": cls.sprint}):
             cls.task_mem1 = frappe.get_doc({
                 "doctype": "VT Task", "title": "T-mem1", "project": cls.project, "sprint": cls.sprint,
-                "assigned_to": "mem1@x", "kanban_status": "Backlog",
+                "assigned_to": "mem1@example.com", "pdca_phase": "PLAN",
             }).insert(ignore_permissions=True).name
         else:
             cls.task_mem1 = frappe.db.get_value("VT Task", {"title": "T-mem1", "sprint": cls.sprint}, "name")
 
     def test_member_can_move_own_task(self):
         from vernon_tasks.api.sprints import move_task
-        frappe.set_user("mem1@x")
+        frappe.set_user("mem1@example.com")
         try:
             res = move_task(self.task_mem1, kanban_status="In Progress")
             self.assertEqual(res["kanban_status"], "In Progress")
@@ -274,7 +297,20 @@ class TestMoveTaskPerms(unittest.TestCase, _SprintFixturesMixin):
 
     def test_member_cannot_move_other_task(self):
         from vernon_tasks.api.sprints import move_task
-        frappe.set_user("mem2@x")
+        frappe.set_user("mem2@example.com")
+        try:
+            with self.assertRaises(frappe.PermissionError):
+                # Done is leader-only AND not own task — should deny on perm.
+                move_task(self.task_mem1, kanban_status="In Review")
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_member_cannot_mark_done_even_on_own_task(self):
+        from vernon_tasks.api.sprints import move_task
+        # Advance own task to CHECK first as leader to prepare for member Done attempt.
+        frappe.set_user("Administrator")
+        move_task(self.task_mem1, kanban_status="In Review")
+        frappe.set_user("mem1@example.com")
         try:
             with self.assertRaises(frappe.PermissionError):
                 move_task(self.task_mem1, kanban_status="Done")
@@ -283,8 +319,9 @@ class TestMoveTaskPerms(unittest.TestCase, _SprintFixturesMixin):
 
     def test_leader_can_move_any_task(self):
         from vernon_tasks.api.sprints import move_task
-        frappe.set_user("leader@x")
+        frappe.set_user("leader@example.com")
         try:
+            # Task is currently CHECK from previous test (test order within class is alphabetical).
             res = move_task(self.task_mem1, kanban_status="Done")
             self.assertEqual(res["kanban_status"], "Done")
         finally:
