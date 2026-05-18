@@ -24,7 +24,8 @@
     "portal_enabled",
     "portal_okr_enabled",
     "portal_projects_enabled",
-    "portal_sprints_enabled"
+    "portal_sprints_enabled",
+    "portal_notifications_enabled"
   ],
   "fields": [
     {
@@ -153,6 +154,12 @@
       "fieldname": "portal_sprints_enabled",
       "fieldtype": "Check",
       "label": "Enable Portal Sprints (P3.2)"
+    },
+    {
+      "default": "0",
+      "fieldname": "portal_notifications_enabled",
+      "fieldtype": "Check",
+      "label": "Portal Notifications Enabled"
     }
   ],
   "issingle": 1,

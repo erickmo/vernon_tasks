@@ -6,13 +6,20 @@ export interface VtSettings {
   portal_okr_enabled: boolean | 0 | 1;
   portal_projects_enabled: boolean | 0 | 1;
   portal_sprints_enabled: boolean | 0 | 1;
+  portal_notifications_enabled: boolean | 0 | 1;
 }
 
 async function fetchVtSettings(): Promise<VtSettings> {
   // api.get auto-unwraps Frappe's { message: ... } envelope.
   const res = await api.get<VtSettings>("/api/method/frappe.client.get_value", {
     doctype: "VT Settings",
-    fieldname: JSON.stringify(["portal_enabled", "portal_okr_enabled", "portal_projects_enabled", "portal_sprints_enabled"]),
+    fieldname: JSON.stringify([
+      "portal_enabled",
+      "portal_okr_enabled",
+      "portal_projects_enabled",
+      "portal_sprints_enabled",
+      "portal_notifications_enabled",
+    ]),
   });
   return res;
 }

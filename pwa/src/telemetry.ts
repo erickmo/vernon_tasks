@@ -69,6 +69,14 @@ export type TelemetryEvent =
   | "sprints.task_board_axis_toggle"
   | "sprints.burndown_view"
   | "sprints.rank_rebalance"
+  | "portal.notif_bell_open"
+  | "portal.notif_panel_close"
+  | "portal.notif_item_click"
+  | "portal.notif_mark_read"
+  | "portal.notif_mark_all_read"
+  | "portal.notif_page_view"
+  | "portal.notif_filter_change"
+  | "portal.notif_load_more"
   | "tasks.detail_view"
   | "tasks.task_updated"
   | "tasks.task_created"
@@ -192,4 +200,29 @@ export function trackCommentDeleted(task: string) {
 }
 export function trackTaskPanelClosed(task: string, open_duration_ms: number) {
   self.logEvent("tasks.panel_closed", { task, open_duration_ms });
+}
+
+export function trackNotifBellOpen(unread_count: number) {
+  self.logEvent("portal.notif_bell_open", { unread_count });
+}
+export function trackNotifPanelClose(duration_ms: number) {
+  self.logEvent("portal.notif_panel_close", { duration_ms });
+}
+export function trackNotifItemClick(event_type: string, is_read: boolean) {
+  self.logEvent("portal.notif_item_click", { event_type, is_read });
+}
+export function trackNotifMarkRead(event_type: string) {
+  self.logEvent("portal.notif_mark_read", { event_type });
+}
+export function trackNotifMarkAllRead(count_marked: number) {
+  self.logEvent("portal.notif_mark_all_read", { count_marked });
+}
+export function trackNotifPageView(filter: string, only_unread: boolean) {
+  self.logEvent("portal.notif_page_view", { filter, only_unread });
+}
+export function trackNotifFilterChange(from: string, to: string) {
+  self.logEvent("portal.notif_filter_change", { from, to });
+}
+export function trackNotifLoadMore(offset: number, filter: string) {
+  self.logEvent("portal.notif_load_more", { offset, filter });
 }
