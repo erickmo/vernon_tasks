@@ -23,7 +23,7 @@ export interface TaskCardData {
   assigned_to: string | null;
   kanban_status: KanbanStatus;
   pdca_phase: PdcaPhase;
-  kanban_rank: number;
+  kanban_rank: number | null;
   estimated_hours: number;
   weight: number;
   priority: "Low" | "Medium" | "High" | "Critical";
@@ -35,8 +35,8 @@ export interface SprintDetail {
     name: string;
     sprint_title: string;
     project: string;
-    start_date: string;
-    end_date: string;
+    start_date: string | null;
+    end_date: string | null;
     status: SprintStatus;
     goal: string | null;
   };

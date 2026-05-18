@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SprintsFeatureGate } from "./SprintsFeatureGate";
 import { SprintRoutes } from "./SprintRoutes";
 import { TaskBoard } from "./TaskBoard";
+import type { SprintDetail } from "./api/types";
 
 vi.mock("../../hooks/useVtSettings", () => ({
   useVtSettings: () => ({
@@ -79,14 +80,14 @@ vi.mock("../tasks/api/tasks", () => ({
 describe("P3.3 integration: TaskDetailPanel + TaskCreateModal", () => {
   it("clicking a TaskCard opens TaskDetailPanel", async () => {
     const sprintDetail = {
-      sprint: { name: "SP-1", project: "PR-1", status: "Active", sprint_title: "S1", start_date: null, end_date: null, goal: null },
+      sprint: { name: "SP-1", project: "PR-1", status: "Active" as const, sprint_title: "S1", start_date: null, end_date: null, goal: null },
       project_summary: null,
       tasks: [{
         name: "VT-TASK-42", title: "My Task", assigned_to: null,
         kanban_status: "Backlog" as const, pdca_phase: "BACKLOG" as const,
         kanban_rank: 1000, estimated_hours: 2, weight: 1, priority: "Medium" as const, deadline: null,
       }],
-    };
+    } satisfies SprintDetail;
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     qc.setQueryData(["sprintDetail", "SP-1"], sprintDetail);
     render(
@@ -100,10 +101,10 @@ describe("P3.3 integration: TaskDetailPanel + TaskCreateModal", () => {
 
   it("clicking + button opens TaskCreateModal", async () => {
     const sprintDetail = {
-      sprint: { name: "SP-1", project: "PR-1", status: "Active", sprint_title: "S1", start_date: null, end_date: null, goal: null },
+      sprint: { name: "SP-1", project: "PR-1", status: "Active" as const, sprint_title: "S1", start_date: null, end_date: null, goal: null },
       project_summary: null,
       tasks: [],
-    };
+    } satisfies SprintDetail;
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>

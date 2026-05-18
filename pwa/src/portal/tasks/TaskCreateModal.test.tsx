@@ -3,8 +3,11 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { TaskCreateModal } from "./TaskCreateModal";
+import type { TaskCardData } from "../sprints/api/types";
 
-const mockCreateTask = vi.fn(async () => ({
+type CreateTaskResult = { name: string; task: TaskCardData };
+
+const mockCreateTask = vi.fn(async (_payload?: unknown): Promise<CreateTaskResult> => ({
   name: "VT-TASK-NEW",
   task: {
     name: "VT-TASK-NEW",
@@ -21,7 +24,7 @@ const mockCreateTask = vi.fn(async () => ({
 }));
 
 vi.mock("./api/tasks", () => ({
-  createTask: (...args: unknown[]) => mockCreateTask(...args),
+  createTask: (payload: unknown) => mockCreateTask(payload),
 }));
 
 function makeWrapper(qc: QueryClient) {
@@ -65,7 +68,7 @@ describe("TaskCreateModal", () => {
     });
     let resolve!: () => void;
     mockCreateTask.mockImplementationOnce(
-      () => new Promise<{ name: string; task: { name: string; title: string; assigned_to: null; kanban_status: string; pdca_phase: string; kanban_rank: null; estimated_hours: number; weight: number; priority: string; deadline: null } }>((r) => {
+      () => new Promise<CreateTaskResult>((r) => {
         resolve = () => r({ name: "VT-TASK-NEW", task: { name: "VT-TASK-NEW", title: "Optimistic", assigned_to: null, kanban_status: "Backlog", pdca_phase: "BACKLOG", kanban_rank: null, estimated_hours: 1, weight: 1, priority: "Medium", deadline: null } });
       }),
     );

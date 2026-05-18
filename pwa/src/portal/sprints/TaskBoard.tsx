@@ -66,7 +66,7 @@ export function TaskBoard({ detail, currentUser, canEditAll, userRole = null, pr
     const task = detail.tasks.find(t => t.name === taskId);
     if (!task) return;
     const colTasks = detail.tasks.filter(t => t[axis] === targetCol && t.name !== taskId)
-      .sort((a, b) => a.kanban_rank - b.kanban_rank);
+      .sort((a, b) => (a.kanban_rank ?? 0) - (b.kanban_rank ?? 0));
     const lastRank = colTasks.length ? colTasks[colTasks.length - 1].kanban_rank : null;
     move.mutate({ task: taskId, axis, targetColumn: targetCol, prevRank: lastRank, nextRank: null });
     telemetry.trackTaskMove(taskId, detail.sprint.name,
@@ -91,7 +91,7 @@ export function TaskBoard({ detail, currentUser, canEditAll, userRole = null, pr
         <div className="task-board">
           {cols.map(col => {
             const colTasks = detail.tasks.filter(t => t[axis] === col)
-              .sort((a, b) => a.kanban_rank - b.kanban_rank);
+              .sort((a, b) => (a.kanban_rank ?? 0) - (b.kanban_rank ?? 0));
             return (
               <div key={col} id={`tcol-${col}`} data-testid={`tcol-${col}`} className="task-board__col">
                 <h4>{col}</h4>

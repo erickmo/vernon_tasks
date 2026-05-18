@@ -39,7 +39,7 @@ export function useTaskComments(taskName: string | null) {
     entries: query.data ?? [],
     isLoading: query.isLoading,
     addComment: (content: string) => addCommentMutation.mutateAsync(content),
-    deleteComment: (comment_name: string) => deleteCommentMutation.mutateAsync(comment_name),
+    deleteComment: (comment_name: string) => deleteCommentMutation.mutateAsync(comment_name).then(() => undefined),
     isAddingComment: addCommentMutation.isPending,
     isDeletingComment: deleteCommentMutation.isPending,
   };
