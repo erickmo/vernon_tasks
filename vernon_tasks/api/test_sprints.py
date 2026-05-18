@@ -61,3 +61,36 @@ class TestListSprints(unittest.TestCase, _SprintFixturesMixin):
             self.assertIn("task_count", r)
             self.assertIn("open_hours", r)
             self.assertIn("completed_hours", r)
+
+
+class TestGetSprintWithRelations(unittest.TestCase, _SprintFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.project = cls._ensure_project()
+        cls.sprint = cls._ensure_sprint(cls.project, "S-detail", date(2026, 5, 1), date(2026, 5, 14), "Active")
+        if not frappe.db.exists("VT Task", {"title": "T1 detail", "sprint": cls.sprint}):
+            frappe.get_doc({
+                "doctype": "VT Task",
+                "title": "T1 detail",
+                "project": cls.project,
+                "sprint": cls.sprint,
+                "kanban_status": "In Progress",
+                "pdca_phase": "DO",
+                "estimated_hours": 4,
+                "weight": 1,
+            }).insert(ignore_permissions=True)
+
+    def test_returns_sprint_project_and_tasks(self):
+        from vernon_tasks.api.sprints import get_sprint_with_relations
+        out = get_sprint_with_relations(self.sprint)
+        self.assertEqual(out["sprint"]["name"], self.sprint)
+        self.assertEqual(out["project_summary"]["name"], self.project)
+        titles = {t["title"] for t in out["tasks"]}
+        self.assertIn("T1 detail", titles)
+
+    def test_lazy_populates_rank(self):
+        from vernon_tasks.api.sprints import get_sprint_with_relations
+        frappe.db.sql("UPDATE `tabVT Task` SET kanban_rank = NULL WHERE sprint = %s", (self.sprint,))
+        out = get_sprint_with_relations(self.sprint)
+        for t in out["tasks"]:
+            self.assertIsNotNone(t["kanban_rank"])

@@ -1,4 +1,5 @@
 import frappe
+import time
 
 VALID_SPRINT_STATUSES = {"Planning", "Active", "Review", "Closed"}
 
@@ -50,3 +51,47 @@ def list_sprints(project, filters=None):
         LIMIT 200
     """
     return frappe.db.sql(sql, params, as_dict=True)
+
+
+def _lazy_populate_ranks(sprint):
+    rows = frappe.db.sql(
+        "SELECT name, creation FROM `tabVT Task` WHERE sprint = %s AND kanban_rank IS NULL ORDER BY creation",
+        (sprint,),
+        as_dict=True,
+    )
+    for r in rows:
+        rank = float(int(r["creation"].timestamp()) * 1000)
+        frappe.db.set_value("VT Task", r["name"], "kanban_rank", rank, update_modified=False)
+    if rows:
+        frappe.db.commit()
+
+
+@frappe.whitelist()
+def get_sprint_with_relations(name):
+    if not frappe.db.exists("VT Sprint", name):
+        raise frappe.DoesNotExistError(f"VT Sprint {name} not found")
+
+    _lazy_populate_ranks(name)
+
+    sprint = frappe.get_doc("VT Sprint", name).as_dict()
+    project_name = sprint.get("project")
+    project_summary = None
+    if project_name and frappe.db.exists("VT Project", project_name):
+        project_summary = frappe.db.get_value(
+            "VT Project", project_name,
+            ["name", "title", "status", "pdca_phase", "start_date", "end_date"],
+            as_dict=True,
+        )
+
+    tasks = frappe.db.sql(
+        """
+        SELECT name, title, assigned_to, kanban_status, pdca_phase,
+               kanban_rank, estimated_hours, weight, priority, deadline
+        FROM `tabVT Task`
+        WHERE sprint = %s
+        ORDER BY kanban_rank ASC, creation ASC
+        """,
+        (name,),
+        as_dict=True,
+    )
+    return {"sprint": sprint, "project_summary": project_summary, "tasks": tasks}
