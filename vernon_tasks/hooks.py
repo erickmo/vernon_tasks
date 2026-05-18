@@ -43,6 +43,7 @@ doc_events = {
         "on_update": [
             "vernon_tasks.task.services.scheduling_engine.on_task_update",
             "vernon_tasks.task.api.analytics.invalidate_project_cache",
+            "vernon_tasks.api.portal_notifications.on_vt_task_update",
         ],
         "validate": "vernon_tasks.task.doctype.vt_task.vt_task.validate_permissions",
     },
@@ -50,7 +51,13 @@ doc_events = {
         "validate": "vernon_tasks.project.doctype.vt_project.vt_project.validate_team",
     },
     "VT Sprint": {
-        "on_update": "vernon_tasks.task.api.analytics.invalidate_project_cache",
+        "on_update": [
+            "vernon_tasks.task.api.analytics.invalidate_project_cache",
+            "vernon_tasks.api.portal_notifications.on_vt_sprint_update",
+        ],
+    },
+    "Comment": {
+        "after_insert": "vernon_tasks.api.portal_notifications.on_comment_insert",
     },
     "Notification Log": {
         "after_insert": "vernon_tasks.task.services.push_sender.send_push_for_notification",
