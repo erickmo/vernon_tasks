@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  pwa-lint-type-test:
+    name: PWA — lint, typecheck, test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pwa
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: pwa/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+  backend-test:
+    name: Backend — bench run-tests
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_frappe
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install frappe-bench
+        run: pip install frappe-bench
+
+      - name: Init bench and install app
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          bench init --frappe-branch version-15 --skip-redis-config-generation frappe-bench
+          cd frappe-bench
+          bench new-site test.localhost \
+            --mariadb-root-password root \
+            --admin-password admin \
+            --no-mariadb-socket
+          bench get-app --branch master "$GITHUB_WORKSPACE"
+          bench --site test.localhost install-app vernon_tasks
+
+      - name: Run backend tests
+        run: |
+          cd frappe-bench
+          bench --site test.localhost run-tests --app vernon_tasks
