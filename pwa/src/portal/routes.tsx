@@ -9,6 +9,7 @@ import { ProjectRoutes } from "./projects/ProjectRoutes";
 import { ProjectsFeatureGate } from "./projects/ProjectsFeatureGate";
 import { NotificationsFeatureGate } from "./notifications/NotificationsFeatureGate";
 import { NotificationsPage } from "./notifications/NotificationsPage";
+import { ReportsRoutes } from "./reports/ReportsRoutes";
 
 export function PortalRoutes() {
   return (
@@ -40,7 +41,11 @@ export function PortalRoutes() {
       />
       <Route
         path="reports/*"
-        element={<RequirePermission perm="report.read"><ComingSoon domain="Reports" /></RequirePermission>}
+        element={
+          <RequirePermission perm="report.read">
+            <ReportsRoutes />
+          </RequirePermission>
+        }
       />
       <Route
         path="notifications"

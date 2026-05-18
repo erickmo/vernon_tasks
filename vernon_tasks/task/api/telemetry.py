@@ -55,6 +55,14 @@ ALLOWED_EVENTS = {
     "tasks.comment_added",
     "tasks.comment_deleted",
     "tasks.panel_closed",
+    "reports.page_view",
+    "reports.tab_view",
+    "reports.period_change",
+    "reports.kpi_select",
+    "reports.velocity_n_change",
+    "reports.leaderboard_period_change",
+    "reports.overdue_view_toggle",
+    "reports.permission_denied",
 }
 
 RATE_LIMIT_PER_MINUTE = 60

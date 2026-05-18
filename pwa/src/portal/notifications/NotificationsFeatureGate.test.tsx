@@ -35,6 +35,7 @@ const BASE_SETTINGS: VtSettings = {
   portal_projects_enabled: true,
   portal_sprints_enabled: true,
   portal_notifications_enabled: true,
+  portal_reports_enabled: false,
 };
 
 describe("NotificationsFeatureGate", () => {

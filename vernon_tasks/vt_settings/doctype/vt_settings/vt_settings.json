@@ -25,7 +25,8 @@
     "portal_okr_enabled",
     "portal_projects_enabled",
     "portal_sprints_enabled",
-    "portal_notifications_enabled"
+    "portal_notifications_enabled",
+    "portal_reports_enabled"
   ],
   "fields": [
     {
@@ -160,6 +161,12 @@
       "fieldname": "portal_notifications_enabled",
       "fieldtype": "Check",
       "label": "Portal Notifications Enabled"
+    },
+    {
+      "default": "0",
+      "fieldname": "portal_reports_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Portal Reports (P5)"
     }
   ],
   "issingle": 1,

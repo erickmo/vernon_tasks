@@ -82,7 +82,15 @@ export type TelemetryEvent =
   | "tasks.task_created"
   | "tasks.comment_added"
   | "tasks.comment_deleted"
-  | "tasks.panel_closed";
+  | "tasks.panel_closed"
+  | "reports.page_view"
+  | "reports.tab_view"
+  | "reports.period_change"
+  | "reports.kpi_select"
+  | "reports.velocity_n_change"
+  | "reports.leaderboard_period_change"
+  | "reports.overdue_view_toggle"
+  | "reports.permission_denied";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -225,4 +233,29 @@ export function trackNotifFilterChange(from: string, to: string) {
 }
 export function trackNotifLoadMore(offset: number, filter: string) {
   self.logEvent("portal.notif_load_more", { offset, filter });
+}
+
+export function trackReportsPageView() {
+  self.logEvent("reports.page_view", {});
+}
+export function trackReportsTabView(tab: "okr" | "sprints" | "team") {
+  self.logEvent("reports.tab_view", { tab });
+}
+export function trackReportsPeriodChange(tab: string, period: string) {
+  self.logEvent("reports.period_change", { tab, period });
+}
+export function trackReportsKpiSelect(kpi: string) {
+  self.logEvent("reports.kpi_select", { kpi });
+}
+export function trackReportsVelocityNChange(n: number) {
+  self.logEvent("reports.velocity_n_change", { n });
+}
+export function trackReportsLeaderboardPeriodChange(period: string) {
+  self.logEvent("reports.leaderboard_period_change", { period });
+}
+export function trackReportsOverdueViewToggle(view: "member" | "project") {
+  self.logEvent("reports.overdue_view_toggle", { view });
+}
+export function trackReportsPermissionDenied(tab: string) {
+  self.logEvent("reports.permission_denied", { tab });
 }

@@ -58,3 +58,8 @@ def invalidate_project_cache(doc, method=None):
     for n in (3, 6, 12):
         frappe.cache().delete_value(f"vt_velocity:{project}:{n}")
     frappe.cache().delete_value(f"vt_forecast:{project}")
+    # Portal velocity/forecast cache keys include {bucket}:{n}:{user} segments
+    # (e.g. "pr:vel:leader:6:user@example.com"). Enumerating all users to build
+    # those keys would be expensive, so we intentionally skip eager invalidation
+    # and let those keys expire by their 300s TTL instead.
+    frappe.cache().delete_value("pr:health:manager")
