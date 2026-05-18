@@ -7,6 +7,8 @@ import { OKRRoutes } from "./okr/OKRRoutes";
 import { OKRFeatureGate } from "./okr/OKRFeatureGate";
 import { ProjectRoutes } from "./projects/ProjectRoutes";
 import { ProjectsFeatureGate } from "./projects/ProjectsFeatureGate";
+import { NotificationsFeatureGate } from "./notifications/NotificationsFeatureGate";
+import { NotificationsPage } from "./notifications/NotificationsPage";
 
 export function PortalRoutes() {
   return (
@@ -39,6 +41,14 @@ export function PortalRoutes() {
       <Route
         path="reports/*"
         element={<RequirePermission perm="report.read"><ComingSoon domain="Reports" /></RequirePermission>}
+      />
+      <Route
+        path="notifications"
+        element={
+          <NotificationsFeatureGate>
+            <NotificationsPage />
+          </NotificationsFeatureGate>
+        }
       />
       <Route path="*" element={<NotFound />} />
     </Routes>
