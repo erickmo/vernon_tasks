@@ -241,3 +241,51 @@ class TestBurndown(unittest.TestCase, _SprintFixturesMixin):
         self.assertEqual(out["series"][0]["ideal"], 12.0)
         if str(out["series"][-1]["date"]) == "2026-10-07":
             self.assertAlmostEqual(out["series"][-1]["ideal"], 0.0, places=5)
+
+
+class TestMoveTaskPerms(unittest.TestCase, _SprintFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.project = cls._ensure_project()
+        cls.sprint = cls._ensure_sprint(cls.project, "S-perm", date(2026, 11, 1), date(2026, 11, 14), "Active")
+        for email, role in [("leader@x", "VT Leader"), ("mem1@x", "VT Member"), ("mem2@x", "VT Member")]:
+            if not frappe.db.exists("User", email):
+                u = frappe.get_doc({
+                    "doctype": "User", "email": email, "first_name": email,
+                    "send_welcome_email": 0, "enabled": 1,
+                }).insert(ignore_permissions=True)
+                u.add_roles(role)
+        if not frappe.db.exists("VT Task", {"title": "T-mem1", "sprint": cls.sprint}):
+            cls.task_mem1 = frappe.get_doc({
+                "doctype": "VT Task", "title": "T-mem1", "project": cls.project, "sprint": cls.sprint,
+                "assigned_to": "mem1@x", "kanban_status": "Backlog",
+            }).insert(ignore_permissions=True).name
+        else:
+            cls.task_mem1 = frappe.db.get_value("VT Task", {"title": "T-mem1", "sprint": cls.sprint}, "name")
+
+    def test_member_can_move_own_task(self):
+        from vernon_tasks.api.sprints import move_task
+        frappe.set_user("mem1@x")
+        try:
+            res = move_task(self.task_mem1, kanban_status="In Progress")
+            self.assertEqual(res["kanban_status"], "In Progress")
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_member_cannot_move_other_task(self):
+        from vernon_tasks.api.sprints import move_task
+        frappe.set_user("mem2@x")
+        try:
+            with self.assertRaises(frappe.PermissionError):
+                move_task(self.task_mem1, kanban_status="Done")
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_leader_can_move_any_task(self):
+        from vernon_tasks.api.sprints import move_task
+        frappe.set_user("leader@x")
+        try:
+            res = move_task(self.task_mem1, kanban_status="Done")
+            self.assertEqual(res["kanban_status"], "Done")
+        finally:
+            frappe.set_user("Administrator")
