@@ -94,3 +94,45 @@ class TestGetSprintWithRelations(unittest.TestCase, _SprintFixturesMixin):
         out = get_sprint_with_relations(self.sprint)
         for t in out["tasks"]:
             self.assertIsNotNone(t["kanban_rank"])
+
+
+class TestSprintCrud(unittest.TestCase, _SprintFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.project = cls._ensure_project()
+
+    def test_create_sprint_returns_name(self):
+        from vernon_tasks.api.sprints import create_sprint
+        out = create_sprint({
+            "sprint_title": "S-create",
+            "project": self.project,
+            "start_date": "2026-06-01",
+            "end_date": "2026-06-14",
+            "status": "Planning",
+            "goal": "Test goal",
+        })
+        self.assertTrue(out["name"].startswith("SP-"))
+        self.assertEqual(frappe.db.get_value("VT Sprint", out["name"], "sprint_title"), "S-create")
+
+    def test_create_rejects_end_before_start(self):
+        from vernon_tasks.api.sprints import create_sprint
+        with self.assertRaises(frappe.ValidationError):
+            create_sprint({
+                "sprint_title": "S-bad",
+                "project": self.project,
+                "start_date": "2026-06-14",
+                "end_date": "2026-06-01",
+                "status": "Planning",
+            })
+
+    def test_update_sprint_changes_status(self):
+        from vernon_tasks.api.sprints import create_sprint, update_sprint
+        created = create_sprint({
+            "sprint_title": "S-update",
+            "project": self.project,
+            "start_date": "2026-07-01",
+            "end_date": "2026-07-14",
+            "status": "Planning",
+        })
+        update_sprint(created["name"], {"status": "Active"})
+        self.assertEqual(frappe.db.get_value("VT Sprint", created["name"], "status"), "Active")

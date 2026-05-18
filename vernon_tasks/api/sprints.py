@@ -95,3 +95,47 @@ def get_sprint_with_relations(name):
         as_dict=True,
     )
     return {"sprint": sprint, "project_summary": project_summary, "tasks": tasks}
+
+
+SPRINT_MUTABLE_FIELDS = {"sprint_title", "start_date", "end_date", "status", "goal"}
+
+
+def _validate_sprint_payload(payload):
+    if payload.get("status") and payload["status"] not in VALID_SPRINT_STATUSES:
+        frappe.throw(f"Invalid sprint status: {payload['status']}")
+    start = payload.get("start_date")
+    end = payload.get("end_date")
+    if start and end and str(end) < str(start):
+        frappe.throw("end_date must be >= start_date")
+
+
+@frappe.whitelist()
+def create_sprint(payload):
+    payload = _parse_filters(payload)
+    _validate_sprint_payload(payload)
+    if not payload.get("project"):
+        frappe.throw("project is required")
+    doc = frappe.get_doc({
+        "doctype": "VT Sprint",
+        "sprint_title": payload["sprint_title"],
+        "project": payload["project"],
+        "start_date": payload["start_date"],
+        "end_date": payload["end_date"],
+        "status": payload.get("status", "Planning"),
+        "goal": payload.get("goal", ""),
+    }).insert()
+    return {"name": doc.name}
+
+
+@frappe.whitelist()
+def update_sprint(name, payload):
+    payload = _parse_filters(payload)
+    _validate_sprint_payload(payload)
+    if not frappe.db.exists("VT Sprint", name):
+        raise frappe.DoesNotExistError(f"VT Sprint {name} not found")
+    doc = frappe.get_doc("VT Sprint", name)
+    for field in SPRINT_MUTABLE_FIELDS:
+        if field in payload:
+            setattr(doc, field, payload[field])
+    doc.save()
+    return {"name": doc.name}
