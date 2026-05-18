@@ -1,0 +1,158 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ActivityLog > snapshot: 5-entry fixture 1`] = `
+<div>
+  <div
+    class="activity-log"
+  >
+    <div
+      class="activity-log__comment"
+    >
+      <div
+        class="activity-log__comment-header"
+      >
+        <span
+          class="activity-log__avatar"
+        >
+          A
+        </span>
+        <span
+          class="activity-log__owner"
+        >
+          alice@test.local
+        </span>
+        <span
+          class="activity-log__time"
+        >
+          10 jam lalu
+        </span>
+        <button
+          aria-label="delete"
+          class="activity-log__delete"
+        >
+          Del
+        </button>
+      </div>
+      <div
+        class="activity-log__content"
+      >
+        <p>
+          First comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="activity-log__version"
+    >
+      <span
+        class="activity-log__meta"
+      >
+        bob@test.local
+         · 
+        10 jam lalu
+      </span>
+      <div
+        class="activity-log__diff"
+      >
+        <strong>
+          Status
+          :
+        </strong>
+         
+        Backlog
+         → 
+        In Progress
+      </div>
+    </div>
+    <div
+      class="activity-log__comment"
+    >
+      <div
+        class="activity-log__comment-header"
+      >
+        <span
+          class="activity-log__avatar"
+        >
+          B
+        </span>
+        <span
+          class="activity-log__owner"
+        >
+          bob@test.local
+        </span>
+        <span
+          class="activity-log__time"
+        >
+          9 jam lalu
+        </span>
+      </div>
+      <div
+        class="activity-log__content"
+      >
+        <p>
+          Second comment
+        </p>
+      </div>
+    </div>
+    <div
+      class="activity-log__version"
+    >
+      <span
+        class="activity-log__meta"
+      >
+        alice@test.local
+         · 
+        9 jam lalu
+      </span>
+      <div
+        class="activity-log__diff"
+      >
+        <strong>
+          Prioritas
+          :
+        </strong>
+         
+        Medium
+         → 
+        High
+      </div>
+    </div>
+    <div
+      class="activity-log__comment"
+    >
+      <div
+        class="activity-log__comment-header"
+      >
+        <span
+          class="activity-log__avatar"
+        >
+          A
+        </span>
+        <span
+          class="activity-log__owner"
+        >
+          alice@test.local
+        </span>
+        <span
+          class="activity-log__time"
+        >
+          8 jam lalu
+        </span>
+        <button
+          aria-label="delete"
+          class="activity-log__delete"
+        >
+          Del
+        </button>
+      </div>
+      <div
+        class="activity-log__content"
+      >
+        <p>
+          Third comment
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+`;
