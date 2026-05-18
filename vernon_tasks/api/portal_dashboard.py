@@ -12,6 +12,10 @@ DOCTYPE_SPRINT = "VT Sprint"
 DOCTYPE_OKR    = "VT OKR"
 CACHE_TTL_SECONDS = 60
 
+MEMBER_STATUS_BLOCKED  = "blocked"
+MEMBER_STATUS_OVERDUE  = "overdue"
+MEMBER_STATUS_ON_TRACK = "on_track"
+
 
 def _is_leader_or_above(roles: set) -> bool:
     return bool({ROLE_MANAGER, ROLE_SYSTEM_MANAGER} & roles) or ROLE_LEADER in roles
@@ -100,10 +104,10 @@ def get_summary() -> dict:
 def _task_member_status(t: dict, today: str) -> str:
     """Derive member status from a single task row."""
     if t["kanban_status"] == "Blocked":
-        return "blocked"
-    if t.get("deadline") and t["deadline"] < today and t["kanban_status"] != "Done":
-        return "overdue"
-    return "on_track"
+        return MEMBER_STATUS_BLOCKED
+    if t.get("deadline") and str(t["deadline"]) < today and t["kanban_status"] != "Done":
+        return MEMBER_STATUS_OVERDUE
+    return MEMBER_STATUS_ON_TRACK
 
 
 @frappe.whitelist()
