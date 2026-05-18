@@ -536,6 +536,11 @@
   <li><code>Vernon Push Preference</code>: <code>(user)</code> unique</li>
 </ul>
 
+<h2>Portal Cross-Domain Reuse</h2>
+<ul>
+  <li><strong>Portal Projects (P3.1)</strong> surfaces the existing <code>VT Project.objective → Objective</code> FK in the desktop portal: <code>portal/projects/ObjectiveLink</code> renders a compact linked-Objective summary by consuming the <code>useObjective</code> hook directly from <code>pwa/src/portal/okr/hooks/</code> (no duplication). See <a href="superpowers/specs/2026-05-17-portal-projects-p3-design.md">Portal Projects P3.1 spec</a> §3.4 and <a href="adr/portal-projects-stack.html">ADR-020</a>.</li>
+</ul>
+
 <h2>Related Docs</h2>
 <ul class="meta-list">
   <li><span><a href="prd/domain.html">PRD §4 — Domain Model</a></span><span class="desc">Module &amp; doctype inventory in narrative form</span></li>

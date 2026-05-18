@@ -1,4 +1,5 @@
 import { api } from "./api/client";
+import * as self from "./telemetry";
 
 export type TelemetryEvent =
   | "pwa_boot"
@@ -38,7 +39,36 @@ export type TelemetryEvent =
   | "push_received"
   | "push_pref_view"
   | "push_pref_changed"
-  | "push_action_complete";
+  | "push_action_complete"
+  | "portal.page_view"
+  | "portal.nav_click"
+  | "portal.permission_denied"
+  | "portal.error"
+  | "okr.list_view"
+  | "okr.detail_view"
+  | "okr.kr_update"
+  | "okr.objective_create"
+  | "okr.objective_edit"
+  | "okr.bulk_pdca_advance"
+  | "okr.permission_denied"
+  | "projects.list_view"
+  | "projects.detail_view"
+  | "projects.create"
+  | "projects.edit"
+  | "projects.bulk_pdca_advance"
+  | "projects.bulk_status_set"
+  | "projects.inline_status_change"
+  | "projects.objective_link_click"
+  | "projects.permission_denied"
+  | "sprints.board_view"
+  | "sprints.sprint_move"
+  | "sprints.sprint_created"
+  | "sprints.sprint_updated"
+  | "sprints.task_move"
+  | "sprints.task_rank_change"
+  | "sprints.task_board_axis_toggle"
+  | "sprints.burndown_view"
+  | "sprints.rank_rebalance";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -46,4 +76,95 @@ export function logEvent(event: TelemetryEvent, props: Record<string, unknown> =
     .catch(() => {
       /* swallow */
     });
+}
+
+export function trackPortalPageView(path: string) {
+  self.logEvent("portal.page_view", { path });
+}
+export function trackPortalNavClick(key: string, path: string) {
+  self.logEvent("portal.nav_click", { key, path });
+}
+export function trackPortalPermissionDenied(path: string, required_perm: string) {
+  self.logEvent("portal.permission_denied", { path, required_perm });
+}
+export function trackPortalError(path: string, message: string) {
+  self.logEvent("portal.error", { path, message });
+}
+
+export function trackOkrListView(filters_count: number) {
+  self.logEvent("okr.list_view", { filters_count });
+}
+export function trackOkrDetailView(name: string) {
+  self.logEvent("okr.detail_view", { name });
+}
+export function trackOkrKrUpdate(kr_name: string, delta: number) {
+  self.logEvent("okr.kr_update", { kr_name, delta });
+}
+export function trackOkrObjectiveCreate(name: string) {
+  self.logEvent("okr.objective_create", { name });
+}
+export function trackOkrObjectiveEdit(name: string) {
+  self.logEvent("okr.objective_edit", { name });
+}
+export function trackOkrBulkPdca(count: number, from_to_pairs: [string, string][]) {
+  self.logEvent("okr.bulk_pdca_advance", { count, from_to_pairs });
+}
+export function trackOkrPermissionDenied(path: string, action: string) {
+  self.logEvent("okr.permission_denied", { path, action });
+}
+
+export function trackProjectsListView(filters_count: number) {
+  self.logEvent("projects.list_view", { filters_count });
+}
+export function trackProjectsDetailView(name: string) {
+  self.logEvent("projects.detail_view", { name });
+}
+export function trackProjectsCreate(name: string) {
+  self.logEvent("projects.create", { name });
+}
+export function trackProjectsEdit(name: string) {
+  self.logEvent("projects.edit", { name });
+}
+export function trackProjectsBulkPdca(count: number, from_to_pairs: [string, string][]) {
+  self.logEvent("projects.bulk_pdca_advance", { count, from_to_pairs });
+}
+export function trackProjectsBulkStatusSet(count: number, target_status: string) {
+  self.logEvent("projects.bulk_status_set", { count, target_status });
+}
+export function trackProjectsInlineStatusChange(name: string, from: string, to: string) {
+  self.logEvent("projects.inline_status_change", { name, from, to });
+}
+export function trackProjectsObjectiveLinkClick(project: string, objective: string) {
+  self.logEvent("projects.objective_link_click", { project, objective });
+}
+export function trackProjectsPermissionDenied(path: string, action: string) {
+  self.logEvent("projects.permission_denied", { path, action });
+}
+
+export function trackSprintBoardView(project: string, sprint_count: number) {
+  self.logEvent("sprints.board_view", { project, sprint_count });
+}
+export function trackSprintMove(sprint: string, from_status: string, to_status: string) {
+  self.logEvent("sprints.sprint_move", { sprint, from_status, to_status });
+}
+export function trackSprintCreated(sprint: string, project: string) {
+  self.logEvent("sprints.sprint_created", { sprint, project });
+}
+export function trackSprintUpdated(sprint: string, changed_fields: string[]) {
+  self.logEvent("sprints.sprint_updated", { sprint, changed_fields });
+}
+export function trackTaskMove(task: string, sprint: string, axis: "kanban" | "pdca", from: string, to: string) {
+  self.logEvent("sprints.task_move", { task, sprint, axis, from, to });
+}
+export function trackTaskRankChange(task: string, sprint: string) {
+  self.logEvent("sprints.task_rank_change", { task, sprint });
+}
+export function trackTaskBoardAxisToggle(sprint: string, axis: "kanban" | "pdca") {
+  self.logEvent("sprints.task_board_axis_toggle", { sprint, axis });
+}
+export function trackBurndownView(sprint: string) {
+  self.logEvent("sprints.burndown_view", { sprint });
+}
+export function trackRankRebalance(sprint: string, axis: "kanban" | "pdca", column: string) {
+  self.logEvent("sprints.rank_rebalance", { sprint, axis, column });
 }

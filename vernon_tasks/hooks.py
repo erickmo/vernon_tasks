@@ -82,6 +82,8 @@ website_route_rules = [
     {"from_route": "/m/me/notifications", "to_route": "m"},
     {"from_route": "/m/me/notifications/settings", "to_route": "m"},
     {"from_route": "/m/leader", "to_route": "m"},
+    {"from_route": "/portal/<path:portal_path>", "to_route": "portal"},
+    {"from_route": "/portal", "to_route": "portal"},
 ]
 
 after_request = ["vernon_tasks.hooks.add_pwa_security_headers"]

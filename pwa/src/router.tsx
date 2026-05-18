@@ -3,18 +3,20 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AuthGuard } from "./auth/guard";
 import { LoginPage } from "./auth/login";
 import { AppShell } from "./AppShell";
-import { MyWorkList } from "./pages/MyWork/List";
-import { MyWorkDetail } from "./pages/MyWork/Detail";
-import { Onboarding } from "./pages/Onboarding";
-import { MePage } from "./pages/Me";
-import { NotificationsPage } from "./pages/Notifications";
-import { DashboardPage } from "./pages/Dashboard";
-import { LeaderPage } from "./pages/Leader";
-import { PushPrefsPage } from "./pages/PushPrefs";
+import { MyWorkList } from "./mobile/pages/MyWork/List";
+import { MyWorkDetail } from "./mobile/pages/MyWork/Detail";
+import { Onboarding } from "./mobile/pages/Onboarding";
+import { MePage } from "./mobile/pages/Me";
+import { NotificationsPage } from "./mobile/pages/Notifications";
+import { DashboardPage } from "./mobile/pages/Dashboard";
+import { LeaderPage } from "./mobile/pages/Leader";
+import { PushPrefsPage } from "./mobile/pages/PushPrefs";
+import { PageSkeleton } from "./components/PageSkeleton";
 
 const AnalyticsPage = lazy(() =>
-  import("./pages/Analytics").then((m) => ({ default: m.AnalyticsPage })),
+  import("./mobile/pages/Analytics").then((m) => ({ default: m.AnalyticsPage })),
 );
+const PortalShell = lazy(() => import("./portal/PortalShell"));
 
 function LazyAnalytics() {
   return (
@@ -22,6 +24,22 @@ function LazyAnalytics() {
       <AnalyticsPage />
     </Suspense>
   );
+}
+
+function LazyPortalShell() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <PortalShell />
+    </Suspense>
+  );
+}
+
+function RootRedirect() {
+  const isDesktop =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(min-width: 1024px)").matches;
+  return <Navigate to={isDesktop ? "/portal" : "/m/work"} replace />;
 }
 
 function OnboardingGate() {
@@ -32,8 +50,10 @@ function OnboardingGate() {
 }
 
 export const router = createBrowserRouter([
+  { path: "/", element: <RootRedirect /> },
   { path: "/m/login", element: <LoginPage /> },
   { path: "/m/onboarding", element: <OnboardingGate /> },
+  { path: "/portal/*", element: <LazyPortalShell /> },
   {
     element: <AuthGuard />,
     children: [

@@ -65,12 +65,33 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "../vernon_tasks/www/m"),
     emptyOutDir: true,
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("/pwa/src/portal/okr/")) return "okr";
+          if (id.includes("/pwa/src/portal/projects/")) return "projects";
+          if (id.includes("/pwa/src/portal/")) return "portal";
+          if (id.includes("/pwa/src/mobile/")) return "mobile";
+          return undefined;
+        }
+      }
+    }
   },
   test: {
     environment: "happy-dom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
-    exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**"]
+    exclude: ["**/node_modules/**", "**/dist/**", "**/e2e/**"],
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/api/**", "src/**/*.d.ts", "src/test-setup.ts"],
+      thresholds: {
+        "src/portal/**": { lines: 80, functions: 75, statements: 80, branches: 70 },
+        "src/portal/okr/**": { lines: 80, functions: 75, statements: 80, branches: 70 },
+        "src/portal/projects/**": { lines: 80, functions: 75, statements: 80, branches: 70 }
+      }
+    }
   }
 });

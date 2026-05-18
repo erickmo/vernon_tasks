@@ -1,0 +1,2 @@
+vernon_tasks.patches.v1_x.add_objective_period_dates
+vernon_tasks.patches.v1_x.add_vt_task_kanban_rank
