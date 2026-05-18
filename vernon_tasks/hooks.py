@@ -83,8 +83,6 @@ scheduler_events = {
     ],
 }
 
-home_page = "m"
-
 website_route_rules = [
     {"from_route": "/m/login", "to_route": "m"},
     {"from_route": "/m/onboarding", "to_route": "m"},
@@ -105,6 +103,15 @@ after_request = ["vernon_tasks.hooks.add_pwa_security_headers"]
 before_tests = "vernon_tasks.test_setup.before_tests"
 
 fixtures = [
+    # Roles & Workspace
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
     {"dt": "Workspace", "filters": [["name", "in", ["My Tasks", "My Projects", "Overview"]]]},
+    # Website brand & content
+    {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
+    {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},
+    {"dt": "Web Page", "filters": [["route", "in", ["", "tentang", "kontak"]]]},
+    {"dt": "Web Form", "filters": [["name", "=", "Hubungi Kami"]]},
+    {"dt": "Website Route Meta", "filters": [["route", "in", ["/", "/portal", "/tentang", "/kontak"]]]},
+    # Portal configuration (Single DocType)
+    "Portal Settings",
 ]
