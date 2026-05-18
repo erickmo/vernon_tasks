@@ -139,3 +139,31 @@ def update_sprint(name, payload):
             setattr(doc, field, payload[field])
     doc.save()
     return {"name": doc.name}
+
+
+@frappe.whitelist()
+def bulk_update_sprints(names, payload):
+    if isinstance(names, str):
+        import json
+        names = json.loads(names)
+    payload = _parse_filters(payload)
+
+    updated = []
+    skipped = []
+    status = payload.get("status")
+    if status and status not in VALID_SPRINT_STATUSES:
+        return {"updated": [], "skipped": [{"name": n, "reason": "invalid_status"} for n in names]}
+
+    for name in names:
+        if not frappe.db.exists("VT Sprint", name):
+            skipped.append({"name": name, "reason": "not_found"})
+            continue
+        try:
+            doc = frappe.get_doc("VT Sprint", name)
+            if status:
+                doc.status = status
+            doc.save()
+            updated.append(name)
+        except frappe.PermissionError:
+            skipped.append({"name": name, "reason": "no_permission"})
+    return {"updated": updated, "skipped": skipped}

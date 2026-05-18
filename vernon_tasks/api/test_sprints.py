@@ -136,3 +136,23 @@ class TestSprintCrud(unittest.TestCase, _SprintFixturesMixin):
         })
         update_sprint(created["name"], {"status": "Active"})
         self.assertEqual(frappe.db.get_value("VT Sprint", created["name"], "status"), "Active")
+
+
+class TestBulkUpdateSprints(unittest.TestCase, _SprintFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.project = cls._ensure_project()
+        cls.s_a = cls._ensure_sprint(cls.project, "Bulk-A", date(2026, 8, 1), date(2026, 8, 7), "Planning")
+        cls.s_b = cls._ensure_sprint(cls.project, "Bulk-B", date(2026, 8, 8), date(2026, 8, 14), "Planning")
+
+    def test_bulk_set_status(self):
+        from vernon_tasks.api.sprints import bulk_update_sprints
+        res = bulk_update_sprints([self.s_a, self.s_b], {"status": "Active"})
+        self.assertEqual(len(res["updated"]), 2)
+        self.assertEqual(frappe.db.get_value("VT Sprint", self.s_a, "status"), "Active")
+
+    def test_bulk_skips_invalid_status(self):
+        from vernon_tasks.api.sprints import bulk_update_sprints
+        res = bulk_update_sprints([self.s_a], {"status": "Bogus"})
+        self.assertEqual(res["updated"], [])
+        self.assertEqual(res["skipped"][0]["reason"], "invalid_status")
