@@ -253,6 +253,33 @@ def get_portal_risks():
     return {"risks": risks}
 
 
+# ── Workload helper ──────────────────────────────────────────────────────────
+def _build_workload_rows(rows, visible_projects, project_names):
+    """
+    Enrich each user row with the list of projects they have open tasks in.
+    Single grouped query replaces the previous N+1 per-project SELECT.
+    """
+    proj_rows = frappe.db.sql(
+        """
+        SELECT project, assigned_to
+        FROM `tabVT Task`
+        WHERE project IN %(projects)s AND assigned_to IS NOT NULL
+        GROUP BY project, assigned_to
+        """,
+        {"projects": project_names},
+        as_dict=True,
+    )
+    user_projects: dict = {}
+    for pr in proj_rows:
+        user_projects.setdefault(pr.assigned_to, []).append(pr.project)
+
+    members = []
+    for r in rows:
+        r["projects"] = user_projects.get(r["user"], [])
+        members.append(r)
+    return members
+
+
 # ── Team tab endpoints (Manager + Leader) ────────────────────────────────────
 @frappe.whitelist()
 def get_portal_leaderboard(period="this_month", limit=20):
@@ -324,29 +351,61 @@ def get_portal_workload():
             as_dict=True,
         )
 
-        # Enrich with project list per user
-        user_projects = {}
-        for p in visible:
-            users_in_proj = frappe.db.sql(
-                """SELECT DISTINCT assigned_to FROM `tabVT Task`
-                   WHERE project = %s AND assigned_to IS NOT NULL""",
-                p["name"],
-                as_list=True,
-            )
-            for row in users_in_proj:
-                uid = row[0]
-                user_projects.setdefault(uid, [])
-                if p["name"] not in user_projects[uid]:
-                    user_projects[uid].append(p["name"])
-
-        members = []
-        for r in rows:
-            r["projects"] = user_projects.get(r["user"], [])
-            members.append(r)
-
+        members = _build_workload_rows(rows, visible, project_names)
         return {"as_of": frappe_today(), "members": members}
 
     return _cache(key, _build)
+
+
+def _build_overdue_rows(visible_projects):
+    """Query and assemble by_member + by_project overdue breakdowns."""
+    from frappe.utils import today as frappe_today
+    project_names = tuple(p["name"] for p in visible_projects)
+    today_str = frappe_today()
+
+    by_member = frappe.db.sql(
+        """
+        SELECT
+            t.assigned_to AS `user`,
+            MAX(u.full_name) AS full_name,
+            COUNT(*) AS overdue_count,
+            COALESCE(SUM(t.estimated_hours), 0) AS overdue_hours,
+            DATEDIFF(%(today)s, MIN(t.deadline)) AS oldest_overdue_days
+        FROM `tabVT Task` t
+        LEFT JOIN `tabUser` u ON u.name = t.assigned_to
+        WHERE t.project IN %(projects)s
+          AND t.deadline < %(today)s
+          AND t.kanban_status NOT IN ('Done', 'Blocked')
+          AND t.assigned_to IS NOT NULL
+        GROUP BY t.assigned_to
+        ORDER BY overdue_count DESC
+        """,
+        {"projects": project_names, "today": today_str},
+        as_dict=True,
+    )
+
+    proj_title_map = {p["name"]: p.get("project_title", p["name"]) for p in visible_projects}
+    by_project = frappe.db.sql(
+        """
+        SELECT
+            t.project,
+            COUNT(*) AS overdue_count,
+            COALESCE(SUM(t.estimated_hours), 0) AS overdue_hours
+        FROM `tabVT Task` t
+        WHERE t.project IN %(projects)s
+          AND t.deadline < %(today)s
+          AND t.kanban_status NOT IN ('Done', 'Blocked')
+        GROUP BY t.project
+        ORDER BY overdue_count DESC
+        """,
+        {"projects": project_names, "today": today_str},
+        as_dict=True,
+    )
+    for row in by_project:
+        row["project_title"] = proj_title_map.get(row["project"], row["project"])
+
+    total = sum(r.get("overdue_count", 0) for r in by_member)
+    return today_str, total, by_member, by_project
 
 
 @frappe.whitelist()
@@ -367,51 +426,7 @@ def get_portal_overdue():
                 "by_member": [],
                 "by_project": [],
             }
-        project_names = tuple(p["name"] for p in visible)
-        today_str = frappe_today()
-
-        by_member = frappe.db.sql(
-            """
-            SELECT
-                t.assigned_to AS `user`,
-                MAX(u.full_name) AS full_name,
-                COUNT(*) AS overdue_count,
-                COALESCE(SUM(t.estimated_hours), 0) AS overdue_hours,
-                DATEDIFF(%(today)s, MIN(t.deadline)) AS oldest_overdue_days
-            FROM `tabVT Task` t
-            LEFT JOIN `tabUser` u ON u.name = t.assigned_to
-            WHERE t.project IN %(projects)s
-              AND t.deadline < %(today)s
-              AND t.kanban_status NOT IN ('Done', 'Blocked')
-              AND t.assigned_to IS NOT NULL
-            GROUP BY t.assigned_to
-            ORDER BY overdue_count DESC
-            """,
-            {"projects": project_names, "today": today_str},
-            as_dict=True,
-        )
-
-        proj_title_map = {p["name"]: p.get("project_title", p["name"]) for p in visible}
-        by_project = frappe.db.sql(
-            """
-            SELECT
-                t.project,
-                COUNT(*) AS overdue_count,
-                COALESCE(SUM(t.estimated_hours), 0) AS overdue_hours
-            FROM `tabVT Task` t
-            WHERE t.project IN %(projects)s
-              AND t.deadline < %(today)s
-              AND t.kanban_status NOT IN ('Done', 'Blocked')
-            GROUP BY t.project
-            ORDER BY overdue_count DESC
-            """,
-            {"projects": project_names, "today": today_str},
-            as_dict=True,
-        )
-        for row in by_project:
-            row["project_title"] = proj_title_map.get(row["project"], row["project"])
-
-        total = sum(r.get("overdue_count", 0) for r in by_member)
+        today_str, total, by_member, by_project = _build_overdue_rows(visible)
         return {
             "as_of": today_str,
             "total_overdue": total,
