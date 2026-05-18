@@ -59,7 +59,16 @@ export type TelemetryEvent =
   | "projects.bulk_status_set"
   | "projects.inline_status_change"
   | "projects.objective_link_click"
-  | "projects.permission_denied";
+  | "projects.permission_denied"
+  | "sprints.board_view"
+  | "sprints.sprint_move"
+  | "sprints.sprint_created"
+  | "sprints.sprint_updated"
+  | "sprints.task_move"
+  | "sprints.task_rank_change"
+  | "sprints.task_board_axis_toggle"
+  | "sprints.burndown_view"
+  | "sprints.rank_rebalance";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -130,4 +139,32 @@ export function trackProjectsObjectiveLinkClick(project: string, objective: stri
 }
 export function trackProjectsPermissionDenied(path: string, action: string) {
   self.logEvent("projects.permission_denied", { path, action });
+}
+
+export function trackSprintBoardView(project: string, sprint_count: number) {
+  self.logEvent("sprints.board_view", { project, sprint_count });
+}
+export function trackSprintMove(sprint: string, from_status: string, to_status: string) {
+  self.logEvent("sprints.sprint_move", { sprint, from_status, to_status });
+}
+export function trackSprintCreated(sprint: string, project: string) {
+  self.logEvent("sprints.sprint_created", { sprint, project });
+}
+export function trackSprintUpdated(sprint: string, changed_fields: string[]) {
+  self.logEvent("sprints.sprint_updated", { sprint, changed_fields });
+}
+export function trackTaskMove(task: string, sprint: string, axis: "kanban" | "pdca", from: string, to: string) {
+  self.logEvent("sprints.task_move", { task, sprint, axis, from, to });
+}
+export function trackTaskRankChange(task: string, sprint: string) {
+  self.logEvent("sprints.task_rank_change", { task, sprint });
+}
+export function trackTaskBoardAxisToggle(sprint: string, axis: "kanban" | "pdca") {
+  self.logEvent("sprints.task_board_axis_toggle", { sprint, axis });
+}
+export function trackBurndownView(sprint: string) {
+  self.logEvent("sprints.burndown_view", { sprint });
+}
+export function trackRankRebalance(sprint: string, axis: "kanban" | "pdca", column: string) {
+  self.logEvent("sprints.rank_rebalance", { sprint, axis, column });
 }
