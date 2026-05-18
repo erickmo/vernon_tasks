@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: Portal Notifications P4c — Desktop Notification Center</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Spec: Portal Notifications P4c — Desktop Notification Center</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-18-portal-notifications-p4c-design.md</span>
+  </div>
+</header>
+
+<h1 id="portal-notifications-p4c-design-spec">Portal Notifications P4c — Design Spec</h1>
+<p><strong>Date:</strong> 2026-05-18
+<strong>Parent PRD:</strong> <code>docs/superpowers/specs/2026-05-17-desktop-portal-foundation-design.md</code>
+<strong>Status:</strong> Draft — pending review
+<strong>Owner:</strong> Erick Mo</p>
+<hr />
+<h2 id="1-scope">1. Scope</h2>
+<p>Desktop portal notification center — a bell-icon inbox in the portal TopBar that delivers real-time task and sprint activity to Manager, Leader, and Member users. P4c is the <strong>portal counterpart</strong> to P4a/P4b (mobile push notifications); it is NOT Web Push. All delivery is in-app, polling-based with optional socketio opt-in.</p>
+<p><strong>In scope (P4c):</strong>
+- Four notification sources: task assigned, task review result (approve/reject), sprint started/ended, mention/comment on user's task.
+- <code>portal_notifications_enabled</code> feature flag in <code>VT Settings</code>.
+- Backend: <code>vernon_tasks/api/portal_notifications.py</code> — new module, sibling to <code>notifications.py</code>. Reuses <code>Vernon Notification</code> DocType (already exists).
+- Backend: doc-event hooks in <code>VT Task</code>, <code>VT Sprint</code>, <code>Comment</code> for the four sources.
+- Frontend: <code>NotificationBell</code> component wired into <code>TopBar.tsx</code>.
+- Frontend: dropdown notification panel (latest 5 + "View all" link).
+- Frontend: dedicated full-page <code>/portal/notifications</code> for the inbox.
+- Permission model: Manager sees all scope notifications; Leader sees notifications scoped to their led projects/teams; Member sees own notifications only.
+- 30-second polling (consistent with PWA <code>count_unread</code> pattern); socketio opt-in noted in §2.1 as future path.</p>
+<p><strong>Non-goals (P4c, deferred):</strong>
+- In-portal notification preferences / mute rules (P4d).
+- Email digest triggered from portal notification queue.
+- Cross-user @mention parsing in comments (P4d — requires mention detection).
+- Web Push from portal (already handled by P4a/P4b; portal UI reuses same <code>Vernon Notification</code> rows without re-sending push).
+- Notification archival / bulk delete.
+- Realtime socketio delivery (opt-in path documented; not implemented here).</p>
+<hr />
+<h2 id="2-architecture">2. Architecture</h2>
+<h3 id="21-backend-doc-events-notification-queue">2.1 Backend — doc events + notification queue</h3>
+<p>Doc events are registered in <code>hooks.py</code> under <code>doc_events</code>. Four hooks:</p>
+<pre><code class="language-python">doc_events = {
+    &quot;VT Task&quot;: {
+        &quot;on_update&quot;: &quot;vernon_tasks.api.portal_notifications.on_vt_task_update&quot;,
+    },
+    &quot;Comment&quot;: {
+        &quot;after_insert&quot;: &quot;vernon_tasks.api.portal_notifications.on_comment_insert&quot;,
+    },
+    &quot;VT Sprint&quot;: {
+        &quot;on_update&quot;: &quot;vernon_tasks.api.portal_notifications.on_vt_sprint_update&quot;,
+    },
+}
+</code></pre>
+<p><code>after_workflow_action</code> is NOT used for approve/reject. Workflow action results surface as field changes on <code>VT Task</code> (<code>review_status</code> or equivalent field) in <code>on_update</code> — handled by the same <code>on_vt_task_update</code> handler via a field-delta check (see §3.2).</p>
+<p><strong>Socketio opt-in path (not implemented in P4c):</strong> After creating a <code>Vernon Notification</code> row, call <code>frappe.publish_realtime(event="vt_notification", message={"user": user}, user=user)</code>. The frontend <code>NotificationBell</code> can then listen via <code>frappe.realtime.on("vt_notification", ...)</code> to trigger an immediate refetch. This path is a one-line addition when ready; polling covers P4c entirely.</p>
+<p><strong>Queue helper — <code>queue_notification</code>:</strong></p>
+<p>Defined in <code>portal_notifications.py</code>. All four source handlers call this single helper. Signature:</p>
+<pre><code class="language-python">def queue_notification(
+    user: str,
+    event_type: str,
+    reference_doctype: str,
+    reference_name: str,
+    message: str,
+) -&gt; None
+</code></pre>
+<ul>
+<li>Guards: skip if <code>user == "Guest"</code> or <code>user == frappe.session.user</code> (no self-notifications).</li>
+<li>Deduplication: check <code>frappe.db.exists("Vernon Notification", {"user": user, "event_type": event_type, "reference_doctype": reference_doctype, "reference_name": reference_name, "is_read": 0})</code> — if unread row already exists for same <code>(user, event_type, reference_name)</code>, skip insert (prevents duplicate flood on rapid saves).</li>
+<li>Insert with <code>ignore_permissions=True</code>; sets <code>is_read=0</code>.</li>
+<li>After insert: call <code>_invalidate_unread_cache(user)</code> (cache key: <code>vt:portal:notif:unread:{user}</code>, TTL 30s, matches polling interval).</li>
+</ul>
+<h3 id="22-backend-portal_notificationspy-api">2.2 Backend — <code>portal_notifications.py</code> API</h3>
+<p><strong>Module path:</strong> <code>vernon_tasks/api/portal_notifications.py</code></p>
+<p>Sibling to <code>vernon_tasks/task/api/notifications.py</code> (PWA). Whitelisted RPC endpoints exposed as <code>vernon_tasks.api.portal_notifications.*</code>:</p>
+<hr />
+<p><strong><code>list_notifications(limit, offset, only_unread, event_type_filter)</code></strong></p>
+<pre><code>GET vernon_tasks.api.portal_notifications.list_notifications
+    ?limit=20&amp;offset=0&amp;only_unread=0&amp;event_type_filter=
+→ {
+    &quot;results&quot;: [
+      {
+        &quot;name&quot;: &quot;VN-0001&quot;,
+        &quot;event_type&quot;: &quot;task_assigned&quot;,
+        &quot;reference_doctype&quot;: &quot;VT Task&quot;,
+        &quot;reference_name&quot;: &quot;VT-0042&quot;,
+        &quot;message&quot;: &quot;New task assigned: Fix login redirect&quot;,
+        &quot;is_read&quot;: 0,
+        &quot;creation&quot;: &quot;2026-05-18 10:23:00&quot;
+      },
+      ...
+    ],
+    &quot;total_unread&quot;: 3
+  }
+</code></pre>
+<ul>
+<li><code>limit</code>: clamped 1–100 (reuse <code>clamp_int</code> from <code>security.py</code>).</li>
+<li><code>offset</code>: clamped 0–10,000.</li>
+<li><code>only_unread</code>: <code>int</code> 0/1 — adds <code>is_read=0</code> filter when <code>1</code>.</li>
+<li><code>event_type_filter</code>: optional string, one of <code>{task_assigned, task_review, sprint_status, comment}</code> — if provided, adds <code>event_type=</code> filter.</li>
+<li>Permission scope filter (applied server-side before query):</li>
+<li>Manager: no additional filter (all rows where <code>user = session.user</code>).</li>
+<li>Leader: rows where <code>user = session.user</code> (notifications are already user-targeted; no cross-user read in P4c).</li>
+<li>Member: same — <code>user = session.user</code>.</li>
+<li>Note: <code>Vernon Notification.user</code> is always the recipient. Permission scope affects what notifications get <strong>created</strong> (§5), not what gets <strong>listed</strong> — each user only ever reads their own rows.</li>
+<li><code>ORDER BY creation DESC</code>, <code>LIMIT limit OFFSET offset</code>.</li>
+<li>Returns <code>total_unread</code> from cache (same key as <code>count_unread</code>); avoids second COUNT query when cache is warm.</li>
+</ul>
+<hr />
+<p><strong><code>count_unread()</code></strong></p>
+<pre><code>GET vernon_tasks.api.portal_notifications.count_unread
+→ {&quot;count&quot;: 3}
+</code></pre>
+<ul>
+<li>Cache key: <code>vt:portal:notif:unread:{user}</code>, TTL 30s.</li>
+<li>Returns <code>{"count": 0}</code> for Guest without throwing (consistent with PWA).</li>
+</ul>
+<hr />
+<p><strong><code>mark_read(name)</code></strong></p>
+<pre><code>POST vernon_tasks.api.portal_notifications.mark_read
+Body: {&quot;name&quot;: &quot;VN-0001&quot;}
+→ {&quot;ok&quot;: True}
+</code></pre>
+<ul>
+<li>Fetch doc; verify <code>doc.user == frappe.session.user</code>, else <code>frappe.throw("Forbidden", frappe.PermissionError)</code>.</li>
+<li>Set <code>is_read=1</code>, <code>save(ignore_permissions=True)</code>.</li>
+<li>Invalidate unread cache for session user.</li>
+</ul>
+<hr />
+<p><strong><code>mark_all_read()</code></strong></p>
+<pre><code>POST vernon_tasks.api.portal_notifications.mark_all_read
+Body: {}
+→ {&quot;ok&quot;: True}
+</code></pre>
+<ul>
+<li><code>frappe.db.set_value("Vernon Notification", {"user": user, "is_read": 0}, "is_read", 1, update_modified=False)</code>.</li>
+<li>Invalidate unread cache.</li>
+</ul>
+<hr />
+<p><strong><code>get_feature_flag()</code></strong></p>
+<pre><code>GET vernon_tasks.api.portal_notifications.get_feature_flag
+→ {&quot;enabled&quot;: true}
+</code></pre>
+<ul>
+<li>Reads <code>VT Settings.portal_notifications_enabled</code>. Cached for 60s (<code>vt:portal:notif:flag</code>).</li>
+<li>Used by <code>NotificationsFeatureGate</code> on the frontend to conditionally render the bell.</li>
+</ul>
+<hr />
+<h3 id="23-schema-delta">2.3 Schema delta</h3>
+<p><strong><code>VT Settings</code> — new field:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field name</th>
+<th>Type</th>
+<th>Default</th>
+<th>Label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>portal_notifications_enabled</code></td>
+<td>Check</td>
+<td><code>0</code></td>
+<td>Portal Notifications Enabled</td>
+</tr>
+</tbody>
+</table>
+<p>Add via patch: <code>frappe.db.add_column("VT Settings", "portal_notifications_enabled", "Check", default_value=0)</code> if column does not exist. Idempotent.</p>
+<p><strong><code>Vernon Notification</code> DocType — existing, no schema change required.</strong> Existing fields used:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user</code></td>
+<td>Link → User</td>
+<td>Recipient of the notification</td>
+</tr>
+<tr>
+<td><code>event_type</code></td>
+<td>Data</td>
+<td>Values: <code>task_assigned</code>, <code>task_review</code>, <code>sprint_status</code>, <code>comment</code></td>
+</tr>
+<tr>
+<td><code>reference_doctype</code></td>
+<td>Data</td>
+<td>e.g. <code>VT Task</code>, <code>VT Sprint</code></td>
+</tr>
+<tr>
+<td><code>reference_name</code></td>
+<td>Data</td>
+<td>e.g. <code>VT-0042</code></td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td>Small Text</td>
+<td>Human-readable message string</td>
+</tr>
+<tr>
+<td><code>is_read</code></td>
+<td>Check</td>
+<td>Default 0</td>
+</tr>
+<tr>
+<td><code>creation</code></td>
+<td>Datetime</td>
+<td>Auto-set by Frappe</td>
+</tr>
+</tbody>
+</table>
+<p>Verify at deploy time that <code>Vernon Notification</code> has these fields. If <code>event_type</code> column does not exist (DocType predates P4a/P4b field naming), add via patch.</p>
+<hr />
+<h3 id="24-frontend-notificationbell-panel">2.4 Frontend — <code>NotificationBell</code> + panel</h3>
+<p><strong>Module path:</strong> <code>pwa/src/portal/notifications/</code></p>
+<pre><code>NotificationsFeatureGate.tsx     // reads get_feature_flag; renders null if disabled
+NotificationBell.tsx             // bell icon + unread badge; opens/closes panel
+NotificationPanel.tsx            // dropdown panel: latest 5 rows + &quot;View all&quot;
+NotificationItem.tsx             // single row: icon, message, timestamp, read state
+NotificationsPage.tsx            // full-page inbox at /portal/notifications
+api/portalNotifications.ts       // RPC wrappers (separate from pwa/src/api/notifications.ts)
+hooks/useNotificationCount.ts    // polls count_unread every 30s via React Query
+hooks/useNotifications.ts        // fetches list_notifications; used by panel + page
+</code></pre>
+<p><strong><code>TopBar.tsx</code> change</strong> — replace the static bell button with <code>NotificationsFeatureGate</code> wrapping <code>NotificationBell</code>:</p>
+<pre><code class="language-tsx">// Before:
+&lt;button type=&quot;button&quot; className=&quot;portal-topbar__bell&quot; aria-label=&quot;Notifications&quot;&gt;🔔&lt;/button&gt;
+
+// After:
+&lt;NotificationsFeatureGate&gt;
+  &lt;NotificationBell /&gt;
+&lt;/NotificationsFeatureGate&gt;
+</code></pre>
+<p><strong><code>NotificationBell.tsx</code>:</strong>
+- Uses <code>useNotificationCount</code> — a React Query query with <code>refetchInterval: 30_000</code> and <code>staleTime: 25_000</code>.
+- Renders a <code>&lt;button&gt;</code> with <code>aria-label="Notifications"</code> and <code>aria-haspopup="dialog"</code>.
+- Shows an unread badge (<code>&lt;span className="notif-bell__badge"&gt;</code>) when <code>count &gt; 0</code>. Badge capped at <code>99+</code>.
+- On click: toggle <code>isPanelOpen</code> state. Click-outside closes panel (use <code>useClickOutside</code> hook or equivalent).
+- Panel is rendered inline as a sibling via a <code>&lt;div&gt;</code> portal to <code>document.body</code> to avoid overflow clipping from topbar CSS. Uses <code>position: fixed</code> coordinates derived from bell button <code>getBoundingClientRect()</code>.</p>
+<p><strong><code>NotificationPanel.tsx</code>:</strong>
+- Fetches <code>list_notifications(limit=5, offset=0)</code> when panel opens (<code>enabled: isPanelOpen</code>).
+- Shows a loading skeleton (3 placeholder rows) while fetching.
+- Shows up to 5 <code>NotificationItem</code> rows.
+- Footer row: "Mark all read" button (calls <code>mark_all_read</code>, invalidates React Query cache) + "View all" <code>&lt;Link to="/portal/notifications"&gt;</code>.
+- Empty state: "No notifications" illustration + text when <code>results.length === 0</code> and <code>count === 0</code>.
+- Panel closes on <code>Escape</code> key and on navigation to <code>/portal/notifications</code>.</p>
+<p><strong><code>NotificationItem.tsx</code>:</strong></p>
+<p>Props: <code>notification: PortalNotification, onRead: (name: string) =&gt; void</code></p>
+<ul>
+<li>Renders: icon (event-type-based), message string, relative time (<code>creation</code> formatted via <code>date-fns/formatDistanceToNow</code>).</li>
+<li>Unread rows have <code>data-unread="true"</code> + CSS highlight.</li>
+<li>Click: calls <code>onRead(name)</code> (optimistically sets <code>is_read=1</code> in local cache) then navigates to the reference entity:</li>
+<li><code>task_assigned</code> / <code>task_review</code> / <code>comment</code> → <code>/portal/projects?task=:reference_name</code> (or task detail route if available).</li>
+<li><code>sprint_status</code> → <code>/portal/projects/:projectId/sprints</code> (derive <code>projectId</code> from <code>reference_name</code> via a <code>VT Sprint</code> lookup — pre-populated in the notification <code>message</code> or add a <code>reference_parent</code> field if needed — see §9).</li>
+</ul>
+<p><strong><code>hooks/useNotificationCount.ts</code>:</strong></p>
+<pre><code class="language-ts">export function useNotificationCount() {
+  return useQuery({
+    queryKey: [&quot;portal&quot;, &quot;notif&quot;, &quot;count&quot;],
+    queryFn: () =&gt; portalNotificationsApi.countUnread(),
+    refetchInterval: 30_000,
+    staleTime: 25_000,
+    select: (data) =&gt; data.count,
+  });
+}
+</code></pre>
+<p><strong><code>hooks/useNotifications.ts</code>:</strong></p>
+<pre><code class="language-ts">export function useNotifications(params: {
+  limit?: number;
+  offset?: number;
+  onlyUnread?: boolean;
+  eventTypeFilter?: string;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: [&quot;portal&quot;, &quot;notif&quot;, &quot;list&quot;, params],
+    queryFn: () =&gt; portalNotificationsApi.listNotifications(params),
+    enabled: params.enabled ?? true,
+    staleTime: 15_000,
+  });
+}
+</code></pre>
+<p><strong><code>api/portalNotifications.ts</code>:</strong></p>
+<pre><code class="language-ts">const BASE = &quot;/api/method/vernon_tasks.api.portal_notifications&quot;;
+
+export interface PortalNotification {
+  name: string;
+  event_type: &quot;task_assigned&quot; | &quot;task_review&quot; | &quot;sprint_status&quot; | &quot;comment&quot;;
+  reference_doctype: string;
+  reference_name: string;
+  message: string;
+  is_read: 0 | 1;
+  creation: string;
+}
+
+export interface ListResult {
+  results: PortalNotification[];
+  total_unread: number;
+}
+
+export const portalNotificationsApi = {
+  listNotifications(p: {
+    limit?: number;
+    offset?: number;
+    onlyUnread?: boolean;
+    eventTypeFilter?: string;
+  }): Promise&lt;ListResult&gt; { ... },
+
+  countUnread(): Promise&lt;{ count: number }&gt; { ... },
+
+  markRead(name: string): Promise&lt;{ ok: boolean }&gt; { ... },
+
+  markAllRead(): Promise&lt;{ ok: boolean }&gt; { ... },
+
+  getFeatureFlag(): Promise&lt;{ enabled: boolean }&gt; { ... },
+};
+</code></pre>
+<hr />
+<h3 id="25-frontend-notificationspage-portalnotifications">2.5 Frontend — <code>NotificationsPage</code> (<code>/portal/notifications</code>)</h3>
+<p><strong>Route registration</strong> in <code>PortalRoutes.tsx</code>:</p>
+<pre><code class="language-tsx">&lt;Route
+  path=&quot;notifications&quot;
+  element={
+    &lt;NotificationsFeatureGate&gt;
+      &lt;NotificationsPage /&gt;
+    &lt;/NotificationsFeatureGate&gt;
+  }
+/&gt;
+</code></pre>
+<p>No <code>RequirePermission</code> wrapper needed — all authenticated portal users can view their own notifications (permission is enforced server-side by <code>user = session.user</code> filter).</p>
+<p><strong><code>NotificationsPage.tsx</code>:</strong></p>
+<ul>
+<li>Page header: "Notifications" title + "Mark all read" button (right-aligned).</li>
+<li>Filter bar: event type tabs — <code>All | Tasks | Reviews | Sprints | Comments</code> — maps to <code>event_type_filter</code> param.</li>
+<li>"Unread only" toggle checkbox.</li>
+<li>Infinite scroll or "Load more" pagination (prefer "Load more" button — simpler, no scroll detection complexity).</li>
+<li>Initial load: <code>limit=20, offset=0</code>.</li>
+<li>Load more: increments <code>offset</code> by 20; appends to local list.</li>
+<li>Each row is a <code>NotificationItem</code> with full-width layout (no truncation on message).</li>
+<li>Empty state per filter.</li>
+<li>On "Mark all read": invalidates <code>["portal", "notif", "list"]</code> and <code>["portal", "notif", "count"]</code> query keys.</li>
+</ul>
+<hr />
+<h2 id="3-notification-sources">3. Notification Sources</h2>
+<h3 id="31-task-assigned">3.1 Task Assigned</h3>
+<p><strong>Trigger:</strong> <code>VT Task.on_update</code> → <code>on_vt_task_update</code> handler.</p>
+<p><strong>Detection:</strong> Check <code>doc.get_doc_before_save()</code>. Fire only when <code>doc.assigned_to != doc_before.assigned_to</code> AND <code>doc.assigned_to</code> is not empty. This prevents spurious notifications on every save.</p>
+<p><strong>Recipient:</strong> <code>doc.assigned_to</code></p>
+<p><strong>Self-notification guard:</strong> Skip if <code>doc.assigned_to == frappe.session.user</code> (person assigned themselves, or system process — still skip).</p>
+<p><strong>Payload to <code>queue_notification</code>:</strong></p>
+<pre><code class="language-python">queue_notification(
+    user=doc.assigned_to,
+    event_type=&quot;task_assigned&quot;,
+    reference_doctype=&quot;VT Task&quot;,
+    reference_name=doc.name,
+    message=f&quot;Task assigned to you: {doc.title}&quot;,
+)
+</code></pre>
+<p><strong>Message template:</strong> <code>"Task assigned to you: {doc.title}"</code></p>
+<p><strong>Icon (frontend):</strong> clipboard / task icon.</p>
+<hr />
+<h3 id="32-task-review-approve-reject">3.2 Task Review (Approve / Reject)</h3>
+<p><strong>Trigger:</strong> <code>VT Task.on_update</code> → <code>on_vt_task_update</code> handler.</p>
+<p><strong>Detection:</strong> Check field <code>review_status</code> (or the field that Frappe workflow sets on approve/reject — confirm field name from <code>VT Task</code> schema; if workflow uses <code>workflow_state</code>, watch that field instead). Fire when <code>review_status</code> changes to one of <code>{Approved, Rejected}</code> AND <code>doc.assigned_to</code> is not empty.</p>
+<p><strong>Recipient:</strong> <code>doc.assigned_to</code> (task owner receives the review result).</p>
+<p><strong>Self-notification guard:</strong> Skip if <code>doc.assigned_to == frappe.session.user</code>.</p>
+<p><strong>Payload:</strong></p>
+<pre><code class="language-python">action = &quot;approved&quot; if doc.review_status == &quot;Approved&quot; else &quot;rejected&quot;
+queue_notification(
+    user=doc.assigned_to,
+    event_type=&quot;task_review&quot;,
+    reference_doctype=&quot;VT Task&quot;,
+    reference_name=doc.name,
+    message=f&quot;Your task was {action}: {doc.title}&quot;,
+)
+</code></pre>
+<p><strong>Message templates:</strong>
+- Approved: <code>"Your task was approved: {doc.title}"</code>
+- Rejected: <code>"Your task was rejected: {doc.title}"</code></p>
+<p><strong>Icon (frontend):</strong> checkmark (approved) or X (rejected) — derive from message prefix or add a <code>meta</code> field (see §9).</p>
+<hr />
+<h3 id="33-sprint-started-ended">3.3 Sprint Started / Ended</h3>
+<p><strong>Trigger:</strong> <code>VT Sprint.on_update</code> → <code>on_vt_sprint_update</code> handler.</p>
+<p><strong>Detection:</strong> Check <code>doc.get_doc_before_save()</code>. Fire when <code>doc.status</code> changed to <code>Active</code> (sprint started) or <code>Completed</code> (sprint ended).</p>
+<p><strong>Recipients:</strong> All users who have tasks in this sprint — <code>frappe.get_all("VT Task", filters={"sprint": doc.name}, pluck="assigned_to")</code>. Deduplicate list. Filter out empty/Guest values.</p>
+<p><strong>Payload (started):</strong></p>
+<pre><code class="language-python">for user in recipients:
+    queue_notification(
+        user=user,
+        event_type=&quot;sprint_status&quot;,
+        reference_doctype=&quot;VT Sprint&quot;,
+        reference_name=doc.name,
+        message=f&quot;Sprint started: {doc.sprint_title}&quot;,
+    )
+</code></pre>
+<p><strong>Payload (ended):</strong></p>
+<pre><code class="language-python">for user in recipients:
+    queue_notification(
+        user=user,
+        event_type=&quot;sprint_status&quot;,
+        reference_doctype=&quot;VT Sprint&quot;,
+        reference_name=doc.name,
+        message=f&quot;Sprint completed: {doc.sprint_title}&quot;,
+    )
+</code></pre>
+<p><strong>Message templates:</strong>
+- Started: <code>"Sprint started: {doc.sprint_title}"</code>
+- Completed: <code>"Sprint completed: {doc.sprint_title}"</code></p>
+<p><strong>Performance note:</strong> For large sprints (&gt;200 tasks), the recipient fetch could be expensive. In P4c: accept O(n_tasks) lookup; log a warning if recipient count &gt; 100. P4d can optimize with background job / celery queue.</p>
+<p><strong>Icon (frontend):</strong> lightning bolt (started) or flag (completed).</p>
+<hr />
+<h3 id="34-mention-comment">3.4 Mention / Comment</h3>
+<p><strong>Trigger:</strong> <code>Comment.after_insert</code> → <code>on_comment_insert</code> handler.</p>
+<p><strong>Scope:</strong> Only for comments on <code>VT Task</code> documents. Check <code>doc.reference_doctype == "VT Task"</code>.</p>
+<p><strong>Recipient:</strong> The <code>assigned_to</code> user of the referenced task — <code>frappe.db.get_value("VT Task", doc.reference_name, "assigned_to")</code>. This covers the "comment on your task" case.</p>
+<p><strong>Self-notification guard:</strong> Skip if <code>doc.comment_by == recipient</code>.</p>
+<p><strong>Payload:</strong></p>
+<pre><code class="language-python">commenter_name = frappe.db.get_value(&quot;User&quot;, doc.comment_by, &quot;full_name&quot;) or doc.comment_by
+task_title = frappe.db.get_value(&quot;VT Task&quot;, doc.reference_name, &quot;title&quot;) or doc.reference_name
+queue_notification(
+    user=recipient,
+    event_type=&quot;comment&quot;,
+    reference_doctype=&quot;VT Task&quot;,
+    reference_name=doc.reference_name,
+    message=f&quot;{commenter_name} commented on your task: {task_title}&quot;,
+)
+</code></pre>
+<p><strong>Message template:</strong> <code>"{commenter_full_name} commented on your task: {task_title}"</code></p>
+<p><strong>Icon (frontend):</strong> speech bubble / comment icon.</p>
+<p><strong>Future @mention support (P4d):</strong> Parse <code>doc.content</code> for <code>@username</code> patterns → notify those users as additional recipients.</p>
+<hr />
+<h2 id="4-notification-center-ui">4. Notification Center UI</h2>
+<h3 id="41-bell-icon-in-topbar">4.1 Bell icon in TopBar</h3>
+<ul>
+<li>Renders in the existing <code>portal-topbar</code> right zone, between search button and profile button (current DOM order unchanged).</li>
+<li>Icon: uses an SVG bell icon, not an emoji. Replace the <code>🔔</code> placeholder.</li>
+<li>Unread badge: absolute-positioned pill on the icon. Red background, white text. Hides when <code>count === 0</code>. Shows <code>99+</code> when count exceeds 99.</li>
+<li>Badge animation: scale-in CSS keyframe on count change (subtle, not distracting).</li>
+<li>Keyboard: focusable, Enter/Space opens panel.</li>
+<li><code>aria-label</code> updates dynamically: <code>"Notifications — {count} unread"</code> when unread &gt; 0, <code>"Notifications"</code> when zero.</li>
+</ul>
+<h3 id="42-dropdown-panel">4.2 Dropdown panel</h3>
+<p>Dimensions: <code>width: 380px</code>, <code>max-height: 480px</code>, overflow-y auto on item list. Positioned below bell button, right-aligned to topbar edge.</p>
+<p>Anatomy (top to bottom):
+1. <strong>Header row</strong> — "Notifications" heading (left) + "Mark all read" text button (right). Mark all read only renders when <code>total_unread &gt; 0</code>.
+2. <strong>Item list</strong> — up to 5 <code>NotificationItem</code> rows. Each row:
+   - 40×40 icon area (event-type icon, colored circle background).
+   - Message text (1–2 lines, overflow ellipsis on line 2).
+   - Relative timestamp (e.g., "3 minutes ago") — bottom-right.
+   - Unread indicator: left border accent (3px, brand color) + slightly lighter row background.
+   - Click navigates to reference entity AND marks read (optimistic).
+3. <strong>Footer row</strong> — "View all notifications →" link to <code>/portal/notifications</code>. Always shown.
+4. <strong>Empty state</strong> (shown when <code>results.length === 0</code>) — centered icon + "You're all caught up" text.</p>
+<p>Panel shadow: <code>box-shadow: 0 8px 24px rgba(0,0,0,0.12)</code>. Border-radius: 8px. Border: 1px solid <code>var(--portal-border)</code>.</p>
+<p>Loading state: 3 skeleton rows (animated shimmer), same height as real rows.</p>
+<p>Error state: "Could not load notifications. Retry?" with a retry button that calls <code>refetch()</code>.</p>
+<h3 id="43-full-notifications-page-portalnotifications">4.3 Full notifications page (<code>/portal/notifications</code>)</h3>
+<p><strong>URL:</strong> <code>/portal/notifications</code></p>
+<p><strong>Nav entry:</strong> Add "Notifications" link to <code>portalNav</code> in <code>nav.ts</code> with key <code>notifications</code>, path <code>/portal/notifications</code>, visible to all roles. The nav item shows an unread count badge inline (uses same <code>useNotificationCount</code> hook).</p>
+<p><strong>Page layout:</strong>
+- Standard <code>PageLayout</code> wrapper (same as OKR/Projects pages).
+- Page title: "Notifications"
+- Subheading: active filter description (e.g., "Showing unread tasks reviews").</p>
+<p><strong>Filter bar:</strong></p>
+<pre><code>[All] [Tasks] [Reviews] [Sprints] [Comments]    [□ Unread only]    [Mark all read]
+</code></pre>
+<ul>
+<li>Tabs map to <code>event_type_filter</code> values: <code>""</code>, <code>"task_assigned"</code>, <code>"task_review"</code>, <code>"sprint_status"</code>, <code>"comment"</code>.</li>
+<li>"Unread only" toggle maps to <code>only_unread=1</code>.</li>
+<li>Active tab highlighted with border-bottom accent.</li>
+</ul>
+<p><strong>Item list:</strong>
+- Full-width <code>NotificationItem</code> rows with no message truncation.
+- Grouped by date (Today / Yesterday / Older) using sticky date dividers.
+- Read rows dimmed (opacity 0.6) but still clickable.
+- "Load more" button below list when server returns exactly <code>limit</code> rows (implies more pages). Appends next page to list.</p>
+<p><strong>Empty state per filter:</strong>
+- All + no notifications: "Nothing here yet. Notifications will appear when tasks are assigned, reviewed, or sprints change."
+- Filtered: "No {filter_label} notifications."</p>
+<hr />
+<h2 id="5-permissions">5. Permissions</h2>
+<p>Permission logic is enforced <strong>server-side</strong> in the notification creation hooks (what gets enqueued) and in the list endpoint (what gets returned). The frontend enforces nothing beyond hiding the feature when the flag is off.</p>
+<h3 id="51-notification-creation-scope">5.1 Notification creation scope</h3>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Manager receives</th>
+<th>Leader receives</th>
+<th>Member receives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task_assigned</code></td>
+<td>Yes, when assigned_to = self</td>
+<td>Yes, when assigned_to = self</td>
+<td>Yes, when assigned_to = self</td>
+</tr>
+<tr>
+<td><code>task_review</code></td>
+<td>Yes, when assigned_to = self</td>
+<td>Yes, when assigned_to = self</td>
+<td>Yes, when assigned_to = self</td>
+</tr>
+<tr>
+<td><code>sprint_status</code></td>
+<td>Yes, if has task in sprint</td>
+<td>Yes, if has task in sprint</td>
+<td>Yes, if has task in sprint</td>
+</tr>
+<tr>
+<td><code>comment</code></td>
+<td>Yes, when task assigned_to = self</td>
+<td>Yes, when task assigned_to = self</td>
+<td>Yes, when task assigned_to = self</td>
+</tr>
+</tbody>
+</table>
+<p>All notification rows are user-targeted (the <code>user</code> field is the recipient). No row is ever visible to a user other than its intended recipient via the portal API.</p>
+<h3 id="52-list-endpoint-scoping">5.2 List endpoint scoping</h3>
+<p><code>list_notifications</code> filters by <code>user = frappe.session.user</code> unconditionally. There is no Manager-reads-all-users mode in P4c — each user sees only their own notifications. A future Manager notification feed (P4d) would be a separate endpoint.</p>
+<h3 id="53-feature-flag-gate">5.3 Feature flag gate</h3>
+<ul>
+<li>Backend: every whitelisted endpoint in <code>portal_notifications.py</code> checks <code>frappe.db.get_single_value("VT Settings", "portal_notifications_enabled")</code> at entry. If <code>0</code>, raise <code>frappe.PermissionError("Portal notifications are not enabled")</code>. Cache the flag value for 60s.</li>
+<li>Frontend: <code>NotificationsFeatureGate</code> calls <code>get_feature_flag()</code> on mount. If <code>enabled=false</code>, renders <code>null</code> (bell is invisible, route returns <code>&lt;NotFound /&gt;</code>).</li>
+</ul>
+<hr />
+<h2 id="6-testing">6. Testing</h2>
+<h3 id="61-backend-testsportaltest_portal_notificationspy">6.1 Backend — <code>tests/portal/test_portal_notifications.py</code></h3>
+<p><strong><code>queue_notification</code> unit tests:</strong>
+- Happy path: creates <code>Vernon Notification</code> row with correct fields.
+- Self-notification guard: <code>frappe.session.user == recipient</code> → no row created.
+- Guest guard: <code>user == "Guest"</code> → no row created.
+- Deduplication: second call with identical <code>(user, event_type, reference_name)</code> + <code>is_read=0</code> → no second row.
+- After insert: <code>count_unread</code> cache is invalidated.</p>
+<p><strong><code>on_vt_task_update</code> tests:</strong>
+- <code>assigned_to</code> changes from empty to user A → notification created for user A.
+- <code>assigned_to</code> changes from user A to user B → notification created for user B, NOT user A.
+- <code>assigned_to</code> unchanged → no notification.
+- <code>review_status</code> changes to <code>Approved</code> → notification to <code>assigned_to</code>.
+- <code>review_status</code> changes to <code>Rejected</code> → notification to <code>assigned_to</code>.
+- <code>review_status</code> unchanged on save → no notification.</p>
+<p><strong><code>on_vt_sprint_update</code> tests:</strong>
+- Status changes to <code>Active</code> → notification sent to all task owners in sprint.
+- Status changes to <code>Completed</code> → notification sent to all task owners.
+- Status changes to <code>Planning</code> (non-trigger) → no notification.
+- Sprint with no tasks → no notification (empty recipient list).</p>
+<p><strong><code>on_comment_insert</code> tests:</strong>
+- Comment on <code>VT Task</code> → notification to task <code>assigned_to</code>.
+- Comment by same user as <code>assigned_to</code> → no notification (self-comment guard).
+- Comment on non-<code>VT Task</code> doctype → no notification.</p>
+<p><strong><code>list_notifications</code> endpoint tests:</strong>
+- Returns only rows for <code>session.user</code>.
+- <code>only_unread=1</code> filter: returns only <code>is_read=0</code> rows.
+- <code>event_type_filter="task_assigned"</code> narrows results.
+- Pagination: <code>offset=20, limit=5</code> returns correct slice.
+- <code>total_unread</code> matches live count.</p>
+<p><strong><code>mark_read</code> tests:</strong>
+- Marks correct row; another user's row raises <code>PermissionError</code>.
+- Cache invalidated after mark.</p>
+<p><strong><code>mark_all_read</code> tests:</strong>
+- All unread rows for user set to <code>is_read=1</code>.
+- Another user's rows unaffected.
+- Cache invalidated.</p>
+<p><strong>Feature flag tests:</strong>
+- All endpoints raise <code>PermissionError</code> when <code>portal_notifications_enabled=0</code>.</p>
+<h3 id="62-frontend-vitest-rtl">6.2 Frontend — Vitest + RTL</h3>
+<p>Per-component <code>.test.tsx</code> files:</p>
+<p><strong><code>NotificationBell.test.tsx</code>:</strong>
+- Renders without badge when count = 0.
+- Renders badge with correct count when count &gt; 0.
+- Badge shows "99+" when count = 100.
+- Click opens panel (<code>aria-expanded="true"</code> on button).
+- Second click closes panel.
+- Escape key closes panel.
+- <code>aria-label</code> reflects count ("Notifications — 3 unread").</p>
+<p><strong><code>NotificationPanel.test.tsx</code>:</strong>
+- Shows loading skeletons while <code>useNotifications</code> is loading.
+- Shows 5 items when 5 notifications returned.
+- Shows "View all" link pointing to <code>/portal/notifications</code>.
+- "Mark all read" button calls <code>markAllRead</code> and invalidates query cache.
+- Empty state renders when results empty.
+- Error state renders on fetch failure with retry button.</p>
+<p><strong><code>NotificationItem.test.tsx</code>:</strong>
+- Unread item has <code>data-unread="true"</code>.
+- Read item has <code>data-unread="false"</code>.
+- Click calls <code>onRead</code> with correct <code>name</code>.
+- <code>task_assigned</code> event type shows correct icon.
+- <code>task_review</code> event type shows correct icon.
+- <code>sprint_status</code> event type shows correct icon.
+- <code>comment</code> event type shows correct icon.
+- Relative timestamp renders.</p>
+<p><strong><code>NotificationsPage.test.tsx</code>:</strong>
+- Renders filter tabs: All, Tasks, Reviews, Sprints, Comments.
+- Clicking "Tasks" tab updates query with <code>event_type_filter="task_assigned"</code>.
+- "Unread only" toggle updates <code>only_unread</code>.
+- "Load more" button appends next page.
+- "Mark all read" invalidates list + count query keys.
+- Empty state text matches active filter.</p>
+<p><strong><code>NotificationsFeatureGate.test.tsx</code>:</strong>
+- Renders children when <code>get_feature_flag</code> returns <code>{enabled: true}</code>.
+- Renders <code>null</code> when <code>enabled: false</code>.</p>
+<p><strong><code>hooks/useNotificationCount.test.ts</code>:</strong>
+- Polls at 30s interval (mock <code>refetchInterval</code>; assert <code>refetchInterval === 30000</code>).
+- Returns count from <code>countUnread</code> response.</p>
+<p><strong><code>__integration.test.tsx</code></strong> (route-level):
+- Navigate to <code>/portal/notifications</code> with flag enabled → page renders.
+- Navigate to <code>/portal/notifications</code> with flag disabled → <code>NotFound</code> renders.
+- Bell click → panel opens → click "View all" → navigates to notifications page.</p>
+<hr />
+<h2 id="7-telemetry">7. Telemetry</h2>
+<h3 id="71-backend-add-to-allowed_events-in-telemetrypy">7.1 Backend — add to <code>ALLOWED_EVENTS</code> in <code>telemetry.py</code></h3>
+<pre><code class="language-python">ALLOWED_EVENTS = {
+    ...existing entries...,
+    &quot;portal.notif_bell_open&quot;,
+    &quot;portal.notif_panel_close&quot;,
+    &quot;portal.notif_item_click&quot;,
+    &quot;portal.notif_mark_read&quot;,
+    &quot;portal.notif_mark_all_read&quot;,
+    &quot;portal.notif_page_view&quot;,
+    &quot;portal.notif_filter_change&quot;,
+    &quot;portal.notif_load_more&quot;,
+}
+</code></pre>
+<h3 id="72-frontend-add-to-telemetryevent-union-in-telemetryts">7.2 Frontend — add to <code>TelemetryEvent</code> union in <code>telemetry.ts</code></h3>
+<pre><code class="language-ts">export type TelemetryEvent =
+  | ...existing entries...
+  | &quot;portal.notif_bell_open&quot;
+  | &quot;portal.notif_panel_close&quot;
+  | &quot;portal.notif_item_click&quot;
+  | &quot;portal.notif_mark_read&quot;
+  | &quot;portal.notif_mark_all_read&quot;
+  | &quot;portal.notif_page_view&quot;
+  | &quot;portal.notif_filter_change&quot;
+  | &quot;portal.notif_load_more&quot;;
+</code></pre>
+<h3 id="73-event-payloads">7.3 Event payloads</h3>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Props</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>portal.notif_bell_open</code></td>
+<td><code>{ unread_count: number }</code></td>
+</tr>
+<tr>
+<td><code>portal.notif_panel_close</code></td>
+<td><code>{ duration_ms: number }</code></td>
+</tr>
+<tr>
+<td><code>portal.notif_item_click</code></td>
+<td><code>{ event_type: string, is_read: boolean }</code></td>
+</tr>
+<tr>
+<td><code>portal.notif_mark_read</code></td>
+<td><code>{ event_type: string }</code></td>
+</tr>
+<tr>
+<td><code>portal.notif_mark_all_read</code></td>
+<td><code>{ count_marked: number }</code></td>
+</tr>
+<tr>
+<td><code>portal.notif_page_view</code></td>
+<td><code>{ filter: string, only_unread: boolean }</code></td>
+</tr>
+<tr>
+<td><code>portal.notif_filter_change</code></td>
+<td><code>{ from: string, to: string }</code></td>
+</tr>
+<tr>
+<td><code>portal.notif_load_more</code></td>
+<td><code>{ offset: number, filter: string }</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-rollout">8. Rollout</h2>
+<ol>
+<li><strong>Schema patch</strong> — add <code>VT Settings.portal_notifications_enabled</code> Check field (default <code>0</code>). Deploy with flag off.</li>
+<li><strong>Backend deploy</strong> — <code>portal_notifications.py</code> module + doc event hooks in <code>hooks.py</code>. Smoke test: confirm all endpoints return <code>PermissionError</code> when flag is <code>0</code>. Confirm no existing functionality broken.</li>
+<li><strong>Frontend deploy</strong> — <code>NotificationsFeatureGate</code> renders <code>null</code> when flag is <code>0</code>. Bell is invisible. No user-visible change.</li>
+<li><strong>Pilot org</strong> — flip <code>portal_notifications_enabled=1</code> on a single site. Smoke test the four notification flows:</li>
+<li>Assign a task → bell count increments within 30s → open panel → notification visible → click navigates correctly.</li>
+<li>Leader approves/rejects a task → member sees review notification.</li>
+<li>Start a sprint → all task members see sprint notification.</li>
+<li>Add a comment to a task → assigned member sees comment notification.</li>
+<li><strong>Validate dedup:</strong> Save a task multiple times without changing <code>assigned_to</code> → confirm only one unread notification per assignment.</li>
+<li><strong>Full rollout</strong> — enable globally.</li>
+<li><strong>Observation window (2 weeks):</strong> Monitor <code>Vernon Notification</code> table growth. If volume unexpectedly high (sprint fanout on large teams), gate sprint notifications behind a sub-flag or switch to background job enqueue (P4d).</li>
+</ol>
+<hr />
+<h2 id="9-open-questions-risks">9. Open questions / risks</h2>
+<ol>
+<li>
+<p><strong><code>review_status</code> field name</strong> — Spec assumes <code>VT Task</code> has a <code>review_status</code> field (or <code>workflow_state</code>) that changes to <code>Approved</code>/<code>Rejected</code>. Confirm exact field name before implementing <code>on_vt_task_update</code>. If the field is named differently, the detection condition in §3.2 must be updated.</p>
+</li>
+<li>
+<p><strong>Sprint navigation from notification</strong> — <code>NotificationItem</code> click for <code>sprint_status</code> events needs to navigate to <code>/portal/projects/:projectId/sprints</code>. The <code>reference_name</code> is a <code>VT Sprint</code> name, not the project ID. Two options:</p>
+</li>
+<li>Option A: During <code>queue_notification</code>, append <code>project_id</code> into the <code>message</code> field or add a <code>reference_parent</code> field to <code>Vernon Notification</code>. Cleaner but requires schema change.</li>
+<li>Option B: Frontend fetches the project for the sprint lazily on click. Extra API call but no schema change.</li>
+<li>
+<p><strong>Recommendation:</strong> Option A — add <code>reference_parent</code> (Data, optional) to <code>Vernon Notification</code> in a patch. Low cost, cleaner navigation.</p>
+</li>
+<li>
+<p><strong>Sprint fanout at scale</strong> — <code>on_vt_sprint_update</code> queries all task owners in a sprint. For a 50-person sprint, this inserts 50 rows synchronously in the doc event handler. Acceptable for P4c; defer to async queue in P4d if sprint size &gt; 100 becomes common.</p>
+</li>
+<li>
+<p><strong><code>Vernon Notification</code> DocType pre-existing content</strong> — P4a/P4b may have written rows using different <code>event_type</code> values (or may use <code>Notification Log</code> entirely). Verify which DocType and which field naming convention P4a/P4b actually used, to ensure P4c rows use consistent values. If P4a/P4b used <code>Notification Log</code> instead of <code>Vernon Notification</code>, P4c should align or the frontend must unify both sources.</p>
+</li>
+<li>
+<p><strong><code>doc.get_doc_before_save()</code> availability</strong> — This Frappe method returns the pre-save state from <code>frappe.db.get_doc</code> cache. Confirm it is reliably populated in <code>on_update</code> for <code>VT Task</code> and <code>VT Sprint</code>. If unreliable, alternative: check <code>doc.has_value_changed("assigned_to")</code> (Frappe v15 API) which is more reliable.</p>
+</li>
+<li>
+<p><strong>Concurrent mark-all-read race</strong> — If the user opens the panel, reads 3 items via individual clicks, then clicks "Mark all read" concurrently while a background poll is in flight, the unread count could briefly show stale data. Mitigation: <code>markAllRead</code> mutation's <code>onSuccess</code> callback calls <code>queryClient.invalidateQueries(["portal", "notif"])</code> to refetch both count and list. Acceptable flicker (&lt; 1 poll cycle = 30s).</p>
+</li>
+<li>
+<p><strong>Socketio opt-in activation</strong> — If realtime delivery is desired before P4d, the one-line addition in <code>queue_notification</code> (§2.1) plus a <code>frappe.realtime.on</code> handler in <code>useNotificationCount</code> is sufficient. No architecture change needed; document the path clearly for the P4d implementer.</p>
+</li>
+</ol>
+<hr />
+<h2 id="10-sub-prd-chain">10. Sub-PRD chain</h2>
+<ul>
+<li><strong>Parent:</strong> <code>docs/superpowers/specs/2026-05-17-desktop-portal-foundation-design.md</code></li>
+<li><strong>Sibling P4a/P4b:</strong> <code>docs/superpowers/specs/2026-05-11-vernon-pwa-p4a-push-notifications-design.html</code> / <code>2026-05-11-vernon-pwa-p4b-push-refinements-design.html</code> — mobile push notifications (implemented). P4c reuses <code>Vernon Notification</code> DocType from P4a/P4b.</li>
+<li><strong>Predecessor:</strong> P3.2 Portal Sprints (Implemented).</li>
+<li><strong>Successors:</strong></li>
+<li><strong>P4d</strong> — Notification preferences (mute rules, email digest, @mention parsing, socketio delivery, Manager feed).</li>
+<li><strong>P4e</strong> — Notification archival + bulk operations.</li>
+</ul>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-18-portal-notifications-p4c-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

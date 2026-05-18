@@ -14,3 +14,4 @@ vernon_tasks/www/m/
 node_modules/
 vernon_tasks/public/node_modules
 vernon_tasks/public/public
+.superpowers/

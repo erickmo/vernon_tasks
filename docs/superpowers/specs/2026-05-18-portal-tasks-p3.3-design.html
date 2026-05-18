@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: Portal Tasks P3.3 — Task Detail, Create & Comments</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Spec: Portal Tasks P3.3 — Task Detail, Create & Comments</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-18-portal-tasks-p3.3-design.md</span>
+  </div>
+</header>
+
+<h1 id="portal-tasks-p33-design-spec">Portal Tasks P3.3 — Design Spec</h1>
+<p><strong>Date:</strong> 2026-05-18
+<strong>Parent PRD:</strong> <code>docs/superpowers/specs/2026-05-18-portal-sprints-p3.2-design.md</code>
+<strong>Status:</strong> Draft — pending review
+<strong>Owner:</strong> Erick Mo</p>
+<h2 id="1-scope">1. Scope</h2>
+<p>Desktop portal Task domain — task detail, task creation, and activity/comments inside the sprint board. Mounts within the existing <code>pwa/src/portal/sprints/</code> module as an overlay/modal layer; no new top-level route. Closes the gap where P3.2 delivered a read+drag board but no task CRUD or detail access from the portal.</p>
+<p><strong>In scope (P3.3):</strong>
+- <strong>Task detail panel (slide-over):</strong> clicking any task card in <code>TaskBoard</code> opens a right-side slide-over panel showing full task fields and edit controls (permission-gated).
+- <strong>Task create modal:</strong> <code>+</code> button on <code>TaskBoard</code> opens a create modal; new task auto-linked to current <code>sprint</code> + <code>project</code>.
+- <strong>Comments and activity log:</strong> threaded comments (Frappe Comment doctype) + field-change history (Frappe Version doctype) rendered inside the detail panel.
+- Sprint Task child table hard removal — P3.2 soft-deprecated it; P3.3 drops it after verifying zero new writes via telemetry (see §9).</p>
+<p><strong>Non-goals (P3.3, deferred):</strong>
+- Inline edit directly on the kanban card (no double-click-to-edit).
+- Delete task from portal.
+- Cross-sprint task drag.
+- Velocity history / sprint completion trend chart.
+- Bulk task operations from portal.
+- Attachment upload.
+- <code>@mention</code> autocomplete in comments.</p>
+<h2 id="2-architecture">2. Architecture</h2>
+<h3 id="21-backend-module-vernon_tasksapiportal_taskspy">2.1 Backend module — <code>vernon_tasks/api/portal_tasks.py</code></h3>
+<p>Sibling to <code>vernon_tasks/api/sprints.py</code>. All functions are <code>@frappe.whitelist()</code>, no classes. Exposed as <code>vernon_tasks.api.portal_tasks.*</code>.</p>
+<p>Functions:
+- <code>get_task_detail(task)</code> — full task doc + permitted edit fields list.
+- <code>update_task(task, payload)</code> — write mutable fields; server enforces perm matrix.
+- <code>create_task(payload)</code> — insert new <code>VT Task</code>; auto-sets <code>sprint</code>, <code>project</code>, <code>creation</code>.
+- <code>get_task_comments(task)</code> — returns comments (Frappe Comment) + version history entries, merged and sorted by <code>creation</code> ASC.
+- <code>add_comment(task, content)</code> — inserts Frappe Comment doc.
+- <code>delete_comment(comment_name)</code> — validates that <code>comment.owner == frappe.session.user</code> or user is Manager/Leader; hard-deletes.</p>
+<h3 id="22-schema-delta">2.2 Schema delta</h3>
+<p>No new DocType fields required. All fields used (<code>title</code>, <code>deadline</code>, <code>assigned_to</code>, <code>kanban_status</code>, <code>priority</code>, <code>base_points</code>, <code>pdca_phase</code>, <code>completion_date</code>, <code>project</code>, <code>sprint</code>, <code>estimated_hours</code>, <code>kanban_rank</code>) already exist on <code>VT Task</code> (P3.2 added <code>kanban_rank</code>).</p>
+<p>Sprint Task child table removal:
+- Confirm zero writes for 2+ closed sprints via <code>tasks.sprint_task_write</code> telemetry counter (set up in P3.2 move_task).
+- If confirmed: remove child table field from <code>VT Sprint</code> DocType JSON via patch, drop <code>tabSprint Task</code> in a subsequent migration.
+- This is gated on observation window, not blocked on P3.3 feature delivery.</p>
+<h3 id="23-frontend-module-pwasrcportaltasks">2.3 Frontend module — <code>pwa/src/portal/tasks/</code></h3>
+<p>New directory, consumed by components in <code>pwa/src/portal/sprints/</code> via relative import.</p>
+<pre><code>pwa/src/portal/tasks/
+  TaskDetailPanel.tsx       // slide-over container + edit form
+  TaskCreateModal.tsx       // modal for new task
+  ActivityLog.tsx           // merged comment + version history list
+  CommentThread.tsx         // comment composer + per-comment render
+  api/
+    tasks.ts                // RPC wrappers for portal_tasks.*
+    types.ts                // TaskDetail, Comment, ActivityEntry, CreateTaskPayload, UpdateTaskPayload
+  hooks/
+    useTaskDetail.ts        // React Query: fetch + optimistic update
+    useTaskComments.ts      // React Query: fetch + add + delete comment
+</code></pre>
+<p>Integration into existing sprint module:
+- <code>TaskCard.tsx</code> gains an <code>onClick</code> prop — calls <code>onTaskOpen(task.name)</code> passed down from <code>TaskBoard</code>.
+- <code>TaskBoard.tsx</code> owns <code>selectedTask: string | null</code> state, renders <code>&lt;TaskDetailPanel taskName={selectedTask} onClose={() =&gt; setSelectedTask(null)} /&gt;</code>.
+- <code>TaskBoard.tsx</code> gains a <code>+</code> button (Manager/Leader only in toolbar; Member sees it only if sprint is Active) that opens <code>&lt;TaskCreateModal sprint={sprintId} project={projectId} onCreated={...} /&gt;</code>.</p>
+<h2 id="3-task-detail-panel">3. Task Detail Panel</h2>
+<h3 id="31-slide-over-behavior">3.1 Slide-over behavior</h3>
+<ul>
+<li>Triggered by clicking any <code>TaskCard</code> in <code>TaskBoard</code>.</li>
+<li>Renders as a fixed right-side drawer: <code>position: fixed; top: 0; right: 0; width: 480px; height: 100vh</code>. Overlays the board without unmounting it.</li>
+<li><code>Escape</code> key and overlay-click outside the panel both close it; <code>onClose</code> clears <code>selectedTask</code>.</li>
+<li>Panel is a single React subtree; does not affect the board's DnD context.</li>
+<li>Only one task can be open at a time; clicking a second card replaces the current panel (no query re-use, new fetch).</li>
+</ul>
+<h3 id="32-data-loading">3.2 Data loading</h3>
+<p><code>useTaskDetail(taskName)</code> calls <code>get_task_detail</code> with React Query key <code>["taskDetail", taskName]</code>. <code>staleTime: 30_000</code>. On panel open, if the task already exists in <code>["sprintDetail", sprintId]</code> cache, it is used as <code>placeholderData</code> to avoid blank flash; the full detail fetch runs in background.</p>
+<p><code>get_task_detail</code> returns:</p>
+<pre><code class="language-json">{
+  &quot;task&quot;: {
+    &quot;name&quot;: &quot;VT-TASK-00042&quot;,
+    &quot;title&quot;: &quot;...&quot;,
+    &quot;deadline&quot;: &quot;2026-05-25&quot;,
+    &quot;assigned_to&quot;: &quot;mo@intinusa.id&quot;,
+    &quot;assigned_to_full_name&quot;: &quot;Erick Mo&quot;,
+    &quot;kanban_status&quot;: &quot;In Progress&quot;,
+    &quot;priority&quot;: &quot;High&quot;,
+    &quot;base_points&quot;: 5.0,
+    &quot;pdca_phase&quot;: &quot;DO&quot;,
+    &quot;completion_date&quot;: null,
+    &quot;project&quot;: &quot;VT-PROJ-00001&quot;,
+    &quot;sprint&quot;: &quot;SP-2026-00001&quot;,
+    &quot;estimated_hours&quot;: 4.0,
+    &quot;kanban_rank&quot;: 3000.0
+  },
+  &quot;permitted_fields&quot;: [&quot;title&quot;, &quot;deadline&quot;, &quot;assigned_to&quot;, &quot;kanban_status&quot;, &quot;priority&quot;, &quot;estimated_hours&quot;, &quot;pdca_phase&quot;]
+}
+</code></pre>
+<p><code>permitted_fields</code> is computed server-side per the perm matrix (§6). The frontend renders each field as editable only if it appears in this list. Fields absent from the list render read-only.</p>
+<h3 id="33-panel-layout">3.3 Panel layout</h3>
+<pre><code>┌─ Task Panel ──────────────────────────────────────────────┐
+│ [←] VT-TASK-00042          [Edit title] [×]              │
+│ ──────────────────────────────────────────────────────── │
+│ Status:     [In Progress ▼]   Priority: [High ▼]         │
+│ PDCA Phase: [DO ▼]           Est. Hours: [4.0 __]        │
+│ Assigned:   [mo@intinusa.id ▼]  Deadline: [2026-05-25]   │
+│ Sprint:     SP-2026-00001 (read-only link)                │
+│ Project:    VT-PROJ-00001 (read-only link)                │
+│ Points:     5.0 (read-only)                               │
+│ ──────────────────────────────────────────────────────── │
+│ Activity                                                  │
+│ [ActivityLog + CommentThread]                             │
+└────────────────────────────────────────────────────────────┘
+</code></pre>
+<p>Fields with edit permission render as controlled inputs; blur or explicit Save triggers <code>update_task</code>. Single-field saves (no bulk submit button) follow the existing portal OKR KR-update pattern. Each save shows an inline spinner on the field row and a success/error toast.</p>
+<p><code>title</code> uses a borderless <code>&lt;input type="text"&gt;</code> that becomes editable on click (pencil icon on hover). Required; empty string is a validation error displayed inline.</p>
+<p><code>kanban_status</code>, <code>priority</code>, <code>pdca_phase</code> use <code>&lt;select&gt;</code> dropdowns with the same value sets as <code>KanbanStatus</code>, <code>Priority</code>, and <code>PdcaPhase</code> types from <code>pwa/src/portal/sprints/api/types.ts</code>.</p>
+<p><code>assigned_to</code> is a <code>&lt;select&gt;</code> populated from project members (reuses the project member list already fetched in <code>SprintDetail</code>'s <code>project_summary</code>). If the user is a Member, their own email is the only option shown (can only re-assign to themselves, which is a no-op; field is effectively read-only for Member).</p>
+<p><code>deadline</code> and <code>estimated_hours</code> use <code>&lt;input type="date"&gt;</code> and <code>&lt;input type="number" step="0.5" min="0"&gt;</code> respectively.</p>
+<p><code>sprint</code>, <code>project</code>, <code>base_points</code>, <code>completion_date</code> are always read-only display rows.</p>
+<h3 id="34-optimistic-updates-from-the-panel">3.4 Optimistic updates from the panel</h3>
+<p>On save of any field:
+1. Optimistically update <code>["taskDetail", taskName]</code> cache.
+2. Optimistically update the matching task entry in <code>["sprintDetail", sprintId]</code> cache so the kanban card reflects the change immediately.
+3. POST <code>update_task</code>. On failure: rollback both caches, show error toast quoting server message.</p>
+<h2 id="4-task-create-flow">4. Task Create Flow</h2>
+<h3 id="41-trigger">4.1 Trigger</h3>
+<p><code>+</code> button rendered in <code>TaskBoard</code>'s column toolbar or in a fixed position at the top of the board. Visibility: Managers and Leaders always see it. Members see it only when <code>sprint.status === "Active"</code> (controlled by <code>canCreate</code> flag derived from session role + sprint status, evaluated client-side as a hint, enforced server-side).</p>
+<h3 id="42-modal-fields">4.2 Modal fields</h3>
+<p><code>TaskCreateModal</code> is a centered dialog (not a slide-over). Fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Input</th>
+<th>Required</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code></td>
+<td>text</td>
+<td>yes</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td>select (Low/Medium/High/Critical)</td>
+<td>yes</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td><code>estimated_hours</code></td>
+<td>number, step 0.5, min 0</td>
+<td>no</td>
+<td>1.0</td>
+</tr>
+<tr>
+<td><code>deadline</code></td>
+<td>date</td>
+<td>no</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>assigned_to</code></td>
+<td>select (project members)</td>
+<td>no</td>
+<td>session.user</td>
+</tr>
+<tr>
+<td><code>pdca_phase</code></td>
+<td>select (BACKLOG/PLAN/DO/CHECK/ACT/DONE)</td>
+<td>no</td>
+<td>BACKLOG</td>
+</tr>
+<tr>
+<td><code>kanban_status</code></td>
+<td>select (all 7 values)</td>
+<td>no</td>
+<td>Backlog</td>
+</tr>
+</tbody>
+</table>
+<p>Hidden / auto-set: <code>sprint = sprintId</code>, <code>project = projectId</code>. Not shown in modal.</p>
+<p>Validation (client-side, mirrored server-side):
+- <code>title</code> non-empty after trim; max 140 chars.
+- <code>estimated_hours</code> ≥ 0.
+- <code>deadline</code> ≥ today if set (warning, not hard block).</p>
+<h3 id="43-api-create_task">4.3 API — <code>create_task</code></h3>
+<pre><code class="language-python">@frappe.whitelist()
+def create_task(payload):
+    payload = _parse_payload(payload)
+    # Permission: Member only if sprint.status == &quot;Active&quot;
+    sprint = frappe.get_doc(&quot;VT Sprint&quot;, payload[&quot;sprint&quot;])
+    role = _get_user_role(payload[&quot;project&quot;])
+    if role == &quot;Member&quot; and sprint.status != &quot;Active&quot;:
+        raise frappe.PermissionError(&quot;Members can only create tasks in Active sprints&quot;)
+    doc = frappe.get_doc({
+        &quot;doctype&quot;: &quot;VT Task&quot;,
+        &quot;title&quot;: payload[&quot;title&quot;],
+        &quot;sprint&quot;: payload[&quot;sprint&quot;],
+        &quot;project&quot;: payload[&quot;project&quot;],
+        &quot;priority&quot;: payload.get(&quot;priority&quot;, &quot;Medium&quot;),
+        &quot;estimated_hours&quot;: payload.get(&quot;estimated_hours&quot;, 1.0),
+        &quot;deadline&quot;: payload.get(&quot;deadline&quot;),
+        &quot;assigned_to&quot;: payload.get(&quot;assigned_to&quot;, frappe.session.user),
+        &quot;pdca_phase&quot;: payload.get(&quot;pdca_phase&quot;, &quot;BACKLOG&quot;),
+        &quot;kanban_status&quot;: payload.get(&quot;kanban_status&quot;, &quot;Backlog&quot;),
+        &quot;kanban_rank&quot;: None,  # lazy-populated on next board load
+    }).insert()
+    return {&quot;name&quot;: doc.name, &quot;task&quot;: frappe.db.get_value(
+        &quot;VT Task&quot;, doc.name,
+        [&quot;name&quot;, &quot;title&quot;, &quot;assigned_to&quot;, &quot;kanban_status&quot;, &quot;pdca_phase&quot;,
+         &quot;kanban_rank&quot;, &quot;estimated_hours&quot;, &quot;weight&quot;, &quot;priority&quot;, &quot;deadline&quot;],
+        as_dict=True,
+    )}
+</code></pre>
+<p>Response shape matches <code>TaskCardData</code> so it can be directly inserted into the board cache.</p>
+<h3 id="44-optimistic-insert">4.4 Optimistic insert</h3>
+<p>On submit:
+1. Generate a temporary ID <code>tmp-&lt;uuid&gt;</code> and insert a provisional <code>TaskCardData</code> into the relevant column of <code>["sprintDetail", sprintId]</code> cache. Temporary card renders with a <code>task-card--pending</code> class (slight opacity, no drag handle).
+2. POST <code>create_task</code>.
+3. On success: replace the provisional entry with the real server response (swapping <code>name: tmp-&lt;uuid&gt;</code> for the real doc name).
+4. On failure: remove provisional entry, show error toast.
+5. Modal closes on success; on failure modal stays open with the error displayed inline below the submit button.</p>
+<h3 id="45-rank-assignment-for-new-task">4.5 Rank assignment for new task</h3>
+<p><code>kanban_rank</code> is returned as <code>null</code> from <code>create_task</code>. The optimistic insert places the card at the bottom of its column (rank = max existing rank + 1000, computed client-side). The server will populate via the existing <code>_lazy_populate_ranks</code> path on the next <code>get_sprint_with_relations</code> call.</p>
+<h2 id="5-comments-and-activity-log">5. Comments and Activity Log</h2>
+<h3 id="51-data-model">5.1 Data model</h3>
+<p>Two separate sources merged into a single timeline:</p>
+<p><strong>Comments</strong> — Frappe native <code>Comment</code> doctype:
+- <code>reference_doctype = "VT Task"</code>, <code>reference_name = task.name</code>
+- <code>comment_type = "Comment"</code> (user-authored), <code>comment_type = "Info"</code> (system notes, e.g. assignment changes)
+- Fields used: <code>name</code>, <code>owner</code>, <code>creation</code>, <code>content</code> (HTML from Frappe rich-text editor)</p>
+<p><strong>Version history</strong> — Frappe native <code>Version</code> doctype:
+- <code>ref_doctype = "VT Task"</code>, <code>docname = task.name</code>
+- Fields used: <code>name</code>, <code>owner</code>, <code>creation</code>, <code>data</code> (JSON string with <code>changed</code> array: <code>[[field, old_value, new_value], ...]</code>)
+- Only surface changes to a curated field set: <code>kanban_status</code>, <code>pdca_phase</code>, <code>priority</code>, <code>assigned_to</code>, <code>deadline</code>, <code>estimated_hours</code>.</p>
+<p>Merge: <code>get_task_comments</code> returns a unified <code>ActivityEntry[]</code> sorted by <code>creation ASC</code>. Each entry has a <code>type</code> discriminant: <code>"comment"</code> or <code>"version"</code>.</p>
+<h3 id="52-api-get_task_comments">5.2 API — <code>get_task_comments</code></h3>
+<pre><code class="language-python">@frappe.whitelist()
+def get_task_comments(task):
+    _assert_task_readable(task)
+
+    comments = frappe.get_all(
+        &quot;Comment&quot;,
+        filters={&quot;reference_doctype&quot;: &quot;VT Task&quot;, &quot;reference_name&quot;: task,
+                 &quot;comment_type&quot;: [&quot;in&quot;, [&quot;Comment&quot;, &quot;Info&quot;]]},
+        fields=[&quot;name&quot;, &quot;owner&quot;, &quot;creation&quot;, &quot;content&quot;, &quot;comment_type&quot;],
+        order_by=&quot;creation asc&quot;,
+        limit=200,
+    )
+
+    TRACKED_FIELDS = {&quot;kanban_status&quot;, &quot;pdca_phase&quot;, &quot;priority&quot;, &quot;assigned_to&quot;, &quot;deadline&quot;, &quot;estimated_hours&quot;}
+    versions = frappe.get_all(
+        &quot;Version&quot;,
+        filters={&quot;ref_doctype&quot;: &quot;VT Task&quot;, &quot;docname&quot;: task},
+        fields=[&quot;name&quot;, &quot;owner&quot;, &quot;creation&quot;, &quot;data&quot;],
+        order_by=&quot;creation asc&quot;,
+        limit=200,
+    )
+    version_entries = []
+    for v in versions:
+        try:
+            changes = json.loads(v[&quot;data&quot;]).get(&quot;changed&quot;, [])
+        except Exception:
+            continue
+        filtered = [[f, o, n] for f, o, n in changes if f in TRACKED_FIELDS]
+        if filtered:
+            version_entries.append({
+                &quot;name&quot;: v[&quot;name&quot;],
+                &quot;owner&quot;: v[&quot;owner&quot;],
+                &quot;creation&quot;: str(v[&quot;creation&quot;]),
+                &quot;type&quot;: &quot;version&quot;,
+                &quot;changes&quot;: filtered,
+            })
+
+    comment_entries = [
+        {**c, &quot;type&quot;: &quot;comment&quot;, &quot;creation&quot;: str(c[&quot;creation&quot;])}
+        for c in comments
+    ]
+
+    merged = sorted(comment_entries + version_entries, key=lambda e: e[&quot;creation&quot;])
+    return merged
+</code></pre>
+<h3 id="53-api-add_comment">5.3 API — <code>add_comment</code></h3>
+<pre><code class="language-python">@frappe.whitelist()
+def add_comment(task, content):
+    _assert_task_readable(task)
+    if not content or not content.strip():
+        frappe.throw(&quot;Comment content is required&quot;)
+    doc = frappe.get_doc({
+        &quot;doctype&quot;: &quot;Comment&quot;,
+        &quot;comment_type&quot;: &quot;Comment&quot;,
+        &quot;reference_doctype&quot;: &quot;VT Task&quot;,
+        &quot;reference_name&quot;: task,
+        &quot;content&quot;: content,
+    }).insert(ignore_permissions=True)
+    return {
+        &quot;name&quot;: doc.name,
+        &quot;owner&quot;: doc.owner,
+        &quot;creation&quot;: str(doc.creation),
+        &quot;content&quot;: doc.content,
+        &quot;type&quot;: &quot;comment&quot;,
+        &quot;comment_type&quot;: &quot;Comment&quot;,
+    }
+</code></pre>
+<h3 id="54-api-delete_comment">5.4 API — <code>delete_comment</code></h3>
+<pre><code class="language-python">@frappe.whitelist()
+def delete_comment(comment_name):
+    doc = frappe.get_doc(&quot;Comment&quot;, comment_name)
+    role = _get_user_role_for_task(doc.reference_name)
+    if role not in (&quot;Manager&quot;, &quot;Leader&quot;) and doc.owner != frappe.session.user:
+        raise frappe.PermissionError(&quot;Cannot delete another user's comment&quot;)
+    frappe.delete_doc(&quot;Comment&quot;, comment_name, ignore_permissions=True)
+    return {&quot;ok&quot;: True}
+</code></pre>
+<h3 id="55-frontend-rendering">5.5 Frontend rendering</h3>
+<p><strong><code>ActivityLog.tsx</code></strong> — receives <code>ActivityEntry[]</code>, renders a scrollable list. Two render variants:
+- <code>type === "comment"</code>: renders the comment bubble (see <code>CommentThread</code>).
+- <code>type === "version"</code>: renders a compact diff line per changed field, e.g. <code>"kanban_status: Backlog → In Progress"</code>. Uses a <code>FIELD_LABELS</code> map for human-readable names.</p>
+<p><strong><code>CommentThread.tsx</code></strong> — handles the comment composer + per-comment display:
+- Composer: <code>&lt;textarea&gt;</code> (auto-resize, max 1000 chars), Submit on <code>Ctrl+Enter</code> or explicit Send button. Clears after submit.
+- Per comment: avatar initial + <code>owner</code>, relative time (<code>"2 min ago"</code> → <code>"May 18"</code> after 24h), <code>content</code> rendered as sanitized HTML (using <code>DOMPurify</code> — already a dependency; if not, add it). Delete button (trash icon) shown only to comment owner and Manager/Leader.
+- Optimistic add: insert a provisional entry with <code>name: tmp-&lt;uuid&gt;</code>, <code>type: "comment"</code>, pending CSS class. On success replace; on failure remove + toast.
+- Optimistic delete: remove from local list immediately, rollback on server error.</p>
+<p><strong><code>useTaskComments(taskName)</code></strong> — React Query key <code>["taskComments", taskName]</code>. <code>staleTime: 10_000</code>. Exposes <code>{ entries, addComment, deleteComment }</code>.</p>
+<p>Activity panel is rendered in the lower half of <code>TaskDetailPanel</code> with a fixed-height scroll container (<code>flex: 1; overflow-y: auto</code>). New comments appear at the bottom; panel auto-scrolls after successful add.</p>
+<h3 id="56-types-pwasrcportaltasksapitypests">5.6 Types — <code>pwa/src/portal/tasks/api/types.ts</code></h3>
+<pre><code class="language-ts">export type ActivityEntryType = &quot;comment&quot; | &quot;version&quot;;
+export type CommentType = &quot;Comment&quot; | &quot;Info&quot;;
+
+export interface CommentEntry {
+  type: &quot;comment&quot;;
+  name: string;
+  owner: string;
+  creation: string;
+  content: string;            // sanitized HTML
+  comment_type: CommentType;
+}
+
+export interface VersionChange { field: string; old: string | null; next: string | null; }
+export interface VersionEntry {
+  type: &quot;version&quot;;
+  name: string;
+  owner: string;
+  creation: string;
+  changes: [string, string | null, string | null][];  // [field, old, new]
+}
+
+export type ActivityEntry = CommentEntry | VersionEntry;
+
+export interface TaskDetail {
+  task: {
+    name: string;
+    title: string;
+    deadline: string | null;
+    assigned_to: string | null;
+    assigned_to_full_name: string | null;
+    kanban_status: KanbanStatus;
+    priority: &quot;Low&quot; | &quot;Medium&quot; | &quot;High&quot; | &quot;Critical&quot;;
+    base_points: number;
+    pdca_phase: PdcaPhase;
+    completion_date: string | null;
+    project: string;
+    sprint: string;
+    estimated_hours: number;
+    kanban_rank: number;
+  };
+  permitted_fields: string[];
+}
+
+export interface CreateTaskPayload {
+  sprint: string;
+  project: string;
+  title: string;
+  priority?: &quot;Low&quot; | &quot;Medium&quot; | &quot;High&quot; | &quot;Critical&quot;;
+  estimated_hours?: number;
+  deadline?: string;
+  assigned_to?: string;
+  pdca_phase?: PdcaPhase;
+  kanban_status?: KanbanStatus;
+}
+
+export interface UpdateTaskPayload {
+  title?: string;
+  deadline?: string | null;
+  assigned_to?: string | null;
+  kanban_status?: KanbanStatus;
+  priority?: &quot;Low&quot; | &quot;Medium&quot; | &quot;High&quot; | &quot;Critical&quot;;
+  estimated_hours?: number;
+  pdca_phase?: PdcaPhase;
+}
+</code></pre>
+<p><code>KanbanStatus</code> and <code>PdcaPhase</code> are imported from <code>../../sprints/api/types</code> (relative import — do not use <code>@/*</code>).</p>
+<h2 id="6-permissions">6. Permissions</h2>
+<p>Permission matrix enforced server-side in every <code>portal_tasks.py</code> function. Client-side enforcement is a hint only (UI shows/hides controls), never relied upon for security.</p>
+<p><code>_get_user_role(project)</code> reuses the same helper pattern as <code>sprints.py</code> — checks <code>VT Project Member</code> table for the session user's role in the given project.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Manager</th>
+<th>Leader (own project)</th>
+<th>Member</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>View task detail</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes (where project visible)</td>
+</tr>
+<tr>
+<td>Edit <code>title</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>own task only</td>
+</tr>
+<tr>
+<td>Edit <code>kanban_status</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>own task only</td>
+</tr>
+<tr>
+<td>Edit <code>pdca_phase</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>own task only</td>
+</tr>
+<tr>
+<td>Edit <code>priority</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Edit <code>estimated_hours</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Edit <code>assigned_to</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Edit <code>deadline</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Create task in sprint</td>
+<td>yes</td>
+<td>yes</td>
+<td>Active sprint only</td>
+</tr>
+<tr>
+<td>Add comment</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes (any visible task)</td>
+</tr>
+<tr>
+<td>Delete own comment</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Delete others' comment</td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p><code>permitted_fields</code> is computed as:</p>
+<pre><code class="language-python">def _permitted_fields(task_doc, project, role):
+    always_editable = []
+    if role in (&quot;Manager&quot;, &quot;Leader&quot;):
+        return [&quot;title&quot;, &quot;deadline&quot;, &quot;assigned_to&quot;, &quot;kanban_status&quot;, &quot;priority&quot;,
+                &quot;estimated_hours&quot;, &quot;pdca_phase&quot;]
+    if role == &quot;Member&quot; and task_doc.assigned_to == frappe.session.user:
+        return [&quot;title&quot;, &quot;kanban_status&quot;, &quot;pdca_phase&quot;]
+    return []  # read-only for Members on others' tasks
+</code></pre>
+<h2 id="7-testing">7. Testing</h2>
+<h3 id="71-backend-vernon_tasksapitest_portal_taskspy">7.1 Backend — <code>vernon_tasks/api/test_portal_tasks.py</code></h3>
+<p>Structure mirrors <code>test_sprints.py</code>. Use <code>frappe.set_user(...)</code> to switch roles within each test.</p>
+<p><strong><code>get_task_detail</code>:</strong>
+- Returns correct shape for Manager, Leader, Member-own, Member-other.
+- <code>permitted_fields</code> is correct for each role/ownership combo.
+- Non-existent task raises appropriate error (do NOT use <code>frappe.DoesNotExistError</code>; use <code>frappe.ValidationError</code> with message).</p>
+<p><strong><code>update_task</code>:</strong>
+- Manager can update all mutable fields.
+- Leader can update all mutable fields on a task in their project.
+- Member can update <code>title</code>, <code>kanban_status</code>, <code>pdca_phase</code> on own task.
+- Member cannot update <code>priority</code>, <code>estimated_hours</code>, <code>deadline</code>, <code>assigned_to</code> — raises <code>frappe.PermissionError</code>.
+- Member cannot update any field on another user's task — raises <code>frappe.PermissionError</code>.
+- Updating <code>kanban_status</code> to <code>Done</code> sets <code>completion_date</code> server-side (mirrors P3.2 <code>move_task</code> logic).
+- Empty <code>title</code> after strip raises <code>frappe.ValidationError</code>.</p>
+<p><strong><code>create_task</code>:</strong>
+- Manager/Leader create — task inserted with correct <code>sprint</code> and <code>project</code> linkage.
+- Member create in Active sprint — succeeds, <code>assigned_to</code> defaults to <code>session.user</code>.
+- Member create in Planning sprint — raises <code>frappe.PermissionError</code>.
+- Missing <code>title</code> — raises <code>frappe.ValidationError</code>.
+- <code>kanban_rank</code> is <code>null</code> after insert (lazy populate not triggered here).
+- Returned shape includes all <code>TaskCardData</code> fields.</p>
+<p><strong><code>get_task_comments</code>:</strong>
+- Returns merged list sorted by creation ASC.
+- Version entries only include changes to tracked fields; untracked field changes produce no entry.
+- Empty task (no comments, no versions) returns <code>[]</code>.</p>
+<p><strong><code>add_comment</code>:</strong>
+- Inserts <code>Comment</code> doc with correct <code>reference_doctype</code> and <code>reference_name</code>.
+- Empty content raises <code>frappe.ValidationError</code>.
+- Returns shape with <code>type: "comment"</code>.</p>
+<p><strong><code>delete_comment</code>:</strong>
+- Owner can delete own comment.
+- Manager can delete any comment.
+- Member cannot delete another user's comment — raises <code>frappe.PermissionError</code>.
+- Non-existent <code>comment_name</code> raises appropriate error.</p>
+<h3 id="72-frontend-vitest-rtl">7.2 Frontend — Vitest + RTL</h3>
+<p>Files match component names: <code>TaskDetailPanel.test.tsx</code>, <code>TaskCreateModal.test.tsx</code>, <code>ActivityLog.test.tsx</code>, <code>CommentThread.test.tsx</code>, <code>hooks/useTaskDetail.test.ts</code>, <code>hooks/useTaskComments.test.ts</code>.</p>
+<p><strong><code>TaskDetailPanel.test.tsx</code>:</strong>
+- Renders with <code>placeholderData</code> from sprint cache while full fetch loads.
+- Editable fields rendered as inputs when in <code>permitted_fields</code>; read-only otherwise.
+- Blur on <code>title</code> input triggers <code>update_task</code> RPC call.
+- Optimistic update replaces both <code>["taskDetail", name]</code> and <code>["sprintDetail", sprintId]</code> caches.
+- Error toast shown and caches rolled back on mutation failure.
+- Escape key closes panel (calls <code>onClose</code>).</p>
+<p><strong><code>TaskCreateModal.test.tsx</code>:</strong>
+- Submit with empty title shows inline validation error, does not call <code>create_task</code>.
+- Submit with valid payload calls <code>create_task</code> with correct <code>sprint</code> and <code>project</code> args.
+- Optimistic <code>tmp-&lt;uuid&gt;</code> card inserted into sprint cache before RPC resolves.
+- Successful RPC replaces provisional card with real <code>name</code>.
+- Failed RPC removes provisional card and shows toast; modal stays open.</p>
+<p><strong><code>ActivityLog.test.tsx</code>:</strong>
+- Renders <code>"comment"</code> entries as bubbles with <code>owner</code> and relative time.
+- Renders <code>"version"</code> entries as diff lines with <code>FIELD_LABELS</code> applied.
+- Snapshot test with a fixed 5-entry fixture (mix of comment and version types).</p>
+<p><strong><code>CommentThread.test.tsx</code>:</strong>
+- <code>Ctrl+Enter</code> inside textarea triggers <code>addComment</code>.
+- Pending state shows spinner; entry replaced on success.
+- Delete button only visible for own comment (or Manager/Leader).
+- DOMPurify sanitization: <code>&lt;script&gt;</code> tags stripped from <code>content</code> before render.</p>
+<p><strong>Integration — <code>pwa/src/portal/sprints/__integration.test.tsx</code>:</strong>
+- Extend existing integration test: simulate click on a <code>TaskCard</code> → assert <code>TaskDetailPanel</code> mounts with the correct task name.
+- Simulate <code>+</code> button → assert <code>TaskCreateModal</code> mounts with <code>sprint</code> pre-filled.</p>
+<h2 id="8-telemetry">8. Telemetry</h2>
+<h3 id="81-new-events-add-to-both-allowlists">8.1 New events — add to BOTH allowlists</h3>
+<p><strong>Backend <code>ALLOWED_EVENTS</code> set in <code>vernon_tasks/task/api/telemetry.py</code>:</strong></p>
+<pre><code class="language-python">&quot;tasks.detail_view&quot;,
+&quot;tasks.task_updated&quot;,
+&quot;tasks.task_created&quot;,
+&quot;tasks.comment_added&quot;,
+&quot;tasks.comment_deleted&quot;,
+&quot;tasks.panel_closed&quot;,
+</code></pre>
+<p><strong>Frontend <code>TelemetryEvent</code> union in <code>pwa/src/telemetry.ts</code>:</strong></p>
+<pre><code class="language-ts">| &quot;tasks.detail_view&quot;
+| &quot;tasks.task_updated&quot;
+| &quot;tasks.task_created&quot;
+| &quot;tasks.comment_added&quot;
+| &quot;tasks.comment_deleted&quot;
+| &quot;tasks.panel_closed&quot;
+</code></pre>
+<h3 id="82-tracker-functions-add-to-pwasrctelemetryts">8.2 Tracker functions — add to <code>pwa/src/telemetry.ts</code></h3>
+<pre><code class="language-ts">export function trackTaskDetailView(task: string, sprint: string) {
+  self.logEvent(&quot;tasks.detail_view&quot;, { task, sprint });
+}
+export function trackTaskUpdated(task: string, changed_fields: string[]) {
+  self.logEvent(&quot;tasks.task_updated&quot;, { task, changed_fields });
+}
+export function trackTaskCreated(task: string, sprint: string, project: string) {
+  self.logEvent(&quot;tasks.task_created&quot;, { task, sprint, project });
+}
+export function trackCommentAdded(task: string) {
+  self.logEvent(&quot;tasks.comment_added&quot;, { task });
+}
+export function trackCommentDeleted(task: string) {
+  self.logEvent(&quot;tasks.comment_deleted&quot;, { task });
+}
+export function trackTaskPanelClosed(task: string, open_duration_ms: number) {
+  self.logEvent(&quot;tasks.panel_closed&quot;, { task, open_duration_ms });
+}
+</code></pre>
+<p><code>tasks.panel_closed</code> captures panel open-to-close duration in ms — used to gauge engagement depth. Start time captured when <code>TaskDetailPanel</code> mounts.</p>
+<h3 id="83-telemetry-test-file">8.3 Telemetry test file</h3>
+<p>Add <code>pwa/src/telemetry.tasks.test.ts</code> following the pattern in <code>telemetry.sprints.test.ts</code> — one <code>it()</code> per tracker function asserting the correct <code>logEvent</code> call signature.</p>
+<h2 id="9-rollout">9. Rollout</h2>
+<ol>
+<li><strong>Sprint Task child table verification (pre-P3.3):</strong> confirm from telemetry that <code>sprints.task_move</code> has not written to <code>Sprint Task</code> child table for at least 2 closed sprints. If confirmed, proceed with removal patch in P3.3 migration.</li>
+<li><strong>Backend deploy:</strong> add <code>portal_tasks.py</code> behind existing feature flag mechanism — endpoints are callable once deployed; no new flag required (P3.2 <code>portal_sprints_enabled</code> gates the board that surfaces these controls).</li>
+<li><strong>Frontend deploy:</strong> <code>TaskDetailPanel</code> and <code>TaskCreateModal</code> ship with sprint board. No additional feature flag. Slide-over and <code>+</code> button appear for all users with sprint board access.</li>
+<li><strong>Smoke test per role:</strong> for each of Manager, Leader, Member — open a task detail, verify field editability matches perm matrix, leave a comment, create a task (Active sprint for Member).</li>
+<li><strong>Sprint Task child table removal</strong> (if observation window passed): execute <code>migrate</code> with the patch that removes the child table field from <code>VT Sprint</code> DocType JSON.</li>
+</ol>
+<h2 id="10-open-questions-risks">10. Open Questions / Risks</h2>
+<ul>
+<li><strong>DOMPurify dependency:</strong> confirm <code>dompurify</code> + <code>@types/dompurify</code> is already in <code>pwa/package.json</code>. If not, add before P3.3 implementation. Rendering raw HTML from Frappe's Comment <code>content</code> without sanitization is a stored XSS risk.</li>
+<li><strong><code>frappe.DoesNotExistError</code> vs <code>frappe.ValidationError</code>:</strong> existing <code>sprints.py</code> already uses <code>raise frappe.DoesNotExistError(...)</code> in two places (lines 74, 136) despite P3.2 spec noting this is not a valid exception. The implementation diverged from spec. P3.3 <code>portal_tasks.py</code> must NOT follow this pattern — use <code>frappe.throw(...)</code> (raises <code>frappe.ValidationError</code>) for not-found cases, consistent with the spec constraint.</li>
+<li><strong>Comment HTML sanitization on backend:</strong> Frappe stores rich-text comment <code>content</code> as HTML. Consider stripping on read in <code>get_task_comments</code> using <code>frappe.utils.strip_html_tags</code> if a plain-text fallback is preferred, or documenting that front-end sanitization via DOMPurify is the sole safeguard.</li>
+<li><strong><code>assigned_to</code> user list source:</strong> <code>get_task_detail</code> must return the project member list for the <code>assigned_to</code> dropdown. Current approach relies on <code>project_summary</code> already in the sprint cache. If the panel is opened from a context without that cache (future: standalone task link), a separate <code>list_project_members(project)</code> call may be needed. Defer to P3.3+ unless the standalone case is required.</li>
+<li><strong>Version track_changes coverage:</strong> relies on <code>VT Task</code> having <code>track_changes = 1</code> in DocType JSON (verified true per P3.2 spec note). Confirm the six tracked fields (<code>kanban_status</code>, <code>pdca_phase</code>, <code>priority</code>, <code>assigned_to</code>, <code>deadline</code>, <code>estimated_hours</code>) are not excluded from the tracked set.</li>
+<li><strong>Concurrent edits:</strong> two users editing the same task simultaneously will produce last-write-wins behavior (standard Frappe <code>doc.save()</code> pattern). No optimistic locking implemented in P3.3. Add <code>modified</code> timestamp comparison in <code>update_task</code> as a simple conflict guard if needed.</li>
+</ul>
+<h2 id="11-sub-prd-chain">11. Sub-PRD Chain</h2>
+<ul>
+<li>Parent: <code>2026-05-17-portal-projects-p3-design.md</code></li>
+<li>Predecessor: P3.2 — <code>2026-05-18-portal-sprints-p3.2-design.md</code> (Implemented)</li>
+<li>This spec: P3.3 — Portal Tasks (Draft)</li>
+<li>Successors: P3.4 (Milestones + Documentation), P3.5 (Team Member capacity)</li>
+</ul>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-18-portal-tasks-p3.3-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

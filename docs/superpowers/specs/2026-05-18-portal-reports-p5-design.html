@@ -1,0 +1,833 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: Portal Reports P5 — Full Exec Dashboard</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Spec: Portal Reports P5 — Full Exec Dashboard</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-18-portal-reports-p5-design.md</span>
+  </div>
+</header>
+
+<h1 id="portal-reports-p5-design-spec">Portal Reports P5 — Design Spec</h1>
+<p><strong>Date:</strong> 2026-05-18
+<strong>Parent PRD:</strong> <code>docs/superpowers/specs/2026-05-17-desktop-portal-foundation-design.md</code>
+<strong>Status:</strong> Draft — pending review
+<strong>Owner:</strong> Erick Mo</p>
+<hr />
+<h2 id="1-scope">1. Scope</h2>
+<p>Desktop portal Reports domain — executive dashboard at <code>/portal/reports</code> surfacing org-wide and cross-project analytics for Managers and Leaders. Three tabs: OKR (org health + KPI trends), Sprints (cross-project velocity + forecast + risk), Team (leaderboard + workload + overdue). Mounts behind <code>portal_reports_enabled</code> flag. Aggregates across the existing <code>exec_analytics.py</code>, <code>analytics.py</code>, and <code>ic_analytics.py</code> services — no business logic duplication.</p>
+<p><strong>In scope (P5):</strong>
+- <code>/portal/reports</code> top-level route, link in portal nav (Manager + Leader only).
+- Feature gate: <code>portal_reports_enabled</code> (Check, default <code>0</code>) in VT Settings.
+- <strong>OKR tab</strong> (Manager only): OKR roll-up per project, org-level health score, per-KPI trend line charts.
+- <strong>Sprints tab</strong> (Manager + Leader): cross-project sprint velocity comparison, per-project forecast cards, risk flag matrix.
+- <strong>Team tab</strong> (Manager + Leader): leaderboard, per-member completion rate, overdue analysis, workload distribution.
+- Permission enforcement: server-side role checks + client-side tab gating; Member redirect to 403.
+- Caching: 5-min TTL on heavy cross-project aggregations, cache key includes role.</p>
+<p><strong>Non-goals (P5, deferred):</strong>
+- Drill-down into individual tasks from the Team tab (P5.1).
+- Exportable PDF/CSV reports (P5.2).
+- Custom date range picker beyond preset periods (P5.2).
+- Scheduled email digests (P5.3).
+- Per-project OKR detail — use <code>/portal/okr</code> (P2).
+- Per-sprint burndown detail — use <code>/portal/projects/:id/sprints/:sprint</code> (P3.2).</p>
+<hr />
+<h2 id="2-architecture">2. Architecture</h2>
+<h3 id="21-backend-vernon_tasksapiportal_reportspy">2.1 Backend — <code>vernon_tasks/api/portal_reports.py</code></h3>
+<p>New file at <code>vernon_tasks/api/portal_reports.py</code> — sibling to <code>vernon_tasks/api/sprints.py</code> and <code>projects.py</code>. Thin aggregation layer: <strong>no business logic copied</strong> from underlying services. All computation remains in <code>task/services/</code>. This module's sole responsibility is:
+1. Portal permission check (role + feature flag).
+2. Cross-project fan-out where a single service call covers only one project.
+3. 5-minute result cache keyed by <code>(endpoint, role, params)</code>.
+4. Serialisation to portal-safe response shapes.</p>
+<p>Calling pattern — internal imports (not whitelisted RPC calls to self):</p>
+<pre><code class="language-python">from vernon_tasks.task.services.okr_rollup_service import get_okr_rollup as _okr
+from vernon_tasks.task.services.kpi_trend_service import get_kpi_trend as _kpi_trend, list_kpis as _list_kpis
+from vernon_tasks.task.services.health_score_service import get_health_score as _health
+from vernon_tasks.task.services.velocity_service import get_velocity_trend as _get_velocity_trend
+from vernon_tasks.task.services.forecast_service import get_forecast as _get_forecast
+from vernon_tasks.task.services.risk_evaluator import evaluate_risks as _evaluate_risks
+from vernon_tasks.task.services.leaderboard_service import get_leaderboard as _lb
+</code></pre>
+<p>Permission constants:</p>
+<pre><code class="language-python">_MANAGER_ROLES  = (&quot;VT Manager&quot;, &quot;System Manager&quot;)
+_LEADER_ROLES   = (&quot;VT Leader&quot;, &quot;VT Manager&quot;, &quot;System Manager&quot;)
+_CACHE_TTL_SEC  = 300  # 5 minutes
+</code></pre>
+<p>Guards:</p>
+<pre><code class="language-python">def _require_leader():
+    &quot;&quot;&quot;Allows VT Leader + VT Manager.&quot;&quot;&quot;
+    if not set(frappe.get_roles()) &amp; set(_LEADER_ROLES):
+        frappe.throw(&quot;Not authorized&quot;, frappe.PermissionError)
+
+def _require_manager():
+    &quot;&quot;&quot;Allows VT Manager only.&quot;&quot;&quot;
+    if not set(frappe.get_roles()) &amp; set(_MANAGER_ROLES):
+        frappe.throw(&quot;Not authorized&quot;, frappe.PermissionError)
+
+def _check_flag():
+    enabled = frappe.db.get_single_value(&quot;VT Settings&quot;, &quot;portal_reports_enabled&quot;)
+    if not int(enabled or 0):
+        frappe.throw(&quot;Portal Reports is not enabled&quot;, frappe.PermissionError)
+</code></pre>
+<p>Each whitelisted endpoint calls <code>_check_flag()</code> first, then the appropriate role guard. The role is included in cache keys to prevent cross-permission leaks when a Manager and a Leader share a Frappe instance (different project scopes).</p>
+<p>Cache helper (consistent with <code>analytics.py</code> pattern):</p>
+<pre><code class="language-python">def _cache(key, fn):
+    cached = frappe.cache().get_value(key)
+    if cached is not None:
+        return cached
+    val = fn()
+    frappe.cache().set_value(key, val, expires_in_sec=_CACHE_TTL_SEC)
+    return val
+</code></pre>
+<h3 id="22-frontend-reportspage-tabs">2.2 Frontend — <code>ReportsPage</code> + tabs</h3>
+<p>New module at <code>pwa/src/portal/reports/</code>:</p>
+<pre><code>ReportsPage.tsx              // top-level page: tab bar + tab router
+ReportsFeatureGate.tsx       // reads portal_reports_enabled, shows ComingSoon if off
+ReportsRoutes.tsx            // minimal: &lt;ReportsFeatureGate&gt;&lt;ReportsPage /&gt;&lt;/ReportsFeatureGate&gt;
+tabs/
+  OkrTab.tsx                 // OKR roll-up table + health score card + KPI trend charts
+  SprintsTab.tsx             // cross-project velocity comparison + forecast cards + risk matrix
+  TeamTab.tsx                // leaderboard table + completion ring chart + workload bar chart
+api/
+  portal_reports.ts          // RPC wrappers — mirrors sprints.ts pattern
+  types.ts                   // TypeScript interfaces for all response shapes
+hooks/
+  useOkrReport.ts
+  useSprintsReport.ts
+  useTeamReport.ts
+charts/
+  KpiTrendChart.tsx          // recharts LineChart, lazy imported
+  VelocityComparisonChart.tsx// recharts BarChart, lazy imported
+  WorkloadChart.tsx          // recharts BarChart horizontal, lazy imported
+  CompletionRingChart.tsx    // recharts RadialBarChart, lazy imported
+</code></pre>
+<p>All recharts imports follow the existing PWA lazy pattern (see <code>BurndownChart.tsx</code> for reference — inline SVG was used there, but P5 uses recharts because cross-project multi-series charts exceed inline SVG practicality). Import pattern:</p>
+<pre><code class="language-tsx">const { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } = await import(&quot;recharts&quot;);
+</code></pre>
+<p>Wrapped in <code>React.lazy</code> + <code>Suspense</code> per chart component so recharts is not in the critical bundle path.</p>
+<p><code>ReportsPage</code> mounts from <code>portal/routes.tsx</code>:</p>
+<pre><code class="language-tsx">import { ReportsRoutes } from &quot;./reports/ReportsRoutes&quot;;
+
+&lt;Route
+  path=&quot;reports/*&quot;
+  element={
+    &lt;RequirePermission perm=&quot;report.read&quot;&gt;
+      &lt;ReportsRoutes /&gt;
+    &lt;/RequirePermission&gt;
+  }
+/&gt;
+</code></pre>
+<p><code>ReportsFeatureGate.tsx</code> implementation follows <code>SprintsFeatureGate.tsx</code> pattern — reads <code>portal_reports_enabled</code> via a deduplicated settings query, renders <code>&lt;ComingSoon domain="Reports" /&gt;</code> if <code>0</code>, renders <code>children</code> if <code>1</code>.</p>
+<h3 id="23-feature-flag">2.3 Feature flag</h3>
+<ul>
+<li>DocType: <code>VT Settings</code></li>
+<li>Field: <code>portal_reports_enabled</code> (Check, default <code>0</code>, label "Enable Portal Reports")</li>
+<li>Backend: <code>_check_flag()</code> called at top of every endpoint in <code>portal_reports.py</code>. Raises <code>frappe.PermissionError</code> (HTTP 403) when <code>0</code>.</li>
+<li>Frontend: <code>ReportsFeatureGate</code> queries <code>portal_reports_enabled</code> from the settings endpoint shared with other feature gates. Nav link in <code>nav.ts</code> is always registered (permission-gated); feature gate is a second layer inside the route.</li>
+</ul>
+<hr />
+<h2 id="3-okr-tab">3. OKR Tab</h2>
+<p><strong>Visible to:</strong> Manager only. Leader sees the tab bar but the OKR tab is hidden on the client and returns 403 on the server.</p>
+<h3 id="31-layout">3.1 Layout</h3>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│  Health Score Card (large)   Period selector (dropdown) │
+│  score: 82  OKR 40%  Ontime 30%  Velocity 30%          │
+├──────────────────┬──────────────────────────────────────┤
+│  OKR Roll-up     │  KPI Trend (line chart area)         │
+│  table (left)    │  KPI selector (dropdown, top-right)  │
+│                  │  12-period line chart                │
+└──────────────────┴──────────────────────────────────────┘
+</code></pre>
+<h3 id="32-api-endpoints">3.2 API endpoints</h3>
+<h4 id="get_portal_health_score"><code>get_portal_health_score</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_health_score
+  (no params)
+→ {
+    &quot;score&quot;: 82.4,
+    &quot;okr_pct&quot;: 0.74,
+    &quot;ontime_pct&quot;: 0.88,
+    &quot;velocity_health&quot;: 0.91,
+    &quot;components&quot;: {
+      &quot;okr_weight&quot;: 0.40,
+      &quot;ontime_weight&quot;: 0.30,
+      &quot;velocity_weight&quot;: 0.30
+    },
+    &quot;as_of&quot;: &quot;2026-05-18T10:00:00&quot;
+  }
+</code></pre>
+<p>Backend: calls <code>_health()</code> internally. Cache key: <code>"pr:health:manager"</code> (role suffix ensures Manager-only data is not served to Leader). TTL 300s.</p>
+<h4 id="get_portal_okr_rollup"><code>get_portal_okr_rollup</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_okr_rollup?period=Q2-2026
+→ {
+    &quot;period&quot;: &quot;Q2-2026&quot;,
+    &quot;rows&quot;: [
+      {
+        &quot;project&quot;: &quot;PROJ-00001&quot;,
+        &quot;project_title&quot;: &quot;Vernon Platform v2&quot;,
+        &quot;objective_count&quot;: 5,
+        &quot;kr_count&quot;: 14,
+        &quot;avg_progress&quot;: 0.63,
+        &quot;on_track&quot;: 3,
+        &quot;at_risk&quot;: 1,
+        &quot;behind&quot;: 1
+      },
+      ...
+    ],
+    &quot;totals&quot;: {
+      &quot;objective_count&quot;: 18,
+      &quot;kr_count&quot;: 51,
+      &quot;avg_progress&quot;: 0.59,
+      &quot;on_track&quot;: 11,
+      &quot;at_risk&quot;: 4,
+      &quot;behind&quot;: 3
+    }
+  }
+</code></pre>
+<p>Backend: calls <code>_okr(period)</code>. <code>period</code> is an optional string matching <code>VT OKR Period.name</code> (e.g. <code>"Q2-2026"</code>). If <code>None</code>, returns current active period. Cache key: <code>f"pr:okr:{period or 'current'}:manager"</code>. TTL 300s.</p>
+<h4 id="get_portal_kpi_list"><code>get_portal_kpi_list</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_kpi_list
+→ [
+    {&quot;name&quot;: &quot;KPI-00001&quot;, &quot;title&quot;: &quot;Sprint Velocity&quot;, &quot;unit&quot;: &quot;pts/sprint&quot;},
+    {&quot;name&quot;: &quot;KPI-00002&quot;, &quot;title&quot;: &quot;Ontime Delivery&quot;, &quot;unit&quot;: &quot;%&quot;},
+    ...
+  ]
+</code></pre>
+<p>Backend: calls <code>_list_kpis()</code>. Cache key: <code>"pr:kpis:manager"</code>. TTL 300s (KPI list changes infrequently).</p>
+<h4 id="get_portal_kpi_trend"><code>get_portal_kpi_trend</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_kpi_trend
+    ?kpi_definition=KPI-00001&amp;periods=12
+→ {
+    &quot;kpi_definition&quot;: &quot;KPI-00001&quot;,
+    &quot;title&quot;: &quot;Sprint Velocity&quot;,
+    &quot;unit&quot;: &quot;pts/sprint&quot;,
+    &quot;periods&quot;: 12,
+    &quot;series&quot;: [
+      {&quot;label&quot;: &quot;2026-W18&quot;, &quot;value&quot;: 42.0, &quot;target&quot;: 50.0},
+      {&quot;label&quot;: &quot;2026-W17&quot;, &quot;value&quot;: 39.5, &quot;target&quot;: 50.0},
+      ...
+    ]
+  }
+</code></pre>
+<p>Backend: calls <code>_kpi_trend(kpi_definition, periods)</code>. <code>periods</code> clamped 1–24 via <code>clamp_int</code>. Cache key: <code>f"pr:kpi_trend:{kpi_definition}:{periods}:manager"</code>. TTL 300s.</p>
+<h3 id="33-react-components">3.3 React components</h3>
+<p><strong><code>OkrTab.tsx</code></strong>
+- Mounts <code>useOkrReport</code> hook (fetches health score + OKR roll-up in parallel via <code>Promise.all</code> in React Query).
+- Renders <code>&lt;HealthScoreCard&gt;</code> + <code>&lt;OkrRollupTable&gt;</code> + <code>&lt;KpiTrendPanel&gt;</code>.
+- Period selector: <code>&lt;select&gt;</code> populated from a deduplicated query to <code>list_okr_periods</code> (existing OKR portal API or new helper).</p>
+<p><strong><code>HealthScoreCard.tsx</code></strong> (inline in <code>OkrTab.tsx</code> or extracted to <code>portal/reports/</code>):
+- Large numeric score with colour coding: ≥80 green, 60–79 amber, &lt;60 red.
+- Three component rows: OKR, Ontime, Velocity with individual percentages.
+- <code>aria-label="Health Score: 82"</code> for accessibility.</p>
+<p><strong><code>OkrRollupTable.tsx</code></strong>:
+- Columns: Project | Objectives | KRs | Avg Progress (progress bar inline) | On Track | At Risk | Behind.
+- Sortable by avg_progress DESC by default.
+- <code>&lt;EmptyState&gt;</code> when <code>rows.length === 0</code>.</p>
+<p><strong><code>KpiTrendPanel.tsx</code></strong>:
+- KPI selector <code>&lt;select&gt;</code> at top. On change, fires <code>useKpiTrend(selectedKpi, 12)</code>.
+- <code>&lt;KpiTrendChart&gt;</code> — recharts <code>LineChart</code> with two <code>&lt;Line&gt;</code> series (value + target), <code>&lt;ReferenceLine&gt;</code> at target.
+- Tooltip shows <code>{label, value, target, delta}</code>.</p>
+<p><strong><code>useOkrReport.ts</code></strong> (hook):</p>
+<pre><code class="language-ts">export function useOkrReport(period?: string) {
+  const health = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;health&quot;],
+    queryFn: () =&gt; getPortalHealthScore(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const rollup = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;okr&quot;, period ?? &quot;current&quot;],
+    queryFn: () =&gt; getPortalOkrRollup(period),
+    staleTime: 5 * 60 * 1000,
+  });
+  return { health, rollup };
+}
+</code></pre>
+<hr />
+<h2 id="4-sprints-tab">4. Sprints Tab</h2>
+<p><strong>Visible to:</strong> Manager and Leader. Leader sees only projects they are assigned to (server enforces scoping via <code>frappe.has_permission</code> per project before including in aggregation).</p>
+<h3 id="41-layout">4.1 Layout</h3>
+<pre><code>┌──────────────────────────────────────────────────────────┐
+│  Velocity Comparison  [bar chart — one bar per project]  │
+│  n= selector (3 / 6 / 12 sprints)                       │
+├──────────────────┬───────────────────────────────────────┤
+│  Forecast Cards  │  Risk Flag Matrix                     │
+│  (grid, 3-col)   │  (table: project × risk type × level)│
+└──────────────────┴───────────────────────────────────────┘
+</code></pre>
+<h3 id="42-api-endpoints">4.2 API endpoints</h3>
+<h4 id="get_portal_velocity_comparison"><code>get_portal_velocity_comparison</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_velocity_comparison
+    ?n=6
+→ {
+    &quot;n&quot;: 6,
+    &quot;projects&quot;: [
+      {
+        &quot;project&quot;: &quot;PROJ-00001&quot;,
+        &quot;project_title&quot;: &quot;Vernon Platform v2&quot;,
+        &quot;sprints&quot;: [
+          {&quot;sprint_label&quot;: &quot;S-2026-W14&quot;, &quot;velocity&quot;: 44.0},
+          {&quot;sprint_label&quot;: &quot;S-2026-W16&quot;, &quot;velocity&quot;: 38.5},
+          ...
+        ],
+        &quot;avg_velocity&quot;: 41.2,
+        &quot;trend&quot;: &quot;up&quot;   // &quot;up&quot; | &quot;down&quot; | &quot;flat&quot;
+      },
+      ...
+    ]
+  }
+</code></pre>
+<p>Backend:
+- <code>_require_leader()</code> + <code>_check_flag()</code>.
+- Calls <code>_get_velocity_trend(project, n)</code> for each project the calling user can see (<code>frappe.get_list("VT Project", filters=_project_filters(), fields=["name", "project_title"])</code>).
+- Leader scoping: <code>_project_filters()</code> returns <code>{"assigned_to": frappe.session.user}</code> for Leader, <code>{}</code> for Manager.
+- Fan-out capped at 50 projects to avoid runaway; logs warning if exceeded.
+- Cache key: <code>f"pr:vel:{role_bucket}:{n}:{frappe.session.user}"</code> where <code>role_bucket</code> is <code>"manager"</code> or <code>"leader"</code> (role determines scoping). TTL 300s.</p>
+<h4 id="get_portal_forecasts"><code>get_portal_forecasts</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_forecasts
+→ {
+    &quot;forecasts&quot;: [
+      {
+        &quot;project&quot;: &quot;PROJ-00001&quot;,
+        &quot;project_title&quot;: &quot;Vernon Platform v2&quot;,
+        &quot;completion_estimate&quot;: &quot;2026-07-04&quot;,
+        &quot;confidence&quot;: 0.72,
+        &quot;remaining_points&quot;: 186,
+        &quot;avg_velocity&quot;: 41.2,
+        &quot;status&quot;: &quot;on_track&quot;  // &quot;on_track&quot; | &quot;at_risk&quot; | &quot;delayed&quot;
+      },
+      ...
+    ]
+  }
+</code></pre>
+<p>Backend: calls <code>_get_forecast(project)</code> per visible project. Same scoping logic as velocity. Cache key: <code>f"pr:forecasts:{role_bucket}:{frappe.session.user}"</code>. TTL 300s.</p>
+<h4 id="get_portal_risks"><code>get_portal_risks</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_risks
+→ {
+    &quot;risks&quot;: [
+      {
+        &quot;project&quot;: &quot;PROJ-00001&quot;,
+        &quot;project_title&quot;: &quot;Vernon Platform v2&quot;,
+        &quot;flags&quot;: [
+          {&quot;type&quot;: &quot;overdue_tasks&quot;, &quot;level&quot;: &quot;high&quot;,   &quot;count&quot;: 5},
+          {&quot;type&quot;: &quot;velocity_drop&quot;, &quot;level&quot;: &quot;medium&quot;, &quot;delta_pct&quot;: -18.2},
+          {&quot;type&quot;: &quot;no_active_sprint&quot;, &quot;level&quot;: &quot;low&quot;, &quot;days_since&quot;: 14}
+        ],
+        &quot;max_level&quot;: &quot;high&quot;
+      },
+      ...
+    ]
+  }
+</code></pre>
+<p>Backend: calls <code>_evaluate_risks(project)</code> per visible project. Risk levels: <code>"high"</code>, <code>"medium"</code>, <code>"low"</code>, <code>"none"</code>. No caching (risks can change frequently with task moves); TTL omitted here. If performance is an issue post-launch, add 60s TTL.</p>
+<h3 id="43-react-components">4.3 React components</h3>
+<p><strong><code>SprintsTab.tsx</code></strong>:
+- Parallel fetches via <code>useSprintsReport</code> hook.
+- <code>n</code> selector state (3 / 6 / 12), stored in component state.
+- Renders <code>&lt;VelocityComparisonChart&gt;</code>, <code>&lt;ForecastGrid&gt;</code>, <code>&lt;RiskMatrix&gt;</code>.</p>
+<p><strong><code>VelocityComparisonChart.tsx</code></strong> (recharts <code>BarChart</code> grouped):
+- X-axis: sprint label. Each project is a <code>&lt;Bar&gt;</code> series with distinct colour.
+- Legend lists project titles.
+- Tooltip: <code>{sprint, project, velocity}</code>.</p>
+<p><strong><code>ForecastGrid.tsx</code></strong>:
+- CSS grid, 3 columns. Each <code>&lt;ForecastCard&gt;</code> shows: project title, completion estimate, confidence badge, remaining points, trend arrow.
+- Colour-coded status: <code>on_track</code> green, <code>at_risk</code> amber, <code>delayed</code> red.</p>
+<p><strong><code>RiskMatrix.tsx</code></strong>:
+- Table. Rows: projects. Columns: risk types (Overdue Tasks | Velocity Drop | No Active Sprint | ...).
+- Cell: coloured badge (<code>high</code>/<code>medium</code>/<code>low</code>/empty). Sortable by <code>max_level</code> DESC.
+- <code>&lt;EmptyState icon="check" title="No risks flagged" /&gt;</code> if all flags are <code>"none"</code>.</p>
+<p><strong><code>useSprintsReport.ts</code></strong> (hook):</p>
+<pre><code class="language-ts">export function useSprintsReport(n: number) {
+  const velocity = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;velocity&quot;, n],
+    queryFn: () =&gt; getPortalVelocityComparison(n),
+    staleTime: 5 * 60 * 1000,
+  });
+  const forecasts = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;forecasts&quot;],
+    queryFn: () =&gt; getPortalForecasts(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const risks = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;risks&quot;],
+    queryFn: () =&gt; getPortalRisks(),
+    staleTime: 2 * 60 * 1000,   // shorter: risks more volatile
+  });
+  return { velocity, forecasts, risks };
+}
+</code></pre>
+<hr />
+<h2 id="5-team-tab">5. Team Tab</h2>
+<p><strong>Visible to:</strong> Manager and Leader. Leader sees only members in their projects. Member: no access (403).</p>
+<h3 id="51-layout">5.1 Layout</h3>
+<pre><code>┌──────────────────────────────────────────────────────────┐
+│  Leaderboard Table  (left, ~55%)                        │
+│  Period selector: this_week / this_month / all_time     │
+├──────────────────┬───────────────────────────────────────┤
+│  Completion Rate │  Workload Distribution (bar chart)   │
+│  (radial bar)    │  (horizontal bar — open tasks/member)│
+└──────────────────┴───────────────────────────────────────┘
+│  Overdue Analysis Table (full-width, bottom)            │
+└──────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="52-api-endpoints">5.2 API endpoints</h3>
+<h4 id="get_portal_leaderboard"><code>get_portal_leaderboard</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_leaderboard
+    ?period=this_month&amp;limit=20
+→ {
+    &quot;period&quot;: &quot;this_month&quot;,
+    &quot;rows&quot;: [
+      {
+        &quot;rank&quot;: 1,
+        &quot;user&quot;: &quot;alice@example.com&quot;,
+        &quot;full_name&quot;: &quot;Alice Chen&quot;,
+        &quot;points&quot;: 420,
+        &quot;tasks_completed&quot;: 18,
+        &quot;streak_days&quot;: 12,
+        &quot;avg_quality&quot;: 4.2
+      },
+      ...
+    ]
+  }
+</code></pre>
+<p>Backend: calls <code>_lb(period, limit)</code> from <code>ic_analytics</code>. Leader scoping: filter <code>rows</code> to members whose primary project overlaps with Leader's projects. Cache key: <code>f"pr:leaderboard:{period}:{limit}:{role_bucket}:{frappe.session.user}"</code>. TTL 300s.</p>
+<h4 id="get_portal_workload"><code>get_portal_workload</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_workload
+→ {
+    &quot;as_of&quot;: &quot;2026-05-18&quot;,
+    &quot;members&quot;: [
+      {
+        &quot;user&quot;: &quot;alice@example.com&quot;,
+        &quot;full_name&quot;: &quot;Alice Chen&quot;,
+        &quot;open_tasks&quot;: 7,
+        &quot;open_hours&quot;: 32.5,
+        &quot;overdue_tasks&quot;: 1,
+        &quot;overdue_hours&quot;: 4.0,
+        &quot;projects&quot;: [&quot;PROJ-00001&quot;, &quot;PROJ-00003&quot;]
+      },
+      ...
+    ]
+  }
+</code></pre>
+<p>Backend: new aggregation in <code>portal_reports.py</code> — direct <code>frappe.db.sql</code> query aggregating <code>VT Task</code> WHERE <code>kanban_status NOT IN ('Done', 'Blocked')</code> GROUP BY <code>assigned_to</code>. Scoped to visible projects. No existing service reused here (workload snapshot is not covered by <code>ic_analytics</code>). Cache key: <code>f"pr:workload:{role_bucket}:{frappe.session.user}"</code>. TTL 300s.</p>
+<p>Note: This is the only endpoint in <code>portal_reports.py</code> that performs direct DB access rather than delegating to an existing service. Justified because no workload service exists yet. If a <code>workload_service.py</code> is created in P5.1, move the query there.</p>
+<h4 id="get_portal_overdue"><code>get_portal_overdue</code></h4>
+<pre><code>GET /api/method/vernon_tasks.api.portal_reports.get_portal_overdue
+→ {
+    &quot;as_of&quot;: &quot;2026-05-18&quot;,
+    &quot;total_overdue&quot;: 12,
+    &quot;by_member&quot;: [
+      {
+        &quot;user&quot;: &quot;bob@example.com&quot;,
+        &quot;full_name&quot;: &quot;Bob Tan&quot;,
+        &quot;overdue_count&quot;: 3,
+        &quot;overdue_hours&quot;: 11.5,
+        &quot;oldest_overdue_days&quot;: 8
+      },
+      ...
+    ],
+    &quot;by_project&quot;: [
+      {
+        &quot;project&quot;: &quot;PROJ-00002&quot;,
+        &quot;project_title&quot;: &quot;Q2 Infra&quot;,
+        &quot;overdue_count&quot;: 5,
+        &quot;overdue_hours&quot;: 18.0
+      },
+      ...
+    ]
+  }
+</code></pre>
+<p>Backend: direct <code>frappe.db.sql</code> aggregation on <code>VT Task</code> WHERE <code>deadline &lt; today</code> AND <code>kanban_status NOT IN ('Done', 'Blocked')</code>. Scoped to visible projects. Cache key: <code>f"pr:overdue:{role_bucket}:{frappe.session.user}"</code>. TTL 300s.</p>
+<h3 id="53-react-components">5.3 React components</h3>
+<p><strong><code>TeamTab.tsx</code></strong>:
+- Period state for leaderboard (<code>this_week</code> / <code>this_month</code> / <code>all_time</code>).
+- Renders <code>&lt;LeaderboardTable&gt;</code>, <code>&lt;CompletionRingChart&gt;</code>, <code>&lt;WorkloadChart&gt;</code>, <code>&lt;OverdueTable&gt;</code>.</p>
+<p><strong><code>LeaderboardTable.tsx</code></strong>:
+- Columns: Rank | Member | Points | Tasks Done | Streak | Avg Quality.
+- Rank 1–3 show medal badges (gold/silver/bronze via CSS, no emoji).
+- Sortable: points DESC default.</p>
+<p><strong><code>CompletionRingChart.tsx</code></strong> (recharts <code>RadialBarChart</code>):
+- Single ring showing org-wide completion rate = <code>sum(tasks_completed) / sum(total_assigned)</code> computed from leaderboard data.
+- Centre label: percentage + <code>"completed this period"</code>.</p>
+<p><strong><code>WorkloadChart.tsx</code></strong> (recharts <code>BarChart</code> horizontal):
+- Y-axis: member names. X-axis: open task count.
+- Two bar segments stacked: normal tasks (blue), overdue tasks (red).
+- Sorted by total DESC.</p>
+<p><strong><code>OverdueTable.tsx</code></strong>:
+- Two sub-views: by Member / by Project (toggle buttons).
+- By Member columns: Member | Overdue Tasks | Overdue Hours | Oldest (days).
+- By Project columns: Project | Overdue Tasks | Overdue Hours.
+- Row-level colour: oldest &gt; 7d → red text; 3–7d → amber.</p>
+<p><strong><code>useTeamReport.ts</code></strong> (hook):</p>
+<pre><code class="language-ts">export function useTeamReport(period: string) {
+  const leaderboard = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;leaderboard&quot;, period],
+    queryFn: () =&gt; getPortalLeaderboard(period, 20),
+    staleTime: 5 * 60 * 1000,
+  });
+  const workload = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;workload&quot;],
+    queryFn: () =&gt; getPortalWorkload(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const overdue = useQuery({
+    queryKey: [&quot;reports&quot;, &quot;overdue&quot;],
+    queryFn: () =&gt; getPortalOverdue(),
+    staleTime: 5 * 60 * 1000,
+  });
+  return { leaderboard, workload, overdue };
+}
+</code></pre>
+<hr />
+<h2 id="6-permissions">6. Permissions</h2>
+<p>Enforced at two layers:
+1. <strong>Server</strong> — role check in every endpoint. Returns HTTP 403 on violation.
+2. <strong>Client</strong> — tab visibility gated by <code>usePermissions().roles</code>. Client check is UI hint only; server is authoritative.</p>
+<table>
+<thead>
+<tr>
+<th>Action / Resource</th>
+<th>Manager</th>
+<th>Leader</th>
+<th>Member</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Access <code>/portal/reports</code> route</td>
+<td>yes</td>
+<td>yes</td>
+<td>no — redirect 403</td>
+</tr>
+<tr>
+<td>OKR tab (visible in UI)</td>
+<td>yes</td>
+<td><strong>no</strong></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>get_portal_health_score</code> endpoint</td>
+<td>yes</td>
+<td><strong>403</strong></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>get_portal_okr_rollup</code> endpoint</td>
+<td>yes</td>
+<td><strong>403</strong></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>get_portal_kpi_list</code> endpoint</td>
+<td>yes</td>
+<td><strong>403</strong></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>get_portal_kpi_trend</code> endpoint</td>
+<td>yes</td>
+<td><strong>403</strong></td>
+<td>403</td>
+</tr>
+<tr>
+<td>Sprints tab</td>
+<td>yes</td>
+<td>yes (own projects)</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>get_portal_velocity_comparison</code> endpoint</td>
+<td>all projects</td>
+<td>own projects only</td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>get_portal_forecasts</code> endpoint</td>
+<td>all projects</td>
+<td>own projects only</td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>get_portal_risks</code> endpoint</td>
+<td>all projects</td>
+<td>own projects only</td>
+<td>403</td>
+</tr>
+<tr>
+<td>Team tab</td>
+<td>yes</td>
+<td>yes (own project members)</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>get_portal_leaderboard</code> endpoint</td>
+<td>all members</td>
+<td>own project members</td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>get_portal_workload</code> endpoint</td>
+<td>all members</td>
+<td>own project members</td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>get_portal_overdue</code> endpoint</td>
+<td>all members</td>
+<td>own project members</td>
+<td>403</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tab rendering logic</strong> in <code>ReportsPage.tsx</code>:</p>
+<pre><code class="language-tsx">const { roles } = usePermissions();
+const isManager = roles.includes(&quot;VT Manager&quot;) || roles.includes(&quot;System Manager&quot;);
+const isLeader  = roles.includes(&quot;VT Leader&quot;);
+
+const tabs = [
+  isManager &amp;&amp; { key: &quot;okr&quot;,     label: &quot;OKR&quot; },
+  (isManager || isLeader) &amp;&amp; { key: &quot;sprints&quot;, label: &quot;Sprints&quot; },
+  (isManager || isLeader) &amp;&amp; { key: &quot;team&quot;,    label: &quot;Team&quot; },
+].filter(Boolean);
+</code></pre>
+<p>If <code>tabs</code> is empty (Member slips through <code>RequirePermission</code> due to misconfiguration), render <code>&lt;PermissionDenied&gt;</code>.</p>
+<hr />
+<h2 id="7-caching-strategy">7. Caching Strategy</h2>
+<p>All heavy read endpoints in <code>portal_reports.py</code> use <code>frappe.cache().set_value</code> with TTL 300s (5 min).</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Cache Key Pattern</th>
+<th>TTL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>get_portal_health_score</code></td>
+<td><code>pr:health:manager</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_okr_rollup</code></td>
+<td><code>pr:okr:{period}:manager</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_kpi_list</code></td>
+<td><code>pr:kpis:manager</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_kpi_trend</code></td>
+<td><code>pr:kpi_trend:{kpi}:{periods}:manager</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_velocity_comparison</code></td>
+<td><code>pr:vel:{role}:{n}:{user}</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_forecasts</code></td>
+<td><code>pr:forecasts:{role}:{user}</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_risks</code></td>
+<td><em>(no cache — risks are near-realtime)</em></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>get_portal_leaderboard</code></td>
+<td><code>pr:leaderboard:{period}:{limit}:{role}:{user}</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_workload</code></td>
+<td><code>pr:workload:{role}:{user}</code></td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>get_portal_overdue</code></td>
+<td><code>pr:overdue:{role}:{user}</code></td>
+<td>300s</td>
+</tr>
+</tbody>
+</table>
+<p>Key design rules:
+- Manager endpoints use fixed suffix <code>manager</code> — no user suffix needed since Managers see all data identically.
+- Leader endpoints include <code>{user}</code> — each Leader may see a different project subset.
+- Role bucket (<code>manager</code> vs <code>leader</code>) is always in the key to prevent Manager-scoped cache being served to a Leader who later gains Manager role mid-session.</p>
+<p><strong>Cache invalidation:</strong>
+- Health score and OKR roll-up: invalidated by <code>on_update</code> hook on <code>VT KPI Snapshot</code> and <code>VT OKR Period</code> docs — add <code>portal_reports.invalidate_okr_cache</code> as a hook in <code>hooks.py</code>.
+- Velocity / forecast: piggyback on existing <code>analytics.invalidate_project_cache</code> hook — extend it to also call <code>frappe.cache().delete_value(f"pr:vel:...")</code> and <code>pr:forecasts:...</code> (role-bucket keys only, not user-keyed because iterating all users is expensive; instead, set TTL 300s and accept up to 5-min staleness).
+- Leaderboard / workload / overdue: no hook invalidation — rely on TTL only. Acceptable because team metrics are not time-critical at 5-min granularity.</p>
+<p><strong>Frontend staleTime:</strong> React Query <code>staleTime: 5 * 60 * 1000</code> (5 min) mirrors backend TTL. Re-fetches triggered only on window focus after stale period, not on every navigation.</p>
+<hr />
+<h2 id="8-testing">8. Testing</h2>
+<h3 id="81-backend-vernon_tasksapitest_portal_reportspy">8.1 Backend — <code>vernon_tasks/api/test_portal_reports.py</code></h3>
+<p>Test file at <code>vernon_tasks/api/test_portal_reports.py</code>. Follows pattern of <code>test_sprints.py</code>.</p>
+<p><strong>Feature flag gate:</strong>
+- <code>test_flag_off_returns_403</code>: with <code>portal_reports_enabled=0</code>, every endpoint raises <code>frappe.PermissionError</code>.</p>
+<p><strong>Permission matrix per endpoint:</strong>
+- <code>test_health_score_manager_ok</code>: Manager role → 200.
+- <code>test_health_score_leader_403</code>: Leader role → <code>frappe.PermissionError</code>.
+- <code>test_health_score_member_403</code>: Member role → <code>frappe.PermissionError</code>.
+- Mirror for <code>get_portal_okr_rollup</code>, <code>get_portal_kpi_list</code>, <code>get_portal_kpi_trend</code> (OKR endpoints — Manager only).
+- <code>test_velocity_leader_scoped</code>: Leader sees only own-project rows; other projects excluded.
+- <code>test_velocity_manager_all</code>: Manager sees all projects.
+- Mirror for <code>get_portal_forecasts</code>, <code>get_portal_risks</code>, <code>get_portal_leaderboard</code>, <code>get_portal_workload</code>, <code>get_portal_overdue</code>.</p>
+<p><strong>Aggregation correctness:</strong>
+- <code>test_velocity_comparison_shape</code>: result contains <code>projects</code> list, each with <code>sprints</code> array and <code>avg_velocity</code>.
+- <code>test_forecasts_status_classification</code>: project with <code>completion_estimate &lt; today+30</code> → <code>on_track</code>; <code>completion_estimate &lt; today</code> → <code>delayed</code>.
+- <code>test_risks_empty_project</code>: project with no tasks → all flags <code>"none"</code>, <code>max_level "none"</code>.
+- <code>test_workload_excludes_done_tasks</code>: tasks with <code>kanban_status="Done"</code> not counted in <code>open_tasks</code>.
+- <code>test_overdue_deadline_filter</code>: task with <code>deadline = today - 1d</code> in non-done status → appears in overdue.
+- <code>test_overdue_done_task_excluded</code>: task with <code>deadline = today - 1d</code> and <code>kanban_status="Done"</code> → not in overdue.</p>
+<p><strong>Caching:</strong>
+- <code>test_cache_hit_returns_same_object</code>: call endpoint twice; mock <code>frappe.cache().get_value</code> to return on second call; assert only one service call.
+- <code>test_cache_key_differs_by_role</code>: Manager and Leader cache keys differ; no cross-role pollution.</p>
+<h3 id="82-frontend-vitest-rtl">8.2 Frontend — Vitest + RTL</h3>
+<p>Per <code>pwa/src/portal/reports/</code>:</p>
+<p><strong>Component tests</strong> (<code>.test.tsx</code> per component):
+- <code>ReportsPage.test.tsx</code>: renders correct tabs for Manager vs Leader; OKR tab absent for Leader; no tabs for Member → <code>PermissionDenied</code> shown.
+- <code>OkrTab.test.tsx</code>: renders <code>HealthScoreCard</code>, <code>OkrRollupTable</code>, <code>KpiTrendPanel</code>; loading skeleton visible while queries pending; <code>EmptyState</code> when <code>rows.length === 0</code>.
+- <code>HealthScoreCard.test.tsx</code>: score ≥80 → green class; 60–79 → amber; &lt;60 → red.
+- <code>SprintsTab.test.tsx</code>: renders velocity chart, forecast grid, risk matrix; <code>n</code> selector change triggers refetch with new <code>n</code>.
+- <code>ForecastCard.test.tsx</code>: <code>on_track</code> → green badge; <code>delayed</code> → red badge.
+- <code>RiskMatrix.test.tsx</code>: <code>EmptyState</code> when all risks are <code>"none"</code>; <code>high</code> flag cell has <code>aria-label</code> indicating severity.
+- <code>TeamTab.test.tsx</code>: renders leaderboard, workload chart, overdue table; period selector change refetches leaderboard.
+- <code>LeaderboardTable.test.tsx</code>: rank 1 row has gold medal class; sortable column click changes sort order.
+- <code>OverdueTable.test.tsx</code>: toggle by Member / by Project switches displayed columns; row with <code>oldest_overdue_days &gt; 7</code> has red text class.</p>
+<p><strong>Chart tests</strong> (snapshot):
+- <code>KpiTrendChart.test.tsx</code>: snapshot with fixed 12-point series. Recharts wrapped in lazy import — test with <code>act(() =&gt; import('recharts'))</code> pattern from existing PWA test harness.
+- <code>VelocityComparisonChart.test.tsx</code>: snapshot with 2 projects × 6 sprints series.
+- <code>WorkloadChart.test.tsx</code>: snapshot with 5-member fixture.
+- <code>CompletionRingChart.test.tsx</code>: centre label shows computed percentage.</p>
+<p><strong>Hook tests:</strong>
+- <code>useOkrReport.test.ts</code>: parallel queries both resolve; health + rollup exposed.
+- <code>useSprintsReport.test.ts</code>: <code>n</code> change invalidates velocity query key.
+- <code>useTeamReport.test.ts</code>: period change invalidates leaderboard query key.</p>
+<p><strong>Integration test</strong> — <code>__integration.test.tsx</code> over <code>ReportsRoutes</code>:
+- MSW handlers mock all 9 endpoints.
+- Scenario A (Manager): all three tabs render, data appears, period selector works.
+- Scenario B (Leader): OKR tab absent; Sprints + Team tabs render.
+- Scenario C (feature flag off): <code>ReportsFeatureGate</code> renders <code>ComingSoon</code>.</p>
+<hr />
+<h2 id="9-telemetry">9. Telemetry</h2>
+<p><strong>Backend <code>ALLOWED_EVENTS</code> additions</strong> (<code>vernon_tasks/task/api/telemetry.py</code>):</p>
+<pre><code class="language-python"># Add to ALLOWED_EVENTS set:
+&quot;reports.page_view&quot;,
+&quot;reports.tab_view&quot;,
+&quot;reports.period_change&quot;,
+&quot;reports.kpi_select&quot;,
+&quot;reports.velocity_n_change&quot;,
+&quot;reports.leaderboard_period_change&quot;,
+&quot;reports.overdue_view_toggle&quot;,
+&quot;reports.permission_denied&quot;,
+</code></pre>
+<p><strong>Frontend <code>TelemetryEvent</code> union additions</strong> (<code>pwa/src/telemetry.ts</code>):</p>
+<pre><code class="language-ts">| &quot;reports.page_view&quot;
+| &quot;reports.tab_view&quot;
+| &quot;reports.period_change&quot;
+| &quot;reports.kpi_select&quot;
+| &quot;reports.velocity_n_change&quot;
+| &quot;reports.leaderboard_period_change&quot;
+| &quot;reports.overdue_view_toggle&quot;
+| &quot;reports.permission_denied&quot;
+</code></pre>
+<p><strong>Track functions</strong> to add at the bottom of <code>telemetry.ts</code>:</p>
+<pre><code class="language-ts">export function trackReportsPageView() {
+  logEvent(&quot;reports.page_view&quot;, {});
+}
+export function trackReportsTabView(tab: &quot;okr&quot; | &quot;sprints&quot; | &quot;team&quot;) {
+  logEvent(&quot;reports.tab_view&quot;, { tab });
+}
+export function trackReportsPeriodChange(tab: string, period: string) {
+  logEvent(&quot;reports.period_change&quot;, { tab, period });
+}
+export function trackReportsKpiSelect(kpi: string) {
+  logEvent(&quot;reports.kpi_select&quot;, { kpi });
+}
+export function trackReportsVelocityNChange(n: number) {
+  logEvent(&quot;reports.velocity_n_change&quot;, { n });
+}
+export function trackReportsLeaderboardPeriodChange(period: string) {
+  logEvent(&quot;reports.leaderboard_period_change&quot;, { period });
+}
+export function trackReportsOverdueViewToggle(view: &quot;member&quot; | &quot;project&quot;) {
+  logEvent(&quot;reports.overdue_view_toggle&quot;, { view });
+}
+export function trackReportsPermissionDenied(tab: string) {
+  logEvent(&quot;reports.permission_denied&quot;, { tab });
+}
+</code></pre>
+<p>Telemetry calls are placed in:
+- <code>ReportsPage.tsx</code> <code>useEffect([activeTab])</code> → <code>trackReportsTabView</code>.
+- <code>ReportsPage.tsx</code> mount → <code>trackReportsPageView</code>.
+- <code>KpiTrendPanel.tsx</code> on KPI select → <code>trackReportsKpiSelect</code>.
+- <code>SprintsTab.tsx</code> on <code>n</code> change → <code>trackReportsVelocityNChange</code>.
+- <code>TeamTab.tsx</code> on period change → <code>trackReportsLeaderboardPeriodChange</code>.
+- <code>OverdueTable.tsx</code> on view toggle → <code>trackReportsOverdueViewToggle</code>.
+- <code>ReportsPage.tsx</code> on permission denied path → <code>trackReportsPermissionDenied</code>.</p>
+<hr />
+<h2 id="10-rollout">10. Rollout</h2>
+<ol>
+<li><strong>Backend deploy (flag off):</strong> Merge <code>portal_reports.py</code> to main. <code>portal_reports_enabled=0</code>. Verify all 9 endpoints return 403 with flag off.</li>
+<li><strong>Frontend deploy (stub replaced):</strong> <code>routes.tsx</code> replaces <code>&lt;ComingSoon domain="Reports" /&gt;</code> with <code>&lt;ReportsRoutes /&gt;</code>. With flag off, <code>ReportsFeatureGate</code> renders <code>ComingSoon</code> — functionally identical to current state.</li>
+<li><strong>Telemetry additions:</strong> Merge backend <code>ALLOWED_EVENTS</code> + frontend <code>TelemetryEvent</code> together with backend deploy.</li>
+<li><strong>Pilot org:</strong> Flip <code>portal_reports_enabled=1</code> on one pilot site (Manager + 2 Leaders). Smoke test: all three tabs render; OKR tab blocked for Leader; cross-project velocity shows ≥2 projects; risk matrix shows at least one flag.</li>
+<li><strong>Performance check:</strong> Measure endpoint p95 latency under pilot load. If any endpoint &gt;1s, lower fan-out cap or reduce default <code>n</code> from 6 to 3.</li>
+<li><strong>Enable globally:</strong> Flip flag on remaining sites. Monitor <code>reports.tab_view</code> telemetry for 7 days.</li>
+<li><strong>Post-ship cleanup (P5.1):</strong> Extract <code>get_portal_workload</code> and <code>get_portal_overdue</code> DB queries into <code>workload_service.py</code> and <code>overdue_service.py</code> to align with existing service layer pattern.</li>
+</ol>
+<hr />
+<h2 id="11-open-questions-risks">11. Open questions / risks</h2>
+<ol>
+<li>
+<p><strong>Leader project scoping — project membership definition.</strong> Currently scoped to <code>VT Project.assigned_to == frappe.session.user</code>. If Leaders can be co-leaders of projects or lead sub-teams, this field is insufficient. Clarify before implementation: does a Leader relationship live on <code>VT Project</code> or on a separate assignment DocType?</p>
+</li>
+<li>
+<p><strong>Velocity comparison chart readability.</strong> With 20+ projects each having 12 sprints, a grouped <code>BarChart</code> becomes unreadable. Mitigation: cap at top-N projects by avg velocity (configurable, default 10). UI shows "Showing top 10 by velocity" label. Deferred configurability to P5.2.</p>
+</li>
+<li>
+<p><strong>Recharts bundle size.</strong> Recharts is <code>~320KB</code> minified. Lazy loading per chart component mitigates initial load. Verify portal chunk budget does not bloat beyond 350KB gzip with recharts added. If it does, consider replacing <code>CompletionRingChart</code> (single metric) with an inline SVG arc (same technique as <code>BurndownChart.tsx</code>) to save the RadialBarChart import.</p>
+</li>
+<li>
+<p><strong><code>_get_velocity_trend</code> per-project fan-out latency.</strong> If a Manager oversees 50 projects, <code>get_portal_velocity_comparison</code> makes 50 service calls. Each call hits DB. Even at 20ms/call, that is 1 second before caching. For the first request after cache miss, this is potentially slow. Mitigation options: (a) lower fan-out cap to 20 projects; (b) rewrite velocity service to accept a list of projects in a single SQL pass. Track via <code>reports.tab_view</code> latency in telemetry.</p>
+</li>
+<li>
+<p><strong><code>get_portal_risks</code> no cache.</strong> Risk evaluation calls <code>_evaluate_risks(project)</code> per project with no caching. If risk evaluation is expensive (joins on tasks + sprints), this will be slow. Evaluate <code>_evaluate_risks</code> complexity before shipping; add 60s TTL if needed.</p>
+</li>
+<li>
+<p><strong>Health score formula alignment.</strong> The formula <code>score = okr_pct × 0.40 + ontime_pct × 0.30 + velocity_health × 0.30</code> is defined in <code>health_score_service.py</code>. <code>portal_reports.py</code> does not recompute it. If the formula changes, the breakdown labels in <code>HealthScoreCard</code> (OKR 40% / Ontime 30% / Velocity 30%) must be updated too. Consider serving the weights from the API response (they are included in <code>get_portal_health_score</code> → <code>components</code> field) and rendering them dynamically in the card.</p>
+</li>
+</ol>
+<hr />
+<h2 id="12-sub-prd-chain">12. Sub-PRD chain</h2>
+<ul>
+<li>Parent: <code>docs/superpowers/specs/2026-05-17-desktop-portal-foundation-design.md</code></li>
+<li>Predecessors: P2 (Portal OKR, Implemented), P3 (Portal Projects, Implemented), P3.2 (Portal Sprints, Implemented).</li>
+<li>Successors:</li>
+<li><strong>P5.1</strong> — Export (PDF/CSV) + drill-down from Team tab to individual task lists.</li>
+<li><strong>P5.2</strong> — Custom date range picker, configurable top-N filter, workload_service.py extraction.</li>
+<li><strong>P5.3</strong> — Scheduled email digest: daily/weekly report snapshot delivered via Frappe email queue.</li>
+<li>Parallel: P4 (Workforce sub-PRD) — no data dependency on P5; can ship in any order.</li>
+</ul>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-18-portal-reports-p5-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>
