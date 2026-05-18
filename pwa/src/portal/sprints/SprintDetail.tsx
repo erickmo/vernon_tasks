@@ -5,13 +5,21 @@ import { getSprintWithRelations } from "./api/sprints";
 import { TaskBoard } from "./TaskBoard";
 import { BurndownChart } from "./BurndownChart";
 import { useBurndown } from "./hooks/useBurndown";
+import { useAuth } from "../../auth/useAuth";
+import { usePermissions } from "../../auth/usePermissions";
 import * as telemetry from "../../telemetry";
+
+const CAN_EDIT_ALL_ROLES = ["VT Manager", "VT Leader"];
 
 type Tab = "board" | "burndown";
 
 export function SprintDetail() {
   const { sprintId } = useParams<{ sprintId: string }>();
   const [tab, setTab] = useState<Tab>("board");
+  const { user } = useAuth();
+  const { roles } = usePermissions();
+  const currentUser = user?.name ?? "";
+  const canEditAll = CAN_EDIT_ALL_ROLES.some((r) => roles.includes(r));
   const detailQuery = useQuery({
     queryKey: ["sprintDetail", sprintId],
     queryFn: () => getSprintWithRelations(sprintId!),
@@ -39,7 +47,7 @@ export function SprintDetail() {
       </div>
       {tab === "board" && (
         <div data-testid="task-board-root">
-          <TaskBoard detail={d} currentUser={"Administrator"} canEditAll={true} />
+          <TaskBoard detail={d} currentUser={currentUser} canEditAll={canEditAll} />
         </div>
       )}
       {tab === "burndown" && burndownQuery.data && <BurndownChart data={burndownQuery.data} />}

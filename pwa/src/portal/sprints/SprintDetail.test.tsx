@@ -4,6 +4,13 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SprintDetail } from "./SprintDetail";
 
+vi.mock("../../auth/useAuth", () => ({
+  useAuth: () => ({ isLoading: false, isAuthenticated: true, user: { name: "test@example.com" }, roles: [] }),
+}));
+vi.mock("../../auth/usePermissions", () => ({
+  usePermissions: () => ({ isLoading: false, permissions: [], roles: [], hasPermission: () => false, hasAnyPermission: () => false, hasRole: () => false }),
+}));
+
 vi.mock("./api/sprints", () => ({
   getSprintWithRelations: vi.fn(async () => ({
     sprint: { name: "SP-1", sprint_title: "S One", project: "PR-1",
