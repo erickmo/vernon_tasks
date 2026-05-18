@@ -301,7 +301,7 @@ Reuse Frappe `_modified` token on PUT. 409 → toast "Updated by another user, r
 
 ## 12. Out of Scope (Future PRDs)
 
-- P3.2 Sprint kanban + sprint CRUD
+- P3.2 Sprint kanban + sprint CRUD — **Implemented (2026-05-18)** · Branch `feat/portal-sprints-p3.2` · [plan](../plans/2026-05-18-portal-sprints-p3.2.md)
 - P3.3 VT Task management (list/board/dependencies/scoring)
 - P3.4 Milestones + Documentation child editors
 - P3.5 Team Member capacity management

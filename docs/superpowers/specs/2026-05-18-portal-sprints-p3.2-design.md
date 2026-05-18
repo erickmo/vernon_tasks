@@ -26,9 +26,9 @@ Desktop portal Sprint domain — sprint board (project-level), sprint detail wit
 
 ## 2. Architecture
 
-### 2.1 Backend module — `vernon_tasks/portal/sprints.py`
+### 2.1 Backend module — `vernon_tasks/api/sprints.py`
 
-Sibling to `portal/projects.py`. Whitelisted RPC endpoints:
+Sibling to `vernon_tasks/api/projects.py` (matches existing portal-backend convention). Whitelisted RPC endpoints (exposed as `vernon_tasks.api.sprints.*`):
 
 - `list_sprints(project, filters)` — filter by status (IN), date-range overlap on start_date/end_date; aggregates `{task_count, open_hours, completed_hours}` per sprint; ORDER BY start_date DESC; LIMIT 200.
 - `get_sprint_with_relations(name)` — returns `{sprint, project_summary, tasks}`. `tasks` is the full task list for the board: `{name, title, assigned_to, kanban_status, pdca_phase, kanban_rank, estimated_hours, weight, priority}`.
@@ -37,6 +37,7 @@ Sibling to `portal/projects.py`. Whitelisted RPC endpoints:
 - `bulk_update_sprints(names, payload)` — `status` batch only; transactional; returns `{updated, skipped}` with reasons.
 - `move_task(task, kanban_status?, pdca_phase?, kanban_rank?, sprint?)` — single atomic write. Server-side perm: Manager/Leader any task; Member only when `task.assigned_to == frappe.session.user`. Returns updated task. Invalidates burndown cache for the affected sprint.
 - `get_sprint_burndown(sprint)` — see §5.
+- `rebalance_column(sprint, axis, column_value)` — recompute ranks for the given column; sets `kanban_rank = (index+1) * 1000` ordered by current rank ASC; transactional.
 
 Reuse `vernon_tasks/okr/pdca.py` for PDCA transitions; do not copy.
 
@@ -142,7 +143,7 @@ Client hides/disables disallowed affordances; server is authoritative — UI hin
 ### 5.2 API
 
 ```
-GET portal.sprints.get_sprint_burndown?sprint=SP-2026-00001
+GET vernon_tasks.api.sprints.get_sprint_burndown?sprint=SP-2026-00001
 → {
     "sprint": "SP-2026-00001",
     "start_date": "2026-05-18",
