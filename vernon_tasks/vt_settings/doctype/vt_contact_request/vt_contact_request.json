@@ -1,0 +1,99 @@
+{
+  "actions": [],
+  "autoname": "VT-CONTACT-.YYYY.-.#####",
+  "creation": "2026-05-19 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "full_name",
+    "email",
+    "column_break_1",
+    "company",
+    "team_size",
+    "message_section",
+    "message",
+    "status_section",
+    "status"
+  ],
+  "fields": [
+    {
+      "fieldname": "full_name",
+      "fieldtype": "Data",
+      "label": "Nama Lengkap",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "email",
+      "fieldtype": "Data",
+      "label": "Email",
+      "options": "Email",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Data",
+      "label": "Nama Perusahaan"
+    },
+    {
+      "fieldname": "team_size",
+      "fieldtype": "Select",
+      "label": "Ukuran Tim",
+      "options": "\n1-10\n11-50\n51-200\n200+"
+    },
+    {
+      "fieldname": "message_section",
+      "fieldtype": "Section Break",
+      "label": "Pesan"
+    },
+    {
+      "fieldname": "message",
+      "fieldtype": "Text",
+      "label": "Pesan",
+      "reqd": 1
+    },
+    {
+      "fieldname": "status_section",
+      "fieldtype": "Section Break",
+      "label": "Status",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "New\nContacted\nClosed",
+      "default": "New",
+      "in_list_view": 1
+    }
+  ],
+  "modified": "2026-05-19 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Vt Settings",
+  "name": "VT Contact Request",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "role": "VT Manager",
+      "write": 1
+    },
+    {
+      "read": 1,
+      "role": "VT Leader"
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC",
+  "track_changes": 0
+}
