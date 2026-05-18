@@ -41,6 +41,12 @@ ALLOWED_EVENTS = {
     "push_pref_view",
     "push_pref_changed",
     "push_action_complete",
+    "tasks.detail_view",
+    "tasks.task_updated",
+    "tasks.task_created",
+    "tasks.comment_added",
+    "tasks.comment_deleted",
+    "tasks.panel_closed",
 }
 
 RATE_LIMIT_PER_MINUTE = 60

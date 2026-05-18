@@ -44,4 +44,28 @@ describe("TaskBoard", () => {
     expect(screen.getByTestId("tcol-Backlog")).toHaveTextContent("A");
     expect(screen.getByTestId("tcol-In Progress")).toHaveTextContent("B");
   });
+
+  it("renders + button for Manager regardless of sprint status", () => {
+    const planningDetail = {
+      sprint: { name: "SP-1", project: "PR-1", status: "Planning", sprint_title: "S1", start_date: null, end_date: null, goal: null },
+      project_summary: null,
+      tasks: [],
+    };
+    wrap(
+      <TaskBoard detail={planningDetail as SprintDetail} currentUser="manager@test.local" canEditAll={true} userRole="Manager" />,
+    );
+    expect(screen.getByRole("button", { name: /\+/i })).toBeInTheDocument();
+  });
+
+  it("does not render + button for Member in Planning sprint", () => {
+    const planningDetail = {
+      sprint: { name: "SP-1", project: "PR-1", status: "Planning", sprint_title: "S1", start_date: null, end_date: null, goal: null },
+      project_summary: null,
+      tasks: [],
+    };
+    wrap(
+      <TaskBoard detail={planningDetail as SprintDetail} currentUser="member@test.local" canEditAll={false} userRole="Member" />,
+    );
+    expect(screen.queryByRole("button", { name: /\+/i })).not.toBeInTheDocument();
+  });
 });
