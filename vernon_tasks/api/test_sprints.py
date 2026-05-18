@@ -186,3 +186,29 @@ class TestMoveTask(unittest.TestCase, _SprintFixturesMixin):
         move_task(self.task.name, kanban_status="Done")
         completion = frappe.db.get_value("VT Task", self.task.name, "completion_date")
         self.assertIsNotNone(completion)
+
+
+class TestRebalanceColumn(unittest.TestCase, _SprintFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.project = cls._ensure_project()
+        cls.sprint = cls._ensure_sprint(cls.project, "S-rebal", date(2026, 9, 15), date(2026, 9, 28), "Active")
+        cls.t1 = frappe.get_doc({
+            "doctype": "VT Task", "title": "R1", "project": cls.project, "sprint": cls.sprint,
+            "kanban_status": "In Progress", "kanban_rank": 100.0,
+        }).insert(ignore_permissions=True).name
+        cls.t2 = frappe.get_doc({
+            "doctype": "VT Task", "title": "R2", "project": cls.project, "sprint": cls.sprint,
+            "kanban_status": "In Progress", "kanban_rank": 100.00005,
+        }).insert(ignore_permissions=True).name
+
+    def test_rebalance_sets_clean_ranks(self):
+        from vernon_tasks.api.sprints import rebalance_column
+        rebalance_column(self.sprint, "kanban_status", "In Progress")
+        ranks = frappe.db.sql(
+            "SELECT kanban_rank FROM `tabVT Task` WHERE sprint=%s AND kanban_status='In Progress' ORDER BY kanban_rank",
+            (self.sprint,),
+            as_dict=True,
+        )
+        values = [r["kanban_rank"] for r in ranks]
+        self.assertEqual(values, [1000.0, 2000.0])

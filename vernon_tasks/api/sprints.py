@@ -224,3 +224,22 @@ def move_task(task, kanban_status=None, pdca_phase=None, kanban_rank=None, sprin
 def _invalidate_burndown(sprint):
     if sprint:
         frappe.cache().delete_value(f"burndown:{sprint}")
+
+
+RANK_STEP = 1000.0
+
+
+@frappe.whitelist()
+def rebalance_column(sprint, axis, column_value):
+    if axis not in {"kanban_status", "pdca_phase"}:
+        frappe.throw(f"Invalid axis: {axis}")
+    rows = frappe.db.sql(
+        f"SELECT name FROM `tabVT Task` WHERE sprint=%(sprint)s AND {axis}=%(col)s ORDER BY kanban_rank ASC, creation ASC",
+        {"sprint": sprint, "col": column_value},
+        as_dict=True,
+    )
+    for idx, r in enumerate(rows):
+        frappe.db.set_value("VT Task", r["name"], "kanban_rank", (idx + 1) * RANK_STEP, update_modified=False)
+    frappe.db.commit()
+    _invalidate_burndown(sprint)
+    return {"rebalanced": len(rows)}
