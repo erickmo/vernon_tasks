@@ -36,3 +36,36 @@ class TestVtContactRequest(unittest.TestCase):
         doc.insert(ignore_permissions=True)
         saved = frappe.get_doc("VT Contact Request", doc.name)
         self.assertEqual(saved.status, "New")
+
+
+class TestHooksFixtures(unittest.TestCase):
+    def test_fixtures_include_website_doctypes(self):
+        import importlib
+        import sys
+        if "vernon_tasks.hooks" in sys.modules:
+            del sys.modules["vernon_tasks.hooks"]
+        hooks = importlib.import_module("vernon_tasks.hooks")
+        fixture_dts = []
+        for f in hooks.fixtures:
+            if isinstance(f, str):
+                fixture_dts.append(f)
+            elif isinstance(f, dict):
+                fixture_dts.append(f.get("dt", ""))
+        for expected in (
+            "Website Theme",
+            "Website Slideshow",
+            "Web Page",
+            "Web Form",
+            "Website Route Meta",
+            "Portal Settings",
+        ):
+            self.assertIn(expected, fixture_dts, f"fixtures missing: {expected}")
+
+    def test_home_page_not_m(self):
+        import importlib
+        import sys
+        if "vernon_tasks.hooks" in sys.modules:
+            del sys.modules["vernon_tasks.hooks"]
+        hooks = importlib.import_module("vernon_tasks.hooks")
+        home = getattr(hooks, "home_page", None)
+        self.assertNotEqual(home, "m", "home_page must not be 'm'")
