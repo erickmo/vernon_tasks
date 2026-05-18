@@ -270,3 +270,113 @@ class TestCreateTask(unittest.TestCase, _TaskFixturesMixin):
         for key in ("name", "title", "assigned_to", "kanban_status", "pdca_phase",
                     "kanban_rank", "estimated_hours", "priority", "deadline"):
             self.assertIn(key, result["task"], f"missing key: {key}")
+
+
+class TestTaskComments(unittest.TestCase, _TaskFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = "manager_p33@test.local"
+        cls.member_owner = "member_own_p33@test.local"
+        cls.member_other = "member_other_p33@test.local"
+        cls._ensure_user(cls.manager, "VT Manager")
+        cls._ensure_user(cls.member_owner, "VT Member")
+        cls._ensure_user(cls.member_other, "VT Member")
+        cls.project = cls._ensure_project()
+        cls.sprint = cls._ensure_sprint(cls.project, "SP-comments-p33")
+        cls.task = cls._ensure_task(
+            "Task comments test", cls.project, cls.sprint, cls.member_owner
+        )
+
+    def test_empty_task_returns_empty_list(self):
+        from vernon_tasks.api.portal_tasks import get_task_comments
+        task2 = frappe.get_doc({
+            "doctype": "VT Task",
+            "title": "Empty comments task",
+            "project": self.project,
+            "sprint": self.sprint,
+            "kanban_status": "Backlog",
+            "pdca_phase": "BACKLOG",
+            "assigned_to": self.member_owner,
+        }).insert(ignore_permissions=True).name
+        frappe.set_user(self.manager)
+        result = get_task_comments(task2)
+        self.assertEqual(result, [])
+
+    def test_add_comment_inserts_and_returns_entry(self):
+        from vernon_tasks.api.portal_tasks import add_comment
+        frappe.set_user(self.member_owner)
+        result = add_comment(self.task, "<p>Hello from member</p>")
+        self.assertEqual(result["type"], "comment")
+        self.assertIn("name", result)
+        self.assertEqual(result["owner"], self.member_owner)
+        self.assertIn("creation", result)
+        self.assertEqual(result["comment_type"], "Comment")
+
+    def test_add_comment_empty_content_raises(self):
+        from vernon_tasks.api.portal_tasks import add_comment
+        frappe.set_user(self.member_owner)
+        with self.assertRaises(frappe.ValidationError):
+            add_comment(self.task, "   ")
+
+    def test_get_task_comments_returns_merged_sorted_list(self):
+        from vernon_tasks.api.portal_tasks import add_comment, get_task_comments
+        frappe.set_user(self.member_owner)
+        add_comment(self.task, "<p>First</p>")
+        frappe.set_user(self.manager)
+        add_comment(self.task, "<p>Second</p>")
+        result = get_task_comments(self.task)
+        for entry in result:
+            self.assertIn("type", entry)
+            self.assertIn(entry["type"], ("comment", "version"))
+        comment_contents = [e["content"] for e in result if e["type"] == "comment"]
+        self.assertIn("<p>First</p>", comment_contents)
+        self.assertIn("<p>Second</p>", comment_contents)
+        creations = [e["creation"] for e in result]
+        self.assertEqual(creations, sorted(creations))
+
+    def test_version_entries_only_include_tracked_fields(self):
+        from vernon_tasks.api.portal_tasks import get_task_comments
+        import json as _json
+        v_doc = frappe.get_doc({
+            "doctype": "Version",
+            "ref_doctype": "VT Task",
+            "docname": self.task,
+            "data": _json.dumps({
+                "changed": [
+                    ["kanban_status", "Backlog", "In Progress"],
+                    ["some_untracked_field", "old", "new"],
+                ]
+            }),
+        }).insert(ignore_permissions=True)
+        frappe.set_user(self.manager)
+        result = get_task_comments(self.task)
+        version_entries = [e for e in result if e["type"] == "version"]
+        our_version = next((v for v in version_entries if v["name"] == v_doc.name), None)
+        self.assertIsNotNone(our_version)
+        fields_in_changes = [c[0] for c in our_version["changes"]]
+        self.assertIn("kanban_status", fields_in_changes)
+        self.assertNotIn("some_untracked_field", fields_in_changes)
+
+    def test_owner_can_delete_own_comment(self):
+        from vernon_tasks.api.portal_tasks import add_comment, delete_comment
+        frappe.set_user(self.member_owner)
+        new_comment = add_comment(self.task, "<p>To delete</p>")
+        result = delete_comment(new_comment["name"])
+        self.assertTrue(result["ok"])
+        self.assertFalse(frappe.db.exists("Comment", new_comment["name"]))
+
+    def test_manager_can_delete_any_comment(self):
+        from vernon_tasks.api.portal_tasks import add_comment, delete_comment
+        frappe.set_user(self.member_owner)
+        new_comment = add_comment(self.task, "<p>Manager will delete this</p>")
+        frappe.set_user(self.manager)
+        result = delete_comment(new_comment["name"])
+        self.assertTrue(result["ok"])
+
+    def test_member_cannot_delete_others_comment(self):
+        from vernon_tasks.api.portal_tasks import add_comment, delete_comment
+        frappe.set_user(self.manager)
+        new_comment = add_comment(self.task, "<p>Manager comment</p>")
+        frappe.set_user(self.member_other)
+        with self.assertRaises(frappe.PermissionError):
+            delete_comment(new_comment["name"])

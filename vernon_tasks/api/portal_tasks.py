@@ -32,6 +32,12 @@ ROLE_MEMBER = "VT Member"
 DOCTYPE_TASK = "VT Task"
 DOCTYPE_SPRINT = "VT Sprint"
 DOCTYPE_USER = "User"
+DOCTYPE_COMMENT = "Comment"
+DOCTYPE_VERSION = "Version"
+
+TRACKED_VERSION_FIELDS = {
+    "kanban_status", "pdca_phase", "priority", "assigned_to", "deadline", "estimated_hours"
+}
 
 SPRINT_STATUS_ACTIVE = "Active"
 TASK_DEFAULT_PRIORITY = "Medium"
@@ -217,3 +223,85 @@ def create_task(payload):
     }).insert(ignore_permissions=True)
 
     return {"name": doc.name, "task": _build_task_card_response(doc.name)}
+
+
+@frappe.whitelist()
+def get_task_comments(task):
+    _assert_task_readable(task)
+
+    comments = frappe.get_all(
+        DOCTYPE_COMMENT,
+        filters={
+            "reference_doctype": DOCTYPE_TASK,
+            "reference_name": task,
+            "comment_type": ["in", ["Comment", "Info"]],
+        },
+        fields=["name", "owner", "creation", "content", "comment_type"],
+        order_by="creation asc",
+        limit=200,
+    )
+
+    versions = frappe.get_all(
+        DOCTYPE_VERSION,
+        filters={"ref_doctype": DOCTYPE_TASK, "docname": task},
+        fields=["name", "owner", "creation", "data"],
+        order_by="creation asc",
+        limit=200,
+    )
+
+    version_entries = []
+    for v in versions:
+        try:
+            changes = json.loads(v["data"]).get("changed", [])
+        except Exception:
+            continue
+        filtered = [[f, o, n] for f, o, n in changes if f in TRACKED_VERSION_FIELDS]
+        if filtered:
+            version_entries.append({
+                "name": v["name"],
+                "owner": v["owner"],
+                "creation": str(v["creation"]),
+                "type": "version",
+                "changes": filtered,
+            })
+
+    comment_entries = [
+        {**c, "type": "comment", "creation": str(c["creation"])}
+        for c in comments
+    ]
+
+    return sorted(comment_entries + version_entries, key=lambda e: e["creation"])
+
+
+@frappe.whitelist()
+def add_comment(task, content):
+    _assert_task_readable(task)
+    if not content or not str(content).strip():
+        frappe.throw("Comment content is required")
+    doc = frappe.get_doc({
+        "doctype": DOCTYPE_COMMENT,
+        "comment_type": "Comment",
+        "reference_doctype": DOCTYPE_TASK,
+        "reference_name": task,
+        "content": content,
+    }).insert(ignore_permissions=True)
+    return {
+        "name": doc.name,
+        "owner": doc.owner,
+        "creation": str(doc.creation),
+        "content": doc.content,
+        "type": "comment",
+        "comment_type": "Comment",
+    }
+
+
+@frappe.whitelist()
+def delete_comment(comment_name):
+    if not frappe.db.exists(DOCTYPE_COMMENT, comment_name):
+        frappe.throw(f"Comment {comment_name} not found")
+    doc = frappe.get_doc(DOCTYPE_COMMENT, comment_name)
+    role = _get_user_role_for_task(doc.reference_name)
+    if role not in ("Manager", "Leader") and doc.owner != frappe.session.user:
+        raise frappe.PermissionError("Cannot delete another user's comment")
+    frappe.delete_doc(DOCTYPE_COMMENT, comment_name, ignore_permissions=True)
+    return {"ok": True}
