@@ -25,3 +25,26 @@ class TestPortalDashboardSummary(unittest.TestCase):
             result = get_summary()
         self.assertEqual(result["team_blocked"], 0)
         self.assertEqual(result["unassigned_tasks"], 0)
+
+
+class TestTeamPulse(unittest.TestCase):
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def test_get_team_pulse_requires_leader(self):
+        from vernon_tasks.api.portal_dashboard import get_team_pulse
+        with patch("frappe.get_roles", return_value=["VT Member"]):
+            with self.assertRaises(frappe.PermissionError):
+                get_team_pulse(project="test-project")
+
+    def test_get_team_pulse_returns_list(self):
+        from vernon_tasks.api.portal_dashboard import get_team_pulse
+        with patch("frappe.get_roles", return_value=["VT Leader"]):
+            result = get_team_pulse(project=None)
+        self.assertIsInstance(result, list)
+
+    def test_get_unassigned_tasks_requires_leader(self):
+        from vernon_tasks.api.portal_dashboard import get_unassigned_tasks
+        with patch("frappe.get_roles", return_value=["VT Member"]):
+            with self.assertRaises(frappe.PermissionError):
+                get_unassigned_tasks(project=None)

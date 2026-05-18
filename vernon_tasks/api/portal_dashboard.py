@@ -95,3 +95,71 @@ def get_summary() -> dict:
     }
     frappe.cache().set_value(cache_key, result, expires_in_sec=CACHE_TTL_SECONDS)
     return result
+
+
+def _task_member_status(t: dict, today: str) -> str:
+    """Derive member status from a single task row."""
+    if t["kanban_status"] == "Blocked":
+        return "blocked"
+    if t.get("deadline") and t["deadline"] < today and t["kanban_status"] != "Done":
+        return "overdue"
+    return "on_track"
+
+
+@frappe.whitelist()
+def get_team_pulse(project: str | None = None) -> list:
+    """Returns member status for Leader section. Leader+ only."""
+    roles = set(frappe.get_roles(frappe.session.user))
+    if not _is_leader_or_above(roles):
+        raise frappe.PermissionError("Leader role required")
+
+    filters: dict = {"assigned_to": ["!=", ""], "kanban_status": ["!=", "Done"]}
+    if project:
+        filters["project"] = project
+
+    tasks = frappe.db.get_all(
+        DOCTYPE_TASK,
+        filters=filters,
+        fields=["name", "title", "assigned_to", "kanban_status", "pdca_phase", "deadline"],
+        order_by="assigned_to asc",
+        limit=50,
+    )
+
+    today = date.today().isoformat()
+    members: dict[str, dict] = {}
+    for t in tasks:
+        member = t["assigned_to"]
+        if member not in members:
+            members[member] = {
+                "user": member,
+                "task_id": t["name"],
+                "task_title": t["title"],
+                "pdca_phase": t.get("pdca_phase", ""),
+                "kanban_status": t["kanban_status"],
+                "status": _task_member_status(t, today),
+            }
+    return list(members.values())
+
+
+@frappe.whitelist()
+def get_unassigned_tasks(project: str | None = None) -> list:
+    """Tasks without assigned_to in active sprint. Leader+ only."""
+    roles = set(frappe.get_roles(frappe.session.user))
+    if not _is_leader_or_above(roles):
+        raise frappe.PermissionError("Leader role required")
+
+    filters: dict = {
+        "assigned_to": ["in", ["", None]],
+        "kanban_status": ["not in", ["Done"]],
+    }
+    if project:
+        filters["project"] = project
+
+    tasks = frappe.db.get_all(
+        DOCTYPE_TASK,
+        filters=filters,
+        fields=["name", "title", "pdca_phase", "sprint", "project"],
+        order_by="creation desc",
+        limit=20,
+    )
+    return tasks
