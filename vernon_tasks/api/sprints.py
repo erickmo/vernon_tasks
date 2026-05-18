@@ -1,6 +1,7 @@
 import frappe
 import time
 from datetime import date as _date
+from datetime import timedelta as _td
 
 VALID_SPRINT_STATUSES = {"Planning", "Active", "Review", "Closed"}
 
@@ -243,3 +244,65 @@ def rebalance_column(sprint, axis, column_value):
     frappe.db.commit()
     _invalidate_burndown(sprint)
     return {"rebalanced": len(rows)}
+
+
+def _was_done_by(task_name, eod_date):
+    """Check if a task's most-recent kanban_status change to 'Done' happened on or before eod_date."""
+    version = frappe.db.sql(
+        """
+        SELECT creation FROM `tabVersion`
+        WHERE docname=%s AND ref_doctype='VT Task'
+          AND data LIKE %s
+          AND DATE(creation) <= %s
+        ORDER BY creation DESC LIMIT 1
+        """,
+        (task_name, '%"kanban_status"%"Done"%', eod_date),
+        as_dict=True,
+    )
+    if version:
+        return True
+    completion = frappe.db.get_value("VT Task", task_name, "completion_date")
+    return completion is not None and completion <= eod_date
+
+
+@frappe.whitelist()
+def get_sprint_burndown(sprint):
+    cached = frappe.cache().get_value(f"burndown:{sprint}")
+    if cached:
+        return cached
+    if not frappe.db.exists("VT Sprint", sprint):
+        raise frappe.DoesNotExistError(f"VT Sprint {sprint} not found")
+    s = frappe.db.get_value("VT Sprint", sprint, ["start_date", "end_date"], as_dict=True)
+    tasks = frappe.db.sql(
+        "SELECT name, estimated_hours FROM `tabVT Task` WHERE sprint=%s",
+        (sprint,),
+        as_dict=True,
+    )
+    total_hours = float(sum((t["estimated_hours"] or 0) for t in tasks))
+
+    today = _date.today()
+    end = min(today, s["end_date"])
+    days = []
+    d = s["start_date"]
+    while d <= end:
+        days.append(d)
+        d += _td(days=1)
+
+    span_days = max((s["end_date"] - s["start_date"]).days, 1)
+    series = []
+    for i, d in enumerate(days):
+        remaining = sum(
+            (t["estimated_hours"] or 0) for t in tasks if not _was_done_by(t["name"], d)
+        )
+        ideal = total_hours * max(0.0, 1 - i / span_days)
+        series.append({"date": str(d), "remaining": float(remaining), "ideal": round(ideal, 4)})
+
+    payload = {
+        "sprint": sprint,
+        "start_date": str(s["start_date"]),
+        "end_date": str(s["end_date"]),
+        "total_hours": total_hours,
+        "series": series,
+    }
+    frappe.cache().set_value(f"burndown:{sprint}", payload, expires_in_sec=300)
+    return payload

@@ -212,3 +212,32 @@ class TestRebalanceColumn(unittest.TestCase, _SprintFixturesMixin):
         )
         values = [r["kanban_rank"] for r in ranks]
         self.assertEqual(values, [1000.0, 2000.0])
+
+
+class TestBurndown(unittest.TestCase, _SprintFixturesMixin):
+    @classmethod
+    def setUpClass(cls):
+        cls.project = cls._ensure_project()
+        cls.sprint = cls._ensure_sprint(cls.project, "S-burn", date(2026, 10, 1), date(2026, 10, 7), "Active")
+        for i in range(3):
+            frappe.get_doc({
+                "doctype": "VT Task",
+                "title": f"B{i}",
+                "project": cls.project,
+                "sprint": cls.sprint,
+                "kanban_status": "Backlog",
+                "estimated_hours": 4,
+            }).insert(ignore_permissions=True)
+
+    def test_series_length_matches_date_range(self):
+        from vernon_tasks.api.sprints import get_sprint_burndown
+        out = get_sprint_burndown(self.sprint)
+        self.assertGreaterEqual(len(out["series"]), 1)
+        self.assertEqual(out["total_hours"], 12)
+
+    def test_ideal_starts_at_total_and_ends_at_zero(self):
+        from vernon_tasks.api.sprints import get_sprint_burndown
+        out = get_sprint_burndown(self.sprint)
+        self.assertEqual(out["series"][0]["ideal"], 12.0)
+        if str(out["series"][-1]["date"]) == "2026-10-07":
+            self.assertAlmostEqual(out["series"][-1]["ideal"], 0.0, places=5)
