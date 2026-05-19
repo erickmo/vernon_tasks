@@ -111,7 +111,6 @@ fixtures = [
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},
     {"dt": "Web Page", "filters": [["route", "in", ["", "tentang", "kontak"]]]},
     {"dt": "Web Form", "filters": [["name", "=", "Hubungi Kami"]]},
-    {"dt": "Website Route Meta", "filters": [["route", "in", ["/", "/portal", "/tentang", "/kontak"]]]},
-    # Portal configuration (Single DocType)
-    "Portal Settings",
+    # Frappe v15: Website Route Meta name IS the route (no separate route column)
+    {"dt": "Website Route Meta", "filters": [["name", "in", ["/", "/portal", "/tentang", "/kontak"]]]},
 ]
