@@ -249,29 +249,27 @@ def setup_route_meta():
 
 
 def setup_portal_settings():
-    """Configure Portal Settings: login redirect and default role.
+    """Configure Portal branding via Portal Appearance (Frappe v15).
 
-    Idempotent: only writes if values differ from current state.
+    Frappe v15 replaced Portal Settings with Portal Appearance + Portal Menu Item.
+    Sets brand name, accent colors. Login redirect is handled via Website Settings.
     """
-    ps = frappe.get_doc("Portal Settings")
-    changed = False
-    if ps.login_redirect != "/portal":
-        ps.login_redirect = "/portal"
-        changed = True
-    if getattr(ps, "logout_redirect", None) != "/":
-        ps.logout_redirect = "/"
-        changed = True
-    try:
-        if ps.default_role != "VT Member":
-            ps.default_role = "VT Member"
-            changed = True
-    except AttributeError:
-        frappe.log("Portal Settings has no default_role field; skipping.")
-    if changed:
-        ps.save(ignore_permissions=True)
-        print("✓ Configured Portal Settings: login_redirect=/portal, logout_redirect=/")
+    # Configure Portal Appearance (Frappe v15 branding doctype)
+    if frappe.db.exists("DocType", "Portal Appearance"):
+        existing = frappe.db.get_all("Portal Appearance", limit=1)
+        if existing:
+            pa = frappe.get_doc("Portal Appearance", existing[0].name)
+        else:
+            pa = frappe.get_doc({"doctype": "Portal Appearance"})
+        pa.brand_name = "Vernon Tasks"
+        pa.accent_color = "#6d28d9"
+        pa.gradient_from = "#6366f1"
+        pa.gradient_to = "#6d28d9"
+        pa.tagline = "Kelola Kerja Tim Anda"
+        pa.save(ignore_permissions=True)
+        print("✓ Configured Portal Appearance: Vernon Tasks brand + purple accent")
     else:
-        print("✓ Portal Settings already configured correctly, skipping")
+        print("⚠ Portal Appearance DocType not found — skipping portal branding")
 
 
 def _ensure_vt_contact_request_table():
