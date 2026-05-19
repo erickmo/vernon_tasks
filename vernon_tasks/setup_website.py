@@ -254,8 +254,10 @@ def setup_portal_settings():
     Frappe v15 replaced Portal Settings with Portal Appearance + Portal Menu Item.
     Sets brand name, accent colors. Login redirect is handled via Website Settings.
     """
-    # Configure Portal Appearance (Frappe v15 branding doctype)
-    if frappe.db.exists("DocType", "Portal Appearance"):
+    try:
+        if not frappe.db.exists("DocType", "Portal Appearance"):
+            print("⚠ Portal Appearance DocType not found — skipping portal branding")
+            return
         existing = frappe.db.get_all("Portal Appearance", limit=1)
         if existing:
             pa = frappe.get_doc("Portal Appearance", existing[0].name)
@@ -268,8 +270,8 @@ def setup_portal_settings():
         pa.tagline = "Kelola Kerja Tim Anda"
         pa.save(ignore_permissions=True)
         print("✓ Configured Portal Appearance: Vernon Tasks brand + purple accent")
-    else:
-        print("⚠ Portal Appearance DocType not found — skipping portal branding")
+    except Exception as e:
+        print(f"⚠ Portal Appearance setup skipped: {e}")
 
 
 def _ensure_vt_contact_request_table():
