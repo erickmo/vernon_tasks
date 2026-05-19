@@ -21,15 +21,7 @@ def setup_website_theme():
     if _exists("Website Theme", "Vernon Tasks Theme"):
         print("✓ Website Theme 'Vernon Tasks Theme' already exists, skipping")
         return
-    doc = frappe.get_doc({
-        "doctype": "Website Theme",
-        "theme": "Vernon Tasks Theme",
-        "google_font": "Inter",
-        "top_bar_color": "#6d28d9",
-        "top_bar_text_color": "#ffffff",
-        "top_bar_hover_color": "#7c3aed",
-        "primary_action_color": "#6366f1",
-        "custom_css": """:root {
+    CUSTOM_CSS = """:root {
   --vt-purple: #6d28d9;
   --vt-indigo: #6366f1;
   --vt-violet: #8b5cf6;
@@ -49,10 +41,35 @@ def setup_website_theme():
   background: linear-gradient(135deg, var(--vt-purple), var(--vt-violet));
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(109, 40, 217, 0.35);
-}""",
-    })
-    doc.insert(ignore_permissions=True)
-    print("✓ Created Website Theme 'Vernon Tasks Theme'")
+}"""
+    try:
+        doc = frappe.get_doc({
+            "doctype": "Website Theme",
+            "theme": "Vernon Tasks Theme",
+            "google_font": "Inter",
+            "top_bar_color": "#6d28d9",
+            "top_bar_text_color": "#ffffff",
+            "top_bar_hover_color": "#7c3aed",
+            "primary_action_color": "#6366f1",
+            "custom_css": CUSTOM_CSS,
+        })
+        doc.insert(ignore_permissions=True)
+        print("✓ Created Website Theme 'Vernon Tasks Theme'")
+    except Exception as e:
+        # Frappe SCSS generation may fail in environments with missing app modules.
+        # Fall back to raw DB insert to bypass validate().
+        frappe.db.sql("""
+            INSERT INTO `tabWebsite Theme`
+                (name, theme, google_font, top_bar_color, top_bar_text_color,
+                 top_bar_hover_color, primary_action_color, custom_css,
+                 owner, modified_by, creation, modified, docstatus)
+            VALUES
+                ('Vernon Tasks Theme', 'Vernon Tasks Theme', 'Inter',
+                 '#6d28d9', '#ffffff', '#7c3aed', '#6366f1', %(css)s,
+                 'Administrator', 'Administrator', NOW(), NOW(), 0)
+        """, {"css": CUSTOM_CSS})
+        frappe.db.commit()
+        print(f"✓ Created Website Theme via raw insert (SCSS gen skipped: {e})")
 
     # Set as active theme in Website Settings
     frappe.db.set_value("Website Settings", "Website Settings", "theme", "Vernon Tasks Theme")
@@ -251,9 +268,23 @@ def setup_portal_settings():
         print("✓ Portal Settings already configured correctly, skipping")
 
 
+def _ensure_vt_contact_request_table():
+    """Create VT Contact Request table if migrate hasn't run yet."""
+    if frappe.db.table_exists("VT Contact Request"):
+        return
+    print("⚙ Creating VT Contact Request table (running reload_doc)...")
+    frappe.reload_doc("Vt Settings", "doctype", "vt_contact_request", force=True)
+    frappe.db.commit()
+    if frappe.db.table_exists("VT Contact Request"):
+        print("✓ VT Contact Request table created")
+    else:
+        print("⚠ VT Contact Request table still missing — run bench migrate first")
+
+
 def execute():
     """Entry point for bench execute."""
     print("\n=== Vernon Tasks Website Setup ===\n")
+    _ensure_vt_contact_request_table()
     setup_website_theme()
     setup_slideshow()
     setup_web_pages()
