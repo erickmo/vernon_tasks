@@ -197,40 +197,55 @@ def setup_web_form():
 
 
 def setup_route_meta():
+    """Create Website Route Meta records for SEO.
+
+    Frappe v15 schema: name = route (URL path),
+    meta_tags child table holds key-value pairs (title, description, og:*).
+    """
     metas = [
         {
-            "route": "/",
-            "page_title": "Vernon Tasks — Manajemen Tim & OKR",
+            "name": "/",
+            "title": "Vernon Tasks — Manajemen Tim & OKR",
             "description": "Platform manajemen project, OKR, dan PDCA untuk tim Indonesia",
             "og_image": "/assets/vernon_tasks/images/og-home.webp",
         },
         {
-            "route": "/portal",
-            "page_title": "Portal — Vernon Tasks",
+            "name": "/portal",
+            "title": "Portal — Vernon Tasks",
             "description": "Dashboard real-time untuk leader, owner, dan anggota tim",
             "og_image": "/assets/vernon_tasks/images/og-portal.webp",
         },
         {
-            "route": "/tentang",
-            "page_title": "Tentang Vernon Tasks",
+            "name": "/tentang",
+            "title": "Tentang Vernon Tasks",
             "description": "Visi, misi, dan cerita di balik Vernon Tasks",
             "og_image": "/assets/vernon_tasks/images/og-about.webp",
         },
         {
-            "route": "/kontak",
-            "page_title": "Hubungi Vernon Tasks",
+            "name": "/kontak",
+            "title": "Hubungi Vernon Tasks",
             "description": "Konsultasi dan demo produk Vernon Tasks",
             "og_image": "/assets/vernon_tasks/images/og-contact.webp",
         },
     ]
     for meta in metas:
-        if frappe.db.exists("Website Route Meta", {"route": meta["route"]}):
-            print(f"✓ Route Meta '{meta['route']}' already exists, skipping")
+        route = meta["name"]
+        if frappe.db.exists("Website Route Meta", route):
+            print(f"✓ Route Meta '{route}' already exists, skipping")
             continue
-        # Website Route Meta uses route as the document name.
-        doc = frappe.get_doc({"doctype": "Website Route Meta", "name": meta["route"], **meta})
+        doc = frappe.get_doc({
+            "doctype": "Website Route Meta",
+            "name": route,
+            "meta_tags": [
+                {"doctype": "Website Meta Tag", "key": "title", "value": meta["title"]},
+                {"doctype": "Website Meta Tag", "key": "description", "value": meta["description"]},
+                {"doctype": "Website Meta Tag", "key": "og:title", "value": meta["title"]},
+                {"doctype": "Website Meta Tag", "key": "og:description", "value": meta["description"]},
+                {"doctype": "Website Meta Tag", "key": "og:image", "value": meta["og_image"]},
+            ],
+        })
         doc.insert(ignore_permissions=True)
-        print(f"✓ Created Website Route Meta: {meta['route']}")
+        print(f"✓ Created Website Route Meta: {route}")
 
 
 def setup_portal_settings():
