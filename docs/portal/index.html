@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Documentation Portal</title>
+<style>
+/* ── Vernon Design System ── */
+:root {
+  --bg-base:       #0f172a;
+  --bg-surface:    #1e293b;
+  --bg-elevated:   #293548;
+  --bg-border:     #334155;
+  --text-primary:  #e2e8f0;
+  --text-muted:    #94a3b8;
+  --text-faint:    #475569;
+  --accent:        #6366f1;
+  --accent-hover:  #818cf8;
+  --accent-subtle: #1e1b4b;
+  --success:       #10b981;
+  --warning:       #f59e0b;
+  --danger:        #ef4444;
+  --info:          #38bdf8;
+  --code-bg:       #0d1117;
+  --code-border:   #21262d;
+  --code-text:     #c9d1d9;
+  --font-sans:     'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:     'JetBrains Mono', 'Fira Code', monospace;
+  --sidebar-width: 260px;
+  --content-width: 860px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-6:24px; --space-8:32px; --space-12:48px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{
+  font-family:var(--font-sans);
+  background:var(--bg-base);
+  color:var(--text-primary);
+  line-height:1.6;
+  min-height:100vh;
+}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--accent-hover);text-decoration:underline}
+
+/* ── Topbar ── */
+.topbar{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:56px;
+  background:var(--bg-surface);
+  border-bottom:1px solid var(--bg-border);
+  display:flex;align-items:center;gap:var(--space-4);
+  padding:0 var(--space-6);
+}
+.topbar-brand{display:flex;align-items:center;gap:var(--space-3);flex-shrink:0}
+.brand-logo{
+  width:32px;height:32px;border-radius:var(--radius-md);
+  background:var(--accent);color:#fff;
+  font-weight:700;font-size:16px;
+  display:flex;align-items:center;justify-content:center;
+}
+.brand-name{font-weight:600;font-size:15px}
+.audience-switcher{display:flex;gap:var(--space-1);margin:0 auto}
+.aud-btn{
+  padding:var(--space-1) var(--space-3);
+  border-radius:9999px;border:none;
+  background:transparent;color:var(--text-muted);
+  font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;
+}
+.aud-btn:hover{background:var(--bg-elevated);color:var(--text-primary)}
+.aud-btn.active{background:var(--accent-subtle);color:var(--accent)}
+.topbar-meta{display:flex;gap:var(--space-4);font-size:12px;color:var(--text-muted);flex-shrink:0}
+.search-wrap{position:relative;flex-shrink:0}
+.search-input{
+  background:var(--bg-elevated);border:1px solid var(--bg-border);
+  color:var(--text-primary);border-radius:var(--radius-md);
+  padding:var(--space-2) var(--space-3);font-size:13px;width:200px;
+  outline:none;
+}
+.search-input:focus{border-color:var(--accent)}
+.search-results{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:var(--bg-surface);border:1px solid var(--bg-border);
+  border-radius:var(--radius-md);z-index:200;
+  display:none;max-height:300px;overflow-y:auto;
+}
+.search-results.open{display:block}
+.search-item{
+  padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--bg-border);
+  cursor:pointer;font-size:13px;
+}
+.search-item:hover{background:var(--bg-elevated)}
+.search-item-title{font-weight:600;color:var(--text-primary)}
+.search-item-snippet{color:var(--text-muted);font-size:12px;margin-top:2px}
+.search-no-result{padding:var(--space-4);color:var(--text-muted);font-size:13px;text-align:center}
+
+/* ── Layout ── */
+.layout{
+  display:flex;
+  padding-top:56px;
+  min-height:100vh;
+}
+
+/* ── Left Sidebar ── */
+.sidebar{
+  position:fixed;top:56px;left:0;bottom:0;
+  width:var(--sidebar-width);
+  background:var(--bg-surface);
+  border-right:1px solid var(--bg-border);
+  overflow-y:auto;
+  padding:var(--space-4) 0;
+}
+.nav-section{margin-bottom:var(--space-2)}
+.nav-section-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:var(--space-2) var(--space-4);
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--text-faint);cursor:pointer;user-select:none;
+}
+.nav-section-header:hover{color:var(--text-muted)}
+.nav-chevron{transition:transform .2s;font-size:10px}
+.nav-section.collapsed .nav-chevron{transform:rotate(-90deg)}
+.nav-section.collapsed .nav-items{display:none}
+.nav-items{padding-bottom:var(--space-2)}
+.nav-item{
+  display:flex;align-items:center;gap:var(--space-2);
+  padding:var(--space-2) var(--space-4) var(--space-2) var(--space-8);
+  font-size:13px;color:var(--text-muted);cursor:pointer;
+  border-left:2px solid transparent;
+  transition:all .1s;
+}
+.nav-item:hover{color:var(--text-primary);background:var(--bg-elevated)}
+.nav-item.active{
+  color:var(--accent);
+  border-left-color:var(--accent);
+  background:var(--accent-subtle);
+}
+
+/* ── Content ── */
+.content-wrap{
+  margin-left:var(--sidebar-width);
+  margin-right:220px;
+  padding:var(--space-12) var(--space-8);
+  flex:1;
+}
+.page{display:none}
+.page.active{display:block}
+.page h1{font-size:2rem;font-weight:700;line-height:1.2;margin-bottom:var(--space-4)}
+.page h2{font-size:1.4rem;font-weight:600;margin:var(--space-8) 0 var(--space-3);padding-top:var(--space-6);border-top:1px solid var(--bg-border)}
+.page h2:first-of-type{border-top:none;margin-top:var(--space-4)}
+.page h3{font-size:1.1rem;font-weight:600;margin:var(--space-6) 0 var(--space-3)}
+.page h4{font-size:1rem;font-weight:600;color:var(--text-muted);margin:var(--space-4) 0 var(--space-2)}
+.page p{margin-bottom:var(--space-4);color:var(--text-primary);line-height:1.7}
+.page ul,.page ol{margin:var(--space-3) 0 var(--space-4) var(--space-6);line-height:1.8}
+.page li{color:var(--text-primary)}
+.page code{
+  font-family:var(--font-mono);font-size:12px;
+  background:var(--code-bg);border:1px solid var(--code-border);
+  padding:1px 6px;border-radius:var(--radius-sm);color:var(--code-text);
+}
+.page pre{
+  background:var(--code-bg);border:1px solid var(--code-border);
+  border-radius:var(--radius-md);padding:var(--space-4);
+  overflow-x:auto;margin:var(--space-4) 0;
+}
+.page pre code{border:none;padding:0;background:none;font-size:13px}
+.page-meta{
+  display:flex;gap:var(--space-3);flex-wrap:wrap;
+  margin-bottom:var(--space-6);font-size:12px;color:var(--text-muted);
+}
+
+/* ── Right Sidebar ── */
+.toc-sidebar{
+  position:fixed;top:56px;right:0;bottom:0;width:220px;
+  padding:var(--space-6) var(--space-4);
+  border-left:1px solid var(--bg-border);
+  overflow-y:auto;font-size:12px;
+}
+.toc-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);margin-bottom:var(--space-3)}
+.toc-link{
+  display:block;padding:var(--space-1) 0;
+  color:var(--text-muted);border-left:2px solid transparent;
+  padding-left:var(--space-3);transition:all .1s;font-size:12px;
+}
+.toc-link:hover{color:var(--text-primary);text-decoration:none}
+.toc-link.active{color:var(--accent);border-left-color:var(--accent)}
+.toc-link-h3{padding-left:var(--space-6);font-size:11px}
+
+/* ── Tables ── */
+table{width:100%;border-collapse:collapse;font-size:13px;margin:var(--space-4) 0}
+th{
+  background:var(--bg-elevated);color:var(--text-muted);
+  font-weight:600;text-align:left;font-size:11px;text-transform:uppercase;
+  letter-spacing:.04em;padding:var(--space-3) var(--space-4);
+  border-bottom:1px solid var(--bg-border);
+}
+td{
+  padding:var(--space-3) var(--space-4);
+  border-bottom:1px solid var(--bg-border);
+  color:var(--text-primary);vertical-align:top;
+}
+tr:hover td{background:var(--bg-elevated)}
+td.id-col{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);white-space:nowrap}
+
+/* ── Badges ── */
+.badge{
+  display:inline-flex;align-items:center;
+  padding:2px 8px;border-radius:9999px;
+  font-size:11px;font-weight:600;white-space:nowrap;
+}
+.badge-ok{background:#071c14;color:#10b981}
+.badge-warn{background:#1c1509;color:#f59e0b}
+.badge-bad{background:#1c0909;color:#ef4444}
+.badge-future{background:#0f172a;color:#475569;border:1px solid #334155}
+.badge-dev{background:#1e1b4b;color:#818cf8}
+.badge-user{background:#071c14;color:#10b981}
+.badge-admin{background:#1c0909;color:#f87171}
+
+/* ── Callouts ── */
+.callout{
+  display:flex;gap:var(--space-3);padding:var(--space-4);
+  border-radius:var(--radius-md);border-left:3px solid;margin:var(--space-6) 0;
+}
+.callout-info{background:#0c1a2e;border-color:var(--info)}
+.callout-warning{background:#1c1509;border-color:var(--warning)}
+.callout-danger{background:#1c0909;border-color:var(--danger)}
+.callout-tip{background:#071c14;border-color:var(--success)}
+.callout-icon{font-size:18px;flex-shrink:0}
+
+/* ── Walkthrough ── */
+.walkthrough{list-style:none;padding:0;position:relative}
+.walkthrough::before{
+  content:'';position:absolute;left:19px;top:32px;bottom:32px;
+  width:2px;background:var(--bg-border);
+}
+.walkthrough li{display:flex;gap:var(--space-4);margin-bottom:var(--space-8)}
+.step-number{
+  width:40px;height:40px;flex-shrink:0;border-radius:50%;
+  background:var(--accent-subtle);border:2px solid var(--accent);
+  color:var(--accent);font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+.step-content h4{margin:0 0 var(--space-2);color:var(--text-primary);font-size:1rem}
+.step-content p{margin:0;color:var(--text-muted);font-size:13px}
+
+/* ── Summary cards ── */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--space-4);margin:var(--space-6) 0}
+.summary-card{
+  background:var(--bg-surface);border:1px solid var(--bg-border);
+  border-radius:var(--radius-md);padding:var(--space-4) var(--space-6);
+  text-align:center;
+}
+.summary-card .num{font-size:2rem;font-weight:700;color:var(--accent)}
+.summary-card .lbl{font-size:12px;color:var(--text-muted);margin-top:var(--space-1)}
+
+/* ── Status legend ── */
+.legend{display:flex;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-4) 0 var(--space-6)}
+
+/* ── Mobile ── */
+.hamburger{display:none}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);transition:transform .2s;z-index:90}
+  .sidebar.open{transform:translateX(0)}
+  .content-wrap{margin-left:0;margin-right:0;padding:var(--space-8) var(--space-4)}
+  .toc-sidebar{display:none}
+  .hamburger{
+    display:flex;align-items:center;justify-content:center;
+    width:40px;height:40px;background:none;border:none;
+    color:var(--text-primary);font-size:20px;cursor:pointer;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<header class="topbar">
+  <button class="hamburger" id="hamburger" aria-label="Menu">&#9776;</button>
+  <div class="topbar-brand">
+    <span class="brand-logo">V</span>
+    <span class="brand-name">Vernon Tasks</span>
+  </div>
+  <nav class="audience-switcher">
+    <button class="aud-btn active" data-aud="all">All</button>
+    <button class="aud-btn" data-aud="dev">Developer</button>
+    <button class="aud-btn" data-aud="user">User</button>
+    <button class="aud-btn" data-aud="admin">Admin</button>
+  </nav>
+  <div class="search-wrap">
+    <input class="search-input" id="searchInput" type="text" placeholder="Search docs&#8230;" autocomplete="off" />
+    <div class="search-results" id="searchResults"></div>
+  </div>
+  <div class="topbar-meta">
+    <span>v1.0</span>
+    <span>2026-05-19</span>
+  </div>
+</header>
+
+<div class="layout">
+
+<!-- Left Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <div class="nav-section" id="sec-start">
+    <div class="nav-section-header" data-section="sec-start">
+      Getting Started <span class="nav-chevron">&#9660;</span>
+    </div>
+    <div class="nav-items">
+      <div class="nav-item" data-page="introduction">Introduction</div>
+      <div class="nav-item" data-page="system-overview">System Overview</div>
+      <div class="nav-item" data-page="quick-start">Quick Start</div>
+    </div>
+  </div>
+
+  <div class="nav-section" id="sec-dev">
+    <div class="nav-section-header" data-section="sec-dev">
+      Developer <span class="nav-chevron">&#9660;</span>
+    </div>
+    <div class="nav-items">
+      <div class="nav-item" data-page="architecture">Architecture</div>
+      <div class="nav-item" data-page="domain-task">Domain: Task</div>
+      <div class="nav-item" data-page="domain-project">Domain: Project &amp; Sprint</div>
+      <div class="nav-item" data-page="domain-okr">Domain: OKR</div>
+      <div class="nav-item" data-page="domain-workforce">Domain: Workforce</div>
+      <div class="nav-item" data-page="domain-workspace">Domain: Workspace</div>
+      <div class="nav-item" data-page="api-reference">API Reference</div>
+      <div class="nav-item" data-page="adr-log">ADR Log</div>
+      <div class="nav-item" data-page="desktop-portal">Desktop Portal</div>
+    </div>
+  </div>
+
+  <div class="nav-section" id="sec-user">
+    <div class="nav-section-header" data-section="sec-user">
+      For Users <span class="nav-chevron">&#9660;</span>
+    </div>
+    <div class="nav-items">
+      <div class="nav-item" data-page="user-my-work">My Work (Daily Queue)</div>
+      <div class="nav-item" data-page="user-dashboard">Dashboard &amp; Analytics</div>
+      <div class="nav-item" data-page="user-pwa">Mobile PWA</div>
+      <div class="nav-item" data-page="user-portal">Desktop Portal</div>
+      <div class="nav-item" data-page="user-notifications">Notifications</div>
+    </div>
+  </div>
+
+  <div class="nav-section" id="sec-admin">
+    <div class="nav-section-header" data-section="sec-admin">
+      For Admins <span class="nav-chevron">&#9660;</span>
+    </div>
+    <div class="nav-items">
+      <div class="nav-item" data-page="admin-setup">Initial Setup</div>
+      <div class="nav-item" data-page="admin-roles">Roles &amp; Permissions</div>
+      <div class="nav-item" data-page="admin-push">Push Notifications</div>
+      <div class="nav-item" data-page="admin-settings">VT Settings</div>
+    </div>
+  </div>
+
+  <div class="nav-section" id="sec-tracker">
+    <div class="nav-section-header" data-section="sec-tracker">
+      Implementation <span class="nav-chevron">&#9660;</span>
+    </div>
+    <div class="nav-items">
+      <div class="nav-item" data-page="impl-tracker">Implementation Tracker</div>
+    </div>
+  </div>
+</nav>
+
+<!-- Content Area -->
+<main class="content-wrap">
+
+<!-- ── Introduction ── -->
+<div class="page active" id="page-introduction" data-audience="all">
+  <div class="page-meta">
+    <span class="badge badge-user">User</span>
+    <span class="badge badge-dev">Developer</span>
+    <span class="badge badge-admin">Admin</span>
+  </div>
+  <h1 id="intro-h1">Vernon Tasks</h1>
+  <p>PDCA &times; OKR &times; Agile &#8212; company-wide task &amp; performance platform built on Frappe v15 with an installable mobile PWA.</p>
+
+  <div class="summary-grid">
+    <div class="summary-card"><div class="num">6</div><div class="lbl">Domains</div></div>
+    <div class="summary-card"><div class="num">22</div><div class="lbl">Doctypes</div></div>
+    <div class="summary-card"><div class="num">216</div><div class="lbl">Backend Tests</div></div>
+    <div class="summary-card"><div class="num">88</div><div class="lbl">PWA Tests</div></div>
+    <div class="summary-card"><div class="num">9</div><div class="lbl">Portal Modules</div></div>
+  </div>
+
+  <h2 id="intro-what">What is Vernon Tasks?</h2>
+  <p>Vernon Tasks is a Frappe app that unifies daily work execution (PDCA), project management (Agile sprints), and performance management (OKR) into a single system accessible via Frappe Desk and an installable mobile PWA.</p>
+
+  <h2 id="intro-audience">Who Uses It?</h2>
+  <table>
+    <thead><tr><th>Role</th><th>Primary Interface</th><th>Key Actions</th></tr></thead>
+    <tbody>
+      <tr><td>Individual Contributor (IC)</td><td>PWA / Desk My Work</td><td>Plan tasks, log hours, submit for review</td></tr>
+      <tr><td>Team Leader</td><td>PWA / Desk Leader Review</td><td>Approve/reject tasks, review sprint burndown</td></tr>
+      <tr><td>Executive</td><td>Desktop Portal / Desk Exec Analytics</td><td>OKR roll-up, KPI trends, Health Score</td></tr>
+      <tr><td>Admin</td><td>Frappe Desk settings</td><td>Configure roles, push keys, VT settings</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="intro-stack">Technology Stack</h2>
+  <table>
+    <thead><tr><th>Layer</th><th>Technology</th></tr></thead>
+    <tbody>
+      <tr><td>Backend</td><td>Frappe v15 (Python)</td></tr>
+      <tr><td>Desk UI</td><td>Frappe native desk pages</td></tr>
+      <tr><td>PWA</td><td>React 18 + Vite 5 + TypeScript strict + TanStack Query 5</td></tr>
+      <tr><td>Desktop Portal</td><td>React 18 SPA served under <code>/portal/*</code> via Frappe</td></tr>
+      <tr><td>Service Worker</td><td>Workbox StaleWhileRevalidate</td></tr>
+      <tr><td>Auth</td><td>Frappe session cookie (no JWT)</td></tr>
+      <tr><td>Push</td><td>Web Push API + VAPID</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── System Overview ── -->
+<div class="page" id="page-system-overview" data-audience="all">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="so-h1">System Overview</h1>
+  <p>Vernon Tasks runs as a Frappe app (<code>vernon_tasks</code>) installed on a standard bench. It exposes two frontends: the classic Frappe Desk and a React-based mobile/desktop PWA.</p>
+
+  <h2 id="so-arch">Architecture Layers</h2>
+  <pre><code>Frappe v15 (Python, MariaDB)
+  Doctypes: VT Task, Project, Sprint, OKR, Workforce
+  Services: point_calculator, scheduling_engine, burndown, push_sender
+  API: @frappe.whitelist() endpoints in task/api/
+
+Frappe Desk Pages        |  React PWA (/m/* and /portal/*)
+  my_work                |  React 18 + Vite 5 + TS strict
+  my_dashboard           |  TanStack Query 5 client cache
+  leader_review          |  Service Worker (Workbox)
+  exec_analytics         |  Push notifications (VAPID)</code></pre>
+
+  <h2 id="so-routes">PWA Route Map</h2>
+  <table>
+    <thead><tr><th>Route</th><th>Module</th><th>Audience</th></tr></thead>
+    <tbody>
+      <tr><td><code>/m/</code></td><td>My Work (daily queue)</td><td>IC</td></tr>
+      <tr><td><code>/m/dashboard</code></td><td>Dashboard + IC Analytics</td><td>IC</td></tr>
+      <tr><td><code>/m/leader</code></td><td>Leader Review queue</td><td>Leader</td></tr>
+      <tr><td><code>/portal/</code></td><td>Role-aware landing dashboard</td><td>Leader / Owner / Member</td></tr>
+      <tr><td><code>/portal/okr</code></td><td>OKR list/detail/filters</td><td>Leader / Owner</td></tr>
+      <tr><td><code>/portal/projects</code></td><td>Project master-detail</td><td>Leader / PM</td></tr>
+      <tr><td><code>/portal/sprints</code></td><td>Sprint board + kanban</td><td>Leader / Member</td></tr>
+      <tr><td><code>/portal/tasks</code></td><td>Task detail slide-over</td><td>All (perm-gated)</td></tr>
+      <tr><td><code>/portal/notifications</code></td><td>Full notification inbox</td><td>All</td></tr>
+      <tr><td><code>/portal/reports</code></td><td>Exec reports (OKR / Sprints / Team)</td><td>Leader / Exec</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Quick Start ── -->
+<div class="page" id="page-quick-start" data-audience="all">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span><span class="badge badge-admin">Admin</span></div>
+  <h1 id="qs-h1">Quick Start</h1>
+
+  <h2 id="qs-install">Install</h2>
+  <pre><code>cd frappe-bench
+bench get-app https://github.com/your-org/vernon_tasks
+bench --site mysite install-app vernon_tasks
+bench --site mysite migrate</code></pre>
+
+  <h2 id="qs-pwa">Build the PWA</h2>
+  <pre><code>cd apps/vernon_tasks
+bash build-pwa.sh</code></pre>
+
+  <h2 id="qs-push">Configure Push Notifications (VAPID)</h2>
+  <pre><code>bench --site mysite execute vernon_tasks.task.api.push.generate_vapid_keys</code></pre>
+  <p>Paste the output keys into <strong>VT Settings</strong> doctype.</p>
+
+  <h2 id="qs-dev">Local Dev</h2>
+  <pre><code>cd apps/vernon_tasks/pwa
+npm install
+npm run dev   # Vite dev server on :5173, proxies to bench</code></pre>
+
+  <h2 id="qs-test">Run Tests</h2>
+  <pre><code># Backend
+bench --site mysite run-tests --app vernon_tasks
+
+# PWA
+cd apps/vernon_tasks/pwa && npm test
+
+# e2e (needs running site)
+npm run e2e</code></pre>
+</div>
+
+<!-- ── Architecture ── -->
+<div class="page" id="page-architecture" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="arch-h1">Architecture</h1>
+
+  <h2 id="arch-layers">Layer Responsibility</h2>
+  <table>
+    <thead><tr><th>Layer</th><th>Location</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr><td>Handler / Controller</td><td><code>task/api/*.py</code></td><td>Parse input, validate format, call service, format output. No business logic.</td></tr>
+      <tr><td>Service / Use Case</td><td><code>task/services/*.py</code></td><td>Orchestrate domain logic, coordinate repos, enforce rules.</td></tr>
+      <tr><td>Domain / Entity</td><td><code>task/doctype/*</code></td><td>Core business rules, PDCA state machine, points invariants.</td></tr>
+      <tr><td>Infrastructure</td><td><code>task/api/push*.py</code></td><td>External services: Web Push, telemetry.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="arch-services">Key Services</h2>
+  <table>
+    <thead><tr><th>Service</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>point_calculator.py</code></td><td>Points = complexity &times; difficulty factor, revision deductions, leader override</td></tr>
+      <tr><td><code>scheduling_engine.py</code></td><td>Capacity-aware scheduling, recurring task spawning</td></tr>
+      <tr><td><code>burndown_service.py</code></td><td>Sprint burndown with ideal vs actual</td></tr>
+      <tr><td><code>forecast_service.py</code></td><td>Sprint completion forecast via velocity</td></tr>
+      <tr><td><code>risk_evaluator.py</code></td><td>At-risk task detection (late, blocked, scope drift)</td></tr>
+      <tr><td><code>health_score_service.py</code></td><td>Health = OKR 0.4 + ontime 0.3 + velocity 0.3</td></tr>
+      <tr><td><code>push_sender.py</code></td><td>VAPID push via WebPush, subscription pruning</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="arch-security">Security Patterns</h2>
+  <ul>
+    <li>All API endpoints use <code>@frappe.whitelist()</code></li>
+    <li>Rate limiting, input clamping, max_str via <code>task/api/security.py</code> guards</li>
+    <li>Role checks at endpoint top via <code>frappe.has_role()</code></li>
+    <li>CSP / X-Frame-Options headers on <code>/m/*</code> via <code>www/m.py</code></li>
+    <li>Telemetry purged after 90 days via scheduler</li>
+  </ul>
+
+  <h2 id="arch-adrs">Key ADRs</h2>
+  <ul>
+    <li><strong>ADR-001</strong> Build on Frappe Framework (not standalone Django)</li>
+    <li><strong>ADR-002</strong> Dual UI: Frappe Desk + Mobile PWA</li>
+    <li><strong>ADR-005</strong> Reuse Frappe session cookie (no JWT)</li>
+    <li><strong>ADR-011</strong> Security guards centralised in <code>security.py</code></li>
+    <li><strong>ADR-016</strong> Responsive nav at 768px breakpoint</li>
+  </ul>
+</div>
+
+<!-- ── Domain: Task ── -->
+<div class="page" id="page-domain-task" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="dt-h1">Domain: Task</h1>
+  <p>PDCA-driven work unit. Core of Vernon Tasks.</p>
+
+  <h2 id="dt-modules">Modules</h2>
+  <ul>
+    <li><code>task/doctype/</code> &#8212; vt_task, task_dependency, task_schedule_entry, task_point_log, recurring_rule</li>
+    <li><code>task/api/</code> &#8212; whitelisted endpoints</li>
+    <li><code>task/services/</code> &#8212; point_calculator, scheduling_engine, burndown_service, forecast_service, risk_evaluator, push_sender</li>
+    <li><code>task/page/</code> &#8212; my_work, my_dashboard, leader_review, leader_analytics, exec_analytics</li>
+  </ul>
+
+  <h2 id="dt-sm">PDCA State Machine</h2>
+  <pre><code>BACKLOG &#8594; PLAN &#8594; DO &#8594; CHECK &#8594; DONE / ACT</code></pre>
+  <p>Invalid transitions raise <code>frappe.ValidationError</code> in the <code>vt_task.py</code> controller.</p>
+
+  <h2 id="dt-events">Cross-Domain Events</h2>
+  <h3>Triggers (fires)</h3>
+  <table>
+    <thead><tr><th>Event</th><th>Payload</th><th>Listeners</th></tr></thead>
+    <tbody>
+      <tr><td><code>task.submitted</code></td><td>{task_id, owner, points}</td><td>workforce (point summary)</td></tr>
+      <tr><td><code>task.completed</code></td><td>{task_id, owner, sprint_id}</td><td>project (sprint progress), okr (key result)</td></tr>
+      <tr><td><code>task.review.requested</code></td><td>{task_id, leader}</td><td>notifications (push), workforce (leader queue)</td></tr>
+    </tbody>
+  </table>
+  <h3>Listens (reacts)</h3>
+  <table>
+    <thead><tr><th>Event</th><th>Source</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td><code>sprint.started</code></td><td>project</td><td>distribute task schedule</td></tr>
+      <tr><td><code>recurring.due</code></td><td>scheduler</td><td>spawn new task instance</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="dt-tests">Tests</h2>
+  <ul>
+    <li><code>task/api/test_*.py</code> &#8212; 10 files</li>
+    <li><code>task/services/test_*.py</code> &#8212; 6 files</li>
+  </ul>
+</div>
+
+<!-- ── Domain: Project & Sprint ── -->
+<div class="page" id="page-domain-project" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="dp-h1">Domain: Project &amp; Sprint</h1>
+  <p>Agile project container with sprint-based delivery. Wraps tasks into sprints; links sprints to OKR objectives.</p>
+
+  <h2 id="dp-doctypes">Doctypes</h2>
+  <ul>
+    <li><code>vt_project</code> &#8212; project container, status, linked objective</li>
+    <li><code>vt_sprint</code> &#8212; sprint with start/end date, capacity, kanban_rank fields</li>
+    <li><code>vt_sprint_task</code> &#8212; sprint &#8596; task link with <code>kanban_rank</code> (fractional)</li>
+  </ul>
+
+  <h2 id="dp-portal">Desktop Portal: Sprints (PORTAL-P3.2)</h2>
+  <ul>
+    <li>Sprint board (kanban) with axis toggle: <code>kanban_status</code> / <code>pdca_phase</code></li>
+    <li>Sprint CRUD modal</li>
+    <li>Burndown chart (recharts)</li>
+    <li>dnd-kit drag-drop with fractional rank</li>
+    <li>Feature flag: <code>portal_sprints_enabled</code></li>
+  </ul>
+</div>
+
+<!-- ── Domain: OKR ── -->
+<div class="page" id="page-domain-okr" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="dokr-h1">Domain: OKR</h1>
+  <p>Objective &amp; Key Result tracking. OKRs link to projects and tasks; Key Result progress auto-updates from completed tasks.</p>
+
+  <h2 id="dokr-doctypes">Doctypes</h2>
+  <ul>
+    <li><code>vt_objective</code> &#8212; Objective with PDCA phase, owner, period</li>
+    <li><code>vt_key_result</code> &#8212; Key Result with target/current values, auto-calculation flag</li>
+  </ul>
+
+  <h2 id="dokr-portal">Desktop Portal: OKR (PORTAL-P2)</h2>
+  <ul>
+    <li>OKR list with filters (period, owner, status)</li>
+    <li>Inline Key Result autosave</li>
+    <li>Bulk PDCA phase transitions</li>
+    <li>Create/edit Objective modal</li>
+    <li>Feature flag: <code>portal_okr_enabled</code></li>
+  </ul>
+
+  <h2 id="dokr-exec">Executive Roll-up</h2>
+  <p>Health Score: <code>okr_score &times; 0.4 + ontime_rate &times; 0.3 + velocity_score &times; 0.3</code></p>
+  <p>Implemented in <code>services/health_score_service.py</code>. Surfaced in exec_analytics and Portal Reports.</p>
+</div>
+
+<!-- ── Domain: Workforce ── -->
+<div class="page" id="page-domain-workforce" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="dwf-h1">Domain: Workforce</h1>
+  <p>Employee capacity, point summaries, leaderboard data. Listens to task events and maintains aggregate performance metrics.</p>
+
+  <h2 id="dwf-doctypes">Doctypes</h2>
+  <ul>
+    <li><code>vt_employee_capacity</code> &#8212; daily capacity per employee</li>
+    <li><code>vt_point_summary</code> &#8212; accumulated points per period</li>
+  </ul>
+
+  <h2 id="dwf-leaderboard">Leaderboard</h2>
+  <p>Computed from <code>vt_point_summary</code> aggregated over configurable period. Exposed via <code>task/api/ic_analytics.py</code>.</p>
+</div>
+
+<!-- ── Domain: Workspace ── -->
+<div class="page" id="page-domain-workspace" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="dws-h1">Domain: Workspace</h1>
+  <p>Frappe Workspace fixtures providing shortcuts and navigation for Vernon Tasks desk pages.</p>
+
+  <h2 id="dws-fixtures">Fixtures</h2>
+  <ul>
+    <li><code>workspace/my_tasks</code> &#8212; IC shortcuts</li>
+    <li><code>workspace/my_projects</code> &#8212; PM shortcuts</li>
+    <li><code>workspace/overview</code> &#8212; Leader / Exec overview</li>
+  </ul>
+  <p>All exported as Frappe fixtures. Auto-installed with <code>bench install-app</code>.</p>
+</div>
+
+<!-- ── API Reference ── -->
+<div class="page" id="page-api-reference" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="api-h1">API Reference</h1>
+  <p>All endpoints are Frappe whitelisted methods. Call via <code>frappe.call(method, args)</code> or HTTP POST to <code>/api/method/{method}</code>.</p>
+
+  <h2 id="api-my-work">My Work</h2>
+  <table>
+    <thead><tr><th>Method</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>task.api.my_work.get_my_tasks</code></td><td>IC task queue with PDCA filter</td></tr>
+      <tr><td><code>task.api.my_work_mutations.complete_task</code></td><td>Mark task complete, log hours</td></tr>
+      <tr><td><code>task.api.my_work_mutations.snooze_task</code></td><td>Snooze task to tomorrow</td></tr>
+      <tr><td><code>task.api.my_work_mutations.submit_for_review</code></td><td>Submit task for leader review</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="api-leader">Leader</h2>
+  <table>
+    <thead><tr><th>Method</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>task.api.leader_review.get_review_queue</code></td><td>Tasks pending leader approval</td></tr>
+      <tr><td><code>task.api.leader_review.approve_task</code></td><td>Approve with optional point override</td></tr>
+      <tr><td><code>task.api.leader_review.reject_task</code></td><td>Reject with reason, return to DO</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="api-portal">Portal</h2>
+  <table>
+    <thead><tr><th>Module</th><th>API file</th></tr></thead>
+    <tbody>
+      <tr><td>OKR</td><td><code>task.api.portal_okr</code></td></tr>
+      <tr><td>Projects</td><td><code>task.api.portal_projects</code></td></tr>
+      <tr><td>Sprints</td><td><code>task.api.portal_sprints</code></td></tr>
+      <tr><td>Tasks</td><td><code>task.api.portal_tasks</code></td></tr>
+      <tr><td>Notifications</td><td><code>task.api.portal_notifications</code></td></tr>
+      <tr><td>Reports</td><td><code>task.api.portal_reports</code></td></tr>
+      <tr><td>Dashboard</td><td><code>task.api.portal_dashboard</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="api-security">Security Guards</h2>
+  <ul>
+    <li><code>rate_limit(key, max_calls, window_sec)</code></li>
+    <li><code>clamp(value, min, max)</code></li>
+    <li><code>max_str(value, length)</code></li>
+    <li><code>require_login()</code></li>
+  </ul>
+</div>
+
+<!-- ── ADR Log ── -->
+<div class="page" id="page-adr-log" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="adr-h1">ADR Log</h1>
+  <p>Full ADR index at <a href="../adr/index.html">docs/adr/index.html</a>.</p>
+
+  <h2 id="adr-foundation">Foundation</h2>
+  <table>
+    <thead><tr><th>ADR</th><th>Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>ADR-001</td><td>Build on Frappe Framework</td><td>Reuse doctypes, roles, workflows</td></tr>
+      <tr><td>ADR-002</td><td>Dual UI: Desk + PWA</td><td>Desk for power users; PWA for mobile-first ICs</td></tr>
+      <tr><td>ADR-003</td><td>React 18 + Vite 5 + TS strict</td><td>Modern DX, tree-shaking, type safety</td></tr>
+      <tr><td>ADR-004</td><td>Workbox StaleWhileRevalidate</td><td>Offline-first without full IndexedDB complexity</td></tr>
+      <tr><td>ADR-005</td><td>Frappe session cookie (no JWT)</td><td>Eliminates token refresh; Frappe handles session expiry</td></tr>
+      <tr><td>ADR-006</td><td>TanStack Query 5</td><td>Stale-while-revalidate + background refetch</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="adr-data">Data &amp; UI</h2>
+  <table>
+    <thead><tr><th>ADR</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>ADR-007</td><td>Doctype model + PDCA state machine</td></tr>
+      <tr><td>ADR-008</td><td>Point calculation + override audit trail</td></tr>
+      <tr><td>ADR-009</td><td>Scheduling engine + capacity model</td></tr>
+      <tr><td>ADR-011</td><td>Security guards + CSP headers centralised</td></tr>
+      <tr><td>ADR-016</td><td>Responsive nav at 768px breakpoint (TopNav / BottomNav)</td></tr>
+      <tr><td>ADR-019</td><td>Portal OKR: vanilla React Query + composed UI</td></tr>
+      <tr><td>ADR-020</td><td>Portal Projects reuses OKR composition pattern</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Desktop Portal ── -->
+<div class="page" id="page-desktop-portal" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="dportal-h1">Desktop Portal</h1>
+  <p>React 18 SPA served via Frappe under <code>/portal/*</code> routes. Targets leaders, executives, and project owners.</p>
+
+  <h2 id="dportal-structure">File Structure</h2>
+  <pre><code>pwa/src/portal/
+  PortalShell.tsx    &#8212; root layout + error boundaries
+  TopBar.tsx         &#8212; topbar with notifications bell
+  routes.tsx         &#8212; React Router v6 route definitions
+  guards/            &#8212; role-based route guards
+  layouts/           &#8212; portal layout components
+  okr/               &#8212; OKR module (P2)
+  projects/          &#8212; Projects module (P3.1)
+  sprints/           &#8212; Sprints module (P3.2)
+  tasks/             &#8212; Task slide-over (P3.3)
+  notifications/     &#8212; Notification inbox (P4c)
+  reports/           &#8212; Exec reports (P5)
+  dashboard/         &#8212; Role-aware dashboard (P6)</code></pre>
+
+  <h2 id="dportal-flags">Feature Flags</h2>
+  <table>
+    <thead><tr><th>Flag</th><th>Module</th></tr></thead>
+    <tbody>
+      <tr><td><code>portal_okr_enabled</code></td><td>OKR module</td></tr>
+      <tr><td><code>portal_projects_enabled</code></td><td>Projects module</td></tr>
+      <tr><td><code>portal_sprints_enabled</code></td><td>Sprints module</td></tr>
+      <tr><td><code>portal_notifications_enabled</code></td><td>Notifications</td></tr>
+      <tr><td><code>portal_reports_enabled</code></td><td>Reports</td></tr>
+      <tr><td><code>portal_dashboard_v2_enabled</code></td><td>Dashboard v2</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── User: My Work ── -->
+<div class="page" id="page-user-my-work" data-audience="user">
+  <div class="page-meta"><span class="badge badge-user">User</span></div>
+  <h1 id="umw-h1">My Work &#8212; Daily Queue</h1>
+  <p>My Work is your primary workspace. It shows your tasks for today, lets you log progress, and sends tasks for leader review.</p>
+
+  <h2 id="umw-access">Access</h2>
+  <ul>
+    <li><strong>Desk:</strong> My Tasks workspace &#8594; My Work page</li>
+    <li><strong>PWA:</strong> Open <code>https://yoursite/m/</code> on mobile or desktop</li>
+  </ul>
+
+  <h2 id="umw-walkthrough">Walkthrough</h2>
+  <ol class="walkthrough">
+    <li>
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h4>Open My Work</h4>
+        <p>Your tasks are sorted by due date. Each card shows PDCA phase, points, and project.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h4>Move a Task to PLAN</h4>
+        <p>Tap the task &#8594; tap <strong>Move to PLAN</strong>. Add notes on your approach.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h4>Work on the Task (DO)</h4>
+        <p>Tap <strong>Start Work</strong> to move to DO. Log hours as you progress.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h4>Submit for Review (CHECK)</h4>
+        <p>When done, tap <strong>Submit for Review</strong>. Your leader receives a push notification.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <h4>Task Approved &#8594; DONE</h4>
+        <p>Once approved, the task moves to DONE and points are credited.</p>
+      </div>
+    </li>
+  </ol>
+
+  <h2 id="umw-snooze">Snooze &amp; Undo</h2>
+  <p>Swipe left on a task to reveal <strong>Snooze</strong> (defer to tomorrow) and <strong>Undo</strong> (revert last action). Both are reversible.</p>
+</div>
+
+<!-- ── User: Dashboard ── -->
+<div class="page" id="page-user-dashboard" data-audience="user">
+  <div class="page-meta"><span class="badge badge-user">User</span></div>
+  <h1 id="udash-h1">Dashboard &amp; Analytics</h1>
+
+  <h2 id="udash-my">My Dashboard</h2>
+  <p>Shows your weekly stats, 7-day completion chart, and hours donut. Access via <strong>PWA &#8594; Dashboard tab</strong> or <strong>Desk &#8594; My Dashboard</strong>.</p>
+
+  <h2 id="udash-leaderboard">Leaderboard</h2>
+  <p>Ranks all ICs by accumulated points for the current period. Streak and velocity badges show consistency.</p>
+
+  <h2 id="udash-leader">Leader Dashboard</h2>
+  <p>Leaders see pending review counts, team KPIs, leaderboard, and overdue alerts. Access via <strong>Desk &#8594; Leader Dashboard</strong> or <strong>Portal &#8594; Dashboard</strong>.</p>
+
+  <h2 id="udash-exec">Executive Analytics</h2>
+  <p>OKR roll-up, KPI trends, and Health Score. Access via <strong>Desk &#8594; Exec Analytics</strong> or <strong>Portal &#8594; Reports</strong>.</p>
+</div>
+
+<!-- ── User: PWA ── -->
+<div class="page" id="page-user-pwa" data-audience="user">
+  <div class="page-meta"><span class="badge badge-user">User</span></div>
+  <h1 id="upwa-h1">Mobile PWA</h1>
+
+  <h2 id="upwa-install">Install on Your Device</h2>
+  <ol class="walkthrough">
+    <li>
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h4>Open in Mobile Browser</h4>
+        <p>Navigate to <code>https://yoursite/m/</code> in Chrome (Android) or Safari (iOS).</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h4>Add to Home Screen (A2HS)</h4>
+        <p>Tap the browser menu &#8594; <strong>Add to Home Screen</strong>.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h4>Enable Push Notifications</h4>
+        <p>Tap the bell icon &#8594; <strong>Enable Notifications</strong>. Grant permission when prompted.</p>
+      </div>
+    </li>
+  </ol>
+
+  <h2 id="upwa-offline">Offline Support</h2>
+  <p>The PWA caches your task list. When offline, you can view tasks but not submit changes. Changes sync automatically when connection restores.</p>
+</div>
+
+<!-- ── User: Desktop Portal ── -->
+<div class="page" id="page-user-portal" data-audience="user">
+  <div class="page-meta"><span class="badge badge-user">User</span></div>
+  <h1 id="uport-h1">Desktop Portal</h1>
+  <p>Full-featured web app for leaders and executives. Access at <code>https://yoursite/portal/</code>.</p>
+
+  <h2 id="uport-sections">Portal Sections</h2>
+  <table>
+    <thead><tr><th>Section</th><th>Who Sees It</th><th>Key Actions</th></tr></thead>
+    <tbody>
+      <tr><td>Dashboard</td><td>All (role-aware sections)</td><td>View team status, drill into blocked tasks</td></tr>
+      <tr><td>OKR</td><td>Leaders, Owners</td><td>Update Key Results, bulk PDCA transitions</td></tr>
+      <tr><td>Projects</td><td>Leaders, PMs</td><td>Project status, linked OKR preview</td></tr>
+      <tr><td>Sprints</td><td>Leaders, Members</td><td>Kanban board, drag tasks, view burndown</td></tr>
+      <tr><td>Notifications</td><td>All</td><td>Full inbox, mark read, action buttons</td></tr>
+      <tr><td>Reports</td><td>Leaders, Execs</td><td>OKR trends, sprint velocity, team leaderboard</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── User: Notifications ── -->
+<div class="page" id="page-user-notifications" data-audience="user">
+  <div class="page-meta"><span class="badge badge-user">User</span></div>
+  <h1 id="unotif-h1">Notifications</h1>
+
+  <h2 id="unotif-events">When You Get Notified</h2>
+  <table>
+    <thead><tr><th>Event</th><th>Who Receives</th></tr></thead>
+    <tbody>
+      <tr><td>Task submitted for review</td><td>Leader</td></tr>
+      <tr><td>Task approved / rejected</td><td>IC (task owner)</td></tr>
+      <tr><td>Task approaching due date</td><td>IC</td></tr>
+      <tr><td>Sprint starting</td><td>All sprint members</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="unotif-prefs">Notification Preferences</h2>
+  <p>Go to <strong>Portal &#8594; Profile &#8594; Notification Preferences</strong> to enable/disable per-event push notifications.</p>
+</div>
+
+<!-- ── Admin: Setup ── -->
+<div class="page" id="page-admin-setup" data-audience="admin">
+  <div class="page-meta"><span class="badge badge-admin">Admin</span></div>
+  <h1 id="asetup-h1">Initial Setup</h1>
+
+  <ol class="walkthrough">
+    <li>
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h4>Install the App</h4>
+        <pre><code>bench get-app https://github.com/your-org/vernon_tasks
+bench --site mysite install-app vernon_tasks
+bench --site mysite migrate</code></pre>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h4>Build the PWA</h4>
+        <pre><code>cd apps/vernon_tasks &amp;&amp; bash build-pwa.sh</code></pre>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h4>Configure VAPID Keys</h4>
+        <p>Open <strong>VT Settings</strong> &#8594; run key generation &#8594; paste public/private keys.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h4>Assign Roles</h4>
+        <p>Assign <code>VT IC</code>, <code>VT Leader</code>, or <code>VT Executive</code> roles via Frappe User Management.</p>
+      </div>
+    </li>
+    <li>
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <h4>Enable Portal Feature Flags</h4>
+        <p>In <strong>VT Settings</strong>, enable portal modules: <code>portal_okr_enabled</code>, <code>portal_sprints_enabled</code>, etc.</p>
+      </div>
+    </li>
+  </ol>
+</div>
+
+<!-- ── Admin: Roles ── -->
+<div class="page" id="page-admin-roles" data-audience="admin">
+  <div class="page-meta"><span class="badge badge-admin">Admin</span></div>
+  <h1 id="aroles-h1">Roles &amp; Permissions</h1>
+
+  <table>
+    <thead><tr><th>Role</th><th>Access</th></tr></thead>
+    <tbody>
+      <tr><td><code>VT IC</code></td><td>My Work, My Dashboard, PWA</td></tr>
+      <tr><td><code>VT Leader</code></td><td>All IC access + Leader Review, Leader Dashboard, Portal</td></tr>
+      <tr><td><code>VT Executive</code></td><td>All Leader access + Exec Analytics, Portal Reports</td></tr>
+      <tr><td><code>VT Admin</code></td><td>Full access + VT Settings, VAPID config</td></tr>
+    </tbody>
+  </table>
+
+  <p>Each Portal module enforces role checks server-side via <code>frappe.has_role()</code>. Frontend guards redirect unauthorised users to the portal home.</p>
+</div>
+
+<!-- ── Admin: Push ── -->
+<div class="page" id="page-admin-push" data-audience="admin">
+  <div class="page-meta"><span class="badge badge-admin">Admin</span></div>
+  <h1 id="apush-h1">Push Notifications</h1>
+
+  <h2 id="apush-vapid">VAPID Setup</h2>
+  <pre><code>bench --site mysite execute vernon_tasks.task.api.push.generate_vapid_keys</code></pre>
+  <p>Copy the output keys into <strong>VT Settings &#8594; VAPID Public Key</strong> and <strong>VAPID Private Key</strong>.</p>
+
+  <div class="callout callout-warning">
+    <span class="callout-icon">&#9888;</span>
+    <div>Regenerating VAPID keys invalidates all existing push subscriptions. All users must re-subscribe. Only regenerate if the private key is compromised.</div>
+  </div>
+
+  <h2 id="apush-pipeline">Push Pipeline</h2>
+  <ul>
+    <li>Event fires (task submitted, approved, etc.)</li>
+    <li>Frappe hook calls <code>push_sender.send_push_notification</code></li>
+    <li>Checks per-user preferences via <code>push_prefs.py</code></li>
+    <li>Sends via WebPush library to stored subscriptions</li>
+    <li>Failed / expired subscriptions pruned automatically</li>
+  </ul>
+</div>
+
+<!-- ── Admin: Settings ── -->
+<div class="page" id="page-admin-settings" data-audience="admin">
+  <div class="page-meta"><span class="badge badge-admin">Admin</span></div>
+  <h1 id="asett-h1">VT Settings</h1>
+  <p>All runtime configuration stored in the <strong>VT Settings</strong> singleton doctype.</p>
+
+  <table>
+    <thead><tr><th>Field</th><th>Purpose</th><th>Default</th></tr></thead>
+    <tbody>
+      <tr><td><code>vapid_public_key</code></td><td>VAPID public key for push subscriptions</td><td>&#8212;</td></tr>
+      <tr><td><code>vapid_private_key</code></td><td>VAPID private key (encrypted at rest)</td><td>&#8212;</td></tr>
+      <tr><td><code>portal_okr_enabled</code></td><td>Enable OKR portal module</td><td>0</td></tr>
+      <tr><td><code>portal_projects_enabled</code></td><td>Enable Projects portal module</td><td>0</td></tr>
+      <tr><td><code>portal_sprints_enabled</code></td><td>Enable Sprints portal module</td><td>0</td></tr>
+      <tr><td><code>portal_notifications_enabled</code></td><td>Enable Notifications module</td><td>0</td></tr>
+      <tr><td><code>portal_reports_enabled</code></td><td>Enable Reports module</td><td>0</td></tr>
+      <tr><td><code>portal_dashboard_v2_enabled</code></td><td>Enable Dashboard v2</td><td>0</td></tr>
+      <tr><td><code>telemetry_retention_days</code></td><td>Days to keep telemetry events</td><td>90</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Implementation Tracker ── -->
+<div class="page" id="page-impl-tracker" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="impl-h1">Implementation Tracker</h1>
+  <p>PRD / TRD / ADR items mapped to code + tests. Source of truth for gap detection.</p>
+
+  <div class="legend">
+    <span class="badge badge-ok">complete</span>
+    <span class="badge badge-warn">partial</span>
+    <span class="badge badge-bad">pending</span>
+    <span class="badge badge-future">future</span>
+  </div>
+
+  <div class="callout callout-tip">
+    <span class="callout-icon">&#10003;</span>
+    <div>All 47 committed items complete as of 2026-05-19. Coverage measurement added via TRD-018 fix.</div>
+  </div>
+
+  <h2 id="impl-desk">PRD &#8212; Desk Pages (&#167;5.1)</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr data-id="PRD-001" data-status="complete" data-domain="task" data-title="My Work daily queue PDCA" class="row-complete"><td class="id-col">PRD-001</td><td>My Work &#8212; daily queue + PDCA quick-actions</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/my_work</code></td></tr>
+      <tr data-id="PRD-002" data-status="complete" data-domain="task" data-title="My Dashboard stats chart" class="row-complete"><td class="id-col">PRD-002</td><td>My Dashboard &#8212; stats + 7-day chart + hours donut</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/my_dashboard</code></td></tr>
+      <tr data-id="PRD-003" data-status="complete" data-domain="task" data-title="My Analytics leaderboard velocity streak" class="row-complete"><td class="id-col">PRD-003</td><td>My Analytics &#8212; leaderboard, velocity, streak</td><td><span class="badge badge-ok">complete</span></td><td><code>task/api/ic_analytics.py</code></td></tr>
+      <tr data-id="PRD-004" data-status="complete" data-domain="task" data-title="Leader Dashboard KPIs" class="row-complete"><td class="id-col">PRD-004</td><td>Leader Dashboard &#8212; pending review, KPIs, leaderboard, overdue</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/leader_dashboard</code></td></tr>
+      <tr data-id="PRD-005" data-status="complete" data-domain="task" data-title="Leader Review approve reject" class="row-complete"><td class="id-col">PRD-005</td><td>Leader Review &#8212; queue, workload, blocked, approve/reject</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/leader_review</code></td></tr>
+      <tr data-id="PRD-006" data-status="complete" data-domain="task" data-title="Leader Analytics burndown forecast" class="row-complete"><td class="id-col">PRD-006</td><td>Leader Analytics &#8212; burndown, velocity, forecast, risks</td><td><span class="badge badge-ok">complete</span></td><td><code>services/{burndown,forecast,risk_evaluator}</code></td></tr>
+      <tr data-id="PRD-007" data-status="complete" data-domain="task" data-title="Executive Analytics OKR Health Score" class="row-complete"><td class="id-col">PRD-007</td><td>Executive Analytics &#8212; OKR roll-up, KPI trends, Health Score</td><td><span class="badge badge-ok">complete</span></td><td><code>task/api/exec_analytics.py</code></td></tr>
+      <tr data-id="PRD-008" data-status="complete" data-domain="workspace" data-title="Workspace shortcuts nav bar" class="row-complete"><td class="id-col">PRD-008</td><td>Workspace shortcuts + global page nav bar</td><td><span class="badge badge-ok">complete</span></td><td><code>public/js/page_nav.js</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="impl-pwa">PRD &#8212; PWA Phases (&#167;5.2)</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Phase</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr data-id="PRD-009" data-status="complete" data-domain="task" data-title="P0.5 Foundation login offline telemetry" class="row-complete"><td class="id-col">PRD-009</td><td>P0.5 Foundation &#8212; login, list/detail, onboarding, offline, telemetry</td><td><span class="badge badge-ok">complete</span></td><td>pilot complete</td></tr>
+      <tr data-id="PRD-010" data-status="complete" data-domain="task" data-title="P1a Mutations Install A2HS" class="row-complete"><td class="id-col">PRD-010</td><td>P1a Mutations + Install &#8212; complete/log/snooze undo, A2HS</td><td><span class="badge badge-ok">complete</span></td><td><code>my_work_mutations.py</code></td></tr>
+      <tr data-id="PRD-011" data-status="complete" data-domain="task" data-title="P1b Search Notifications" class="row-complete"><td class="id-col">PRD-011</td><td>P1b Search + Notifications &#8212; debounced search, filter sheet, log, badge</td><td><span class="badge badge-ok">complete</span></td><td><code>notifications.py</code></td></tr>
+      <tr data-id="PRD-012" data-status="complete" data-domain="task" data-title="P2 Dashboard IC Analytics kanban" class="row-complete"><td class="id-col">PRD-012</td><td>P2 Dashboard + IC Analytics &#8212; summary, kanban, leaderboard tabs</td><td><span class="badge badge-ok">complete</span></td><td>PWA <code>/m/dashboard</code></td></tr>
+      <tr data-id="PRD-013" data-status="complete" data-domain="task" data-title="P3a Leader Review queue" class="row-complete"><td class="id-col">PRD-013</td><td>P3a Leader Review &#8212; /m/leader queue, approve/reject</td><td><span class="badge badge-ok">complete</span></td><td><code>leader_review.py</code></td></tr>
+      <tr data-id="PRD-014" data-status="complete" data-domain="task" data-title="P3b Leader Sprint Exec burndown" class="row-complete"><td class="id-col">PRD-014</td><td>P3b Leader Sprint + Exec &#8212; burndown, forecast, Health Score, OKR</td><td><span class="badge badge-ok">complete</span></td><td>services + exec_analytics</td></tr>
+      <tr data-id="PRD-015" data-status="complete" data-domain="task" data-title="P4a Push Notifications VAPID" class="row-complete"><td class="id-col">PRD-015</td><td>P4a Push Notifications &#8212; VAPID, subscribe, pipeline, pruning</td><td><span class="badge badge-ok">complete</span></td><td><code>push.py</code>, <code>push_sender.py</code></td></tr>
+      <tr data-id="PRD-016" data-status="complete" data-domain="task" data-title="P4b Push Refinements prefs action buttons" class="row-complete"><td class="id-col">PRD-016</td><td>P4b Push Refinements &#8212; per-event prefs, action buttons</td><td><span class="badge badge-ok">complete</span></td><td><code>push_prefs.py</code>, <code>push_action.py</code></td></tr>
+      <tr data-id="PRD-017" data-status="complete" data-domain="task" data-title="CSO Security Audit guards CSP" class="row-complete"><td class="id-col">PRD-017</td><td>CSO Security Audit &#8212; security.py guards, CSP/X-Frame</td><td><span class="badge badge-ok">complete</span></td><td><code>task/api/security.py</code></td></tr>
+      <tr data-id="PRD-018" data-status="complete" data-domain="task" data-title="Login Task UI Redesign glassmorphism" class="row-complete"><td class="id-col">PRD-018</td><td>Login + Task UI Redesign &#8212; glassmorphism, purple, accent cards</td><td><span class="badge badge-ok">complete</span></td><td>commits 52588ef&#8230;1fc12ca</td></tr>
+      <tr data-id="PRD-019" data-status="complete" data-domain="task" data-title="Mobile Desktop Responsive Nav 768px" class="row-complete"><td class="id-col">PRD-019</td><td>Mobile/Desktop Responsive Nav &#8212; 768px breakpoint, TopNav/BottomNav</td><td><span class="badge badge-ok">complete</span></td><td>ADR-016; merge acf48f4</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="impl-portal">Desktop Portal &#8212; Sub-PRDs</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Module</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr data-id="PORTAL-P1" data-status="complete" data-domain="task" data-title="Portal Foundation shell topbar auth" class="row-complete"><td class="id-col">PORTAL-P1</td><td>Foundation &#8212; shell, topbar, auth/permission, error boundaries</td><td><span class="badge badge-ok">complete</span></td><td><code>PortalShell.tsx</code>, <code>TopBar.tsx</code></td></tr>
+      <tr data-id="PORTAL-P2" data-status="complete" data-domain="okr" data-title="Portal OKR list filters autosave" class="row-complete"><td class="id-col">PORTAL-P2</td><td>OKR &#8212; list/detail/filters, inline KR autosave, bulk PDCA</td><td><span class="badge badge-ok">complete</span></td><td>flag <code>portal_okr_enabled</code></td></tr>
+      <tr data-id="PORTAL-P3.1" data-status="complete" data-domain="project" data-title="Portal Projects master-detail bulk" class="row-complete"><td class="id-col">PORTAL-P3.1</td><td>Projects &#8212; master-detail, linked-OKR preview, inline status, bulk</td><td><span class="badge badge-ok">complete</span></td><td>ADR-020</td></tr>
+      <tr data-id="PORTAL-P3.2" data-status="complete" data-domain="project" data-title="Portal Sprints kanban burndown dnd" class="row-complete"><td class="id-col">PORTAL-P3.2</td><td>Sprints &#8212; kanban board, sprint CRUD, burndown, dnd-kit drag-drop</td><td><span class="badge badge-ok">complete</span></td><td>flag <code>portal_sprints_enabled</code></td></tr>
+      <tr data-id="PORTAL-P3.3" data-status="complete" data-domain="task" data-title="Portal Tasks slide-over create modal" class="row-complete"><td class="id-col">PORTAL-P3.3</td><td>Tasks &#8212; detail slide-over, create modal, comment/activity log</td><td><span class="badge badge-ok">complete</span></td><td><code>test_portal_tasks.py</code></td></tr>
+      <tr data-id="PORTAL-P4c" data-status="complete" data-domain="task" data-title="Portal Notifications bell inbox" class="row-complete"><td class="id-col">PORTAL-P4c</td><td>Notifications &#8212; bell badge, dropdown panel, full inbox</td><td><span class="badge badge-ok">complete</span></td><td>277 tests pass</td></tr>
+      <tr data-id="PORTAL-P5" data-status="complete" data-domain="task" data-title="Portal Reports exec dashboard OKR tabs" class="row-complete"><td class="id-col">PORTAL-P5</td><td>Reports &#8212; exec dashboard, 3 tabs (OKR/Sprints/Team), 9 endpoints</td><td><span class="badge badge-ok">complete</span></td><td>329 frontend tests pass</td></tr>
+      <tr data-id="PORTAL-P6" data-status="complete" data-domain="task" data-title="Portal Dashboard role-aware landing" class="row-complete"><td class="id-col">PORTAL-P6</td><td>Dashboard &#8212; role-aware landing, 3 sections, drag-reorder</td><td><span class="badge badge-ok">complete</span></td><td>7 Python tests; <code>api/portal_dashboard.py</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="impl-domain">PRD &#8212; Domain &amp; Rules (&#167;4)</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Feature</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr data-id="PRD-020" data-status="complete" data-domain="task" data-title="PDCA state machines" class="row-complete"><td class="id-col">PRD-020</td><td>PDCA state machines (Task/Project/Objective)</td><td><span class="badge badge-ok">complete</span></td></tr>
+      <tr data-id="PRD-021" data-status="complete" data-domain="task" data-title="Point calculation revision deduction" class="row-complete"><td class="id-col">PRD-021</td><td>Point calculation + revision deduction + override</td><td><span class="badge badge-ok">complete</span></td></tr>
+      <tr data-id="PRD-022" data-status="complete" data-domain="task" data-title="Scheduling engine capacity recurring" class="row-complete"><td class="id-col">PRD-022</td><td>Scheduling engine + capacity + recurring tasks</td><td><span class="badge badge-ok">complete</span></td></tr>
+      <tr data-id="PRD-023" data-status="complete" data-domain="task" data-title="Health Score formula OKR ontime velocity" class="row-complete"><td class="id-col">PRD-023</td><td>Health Score formula (okr 0.4 + ontime 0.3 + velocity 0.3)</td><td><span class="badge badge-ok">complete</span></td></tr>
+      <tr data-id="PRD-024" data-status="complete" data-domain="workspace" data-title="Workspaces fixtures" class="row-complete"><td class="id-col">PRD-024</td><td>Workspaces fixtures (My Tasks / My Projects / Overview)</td><td><span class="badge badge-ok">complete</span></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="impl-trd">TRD</h2>
+  <table>
+    <thead><tr><th>ID</th><th>Requirement</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr data-id="TRD-001" data-status="complete" data-domain="task" data-title="Frappe v15 backend" class="row-complete"><td class="id-col">TRD-001</td><td>Frappe v15 backend</td><td><span class="badge badge-ok">complete</span></td><td>ADR-001</td></tr>
+      <tr data-id="TRD-002" data-status="complete" data-domain="task" data-title="React 18 Vite 5 TS strict" class="row-complete"><td class="id-col">TRD-002</td><td>React 18 + Vite 5 + TS strict</td><td><span class="badge badge-ok">complete</span></td><td><code>pwa/</code></td></tr>
+      <tr data-id="TRD-003" data-status="complete" data-domain="task" data-title="Dual-UI architecture Desk PWA" class="row-complete"><td class="id-col">TRD-003</td><td>Dual-UI architecture (Desk + PWA)</td><td><span class="badge badge-ok">complete</span></td><td>ADR-002</td></tr>
+      <tr data-id="TRD-004" data-status="complete" data-domain="task" data-title="TanStack Query 5 client cache" class="row-complete"><td class="id-col">TRD-004</td><td>TanStack Query 5 client cache</td><td><span class="badge badge-ok">complete</span></td><td>ADR-006</td></tr>
+      <tr data-id="TRD-005" data-status="complete" data-domain="task" data-title="Layer separation Controller Service" class="row-complete"><td class="id-col">TRD-005</td><td>Layer separation: Controller / Service / Page Handler</td><td><span class="badge badge-ok">complete</span></td><td><code>services/</code> split</td></tr>
+      <tr data-id="TRD-006" data-status="complete" data-domain="task" data-title="Custom doctypes VT Task Project Sprint OKR" class="row-complete"><td class="id-col">TRD-006</td><td>Custom doctypes (VT Task, Project, Sprint, OKR, etc.)</td><td><span class="badge badge-ok">complete</span></td><td>ADR-007</td></tr>
+      <tr data-id="TRD-007" data-status="complete" data-domain="task" data-title="Telemetry 90-day retention" class="row-complete"><td class="id-col">TRD-007</td><td>Telemetry 90-day retention</td><td><span class="badge badge-ok">complete</span></td><td>scheduler <code>purge_old_telemetry</code></td></tr>
+      <tr data-id="TRD-008" data-status="complete" data-domain="task" data-title="API contract whitelisted namespace" class="row-complete"><td class="id-col">TRD-008</td><td>API contract conventions (whitelisted method namespace)</td><td><span class="badge badge-ok">complete</span></td><td><code>task/api/*.py</code></td></tr>
+      <tr data-id="TRD-009" data-status="complete" data-domain="task" data-title="Vite build pipeline bundle budget 95KB" class="row-complete"><td class="id-col">TRD-009</td><td>Vite build pipeline + bundle budget (~95KB gz)</td><td><span class="badge badge-ok">complete</span></td><td><code>build-pwa.sh</code></td></tr>
+      <tr data-id="TRD-010" data-status="complete" data-domain="task" data-title="Service worker StaleWhileRevalidate offline" class="row-complete"><td class="id-col">TRD-010</td><td>Service worker StaleWhileRevalidate offline</td><td><span class="badge badge-ok">complete</span></td><td>Workbox; ADR-004</td></tr>
+      <tr data-id="TRD-011" data-status="complete" data-domain="task" data-title="Frappe session cookie no JWT" class="row-complete"><td class="id-col">TRD-011</td><td>Reuse Frappe session cookie (no JWT)</td><td><span class="badge badge-ok">complete</span></td><td>ADR-005</td></tr>
+      <tr data-id="TRD-012" data-status="complete" data-domain="task" data-title="Security headers /m/ routes" class="row-complete"><td class="id-col">TRD-012</td><td>Security headers on /m/*</td><td><span class="badge badge-ok">complete</span></td><td><code>www/m.py</code></td></tr>
+      <tr data-id="TRD-013" data-status="complete" data-domain="task" data-title="API guards rate_limit clamp max_str" class="row-complete"><td class="id-col">TRD-013</td><td>API guards (rate_limit, clamp, max_str, require_login)</td><td><span class="badge badge-ok">complete</span></td><td><code>task/api/security.py</code></td></tr>
+      <tr data-id="TRD-014" data-status="complete" data-domain="task" data-title="Role checks endpoint frappe.has_role" class="row-complete"><td class="id-col">TRD-014</td><td>Role checks at endpoint top</td><td><span class="badge badge-ok">complete</span></td><td><code>frappe.has_role()</code></td></tr>
+      <tr data-id="TRD-015" data-status="complete" data-domain="task" data-title="Telemetry pipeline Report Builder" class="row-complete"><td class="id-col">TRD-015</td><td>Telemetry pipeline + Report Builder reports</td><td><span class="badge badge-ok">complete</span></td><td><code>telemetry.py</code></td></tr>
+      <tr data-id="TRD-016" data-status="complete" data-domain="task" data-title="Deploy topology rollback procedure" class="row-complete"><td class="id-col">TRD-016</td><td>Deploy topology + rollback procedure</td><td><span class="badge badge-ok">complete</span></td><td><code>docs/rollout/pwa-pilot.html</code></td></tr>
+      <tr data-id="TRD-017" data-status="complete" data-domain="task" data-title="VAPID key provisioning" class="row-complete"><td class="id-col">TRD-017</td><td>VAPID key one-time provisioning</td><td><span class="badge badge-ok">complete</span></td><td>docs/trd/infrastructure.html &#167;13.3</td></tr>
+      <tr data-id="TRD-018" data-status="complete" data-domain="task" data-title="Backend test coverage 80 percent measured" class="row-complete"><td class="id-col">TRD-018</td><td>Backend test coverage &#8805;80% (services + security)</td><td><span class="badge badge-ok">complete</span></td><td><code>[tool.coverage.*]</code> in pyproject.toml; <code>--coverage</code> in CI; <code>test_trd018_coverage.py</code> (4 tests)</td></tr>
+      <tr data-id="TRD-019" data-status="complete" data-domain="task" data-title="PWA Vitest happy-dom RTL" class="row-complete"><td class="id-col">TRD-019</td><td>PWA Vitest + happy-dom + RTL</td><td><span class="badge badge-ok">complete</span></td><td>88/88 passing</td></tr>
+      <tr data-id="TRD-020" data-status="complete" data-domain="task" data-title="PWA Playwright e2e smoke" class="row-complete"><td class="id-col">TRD-020</td><td>PWA Playwright e2e (env-gated)</td><td><span class="badge badge-ok">complete</span></td><td><code>pwa/e2e/smoke.spec.ts</code></td></tr>
+      <tr data-id="TRD-021" data-status="complete" data-domain="task" data-title="TS tsc noEmit strict" class="row-complete"><td class="id-col">TRD-021</td><td>TS <code>tsc --noEmit</code> strict</td><td><span class="badge badge-ok">complete</span></td><td>no errors 2026-05-16</td></tr>
+      <tr data-id="TRD-022" data-status="complete" data-domain="task" data-title="CI gates lint type test GitHub Actions" class="row-complete"><td class="id-col">TRD-022</td><td>CI gates (lint, type, test)</td><td><span class="badge badge-ok">complete</span></td><td><code>.github/workflows/test.yml</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="impl-summary">Summary</h2>
+  <div class="summary-grid">
+    <div class="summary-card"><div class="num" style="color:var(--success)">47</div><div class="lbl">complete</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--warning)">0</div><div class="lbl">partial</div></div>
+    <div class="summary-card"><div class="num" style="color:var(--danger)">0</div><div class="lbl">pending</div></div>
+  </div>
+</div>
+
+</main>
+
+<!-- Right Sidebar (TOC) -->
+<aside class="toc-sidebar" id="tocSidebar">
+  <div class="toc-title">On This Page</div>
+  <div id="tocLinks"></div>
+</aside>
+
+</div><!-- .layout -->
+
+<script>
+(function() {
+  'use strict';
+
+  /* ── Search Index (static data only) ── */
+  var SEARCH_INDEX = [
+    {page:'introduction',title:'Vernon Tasks Introduction',body:'PDCA OKR Agile task performance platform Frappe PWA React domains doctypes tests'},
+    {page:'system-overview',title:'System Overview',body:'architecture layers frappe desk PWA routes portal route map'},
+    {page:'quick-start',title:'Quick Start',body:'install bench get-app build PWA test run VAPID'},
+    {page:'architecture',title:'Architecture',body:'layers handler service domain repository security ADR key decisions'},
+    {page:'domain-task',title:'Domain Task',body:'PDCA state machine backlog plan do check done act services tests events'},
+    {page:'domain-project',title:'Domain Project Sprint',body:'sprint kanban burndown drag drop dnd-kit portal fractional rank'},
+    {page:'domain-okr',title:'Domain OKR',body:'objective key result health score exec analytics roll-up'},
+    {page:'domain-workforce',title:'Domain Workforce',body:'capacity points leaderboard velocity employee summary'},
+    {page:'domain-workspace',title:'Domain Workspace',body:'fixtures shortcuts my tasks my projects overview'},
+    {page:'api-reference',title:'API Reference',body:'whitelisted endpoints my work leader portal security guards'},
+    {page:'adr-log',title:'ADR Log',body:'architectural decisions frappe react session cookie workbox tanstack query'},
+    {page:'desktop-portal',title:'Desktop Portal Developer',body:'react spa portal routes feature flags okr projects sprints dashboard'},
+    {page:'user-my-work',title:'My Work User Guide',body:'daily queue PDCA plan do check submit review snooze undo'},
+    {page:'user-dashboard',title:'Dashboard Analytics User',body:'stats 7-day chart leaderboard leader executive analytics'},
+    {page:'user-pwa',title:'Mobile PWA User',body:'install add to home screen push notifications offline A2HS'},
+    {page:'user-portal',title:'Desktop Portal User',body:'okr projects sprints notifications reports role-aware'},
+    {page:'user-notifications',title:'Notifications User',body:'push bell inbox prefs events task approved rejected sprint'},
+    {page:'admin-setup',title:'Admin Initial Setup',body:'install bench VAPID roles feature flags migrate'},
+    {page:'admin-roles',title:'Admin Roles Permissions',body:'VT IC Leader Executive Admin permission matrix role checks'},
+    {page:'admin-push',title:'Admin Push Notifications',body:'VAPID keys generate pipeline pruning subscriptions WebPush'},
+    {page:'admin-settings',title:'Admin VT Settings',body:'config doctype vapid portal flags telemetry retention singleton'},
+    {page:'impl-tracker',title:'Implementation Tracker',body:'PRD TRD ADR complete partial pending coverage gaps TRD-018'},
+  ];
+
+  var currentPage = 'introduction';
+  var currentAud  = localStorage.getItem('vt-aud') || 'all';
+
+  /* ── navigate to page ── */
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+    document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+
+    var page = document.getElementById('page-' + id);
+    if (!page) return;
+
+    page.classList.add('active');
+    currentPage = id;
+    buildToc(page);
+    window.scrollTo(0, 0);
+
+    document.querySelectorAll('.nav-item').forEach(function(n) {
+      if (n.dataset.page === id) n.classList.add('active');
+    });
+
+    history.replaceState(null, '', '#' + id);
+    document.getElementById('sidebar').classList.remove('open');
+  }
+
+  /* ── build right TOC ── */
+  function buildToc(page) {
+    var container = document.getElementById('tocLinks');
+    while (container.firstChild) container.removeChild(container.firstChild);
+
+    page.querySelectorAll('h2[id], h3[id]').forEach(function(h) {
+      var a = document.createElement('a');
+      a.className = 'toc-link' + (h.tagName === 'H3' ? ' toc-link-h3' : '');
+      a.href = '#' + h.id;
+      a.textContent = h.textContent;
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        h.scrollIntoView({ behavior: 'smooth' });
+      });
+      container.appendChild(a);
+    });
+  }
+
+  /* ── audience filter ── */
+  function setAudience(aud) {
+    currentAud = aud;
+    localStorage.setItem('vt-aud', aud);
+
+    document.querySelectorAll('.aud-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.aud === aud);
+    });
+
+    var audSections = {
+      dev:   ['sec-start', 'sec-dev', 'sec-tracker'],
+      user:  ['sec-start', 'sec-user'],
+      admin: ['sec-start', 'sec-admin', 'sec-tracker']
+    };
+    var show = aud === 'all' ? null : (audSections[aud] || []);
+
+    document.querySelectorAll('.nav-section').forEach(function(s) {
+      s.style.display = (!show || show.indexOf(s.id) !== -1) ? '' : 'none';
+    });
+  }
+
+  /* ── collapse/expand section ── */
+  function toggleSection(id) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('collapsed');
+  }
+
+  /* ── search ── */
+  var searchInput   = document.getElementById('searchInput');
+  var searchResults = document.getElementById('searchResults');
+
+  searchInput.addEventListener('input', function() {
+    var q = searchInput.value.trim().toLowerCase();
+
+    while (searchResults.firstChild) searchResults.removeChild(searchResults.firstChild);
+
+    if (!q) { searchResults.classList.remove('open'); return; }
+
+    var hits = SEARCH_INDEX.filter(function(item) {
+      return item.title.toLowerCase().indexOf(q) !== -1 ||
+             item.body.toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 6);
+
+    if (!hits.length) {
+      var noResult = document.createElement('div');
+      noResult.className = 'search-no-result';
+      noResult.textContent = 'No results';
+      searchResults.appendChild(noResult);
+    } else {
+      hits.forEach(function(h) {
+        var item = document.createElement('div');
+        item.className = 'search-item';
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'search-item-title';
+        titleEl.textContent = h.title;
+
+        var snippet = document.createElement('div');
+        snippet.className = 'search-item-snippet';
+        snippet.textContent = h.body.substring(0, 80) + '…';
+
+        item.appendChild(titleEl);
+        item.appendChild(snippet);
+
+        item.addEventListener('click', function() {
+          showPage(h.page);
+          searchInput.value = '';
+          searchResults.classList.remove('open');
+        });
+
+        searchResults.appendChild(item);
+      });
+    }
+
+    searchResults.classList.add('open');
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.search-wrap')) searchResults.classList.remove('open');
+  });
+
+  /* ── wire audience buttons ── */
+  document.querySelectorAll('.aud-btn').forEach(function(b) {
+    b.addEventListener('click', function() { setAudience(b.dataset.aud); });
+  });
+
+  /* ── wire nav items ── */
+  document.querySelectorAll('.nav-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      var pg = item.dataset.page;
+      if (pg) showPage(pg);
+    });
+  });
+
+  /* ── wire section headers ── */
+  document.querySelectorAll('.nav-section-header').forEach(function(hdr) {
+    hdr.addEventListener('click', function() {
+      var secId = hdr.dataset.section;
+      if (secId) toggleSection(secId);
+    });
+  });
+
+  /* ── hamburger ── */
+  document.getElementById('hamburger').addEventListener('click', function() {
+    document.getElementById('sidebar').classList.toggle('open');
+  });
+
+  /* ── hash routing ── */
+  function routeFromHash() {
+    var hash = location.hash.slice(1);
+    if (hash && document.getElementById('page-' + hash)) {
+      showPage(hash);
+    } else {
+      showPage('introduction');
+    }
+  }
+
+  /* ── scrollspy ── */
+  var scrollTimer;
+  window.addEventListener('scroll', function() {
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(function() {
+      var page = document.getElementById('page-' + currentPage);
+      if (!page) return;
+      var active = null;
+      page.querySelectorAll('h2[id], h3[id]').forEach(function(h) {
+        if (h.getBoundingClientRect().top < 120) active = h.id;
+      });
+      document.querySelectorAll('.toc-link').forEach(function(a) {
+        a.classList.toggle('active', active && a.getAttribute('href') === '#' + active);
+      });
+    }, 50);
+  });
+
+  /* ── init ── */
+  document.addEventListener('DOMContentLoaded', function() {
+    setAudience(currentAud);
+    routeFromHash();
+  });
+  window.addEventListener('hashchange', routeFromHash);
+
+}());
+</script>
+</body>
+</html>

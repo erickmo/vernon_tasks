@@ -27,3 +27,27 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 indent = "    "
+
+[tool.coverage.run]
+source = ["vernon_tasks"]
+omit = [
+    "*/test_*.py",
+    "*/tests/*",
+    "*/migrations/*",
+    "*/fixtures/*",
+    "*/public/*",
+    "*/__pycache__/*",
+]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@(abc\\.)?abstractmethod",
+]
