@@ -4,6 +4,8 @@ import frappe
 def execute():
     """Add portal_notifications_enabled Check field to VT Settings. Idempotent."""
     frappe.reload_doc("vt_settings", "doctype", "vt_settings")
+    if not frappe.db.table_exists("VT Settings"):
+        return
     columns = frappe.db.sql(
         "SHOW COLUMNS FROM `tabVT Settings` LIKE 'portal_notifications_enabled'"
     )
