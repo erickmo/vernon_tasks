@@ -1,1 +1,39 @@
-[]
+[
+ {
+  "docstatus": 0,
+  "doctype": "Website Slideshow",
+  "header": null,
+  "modified": "2026-05-19 07:16:43.277689",
+  "name": "Vernon Hero",
+  "slideshow_items": [
+   {
+    "description": "Hubungkan target organisasi ke task harian tim Anda",
+    "heading": "Kelola OKR & Sprint dalam Satu Platform",
+    "image": "/assets/vernon_tasks/images/hero-okr.webp",
+    "parent": "Vernon Hero",
+    "parentfield": "slideshow_items",
+    "parenttype": "Website Slideshow",
+    "url": "/portal"
+   },
+   {
+    "description": "Plan → Do → Check → Act dalam setiap task",
+    "heading": "PDCA Workflow yang Terstruktur",
+    "image": "/assets/vernon_tasks/images/hero-pdca.webp",
+    "parent": "Vernon Hero",
+    "parentfield": "slideshow_items",
+    "parenttype": "Website Slideshow",
+    "url": "/portal"
+   },
+   {
+    "description": "Dashboard real-time: siapa blocked, siapa on track",
+    "heading": "Visibilitas Penuh untuk Leader & Owner",
+    "image": "/assets/vernon_tasks/images/hero-team.webp",
+    "parent": "Vernon Hero",
+    "parentfield": "slideshow_items",
+    "parenttype": "Website Slideshow",
+    "url": "/portal"
+   }
+  ],
+  "slideshow_name": "Vernon Hero"
+ }
+]

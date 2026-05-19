@@ -1,1 +1,174 @@
-[]
+[
+ {
+  "docstatus": 0,
+  "doctype": "Website Route Meta",
+  "meta_tags": [
+   {
+    "key": "title",
+    "parent": "/",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Vernon Tasks — Manajemen Tim & OKR"
+   },
+   {
+    "key": "description",
+    "parent": "/",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Platform manajemen project, OKR, dan PDCA untuk tim Indonesia"
+   },
+   {
+    "key": "og:title",
+    "parent": "/",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Vernon Tasks — Manajemen Tim & OKR"
+   },
+   {
+    "key": "og:description",
+    "parent": "/",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Platform manajemen project, OKR, dan PDCA untuk tim Indonesia"
+   },
+   {
+    "key": "og:image",
+    "parent": "/",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "/assets/vernon_tasks/images/og-home.webp"
+   }
+  ],
+  "modified": "2026-05-19 07:16:45.404630",
+  "name": "/"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Website Route Meta",
+  "meta_tags": [
+   {
+    "key": "title",
+    "parent": "/portal",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Portal — Vernon Tasks"
+   },
+   {
+    "key": "description",
+    "parent": "/portal",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Dashboard real-time untuk leader, owner, dan anggota tim"
+   },
+   {
+    "key": "og:title",
+    "parent": "/portal",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Portal — Vernon Tasks"
+   },
+   {
+    "key": "og:description",
+    "parent": "/portal",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Dashboard real-time untuk leader, owner, dan anggota tim"
+   },
+   {
+    "key": "og:image",
+    "parent": "/portal",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "/assets/vernon_tasks/images/og-portal.webp"
+   }
+  ],
+  "modified": "2026-05-19 07:16:45.421003",
+  "name": "/portal"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Website Route Meta",
+  "meta_tags": [
+   {
+    "key": "title",
+    "parent": "/tentang",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Tentang Vernon Tasks"
+   },
+   {
+    "key": "description",
+    "parent": "/tentang",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Visi, misi, dan cerita di balik Vernon Tasks"
+   },
+   {
+    "key": "og:title",
+    "parent": "/tentang",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Tentang Vernon Tasks"
+   },
+   {
+    "key": "og:description",
+    "parent": "/tentang",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Visi, misi, dan cerita di balik Vernon Tasks"
+   },
+   {
+    "key": "og:image",
+    "parent": "/tentang",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "/assets/vernon_tasks/images/og-about.webp"
+   }
+  ],
+  "modified": "2026-05-19 07:16:45.451316",
+  "name": "/tentang"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Website Route Meta",
+  "meta_tags": [
+   {
+    "key": "title",
+    "parent": "/kontak",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Hubungi Vernon Tasks"
+   },
+   {
+    "key": "description",
+    "parent": "/kontak",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Konsultasi dan demo produk Vernon Tasks"
+   },
+   {
+    "key": "og:title",
+    "parent": "/kontak",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Hubungi Vernon Tasks"
+   },
+   {
+    "key": "og:description",
+    "parent": "/kontak",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "Konsultasi dan demo produk Vernon Tasks"
+   },
+   {
+    "key": "og:image",
+    "parent": "/kontak",
+    "parentfield": "meta_tags",
+    "parenttype": "Website Route Meta",
+    "value": "/assets/vernon_tasks/images/og-contact.webp"
+   }
+  ],
+  "modified": "2026-05-19 07:16:45.467674",
+  "name": "/kontak"
+ }
+]

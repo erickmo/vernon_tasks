@@ -1,1 +1,28 @@
-[]
+[
+ {
+  "background_color": null,
+  "button_gradients": 0,
+  "button_rounded_corners": 1,
+  "button_shadows": 0,
+  "custom": 1,
+  "custom_overrides": null,
+  "custom_scss": ":root {\n  --vt-purple: #6d28d9;\n  --vt-indigo: #6366f1;\n  --vt-violet: #8b5cf6;\n}\n.navbar {\n  backdrop-filter: blur(12px);\n  -webkit-backdrop-filter: blur(12px);\n  background: rgba(109, 40, 217, 0.95) !important;\n  border-bottom: 1px solid rgba(255,255,255,0.1);\n}\n.btn-primary {\n  background: linear-gradient(135deg, var(--vt-indigo), var(--vt-purple));\n  border: none;\n  border-radius: 8px;\n}\n.btn-primary:hover {\n  background: linear-gradient(135deg, var(--vt-purple), var(--vt-violet));\n  transform: translateY(-1px);\n  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.35);\n}",
+  "dark_color": null,
+  "docstatus": 0,
+  "doctype": "Website Theme",
+  "font_properties": "wght@300;400;500;600;700;800",
+  "font_size": null,
+  "google_font": "Inter",
+  "ignored_apps": [],
+  "js": null,
+  "light_color": null,
+  "modified": "2026-05-19 00:13:36",
+  "module": "Website",
+  "name": "Vernon Tasks Theme",
+  "primary_color": "#6366f1",
+  "text_color": null,
+  "theme": "Vernon Tasks Theme",
+  "theme_scss": null,
+  "theme_url": null
+ }
+]
