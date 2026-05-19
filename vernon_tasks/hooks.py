@@ -109,7 +109,8 @@ fixtures = [
     # Website brand & content
     {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},
-    {"dt": "Web Page", "filters": [["route", "in", ["", "tentang", "kontak"]]]},
+    # Home page route is "home" (Frappe auto-generates route from title when empty)
+    {"dt": "Web Page", "filters": [["route", "in", ["home", "tentang", "kontak"]]]},
     # Frappe slugifies Web Form title: "Hubungi Kami" → "hubungi-kami"
     {"dt": "Web Form", "filters": [["name", "=", "hubungi-kami"]]},
     # Frappe v15: Website Route Meta name IS the route (no separate route column)
