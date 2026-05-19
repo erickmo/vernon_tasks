@@ -110,7 +110,8 @@ fixtures = [
     {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},
     {"dt": "Web Page", "filters": [["route", "in", ["", "tentang", "kontak"]]]},
-    {"dt": "Web Form", "filters": [["name", "=", "Hubungi Kami"]]},
+    # Frappe slugifies Web Form title: "Hubungi Kami" → "hubungi-kami"
+    {"dt": "Web Form", "filters": [["name", "=", "hubungi-kami"]]},
     # Frappe v15: Website Route Meta name IS the route (no separate route column)
     {"dt": "Website Route Meta", "filters": [["name", "in", ["/", "/portal", "/tentang", "/kontak"]]]},
 ]
