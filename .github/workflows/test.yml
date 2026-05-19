@@ -83,7 +83,18 @@ jobs:
           bench get-app --branch master "$GITHUB_WORKSPACE"
           bench --site test.localhost install-app vernon_tasks
 
-      - name: Run backend tests
+      - name: Install coverage tooling
+        run: pip install pytest-cov coverage
+
+      - name: Run backend tests with coverage
         run: |
           cd frappe-bench
-          bench --site test.localhost run-tests --app vernon_tasks
+          bench --site test.localhost run-tests --app vernon_tasks --coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: frappe-bench/coverage.xml
+          if-no-files-found: warn
