@@ -227,7 +227,8 @@ def setup_route_meta():
         if frappe.db.exists("Website Route Meta", {"route": meta["route"]}):
             print(f"✓ Route Meta '{meta['route']}' already exists, skipping")
             continue
-        doc = frappe.get_doc({"doctype": "Website Route Meta", **meta})
+        # Website Route Meta uses route as the document name.
+        doc = frappe.get_doc({"doctype": "Website Route Meta", "name": meta["route"], **meta})
         doc.insert(ignore_permissions=True)
         print(f"✓ Created Website Route Meta: {meta['route']}")
 
