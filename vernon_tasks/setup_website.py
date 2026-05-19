@@ -18,10 +18,13 @@ def _exists(doctype, name):
 
 
 def setup_website_theme():
-    if _exists("Website Theme", "Vernon Tasks Theme"):
-        print("✓ Website Theme 'Vernon Tasks Theme' already exists, skipping")
-        return
-    CUSTOM_CSS = """:root {
+    """Create Vernon Tasks Theme using Frappe v15 schema.
+
+    Bypasses validate() via raw DB insert to avoid SCSS generation errors
+    caused by missing app modules in this environment (e.g. vernon_portal).
+    custom_scss field holds CSS overrides (v15 renamed from custom_css).
+    """
+    CUSTOM_SCSS = """:root {
   --vt-purple: #6d28d9;
   --vt-indigo: #6366f1;
   --vt-violet: #8b5cf6;
@@ -42,34 +45,21 @@ def setup_website_theme():
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(109, 40, 217, 0.35);
 }"""
-    try:
-        doc = frappe.get_doc({
-            "doctype": "Website Theme",
-            "theme": "Vernon Tasks Theme",
-            "google_font": "Inter",
-            "top_bar_color": "#6d28d9",
-            "top_bar_text_color": "#ffffff",
-            "top_bar_hover_color": "#7c3aed",
-            "primary_action_color": "#6366f1",
-            "custom_css": CUSTOM_CSS,
-        })
-        doc.insert(ignore_permissions=True)
-        print("✓ Created Website Theme 'Vernon Tasks Theme'")
-    except Exception as e:
-        # Frappe SCSS generation may fail in environments with missing app modules.
-        # Fall back to raw DB insert to bypass validate().
+    if _exists("Website Theme", "Vernon Tasks Theme"):
+        print("✓ Website Theme 'Vernon Tasks Theme' already exists, skipping")
+    else:
+        # Raw insert bypasses validate() + SCSS generation (v15 compatible columns).
         frappe.db.sql("""
             INSERT INTO `tabWebsite Theme`
-                (name, theme, google_font, top_bar_color, top_bar_text_color,
-                 top_bar_hover_color, primary_action_color, custom_css,
-                 owner, modified_by, creation, modified, docstatus)
+                (name, theme, google_font, primary_color, custom_scss,
+                 owner, modified_by, creation, modified, docstatus, idx)
             VALUES
                 ('Vernon Tasks Theme', 'Vernon Tasks Theme', 'Inter',
-                 '#6d28d9', '#ffffff', '#7c3aed', '#6366f1', %(css)s,
-                 'Administrator', 'Administrator', NOW(), NOW(), 0)
-        """, {"css": CUSTOM_CSS})
+                 '#6366f1', %(scss)s,
+                 'Administrator', 'Administrator', NOW(), NOW(), 0, 0)
+        """, {"scss": CUSTOM_SCSS})
         frappe.db.commit()
-        print(f"✓ Created Website Theme via raw insert (SCSS gen skipped: {e})")
+        print("✓ Created Website Theme 'Vernon Tasks Theme' (v15 raw insert)")
 
     # Set as active theme in Website Settings
     frappe.db.set_value("Website Settings", "Website Settings", "theme", "Vernon Tasks Theme")
