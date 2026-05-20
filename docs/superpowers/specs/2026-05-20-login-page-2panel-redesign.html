@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: 2-Panel Login Page Redesign</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<header class="doc-header">
+  <h1>2-Panel Login Page Redesign</h1>
+  <p class="meta">Spec · 2026-05-20 · Status: Draft</p>
+</header>
+
+<main class="doc-body">
+
+<h2>Ringkasan</h2>
+<p>
+  Ganti tampilan halaman login Frappe default di <code>task.localhost:8080/login</code>
+  dengan desain 2-panel yang menarik: kiri gradient ungu-pink dengan feature list,
+  kanan form login putih bersih. File implementasi: <code>vernon_tasks/www/login.html</code>.
+</p>
+
+<h2>Tujuan</h2>
+<ul>
+  <li>Halaman <code>/login</code> (dan root <code>/</code> saat belum login) langsung menampilkan 2-panel login yang berkesan</li>
+  <li>Tidak ada halaman marketing perantara — user langsung disambut dengan login page</li>
+  <li>Desain konsisten dengan brand Vernon Tasks (purple gradient)</li>
+</ul>
+
+<h2>Desain Visual</h2>
+
+<h3>Layout</h3>
+<ul>
+  <li><strong>Dua panel horizontal</strong> — kiri flex 1.35, kanan flex 1</li>
+  <li>Full viewport height (<code>100vh</code>)</li>
+  <li>Responsive: stack vertikal di layar &lt; 768px (panel kiri jadi header)</li>
+</ul>
+
+<h3>Panel Kiri — Gradient Mural</h3>
+<ul>
+  <li>Background: <code>linear-gradient(145deg, #4f3cc9 → #7c3aed → #a855f7 → #f093fb)</code></li>
+  <li>Grid pattern overlay: repeating-linear-gradient putih opacity 5%</li>
+  <li>Blur blob dekoratif di sudut kiri atas dan kanan bawah</li>
+  <li>Logo Vernon Tasks (icon ◆ + nama) di atas</li>
+  <li>Headline besar: <em>"Satu platform untuk seluruh alur kerja tim."</em></li>
+  <li>Subtext: penjelasan singkat 1 kalimat</li>
+  <li>Feature list (3 item dengan icon + nama + deskripsi):</li>
+    <ul>
+      <li>🎯 OKR Tracking — Hubungkan target organisasi ke task harian</li>
+      <li>🏃 Sprint Board — Agile sprint dengan kanban visual dan visibilitas penuh</li>
+      <li>🔄 PDCA Workflow — Struktur kerja Plan-Do-Check-Act yang terbukti efektif</li>
+    </ul>
+  <li>Trust badge di bawah: "Sistem aktif · Vernon Corp" dengan green dot</li>
+</ul>
+
+<h3>Panel Kanan — Form Login</h3>
+<ul>
+  <li>Background: <code>#ffffff</code></li>
+  <li>Form terpusat, max-width 340px</li>
+  <li>Greeting: <em>"Selamat datang 👋"</em> + subtext</li>
+  <li>Field: Email/Username + Password (label uppercase kecil)</li>
+  <li>Tombol submit: gradient ungu → pink dengan box-shadow glow</li>
+  <li>Error state: red alert box dengan pesan dari API</li>
+  <li>Footer: copyright Vernon Corp</li>
+</ul>
+
+<h2>Implementasi Teknis</h2>
+
+<h3>File yang dibuat</h3>
+<ul>
+  <li><code>vernon_tasks/www/login.html</code> — template Jinja override login Frappe</li>
+  <li><code>vernon_tasks/www/login.py</code> — context script (opsional, untuk dev shortcuts)</li>
+</ul>
+
+<h3>Cara kerja override</h3>
+<p>
+  Frappe mencari <code>www/login.html</code> di setiap installed app sebelum fallback ke default.
+  File ini akan di-render sebagai Jinja template dengan context Frappe standar
+  (<code>csrf_token</code>, <code>redirect_to</code>, dll).
+</p>
+
+<h3>Login API</h3>
+<pre><code>POST /api/method/login
+Content-Type: application/x-www-form-urlencoded
+
+usr={email}&pwd={password}&cmd=login</code></pre>
+<ul>
+  <li>Success: <code>{"message": "Logged In"}</code> → redirect ke <code>/m/work</code> atau <code>?redirect_to=</code></li>
+  <li>Error: non-2xx atau <code>{"message": "..."}</code> → tampilkan pesan error</li>
+</ul>
+
+<h3>No external CDN</h3>
+<p>
+  Semua CSS inline dalam <code>&lt;style&gt;</code> block. Gunakan system font stack
+  (<code>-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif</code>).
+  Tidak ada Tailwind atau external font request.
+</p>
+
+<h3>Dev shortcuts</h3>
+<p>
+  Jika <code>frappe.conf.developer_mode</code> aktif, tampilkan quick-fill button
+  "Administrator" di atas form untuk mempercepat development.
+</p>
+
+<h2>Out of Scope</h2>
+<ul>
+  <li>SSO / OAuth — tidak diimplementasikan (tombol SSO/OTP di mockup dihapus dari implementasi)</li>
+  <li>Forgot password flow — gunakan link ke halaman Frappe default <code>/update-password</code></li>
+  <li>Perubahan pada PWA login (<code>pwa/src/auth/login.tsx</code>) — tidak disentuh</li>
+  <li>Web Page fixture "home" — tidak diubah (Frappe redirect ke /login saat belum auth)</li>
+</ul>
+
+<h2>Testing</h2>
+<ul>
+  <li>Buka <code>http://task.localhost:8080/login</code> saat logout → tampil 2-panel</li>
+  <li>Submit credentials valid → redirect ke <code>/m/work</code></li>
+  <li>Submit credentials salah → error box muncul, form tetap aktif</li>
+  <li>Resize &lt; 768px → stack vertikal, tidak ada overflow</li>
+</ul>
+
+</main>
+</body>
+</html>

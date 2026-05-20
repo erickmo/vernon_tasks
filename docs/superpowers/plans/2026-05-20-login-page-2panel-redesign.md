@@ -1,3 +1,71 @@
+# Login Page 2-Panel Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Override Frappe's default login page with a beautiful 2-panel design (gradient mural left + clean form right) at `task.localhost:8080/login`.
+
+**Architecture:** Create `vernon_tasks/www/login.html` (Jinja template) + `vernon_tasks/www/login.py` (context script). Frappe resolves `www/login.html` from installed apps before its own default, so no hooks change needed. Login calls `/api/method/login` via fetch, redirects to `/m/work` on success.
+
+**Tech Stack:** Frappe Jinja templates, vanilla JS fetch API, inline CSS (no external dependencies)
+
+---
+
+### Task 1: Context Script
+
+**Files:**
+- Create: `vernon_tasks/www/login.py`
+
+- [ ] **Step 1: Create `vernon_tasks/www/login.py`**
+
+```python
+import frappe
+
+no_cache = 1
+
+
+def get_context(context):
+    if frappe.session.user != "Guest":
+        frappe.local.flags.redirect_location = "/m/work"
+        raise frappe.Redirect
+
+    context.csrf_token = frappe.sessions.get_csrf_token()
+    context.redirect_to = frappe.form_dict.get("redirect_to") or "/m/work"
+    context.dev_shortcuts = _get_dev_shortcuts()
+
+
+def _get_dev_shortcuts() -> list[dict]:
+    if not frappe.conf.get("developer_mode"):
+        return []
+    return [
+        {"usr": "Administrator", "pwd": "admin", "label": "Administrator"},
+    ]
+```
+
+- [ ] **Step 2: Verify file exists**
+
+```bash
+ls -la apps/vernon_tasks/vernon_tasks/www/login.py
+```
+
+Expected: file exists, ~20 lines.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/vernon_tasks/vernon_tasks/www/login.py
+git commit -m "feat(login): add www/login.py context script with redirect + dev shortcuts"
+```
+
+---
+
+### Task 2: HTML Template
+
+**Files:**
+- Create: `vernon_tasks/www/login.html`
+
+- [ ] **Step 1: Create `vernon_tasks/www/login.html`**
+
+```html
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -328,10 +396,6 @@ body {
   function clearError() {
     errEl.classList.remove("vl-visible");
   }
-  function resetBtn() {
-    btn.disabled = false;
-    btn.textContent = "Masuk ke Workspace →";
-  }
 
   form.addEventListener("submit", async function (e) {
     e.preventDefault();
@@ -342,45 +406,104 @@ body {
     var usr = document.getElementById("vl-usr").value.trim();
     var pwd = document.getElementById("vl-pwd").value;
 
-    if (!usr) {
-      showError("Email/username tidak boleh kosong.");
-      resetBtn();
-      return;
-    }
-    if (!pwd) {
-      showError("Password tidak boleh kosong.");
-      resetBtn();
-      return;
-    }
-
     try {
       var res = await fetch("/api/method/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Frappe-CSRF-Token": {{ csrf_token | tojson }},
+          "X-Frappe-CSRF-Token": "{{ csrf_token }}",
         },
         body: JSON.stringify({ usr: usr, pwd: pwd }),
       });
+      var data = await res.json();
       if (res.ok) {
         window.location.href = redirect;
-        return;
-      }
-      var data = {};
-      try { data = await res.json(); } catch (_) {}
-      var excType = (data.exc_type) || "";
-      if (excType === "AuthenticationError") {
-        showError("Email/username atau password salah.");
       } else {
-        showError("Terjadi kesalahan, silakan coba lagi.");
+        var excType = (data && data.exc_type) || "";
+        if (excType === "AuthenticationError" || excType === "LoginError") {
+          showError("Email/username atau password salah.");
+        } else {
+          showError("Terjadi kesalahan, silakan coba lagi.");
+        }
+        btn.disabled = false;
+        btn.textContent = "Masuk ke Workspace →";
       }
-      resetBtn();
     } catch (_) {
       showError("Tidak dapat terhubung ke server. Periksa koneksi Anda.");
-      resetBtn();
+      btn.disabled = false;
+      btn.textContent = "Masuk ke Workspace →";
     }
   });
 }());
 </script>
 </body>
 </html>
+```
+
+- [ ] **Step 2: Verify file exists**
+
+```bash
+ls -la apps/vernon_tasks/vernon_tasks/www/login.html
+wc -l apps/vernon_tasks/vernon_tasks/www/login.html
+```
+
+Expected: file exists, ~220+ lines.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/vernon_tasks/vernon_tasks/www/login.html
+git commit -m "feat(login): 2-panel gradient mural login page override"
+```
+
+---
+
+### Task 3: Verify in Browser
+
+No automated test applicable for a full-page HTML override — verify manually.
+
+- [ ] **Step 1: Clear Frappe template cache**
+
+```bash
+bench --site task.localhost clear-cache
+```
+
+- [ ] **Step 2: Open browser and verify layout**
+
+Open `http://task.localhost:8080/login` while logged out.
+
+Expected:
+- Left panel: purple→pink gradient + grid pattern + feature list visible
+- Right panel: white form with username + password fields
+- No Frappe default blue login page
+
+- [ ] **Step 3: Verify error state**
+
+Submit empty form or wrong credentials.
+
+Expected: red error box appears below password field with text "Email/username atau password salah."
+
+- [ ] **Step 4: Verify successful login**
+
+Submit valid credentials (Administrator / admin in dev mode).
+
+Expected: redirects to `/m/work`.
+
+- [ ] **Step 5: Verify redirect after login**
+
+Visit `http://task.localhost:8080/login` while already logged in.
+
+Expected: redirects immediately to `/m/work` (no login form shown).
+
+- [ ] **Step 6: Verify responsive**
+
+Resize browser below 768px.
+
+Expected: left panel stacks above form, no horizontal scroll, no overflow.
+
+- [ ] **Step 7: Final commit if any fixes made**
+
+```bash
+git add -p
+git commit -m "fix(login): <describe any fix>"
+```
