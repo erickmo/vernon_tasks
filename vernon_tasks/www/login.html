@@ -328,6 +328,10 @@ body {
   function clearError() {
     errEl.classList.remove("vl-visible");
   }
+  function resetBtn() {
+    btn.disabled = false;
+    btn.textContent = "Masuk ke Workspace →";
+  }
 
   form.addEventListener("submit", async function (e) {
     e.preventDefault();
@@ -338,32 +342,37 @@ body {
     var usr = document.getElementById("vl-usr").value.trim();
     var pwd = document.getElementById("vl-pwd").value;
 
+    if (!usr) {
+      showError("Email/username tidak boleh kosong.");
+      resetBtn();
+      return;
+    }
+
     try {
       var res = await fetch("/api/method/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Frappe-CSRF-Token": "{{ csrf_token }}",
+          "X-Frappe-CSRF-Token": {{ csrf_token | tojson }},
         },
         body: JSON.stringify({ usr: usr, pwd: pwd }),
       });
-      var data = await res.json();
       if (res.ok) {
         window.location.href = redirect;
-      } else {
-        var excType = (data && data.exc_type) || "";
-        if (excType === "AuthenticationError" || excType === "LoginError") {
-          showError("Email/username atau password salah.");
-        } else {
-          showError("Terjadi kesalahan, silakan coba lagi.");
-        }
-        btn.disabled = false;
-        btn.textContent = "Masuk ke Workspace →";
+        return;
       }
+      var data = {};
+      try { data = await res.json(); } catch (_) {}
+      var excType = (data && data.exc_type) || "";
+      if (excType === "AuthenticationError" || excType === "LoginError") {
+        showError("Email/username atau password salah.");
+      } else {
+        showError("Terjadi kesalahan, silakan coba lagi.");
+      }
+      resetBtn();
     } catch (_) {
       showError("Tidak dapat terhubung ke server. Periksa koneksi Anda.");
-      btn.disabled = false;
-      btn.textContent = "Masuk ke Workspace →";
+      resetBtn();
     }
   });
 }());
