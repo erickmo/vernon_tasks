@@ -3,11 +3,18 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { logout } from "../auth/session";
 import { useUnreadCount } from "../hooks/useUnreadCount";
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-const NAV2_BG    = "#f1f5f9";
-const PRIMARY    = "var(--vt-primary)";
-const TEXT_MUTED = "var(--vt-text-muted)";
-const BORDER     = "var(--vt-border)";
+// ── Design tokens ──────────────────────────────────────────────────────────────
+const C_BG        = "#ffffff";
+const C_SURFACE   = "#fafafa";
+const C_BORDER    = "rgba(0,0,0,0.07)";
+const C_TEXT      = "#0a0a0a";
+const C_MUTED     = "#6b7280";
+const C_PRIMARY   = "#7c4dab";
+const C_PRIMARY_L = "#f3eeff";
+const C_DANGER    = "#dc2626";
+const C_DANGER_L  = "#fef2f2";
+const SHADOW_SM   = "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)";
+const SHADOW_MD   = "0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)";
 
 const BREADCRUMB_MAP: { prefix: string; label: string }[] = [
   { prefix: "/m/dashboard", label: "Dashboard" },
@@ -28,41 +35,49 @@ const NAV2_ITEMS = [
   { label: "Report",    to: "/m/analytics" },
 ] as const;
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function getInitials(username: string | null): string {
+  if (!username) return "?";
+  const local = username.split("@")[0];
+  const parts = local.split(/[._-]/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return local.slice(0, 2).toUpperCase();
+}
+
+function getAvatarColor(username: string | null): string {
+  if (!username) return C_PRIMARY;
+  const colors = ["#7c4dab","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4"];
+  let h = 0;
+  for (let i = 0; i < username.length; i++) h = username.charCodeAt(i) + ((h << 5) - h);
+  return colors[Math.abs(h) % colors.length];
+}
+
 // ── SVG icons ─────────────────────────────────────────────────────────────────
-function IconBell({ size = 18, color = "currentColor" }: { size?: number; color?: string }) {
+function IconBell({ size = 16 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   );
 }
 
-function IconUser({ size = 18, color = "currentColor" }: { size?: number; color?: string }) {
+function IconChevron({ size = 12 }: { size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+// ── Logo mark ──────────────────────────────────────────────────────────────────
+function LogoMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden>
+      <rect width="22" height="22" rx="6" fill={C_PRIMARY} />
+      <path d="M6 6l5 10 5-10" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -70,6 +85,7 @@ function IconUser({ size = 18, color = "currentColor" }: { size?: number; color?
 // ── NotificationButton ─────────────────────────────────────────────────────────
 function NotificationButton({ unread, onNavigate }: { unread: number; onNavigate: () => void }) {
   const [hovered, setHovered] = useState(false);
+  const badgeCount = unread > 99 ? "99+" : unread > 0 ? String(unread) : null;
   return (
     <button
       onClick={onNavigate}
@@ -79,22 +95,32 @@ function NotificationButton({ unread, onNavigate }: { unread: number; onNavigate
       style={{
         position: "relative",
         display: "flex", alignItems: "center", justifyContent: "center",
-        width: 34, height: 34,
-        border: "none",
-        background: hovered ? "var(--vt-primary-light)" : "transparent",
+        width: 32, height: 32,
+        border: `1px solid ${hovered ? "rgba(0,0,0,0.12)" : C_BORDER}`,
+        background: hovered ? C_SURFACE : C_BG,
         borderRadius: 8, cursor: "pointer",
-        color: hovered ? PRIMARY : TEXT_MUTED,
-        transition: "background 0.13s, color 0.13s",
+        color: hovered ? C_TEXT : C_MUTED,
+        transition: "all 0.15s",
+        boxShadow: hovered ? SHADOW_SM : "none",
       }}
     >
       <IconBell />
-      {unread > 0 && (
+      {badgeCount && (
         <span aria-hidden style={{
-          position: "absolute", top: 5, right: 5,
-          width: 8, height: 8, borderRadius: "50%",
+          position: "absolute", top: -5, right: -5,
+          minWidth: 16, height: 16,
+          padding: "0 3px",
+          borderRadius: 99,
           background: "#ef4444",
-          boxShadow: "0 0 0 2px var(--vt-bg)",
-        }} />
+          color: "#fff",
+          fontSize: 9,
+          fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: `0 0 0 2px ${C_BG}`,
+          letterSpacing: "-0.02em",
+        }}>
+          {badgeCount}
+        </span>
       )}
     </button>
   );
@@ -107,13 +133,13 @@ function AvatarDropdown({ username }: { username: string | null }) {
   const [keluarHovered, setKeluarHovered] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const nav = useNavigate();
+  const initials = getInitials(username);
+  const avatarBg = getAvatarColor(username);
 
   useEffect(() => {
     if (!open) return;
     function onOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     document.addEventListener("mousedown", onOutside);
     return () => document.removeEventListener("mousedown", onOutside);
@@ -136,88 +162,127 @@ function AvatarDropdown({ username }: { username: string | null }) {
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
+      {/* Avatar button — initials circle */}
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu akun"
         aria-expanded={open}
+        aria-haspopup="menu"
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 34,
-          height: 34,
-          border: "none",
-          background: open ? "var(--vt-primary-light)" : "transparent",
-          borderRadius: 8,
-          cursor: "pointer",
-          color: open ? PRIMARY : TEXT_MUTED,
-          transition: "background 0.13s, color 0.13s",
+          display: "flex", alignItems: "center", gap: 6,
+          height: 32, padding: "0 8px 0 4px",
+          border: `1px solid ${open ? "rgba(0,0,0,0.14)" : C_BORDER}`,
+          background: open ? C_SURFACE : C_BG,
+          borderRadius: 999, cursor: "pointer",
+          transition: "all 0.15s",
+          boxShadow: open ? SHADOW_SM : "none",
         }}
       >
-        <IconUser />
+        <span style={{
+          width: 22, height: 22, borderRadius: "50%",
+          background: avatarBg,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 9, fontWeight: 700, color: "#fff",
+          letterSpacing: "0.04em", flexShrink: 0,
+          fontFamily: "system-ui, sans-serif",
+        }}>
+          {initials}
+        </span>
+        <span style={{
+          fontSize: 12, fontWeight: 500, color: C_TEXT,
+          maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {username ? username.split("@")[0] : "Akun"}
+        </span>
+        <span style={{ color: C_MUTED, display: "flex", alignItems: "center" }}>
+          <IconChevron />
+        </span>
       </button>
 
       {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            right: 0,
-            minWidth: 160,
-            background: "var(--vt-bg)",
-            border: `1px solid ${BORDER}`,
-            borderRadius: 8,
-            boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
-            zIndex: 200,
-            overflow: "hidden",
-          }}
-        >
+        <div style={{
+          position: "absolute",
+          top: "calc(100% + 6px)",
+          right: 0,
+          minWidth: 200,
+          background: C_BG,
+          border: `1px solid ${C_BORDER}`,
+          borderRadius: 10,
+          boxShadow: SHADOW_MD,
+          zIndex: 200,
+          overflow: "hidden",
+        }}>
+          {/* Header */}
           {username && (
-            <div
-              style={{
-                padding: "10px 14px 8px",
-                fontSize: 11,
-                color: TEXT_MUTED,
-                borderBottom: `1px solid ${BORDER}`,
-                fontWeight: 500,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {username}
+            <div style={{
+              padding: "12px 14px 10px",
+              borderBottom: `1px solid ${C_BORDER}`,
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: avatarBg, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11, fontWeight: 700, color: "#fff",
+                letterSpacing: "0.04em",
+              }}>
+                {initials}
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{
+                  fontSize: 12, fontWeight: 600, color: C_TEXT,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {username.split("@")[0]}
+                </div>
+                <div style={{
+                  fontSize: 11, color: C_MUTED, marginTop: 1,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {username}
+                </div>
+              </div>
             </div>
           )}
-          <Link
-            to="/m/me"
-            onClick={() => setOpen(false)}
-            onMouseEnter={() => setProfilHovered(true)}
-            onMouseLeave={() => setProfilHovered(false)}
-            style={{
-              display: "block", padding: "9px 14px",
-              fontSize: 13, color: "var(--vt-text)",
-              textDecoration: "none",
-              background: profilHovered ? "var(--vt-primary-light)" : "transparent",
-              transition: "background 0.12s",
-            }}
-          >
-            Profil
-          </Link>
-          <button
-            onClick={handleLogout}
-            onMouseEnter={() => setKeluarHovered(true)}
-            onMouseLeave={() => setKeluarHovered(false)}
-            style={{
-              display: "block", width: "100%", textAlign: "left",
-              padding: "9px 14px", fontSize: 13, color: "#dc2626",
-              background: keluarHovered ? "#fef2f2" : "transparent",
-              border: "none", cursor: "pointer",
-              borderTop: `1px solid ${BORDER}`,
-              transition: "background 0.12s",
-            }}
-          >
-            Keluar
-          </button>
+
+          {/* Menu items */}
+          <div style={{ padding: "4px 0" }}>
+            <Link
+              to="/m/me"
+              onClick={() => setOpen(false)}
+              onMouseEnter={() => setProfilHovered(true)}
+              onMouseLeave={() => setProfilHovered(false)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "7px 14px",
+                fontSize: 13, color: C_TEXT,
+                textDecoration: "none",
+                background: profilHovered ? C_SURFACE : "transparent",
+                transition: "background 0.1s",
+              }}
+            >
+              Profil
+            </Link>
+          </div>
+
+          {/* Danger zone */}
+          <div style={{ borderTop: `1px solid ${C_BORDER}`, padding: "4px 0" }}>
+            <button
+              onClick={handleLogout}
+              onMouseEnter={() => setKeluarHovered(true)}
+              onMouseLeave={() => setKeluarHovered(false)}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "7px 14px",
+                fontSize: 13, color: C_DANGER,
+                background: keluarHovered ? C_DANGER_L : "transparent",
+                border: "none", cursor: "pointer",
+                transition: "background 0.1s", textAlign: "left",
+              }}
+            >
+              Keluar
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -247,90 +312,92 @@ export function TopNav() {
 
   return (
     <>
-      {/* ── Navbar1 (44px sticky) ── */}
-      <header
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "var(--top-nav1-h)",
-          background: "var(--vt-bg)",
-          borderBottom: `1px solid ${BORDER}`,
-          display: "flex",
-          alignItems: "center",
-          zIndex: 50,
-          padding: "0 20px",
-        }}
-      >
-        {/* Logo */}
-        <Link
-          to="/m/dashboard"
-          style={{
-            fontFamily: "'Barlow Condensed', 'Outfit', system-ui, sans-serif",
-            fontSize: 17,
-            fontWeight: 900,
-            color: PRIMARY,
-            textDecoration: "none",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            flexShrink: 0,
-            userSelect: "none",
-          }}
-        >
-          Vernon
+      {/* ── Navbar1 ── */}
+      <header style={{
+        position: "fixed", top: 0, left: 0, right: 0,
+        height: "var(--top-nav1-h)",
+        background: C_BG,
+        borderBottom: `1px solid ${C_BORDER}`,
+        display: "flex", alignItems: "center",
+        zIndex: 50,
+        padding: "0 20px",
+        gap: 0,
+      }}>
+
+        {/* Logo: mark + wordmark */}
+        <Link to="/m/dashboard" style={{
+          display: "flex", alignItems: "center", gap: 8,
+          textDecoration: "none", flexShrink: 0,
+          userSelect: "none",
+        }}>
+          <LogoMark />
+          <span style={{
+            fontSize: 14,
+            fontWeight: 700,
+            color: C_TEXT,
+            letterSpacing: "-0.02em",
+            fontFamily: "'Outfit', system-ui, sans-serif",
+          }}>
+            Vernon
+          </span>
         </Link>
 
         {/* Divider */}
-        <div
-          aria-hidden
-          style={{
-            width: 1,
-            height: 18,
-            background: BORDER,
-            margin: "0 14px",
-            flexShrink: 0,
-          }}
-        />
+        <div aria-hidden style={{
+          width: 1, height: 16,
+          background: C_BORDER,
+          margin: "0 14px",
+          flexShrink: 0,
+        }} />
 
         {/* Breadcrumb */}
-        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--vt-text)" }}>
-          {breadcrumb}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{
+            fontSize: 13, fontWeight: 400,
+            color: C_MUTED,
+          }}>
+            Vernon
+          </span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+            stroke={C_MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          <span style={{
+            fontSize: 13, fontWeight: 600,
+            color: C_TEXT,
+          }}>
+            {breadcrumb}
+          </span>
+        </div>
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Notification bell */}
-        <NotificationButton
-          unread={unread}
-          onNavigate={() => nav("/m/me/notifications")}
-        />
-
-        {/* Avatar dropdown */}
-        <AvatarDropdown username={username} />
+        {/* Right actions */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <NotificationButton
+            unread={unread}
+            onNavigate={() => nav("/m/me/notifications")}
+          />
+          <AvatarDropdown username={username} />
+        </div>
       </header>
 
-      {/* ── Navbar2 (36px sticky below navbar1) ── */}
-      <nav
-        aria-label="Main menu"
-        style={{
-          position: "fixed",
-          top: "var(--top-nav1-h)",
-          left: 0,
-          right: 0,
-          height: "var(--top-nav2-h)",
-          background: NAV2_BG,
-          borderBottom: `1px solid ${BORDER}`,
-          display: "flex",
-          alignItems: "center",
-          zIndex: 49,
-          padding: "0 20px",
-          gap: 4,
-          overflowX: "auto",
-          scrollbarWidth: "none",
-        }}
-      >
+      {/* ── Navbar2 ── */}
+      <nav aria-label="Main menu" style={{
+        position: "fixed",
+        top: "var(--top-nav1-h)",
+        left: 0, right: 0,
+        height: "var(--top-nav2-h)",
+        background: C_BG,
+        borderBottom: `1px solid ${C_BORDER}`,
+        display: "flex", alignItems: "center",
+        zIndex: 49,
+        padding: "0 20px",
+        gap: 2,
+        overflowX: "auto",
+        scrollbarWidth: "none",
+      }}>
         {NAV2_ITEMS.map((item) => {
           const isActive = loc.pathname.startsWith(item.to);
           return (
@@ -338,18 +405,16 @@ export function TopNav() {
               key={item.to}
               to={item.to}
               style={{
-                display: "flex",
-                alignItems: "center",
-                height: "100%",
-                padding: "0 12px",
-                fontSize: 13,
-                fontWeight: isActive ? 600 : 500,
-                color: isActive ? "var(--vt-text)" : TEXT_MUTED,
+                display: "inline-flex", alignItems: "center",
+                padding: "3px 10px",
+                fontSize: 12, fontWeight: isActive ? 600 : 500,
+                color: isActive ? C_TEXT : C_MUTED,
                 textDecoration: "none",
-                borderBottom: isActive ? `2px solid ${PRIMARY}` : "2px solid transparent",
-                transition: "color 0.14s, border-color 0.14s",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
+                borderRadius: 6,
+                background: isActive ? C_PRIMARY_L : "transparent",
+                border: isActive ? `1px solid rgba(124,77,171,0.18)` : "1px solid transparent",
+                transition: "all 0.15s",
+                whiteSpace: "nowrap", flexShrink: 0,
               }}
             >
               {item.label}
