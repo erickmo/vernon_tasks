@@ -231,7 +231,7 @@ export function TopNav() {
   const { data: unread = 0 } = useUnreadCount();
 
   const [username, setUsername] = useState<string | null>(
-    (window as unknown as { frappe_user?: string }).frappe_user ?? null
+    (window as unknown as { frappe?: { session?: { user?: string } } }).frappe?.session?.user ?? null
   );
 
   useEffect(() => {
