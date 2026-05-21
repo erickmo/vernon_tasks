@@ -39,12 +39,12 @@ function RootRedirect() {
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
     window.matchMedia("(min-width: 1024px)").matches;
-  return <Navigate to={isDesktop ? "/portal" : "/m/work"} replace />;
+  return <Navigate to={isDesktop ? "/portal" : "/m/dashboard"} replace />;
 }
 
 function OnboardingGate() {
   if (localStorage.getItem("vt_pwa_onboarded") === "1") {
-    return <Navigate to="/m/work" replace />;
+    return <Navigate to="/m/dashboard" replace />;
   }
   return <Onboarding />;
 }
@@ -73,5 +73,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: "*", element: <Navigate to="/m/work" replace /> },
+  { path: "*", element: <Navigate to="/m/dashboard" replace /> },
 ]);
