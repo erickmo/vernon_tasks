@@ -8,7 +8,7 @@ export function SafeArea({ children }: { children: ReactNode }) {
         paddingLeft: "var(--safe-left)",
         paddingRight: "var(--safe-right)",
         paddingBottom: "calc(var(--bottom-nav-h) + var(--safe-bottom))",
-        minHeight: "100%",
+        minHeight: "100dvh",
       }}
     >
       {children}
