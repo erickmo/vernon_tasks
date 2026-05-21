@@ -9,9 +9,13 @@ export function SafeArea({ children }: { children: ReactNode }) {
         paddingRight: "var(--safe-right)",
         paddingBottom: "calc(var(--bottom-nav-h) + var(--safe-bottom))",
         minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {children}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        {children}
+      </div>
     </div>
   );
 }

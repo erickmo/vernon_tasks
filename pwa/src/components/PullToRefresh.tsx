@@ -32,7 +32,12 @@ export function PullToRefresh({ onRefresh, children }: Props) {
   }
 
   return (
-    <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+    <div
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={{ flex: 1, display: "flex", flexDirection: "column" }}
+    >
       <div
         style={{
           height: pull,

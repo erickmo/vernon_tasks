@@ -11,70 +11,86 @@ import { PullToRefresh } from "../../components/PullToRefresh";
 import { fmtDate, t } from "../../i18n";
 import { logEvent } from "../../telemetry";
 
-/* ── Design tokens (dashboard-local) ─────────────────────── */
-const BG       = "var(--vt-bg)";
-const GLASS    = "var(--vt-surface)";
-const GLASS_BD = "var(--vt-border)";
-const DIM      = "rgba(0,0,0,0.45)";
-const FONT     = "Inter, system-ui, sans-serif";
+/* ── Tokens ───────────────────────────────────────────────── */
+const BG     = "#f1f5f9";
+const CARD   = "#ffffff";
+const SHADOW = "0 1px 3px rgba(0,0,0,0.07), 0 2px 10px rgba(0,0,0,0.04)";
+const BD     = "#e8edf3";
+const TEXT   = "#0f172a";
+const TEXT2  = "#64748b";
+const TEXT3  = "#94a3b8";
+const INDIGO = "#4f46e5";
+const PURPLE = "#7c3aed";
+const GREEN  = "#059669";
+const AMBER  = "#d97706";
 
 const STAT_META = [
-  { key: "done_today",   icon: "✓", label: "Selesai hari ini", color: "#10b981", glow: "rgba(16,185,129,0.22)",  round: false },
-  { key: "done_week",    icon: "◈", label: "Minggu ini",       color: "#a855f7", glow: "rgba(168,85,247,0.22)", round: false },
-  { key: "points_month", icon: "◆", label: "Poin bulan ini",   color: "#f59e0b", glow: "rgba(245,158,11,0.22)", round: true  },
+  { key: "done_today",   icon: "✓", label: "Selesai hari ini", color: GREEN,  bg: "#f0fdf4", round: false },
+  { key: "done_week",    icon: "◈", label: "Minggu ini",       color: INDIGO, bg: "#eef2ff", round: false },
+  { key: "points_month", icon: "◆", label: "Poin bulan ini",   color: AMBER,  bg: "#fffbeb", round: true  },
 ] as const;
 
-const KANBAN_ACCENT: Record<string, { color: string; pill: string }> = {
-  Backlog: { color: "#64748b", pill: "rgba(100,116,139,0.18)" },
-  Doing:   { color: "#a855f7", pill: "rgba(168,85,247,0.18)"  },
-  Review:  { color: "#f59e0b", pill: "rgba(245,158,11,0.18)"  },
-  Done:    { color: "#10b981", pill: "rgba(16,185,129,0.18)"  },
+const KANBAN_ACCENT: Record<string, { color: string; bg: string }> = {
+  Backlog: { color: "#64748b", bg: "#f8fafc" },
+  Doing:   { color: INDIGO,   bg: "#eef2ff" },
+  Review:  { color: AMBER,    bg: "#fffbeb" },
+  Done:    { color: GREEN,    bg: "#f0fdf4" },
 };
 
 /* ── Sub-components ───────────────────────────────────────── */
 
 function StatCard({
-  icon, label, color, glow, value, delay,
+  icon, label, color, bg, value, delay,
 }: {
-  icon: string; label: string; color: string; glow: string;
+  icon: string; label: string; color: string; bg: string;
   value: number | string; delay: number;
 }) {
   return (
     <div style={{
-      background: GLASS,
-      border: `1px solid ${GLASS_BD}`,
-      borderRadius: 8,
-      padding: "12px 10px",
-      position: "relative",
-      overflow: "hidden",
-      animation: `vt-fade-up 0.45s ease ${delay}s both`,
+      background: CARD,
+      borderRadius: 10,
+      padding: "14px 12px",
+      boxShadow: SHADOW,
+      animation: `vt-fade-up 0.4s ease ${delay}s both`,
     }}>
       <div style={{
-        position: "absolute", bottom: -16, right: -16,
-        width: 70, height: 70,
-        background: `radial-gradient(circle, ${glow} 0%, transparent 70%)`,
-        borderRadius: "50%",
-        pointerEvents: "none",
-      }} />
-      <div style={{ fontSize: 12, color, marginBottom: 6, fontWeight: 700 }}>{icon}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: "var(--vt-text)", marginBottom: 6 }}>
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 28, height: 28,
+        borderRadius: 7,
+        background: bg,
+        color,
+        fontSize: 12,
+        fontWeight: 700,
+        marginBottom: 10,
+      }}>
+        {icon}
+      </div>
+      <div style={{
+        fontSize: 26, fontWeight: 700, lineHeight: 1,
+        color: TEXT, marginBottom: 5,
+        letterSpacing: "-0.03em",
+      }}>
         {value}
       </div>
-      <div style={{ fontSize: 10, color: DIM, lineHeight: 1.4 }}>{label}</div>
+      <div style={{ fontSize: 10, color: TEXT2, fontWeight: 500 }}>{label}</div>
     </div>
   );
 }
 
-function GlowBar({ pct }: { pct: number }) {
+function ProgressBar({ pct }: { pct: number }) {
   const clamped = Math.max(0, Math.min(100, pct));
   return (
-    <div style={{ height: 10, background: "var(--vt-border)", borderRadius: 99, overflow: "hidden" }}>
+    <div style={{
+      height: 6, background: "#e2e8f0",
+      borderRadius: 99, overflow: "hidden",
+    }}>
       <div style={{
         height: "100%",
         width: `${clamped}%`,
-        background: "linear-gradient(90deg, #6d28d9, #a855f7, #c084fc)",
+        background: `linear-gradient(90deg, ${INDIGO}, ${PURPLE})`,
         borderRadius: 99,
-        boxShadow: "0 0 14px rgba(168,85,247,0.8)",
         transition: "width 0.7s cubic-bezier(0.4,0,0.2,1)",
       }} />
     </div>
@@ -84,33 +100,52 @@ function GlowBar({ pct }: { pct: number }) {
 function MiniCard({ item, accent }: { item: KanbanItem; accent: string }) {
   return (
     <div style={{
-      background: "var(--vt-surface)",
-      border: "1px solid var(--vt-border)",
-      borderRadius: 8,
+      background: "#fafbfc",
+      border: `1px solid ${BD}`,
+      borderRadius: 7,
       padding: "8px 10px",
-      marginBottom: 8,
+      marginBottom: 6,
     }}>
       <div style={{
-        fontSize: 12, fontWeight: 600,
-        color: "var(--vt-text)",
-        lineHeight: 1.4, marginBottom: 4,
+        fontSize: 12, fontWeight: 500,
+        color: TEXT,
+        lineHeight: 1.45, marginBottom: 5,
       }}>
         {item.title}
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {item.points > 0 && (
-          <span style={{ fontSize: 11, color: accent, fontWeight: 600 }}>{item.points}pt</span>
+          <span style={{
+            fontSize: 10, color: accent, fontWeight: 600,
+          }}>
+            {item.points}pt
+          </span>
         )}
         {item.priority && (
-          <span style={{ fontSize: 11, color: DIM }}>{item.priority}</span>
+          <span style={{ fontSize: 10, color: TEXT3 }}>{item.priority}</span>
         )}
         {item.deadline && (
-          <span style={{ fontSize: 11, color: DIM, marginLeft: "auto" }}>
+          <span style={{ fontSize: 10, color: TEXT3, marginLeft: "auto" }}>
             {fmtDate(item.deadline)}
           </span>
         )}
       </div>
     </div>
+  );
+}
+
+/* ── Section header ───────────────────────────────────────── */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p style={{
+      fontSize: 10, fontWeight: 700,
+      color: TEXT3,
+      textTransform: "uppercase",
+      letterSpacing: "0.10em",
+      margin: "0 0 10px",
+    }}>
+      {children}
+    </p>
   );
 }
 
@@ -132,137 +167,131 @@ export function DashboardPage() {
 
   return (
     <PullToRefresh onRefresh={refresh}>
-      <div style={{ background: BG, minHeight: "100%", fontFamily: FONT, color: "var(--vt-text)" }}>
+      <div style={{ background: BG, flex: 1, color: TEXT }}>
 
-        {/* ── Hero section ── */}
+        {/* ── Hero / Header ── */}
         <div style={{
-          background: "var(--vt-primary-light)",
-          padding: "20px 20px 0",
-          position: "relative",
-          overflow: "hidden",
+          background: CARD,
+          borderBottom: `1px solid ${BD}`,
+          padding: "20px 20px 16px",
         }}>
           <p style={{
             margin: "0 0 2px", fontSize: 10,
-            color: "var(--vt-primary)",
-            letterSpacing: "0.1em", textTransform: "uppercase",
-            animation: "vt-fade-in 0.4s ease both",
+            color: TEXT3, fontWeight: 500,
+            letterSpacing: "0.04em",
+            animation: "vt-fade-in 0.35s ease both",
           }}>
             {todayStr}
           </p>
           <h1 style={{
-            margin: "0 0 20px", fontSize: 20, fontWeight: 700,
-            letterSpacing: "-0.03em", color: "var(--vt-primary-dark)",
-            animation: "vt-fade-in 0.4s ease 0.05s both",
+            margin: 0, fontSize: 20, fontWeight: 700,
+            letterSpacing: "-0.02em", color: TEXT,
+            animation: "vt-fade-in 0.35s ease 0.05s both",
           }}>
             Dashboard
           </h1>
+        </div>
 
-          {/* Stats row */}
+        {/* ── Content ── */}
+        <div style={{ padding: "16px 14px 32px" }}>
+
+          {/* Stats */}
+          <SectionLabel>Ringkasan</SectionLabel>
           {stats.isLoading && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, paddingBottom: 24 }}>
-              {[0, 1, 2].map(i => <Skeleton key={i} height={104} />)}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
+              {[0, 1, 2].map(i => <Skeleton key={i} height={96} />)}
             </div>
           )}
           {stats.data && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, paddingBottom: 24 }}>
-              {STAT_META.map(({ key, icon, label, color, glow, round }, i) => {
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(3,1fr)",
+              gap: 10, marginBottom: 20,
+            }}>
+              {STAT_META.map(({ key, icon, label, color, bg, round }, i) => {
                 const raw   = stats.data[key];
                 const value = round ? Math.round(raw as number) : raw;
                 return (
                   <StatCard
                     key={key}
                     icon={icon} label={label}
-                    color={color} glow={glow}
+                    color={color} bg={bg}
                     value={value}
-                    delay={0.08 + i * 0.08}
+                    delay={0.06 + i * 0.07}
                   />
                 );
               })}
             </div>
           )}
-        </div>
 
-        {/* ── Content — responsive grid ── */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-          gap: 24,
-          padding: "16px 20px 32px",
-          alignItems: "start",
-        }}>
-
-          {kanban.isLoading && <Skeleton height={130} />}
+          {/* Kanban / Sprint */}
+          {kanban.isLoading && <Skeleton height={120} />}
 
           {kanban.data && (
             kanban.data.sprint ? (
               <>
                 {/* Sprint card */}
-                <section style={{
-                  background: GLASS,
-                  border: "1px solid rgba(168,85,247,0.22)",
-                  borderRadius: 8,
-                  padding: 20,
+                <SectionLabel>Sprint Aktif</SectionLabel>
+                <div style={{
+                  background: CARD,
+                  borderRadius: 10,
+                  borderLeft: `3px solid ${PURPLE}`,
+                  boxShadow: SHADOW,
+                  padding: "16px 18px",
                   marginBottom: 20,
-                  animation: "vt-fade-up 0.45s ease 0.28s both",
+                  animation: "vt-fade-up 0.4s ease 0.25s both",
                 }}>
                   <div style={{
-                    fontSize: 10, color: "#a855f7",
-                    letterSpacing: "0.12em", textTransform: "uppercase",
-                    fontWeight: 700, marginBottom: 6,
-                  }}>
-                    Sprint Aktif
-                  </div>
-                  <div style={{
-                    fontSize: 18, fontWeight: 800,
-                    letterSpacing: "-0.02em", color: "var(--vt-text)",
-                    marginBottom: 16,
+                    fontSize: 15, fontWeight: 600,
+                    color: TEXT,
+                    marginBottom: 14, lineHeight: 1.3,
+                    letterSpacing: "-0.01em",
                   }}>
                     {kanban.data.sprint.title}
                   </div>
 
-                  <GlowBar pct={kanban.data.sprint.progress_pct} />
+                  <ProgressBar pct={kanban.data.sprint.progress_pct} />
 
                   <div style={{
                     display: "flex", justifyContent: "space-between",
-                    marginTop: 10, fontSize: 12, color: DIM,
+                    marginTop: 10, fontSize: 11, color: TEXT2,
                   }}>
                     <span>
                       {fmtDate(kanban.data.sprint.start_date)} — {fmtDate(kanban.data.sprint.end_date)}
                     </span>
-                    <span style={{ color: "#a855f7", fontWeight: 700 }}>
+                    <span style={{ color: PURPLE, fontWeight: 700 }}>
                       {Math.round(kanban.data.sprint.progress_pct)}%
                     </span>
                   </div>
-                </section>
+                </div>
 
                 {/* Kanban scroll */}
+                <SectionLabel>Kanban</SectionLabel>
                 <div style={{
                   display: "flex",
-                  gap: 12,
+                  gap: 10,
                   overflowX: "auto",
-                  paddingBottom: 8,
-                  marginLeft: -20,
-                  marginRight: -20,
-                  paddingLeft: 20,
-                  paddingRight: 20,
+                  paddingBottom: 6,
+                  marginLeft: -14,
+                  marginRight: -14,
+                  paddingLeft: 14,
+                  paddingRight: 14,
                   scrollbarWidth: "none",
-                  animation: "vt-fade-up 0.45s ease 0.36s both",
+                  animation: "vt-fade-up 0.4s ease 0.32s both",
                 }}>
                   {Object.entries(kanban.data.columns).map(([col, items]) => {
-                    const acc = KANBAN_ACCENT[col] ?? { color: "#64748b", pill: "rgba(100,116,139,0.18)" };
+                    const acc = KANBAN_ACCENT[col] ?? { color: "#64748b", bg: "#f8fafc" };
                     return (
                       <div key={col} style={{
-                        minWidth: 210,
+                        minWidth: 195,
                         flex: "0 0 auto",
-                        background: GLASS,
-                        border: "1px solid var(--vt-border)",
-                        borderTop: `2px solid ${acc.color}`,
-                        borderRadius: 8,
+                        background: CARD,
+                        boxShadow: SHADOW,
+                        borderRadius: 10,
                         padding: 12,
                       }}>
                         <div style={{
                           display: "flex", justifyContent: "space-between",
-                          alignItems: "center", marginBottom: 12,
+                          alignItems: "center", marginBottom: 10,
                         }}>
                           <span style={{
                             fontSize: 10, fontWeight: 700, color: acc.color,
@@ -271,9 +300,10 @@ export function DashboardPage() {
                             {col}
                           </span>
                           <span style={{
-                            fontSize: 11, fontWeight: 700,
-                            background: acc.pill, color: acc.color,
-                            padding: "2px 9px", borderRadius: 99,
+                            fontSize: 10, fontWeight: 700,
+                            background: acc.bg, color: acc.color,
+                            padding: "2px 8px", borderRadius: 4,
+                            border: `1px solid ${BD}`,
                           }}>
                             {items.length}
                           </span>
@@ -281,8 +311,8 @@ export function DashboardPage() {
 
                         {items.length === 0 && (
                           <div style={{
-                            fontSize: 12, color: "var(--vt-text-muted)",
-                            textAlign: "center", padding: "16px 0",
+                            fontSize: 12, color: TEXT3,
+                            textAlign: "center", padding: "14px 0",
                           }}>
                             —
                           </div>
