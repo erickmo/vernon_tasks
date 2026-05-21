@@ -1,9 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { TopNav } from "./TopNav";
 
-vi.mock("../hooks/useIsLeader", () => ({ useIsLeader: () => false }));
 vi.mock("../hooks/useUnreadCount", () => ({
   useUnreadCount: () => ({ data: 0 }),
 }));
@@ -19,61 +18,38 @@ function Wrapper({ path }: { path: string }) {
 }
 
 describe("TopNav", () => {
-  it("renders Nav1 items for non-leader", () => {
+  it("renders logo link to /m/dashboard", () => {
     render(<Wrapper path="/m/dashboard" />);
-    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    const logo = screen.getByRole("link", { name: /vernon/i });
+    expect(logo).toBeInTheDocument();
+    expect(logo).toHaveAttribute("href", "/m/dashboard");
+  });
+
+  it("renders navbar2 with Dashboard, Project, Report tabs", () => {
+    render(<Wrapper path="/m/dashboard" />);
+    // "Dashboard" appears in both breadcrumb and navbar2 tab
+    expect(screen.getAllByText("Dashboard").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Project")).toBeInTheDocument();
+    expect(screen.getByText("Report")).toBeInTheDocument();
+  });
+
+  it("shows Work breadcrumb on /m/work", () => {
+    render(<Wrapper path="/m/work" />);
     expect(screen.getByText("Work")).toBeInTheDocument();
-    expect(screen.getByText("Analytics")).toBeInTheDocument();
-    expect(screen.getByText("Me")).toBeInTheDocument();
   });
 
-  it("hides Leader tab for non-leaders", () => {
-    render(<Wrapper path="/m/dashboard" />);
-    expect(screen.queryByText("Leader")).not.toBeInTheDocument();
-  });
-
-  it("shows Analytics Nav2 when analytics path is active", () => {
+  it("shows Analytics breadcrumb on /m/analytics", () => {
     render(<Wrapper path="/m/analytics" />);
-    expect(screen.getByText("Leaderboard")).toBeInTheDocument();
-    expect(screen.getByText("Velocity")).toBeInTheDocument();
-    expect(screen.getByText("Streak")).toBeInTheDocument();
+    expect(screen.getByText("Analytics")).toBeInTheDocument();
   });
 
-  it("hides Nav2 when active page has no submenus", () => {
+  it("renders notification button", () => {
     render(<Wrapper path="/m/dashboard" />);
-    expect(screen.queryByText("Leaderboard")).not.toBeInTheDocument();
-    expect(screen.queryByText("Velocity")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /notifikasi/i })).toBeInTheDocument();
   });
 
-  it("shows Me Nav2 when me path is active", () => {
-    render(<Wrapper path="/m/me" />);
-    expect(screen.getByText("Profile")).toBeInTheDocument();
-    expect(screen.getByText("Notifications")).toBeInTheDocument();
-    expect(screen.getByText("Push Settings")).toBeInTheDocument();
-  });
-});
-
-describe("TopNav (leader)", () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
-
-  it("shows Leader tab and its Nav2 items when useIsLeader returns true", async () => {
-    vi.doMock("../hooks/useIsLeader", () => ({ useIsLeader: () => true }));
-    vi.doMock("../hooks/useUnreadCount", () => ({
-      useUnreadCount: () => ({ data: 0 }),
-    }));
-    const { TopNav: TopNavLeader } = await import("./TopNav");
-    render(
-      <MemoryRouter initialEntries={["/m/leader"]}>
-        <Routes>
-          <Route path="*" element={<TopNavLeader />} />
-        </Routes>
-      </MemoryRouter>
-    );
-    expect(screen.getByText("Leader")).toBeInTheDocument();
-    expect(screen.getByText("Review Queue")).toBeInTheDocument();
-    expect(screen.getByText("Sprint")).toBeInTheDocument();
-    expect(screen.getByText("Executive")).toBeInTheDocument();
+  it("renders avatar dropdown button", () => {
+    render(<Wrapper path="/m/dashboard" />);
+    expect(screen.getByRole("button", { name: /menu akun/i })).toBeInTheDocument();
   });
 });
