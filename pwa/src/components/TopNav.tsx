@@ -241,7 +241,7 @@ export function TopNav() {
         .then((s) => { if (s.user) setUsername(s.user); })
         .catch(() => { /* session unavailable */ })
     );
-  }, [username]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- one-shot mount fetch, guarded by if (username) return
 
   const breadcrumb = getBreadcrumb(loc.pathname);
 
