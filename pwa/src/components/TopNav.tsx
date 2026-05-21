@@ -68,55 +68,33 @@ function IconUser({ size = 18, color = "currentColor" }: { size?: number; color?
 }
 
 // ── NotificationButton ─────────────────────────────────────────────────────────
-function NotificationButton({
-  unread,
-  onNavigate,
-}: {
-  unread: number;
-  onNavigate: () => void;
-}) {
+function NotificationButton({ unread, onNavigate }: { unread: number; onNavigate: () => void }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <button
       onClick={onNavigate}
       aria-label={unread > 0 ? `${unread} notifikasi belum dibaca` : "Notifikasi"}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         position: "relative",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 34,
-        height: 34,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        width: 34, height: 34,
         border: "none",
-        background: "transparent",
-        borderRadius: 8,
-        cursor: "pointer",
-        color: TEXT_MUTED,
+        background: hovered ? "var(--vt-primary-light)" : "transparent",
+        borderRadius: 8, cursor: "pointer",
+        color: hovered ? PRIMARY : TEXT_MUTED,
         transition: "background 0.13s, color 0.13s",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background = "var(--vt-primary-light)";
-        (e.currentTarget as HTMLButtonElement).style.color = PRIMARY;
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-        (e.currentTarget as HTMLButtonElement).style.color = TEXT_MUTED;
       }}
     >
       <IconBell />
       {unread > 0 && (
-        <span
-          aria-hidden
-          style={{
-            position: "absolute",
-            top: 5,
-            right: 5,
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "#ef4444",
-            boxShadow: "0 0 0 2px var(--vt-bg)",
-          }}
-        />
+        <span aria-hidden style={{
+          position: "absolute", top: 5, right: 5,
+          width: 8, height: 8, borderRadius: "50%",
+          background: "#ef4444",
+          boxShadow: "0 0 0 2px var(--vt-bg)",
+        }} />
       )}
     </button>
   );
@@ -125,6 +103,8 @@ function NotificationButton({
 // ── AvatarDropdown ─────────────────────────────────────────────────────────────
 function AvatarDropdown({ username }: { username: string | null }) {
   const [open, setOpen] = useState(false);
+  const [profilHovered, setProfilHovered] = useState(false);
+  const [keluarHovered, setKeluarHovered] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const nav = useNavigate();
 
@@ -139,9 +119,18 @@ function AvatarDropdown({ username }: { username: string | null }) {
     return () => document.removeEventListener("mousedown", onOutside);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   async function handleLogout() {
     setOpen(false);
-    await logout();
+    try { await logout(); } catch { /* best-effort */ }
     nav("/m/login", { replace: true });
   }
 
@@ -202,45 +191,30 @@ function AvatarDropdown({ username }: { username: string | null }) {
           <Link
             to="/m/me"
             onClick={() => setOpen(false)}
+            onMouseEnter={() => setProfilHovered(true)}
+            onMouseLeave={() => setProfilHovered(false)}
             style={{
-              display: "block",
-              padding: "9px 14px",
-              fontSize: 13,
-              color: "var(--vt-text)",
+              display: "block", padding: "9px 14px",
+              fontSize: 13, color: "var(--vt-text)",
               textDecoration: "none",
+              background: profilHovered ? "var(--vt-primary-light)" : "transparent",
               transition: "background 0.12s",
             }}
-            onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLAnchorElement).style.background =
-                "var(--vt-primary-light)")
-            }
-            onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLAnchorElement).style.background = "transparent")
-            }
           >
             Profil
           </Link>
           <button
             onClick={handleLogout}
+            onMouseEnter={() => setKeluarHovered(true)}
+            onMouseLeave={() => setKeluarHovered(false)}
             style={{
-              display: "block",
-              width: "100%",
-              textAlign: "left",
-              padding: "9px 14px",
-              fontSize: 13,
-              color: "#dc2626",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
+              display: "block", width: "100%", textAlign: "left",
+              padding: "9px 14px", fontSize: 13, color: "#dc2626",
+              background: keluarHovered ? "#fef2f2" : "transparent",
+              border: "none", cursor: "pointer",
               borderTop: `1px solid ${BORDER}`,
               transition: "background 0.12s",
             }}
-            onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLButtonElement).style.background = "#fef2f2")
-            }
-            onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLButtonElement).style.background = "transparent")
-            }
           >
             Keluar
           </button>
@@ -263,9 +237,11 @@ export function TopNav() {
   useEffect(() => {
     if (username) return;
     import("../auth/session").then(({ probeSession }) =>
-      probeSession().then((s) => setUsername(s.user))
+      probeSession()
+        .then((s) => { if (s.user) setUsername(s.user); })
+        .catch(() => { /* session unavailable */ })
     );
-  }, []);
+  }, [username]);
 
   const breadcrumb = getBreadcrumb(loc.pathname);
 
