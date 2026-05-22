@@ -115,4 +115,6 @@ fixtures = [
     {"dt": "Web Form", "filters": [["name", "=", "hubungi-kami"]]},
     # Frappe v15: Website Route Meta name IS the route (no separate route column)
     {"dt": "Website Route Meta", "filters": [["name", "in", ["/", "/portal", "/tentang", "/kontak"]]]},
+    # Home page = login, hide footer signup
+    {"dt": "Website Settings"},
 ]

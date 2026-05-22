@@ -531,7 +531,46 @@ npm run e2e</code></pre>
     <li><strong>ADR-002</strong> Dual UI: Frappe Desk + Mobile PWA</li>
     <li><strong>ADR-005</strong> Reuse Frappe session cookie (no JWT)</li>
     <li><strong>ADR-011</strong> Security guards centralised in <code>security.py</code></li>
-    <li><strong>ADR-016</strong> Responsive nav at 768px breakpoint</li>
+    <li><strong>ADR-016</strong> Dual-navbar PWA layout with primary gradient</li>
+  </ul>
+
+  <h2 id="arch-topnav">PWA Navigation Standard</h2>
+  <p>Component: <code>pwa/src/components/TopNav.tsx</code>. Shared by all <code>/m/*</code> routes.</p>
+  <table>
+    <thead><tr><th>Layer</th><th>Height</th><th>Contents</th></tr></thead>
+    <tbody>
+      <tr><td>Navbar1</td><td><code>--top-nav1-h</code></td><td>Logo mark + wordmark, breadcrumb, notification bell, avatar pill</td></tr>
+      <tr><td>Navbar2</td><td><code>--top-nav2-h</code></td><td>Pill tabs: Dashboard · Project · Report</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="arch-topnav-tokens">On-Primary Color Tokens</h3>
+  <table>
+    <thead><tr><th>Token</th><th>Value</th><th>Usage</th></tr></thead>
+    <tbody>
+      <tr><td><code>C_NAV_BG</code></td><td><code>linear-gradient(135deg, #6836a0 0%, #7c4dab 100%)</code></td><td>Both navbar backgrounds</td></tr>
+      <tr><td><code>C_NAV_TEXT</code></td><td><code>#ffffff</code></td><td>Logo, breadcrumb current page, active tab, username</td></tr>
+      <tr><td><code>C_NAV_MUTED</code></td><td><code>rgba(255,255,255,0.60)</code></td><td>Breadcrumb parent, inactive tabs, chevron, bell idle</td></tr>
+      <tr><td><code>C_NAV_BORDER</code></td><td><code>rgba(255,255,255,0.14)</code></td><td>Navbar border-bottom, divider, button idle border</td></tr>
+      <tr><td><code>C_NAV_ACTIVE</code></td><td><code>rgba(255,255,255,0.18)</code></td><td>Active tab background, button hover/open background</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="arch-topnav-notif">Notification Dropdown</h3>
+  <ul>
+    <li>Rendered by <code>NotificationDropdown</code> inside <code>TopNav</code>; triggered by bell button.</li>
+    <li>Unread indicator: filled primary dot + 3px primary border-left on item row.</li>
+    <li>Read indicator: outlined grey dot, transparent border-left.</li>
+    <li>Unread item background: <code>C_PRIMARY_L</code> (<code>#f3eeff</code>).</li>
+    <li>Bell button when open: <code>C_NAV_ACTIVE</code> background, <code>rgba(255,255,255,0.30)</code> border.</li>
+    <li>Fetches up to 10 latest notifications on open; stale after 30s.</li>
+    <li>"Mark all read" button appears only when unread items exist.</li>
+  </ul>
+
+  <h3 id="arch-topnav-avatar">Avatar</h3>
+  <ul>
+    <li>Initials derived from username (first letters of dot/underscore-separated parts).</li>
+    <li>Background always <code>C_PRIMARY</code> (<code>#7c4dab</code>) — no per-user colour randomisation.</li>
   </ul>
 </div>
 
@@ -736,7 +775,7 @@ npm run e2e</code></pre>
       <tr><td>ADR-008</td><td>Point calculation + override audit trail</td></tr>
       <tr><td>ADR-009</td><td>Scheduling engine + capacity model</td></tr>
       <tr><td>ADR-011</td><td>Security guards + CSP headers centralised</td></tr>
-      <tr><td>ADR-016</td><td>Responsive nav at 768px breakpoint (TopNav / BottomNav)</td></tr>
+      <tr><td>ADR-016</td><td>Dual-navbar PWA layout: Navbar1 (logo + breadcrumb + actions, 48px) + Navbar2 (pill tabs, 40px); primary gradient background <code>#6836a0→#7c4dab</code></td></tr>
       <tr><td>ADR-019</td><td>Portal OKR: vanilla React Query + composed UI</td></tr>
       <tr><td>ADR-020</td><td>Portal Projects reuses OKR composition pattern</td></tr>
     </tbody>
@@ -855,6 +894,14 @@ npm run e2e</code></pre>
 <div class="page" id="page-user-pwa" data-audience="user">
   <div class="page-meta"><span class="badge badge-user">User</span></div>
   <h1 id="upwa-h1">Mobile PWA</h1>
+
+  <h2 id="upwa-nav">Navigation</h2>
+  <p>The top area has two bars with a purple gradient background:</p>
+  <ul>
+    <li><strong>Top bar</strong> — Vernon logo, current page breadcrumb, notification bell, and your account avatar.</li>
+    <li><strong>Tab bar</strong> — Quick navigation between Dashboard, Project, and Report.</li>
+  </ul>
+  <p>Tap the <strong>bell icon</strong> to see recent notifications. Unread items show a purple dot and highlighted background. Tap <strong>Mark all read</strong> or tap an item to dismiss.</p>
 
   <h2 id="upwa-install">Install on Your Device</h2>
   <ol class="walkthrough">

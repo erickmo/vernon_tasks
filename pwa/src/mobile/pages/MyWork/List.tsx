@@ -25,39 +25,115 @@ import { useToast } from "../../../components/Toast";
 import { useUndoableMutation } from "../../../hooks/useUndoableMutation";
 import { useCompleteCounter } from "../../../hooks/useCompleteCounter";
 import { useDebounce } from "../../../hooks/useDebounce";
-import { greeting, fmtDate, t } from "../../../i18n";
+import { t } from "../../../i18n";
 import { logEvent } from "../../../telemetry";
 
-const HEADER_H = 96;
+/* ── Tokens (match Dashboard) ─────────────────────────────── */
+const BG     = "#f1f5f9";
+const CARD   = "#ffffff";
+const SHADOW = "0 1px 3px rgba(0,0,0,0.07), 0 2px 10px rgba(0,0,0,0.04)";
+const BD     = "#e8edf3";
+const TEXT   = "#0f172a";
+const TEXT2  = "#64748b";
+const TEXT3  = "#94a3b8";
+const INDIGO = "#4f46e5";
+const DANGER = "#dc2626";
+const AMBER  = "#d97706";
+
+const HEADER_H = 84;
 
 interface WorkListHeaderProps {
   data: MyWork | undefined;
   onResetFilters: () => void;
+  filtersActive: boolean;
 }
 
-function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
+function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderProps) {
+  const todayStr = new Date().toLocaleDateString("id-ID", {
+    weekday: "long", day: "numeric", month: "long",
+  });
   return (
     <header
       style={{
-        background: "var(--vt-primary-light)",
-        padding: "var(--vt-space-4) var(--vt-space-4) var(--vt-space-3)",
+        background: CARD,
+        borderBottom: `1px solid ${BD}`,
+        padding: "20px 20px 14px",
         position: "sticky",
         top: 0,
         zIndex: 10,
       }}
     >
-      <div style={{ color: "var(--vt-text-muted)", fontSize: 11, marginBottom: 2 }}>
-        {fmtDate(new Date())}
-      </div>
-      <div style={{ color: "var(--vt-primary-dark)", fontSize: 15, fontWeight: 600 }}>
-        {greeting()}
+      <p style={{
+        margin: "0 0 2px", fontSize: 10,
+        color: TEXT3, fontWeight: 500,
+        letterSpacing: "0.04em",
+      }}>
+        {todayStr}
+      </p>
+      <div style={{
+        display: "flex", alignItems: "center",
+        justifyContent: "space-between", gap: 8,
+      }}>
+        <h1 style={{
+          margin: 0, fontSize: 20, fontWeight: 700,
+          letterSpacing: "-0.02em", color: TEXT,
+        }}>
+          Pekerjaan Saya
+        </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <a
+            href="/app/vt-project/new?vt_project=new"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => logEvent("project_create_click", {})}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              background: INDIGO,
+              color: "#ffffff",
+              borderRadius: 99,
+              padding: "5px 10px",
+              fontSize: 11,
+              fontWeight: 600,
+              textDecoration: "none",
+              lineHeight: 1,
+            }}
+            aria-label="Buat Proyek"
+          >
+            + Proyek
+          </a>
+          <a
+            href="/app/vt-project"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => logEvent("project_manage_click", {})}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              background: "transparent",
+              color: INDIGO,
+              border: `1px solid ${BD}`,
+              borderRadius: 99,
+              padding: "5px 10px",
+              fontSize: 11,
+              fontWeight: 600,
+              textDecoration: "none",
+              lineHeight: 1,
+            }}
+            aria-label="Kelola Proyek"
+          >
+            Kelola
+          </a>
+          <StaleBadge resource="my-work" />
+        </div>
       </div>
 
-      {/* Filter chips — display only */}
+      {/* Summary chips (tap-to-reset filter) */}
       <div
         style={{
           display: "flex",
-          gap: 8,
+          gap: 6,
           marginTop: 12,
           overflowX: "auto",
           scrollbarWidth: "none",
@@ -66,13 +142,14 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
       >
         <button
           onClick={onResetFilters}
+          aria-pressed={!filtersActive}
           style={{
-            background: "rgba(149,97,171,0.12)",
-            border: "none",
-            borderRadius: 20,
+            background: !filtersActive ? "#eef2ff" : "transparent",
+            border: `1px solid ${!filtersActive ? "#c7d2fe" : BD}`,
+            borderRadius: 99,
             padding: "4px 12px",
-            color: "var(--vt-primary)",
-            fontSize: 12,
+            color: !filtersActive ? INDIGO : TEXT2,
+            fontSize: 11,
             fontWeight: 600,
             cursor: "pointer",
             whiteSpace: "nowrap",
@@ -83,12 +160,13 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
         {data && data.overdue.length > 0 && (
           <span
             style={{
-              background: "rgba(212,53,28,0.25)",
-              border: "1px solid rgba(212,53,28,0.4)",
-              borderRadius: 20,
-              padding: "4px 12px",
-              color: "rgba(255,200,200,0.9)",
-              fontSize: 12,
+              background: "#fef2f2",
+              border: `1px solid #fecaca`,
+              borderRadius: 99,
+              padding: "4px 10px",
+              color: DANGER,
+              fontSize: 11,
+              fontWeight: 600,
               whiteSpace: "nowrap",
             }}
           >
@@ -98,18 +176,19 @@ function WorkListHeader({ data, onResetFilters }: WorkListHeaderProps) {
         {data && data.today.length > 0 && (
           <span
             style={{
-              background: "rgba(149,97,171,0.08)",
-              borderRadius: 20,
-              padding: "4px 12px",
-              color: "var(--vt-primary)",
-              fontSize: 12,
+              background: "#fffbeb",
+              border: `1px solid #fde68a`,
+              borderRadius: 99,
+              padding: "4px 10px",
+              color: AMBER,
+              fontSize: 11,
+              fontWeight: 600,
               whiteSpace: "nowrap",
             }}
           >
             {`${t("header.filter.today")} ${data.today.length}`}
           </span>
         )}
-        <StaleBadge resource="my-work" />
       </div>
     </header>
   );
@@ -149,11 +228,11 @@ function TaskCardView({
           display: "flex",
           alignItems: "center",
           gap: 12,
-          padding: "var(--vt-space-3) var(--vt-space-4)",
-          background: "var(--vt-surface)",
-          borderRadius: "var(--vt-radius)",
+          padding: "12px 14px",
+          background: CARD,
+          borderRadius: 10,
           borderLeft: accent ? `3px solid ${accent}` : undefined,
-          boxShadow: "0 1px 6px rgba(149,97,171,0.08)",
+          boxShadow: SHADOW,
         }}
       >
         <input
@@ -162,15 +241,15 @@ function TaskCardView({
           onChange={onComplete}
           disabled={disabled}
           aria-label="complete"
-          style={{ width: 22, height: 22, accentColor: "var(--vt-primary)" }}
+          style={{ width: 20, height: 20, accentColor: INDIGO }}
         />
         {onSelect ? (
           <div
             onClick={onSelect}
-            style={{ flex: 1, color: "var(--vt-text)", cursor: "pointer" }}
+            style={{ flex: 1, color: TEXT, cursor: "pointer" }}
           >
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{task.title}</div>
-            <div style={{ fontSize: 12, color: "var(--vt-text-muted)", marginTop: 3 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.35 }}>{task.title}</div>
+            <div style={{ fontSize: 11, color: TEXT2, marginTop: 4 }}>
               {[task.project, task.priority].filter(Boolean).join(" · ")}
               {task.points ? ` · +${task.points} pts` : ""}
             </div>
@@ -178,10 +257,10 @@ function TaskCardView({
         ) : (
           <Link
             to={`/m/work/${encodeURIComponent(task.id)}`}
-            style={{ flex: 1, color: "var(--vt-text)", textDecoration: "none" }}
+            style={{ flex: 1, color: TEXT, textDecoration: "none" }}
           >
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{task.title}</div>
-            <div style={{ fontSize: 12, color: "var(--vt-text-muted)", marginTop: 3 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.35 }}>{task.title}</div>
+            <div style={{ fontSize: 11, color: TEXT2, marginTop: 4 }}>
               {[task.project, task.priority].filter(Boolean).join(" · ")}
               {task.points ? ` · +${task.points} pts` : ""}
             </div>
@@ -205,21 +284,21 @@ function Section({
 }) {
   if (items.length === 0) return null;
   return (
-    <section style={{ marginBottom: "var(--vt-space-5)" }}>
+    <section style={{ marginBottom: 20 }}>
       <h3
         style={{
-          fontSize: 11,
-          color: accent ?? "var(--vt-text-muted)",
-          margin: "0 0 var(--vt-space-2)",
+          fontSize: 10,
+          color: accent ?? TEXT3,
+          margin: "0 0 10px",
           textTransform: "uppercase",
-          letterSpacing: 0.8,
+          letterSpacing: "0.10em",
           fontWeight: 700,
         }}
       >
         {title}
       </h3>
       {items.map((task) => (
-        <div key={task.id} style={{ marginBottom: "var(--vt-space-3)" }}>
+        <div key={task.id} style={{ marginBottom: 10 }}>
           {render(task)}
         </div>
       ))}
@@ -341,28 +420,30 @@ export function MyWorkList() {
     (q.data?.upcoming.length ?? 0);
 
   return (
-    <div style={{ display: "flex", height: "100%", minHeight: "100vh" }}>
+    <div style={{ display: "flex", height: "100%", minHeight: "100vh", background: BG }}>
       {/* List panel */}
       <div style={{
         width: isDesktop ? 380 : "100%",
         minWidth: isDesktop ? 380 : undefined,
         flexShrink: 0,
-        borderRight: isDesktop ? "1px solid var(--vt-border)" : undefined,
+        borderRight: isDesktop ? `1px solid ${BD}` : undefined,
         overflowY: "auto",
+        background: BG,
       }}>
     <PullToRefresh onRefresh={() => q.refetch().then(() => {})}>
-      {/* ── Sticky gradient header ── */}
+      {/* ── Sticky hero ── */}
       <WorkListHeader
         data={q.data}
+        filtersActive={searching}
         onResetFilters={() => { setQuery(""); setFilters({ due_range: "all" }); }}
       />
 
       {/* ── Sticky search strip ── */}
       <div
         style={{
-          background: "var(--vt-surface)",
-          padding: "var(--vt-space-2) var(--vt-space-4)",
-          borderBottom: "1px solid var(--vt-primary-light)",
+          background: CARD,
+          padding: "8px 14px 10px",
+          borderBottom: `1px solid ${BD}`,
           position: "sticky",
           top: HEADER_H,
           zIndex: 9,
@@ -385,7 +466,7 @@ export function MyWorkList() {
       </div>
 
       {/* ── Task content ── */}
-      <div style={{ padding: "var(--vt-space-4)", background: "var(--vt-primary-light)", minHeight: "100%" }}>
+      <div style={{ padding: "16px 14px 32px", background: BG, minHeight: "100%" }}>
         {!searching && q.isLoading && (
           <>
             <Skeleton height={64} />
@@ -410,11 +491,11 @@ export function MyWorkList() {
               <Section
                 title={t("tasks.section.overdue")}
                 items={q.data.overdue}
-                accent="var(--vt-danger)"
+                accent={DANGER}
                 render={(task) => (
                   <TaskCardView
                     task={task}
-                    accent="var(--vt-danger)"
+                    accent={DANGER}
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
@@ -426,11 +507,11 @@ export function MyWorkList() {
               <Section
                 title={t("tasks.section.today")}
                 items={q.data.today}
-                accent="var(--vt-primary)"
+                accent={INDIGO}
                 render={(task) => (
                   <TaskCardView
                     task={task}
-                    accent="var(--vt-primary)"
+                    accent={INDIGO}
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
@@ -442,11 +523,11 @@ export function MyWorkList() {
               <Section
                 title={t("tasks.section.upcoming")}
                 items={q.data.upcoming}
-                accent="var(--vt-border)"
+                accent={BD}
                 render={(task) => (
                   <TaskCardView
                     task={task}
-                    accent="var(--vt-border)"
+                    accent={BD}
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
@@ -479,10 +560,10 @@ export function MyWorkList() {
           ) : (
             <div>
               {searchQ.data.results.map((task) => (
-                <div key={task.id} style={{ marginBottom: "var(--vt-space-3)" }}>
+                <div key={task.id} style={{ marginBottom: 10 }}>
                   <TaskCardView
                     task={task}
-                    accent="var(--vt-border)"
+                    accent={BD}
                     onComplete={() => handleComplete(task)}
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
@@ -523,7 +604,7 @@ export function MyWorkList() {
 
       {/* Detail panel — desktop only */}
       {isDesktop && (
-        <div style={{ flex: 1, overflowY: "auto", background: "var(--vt-bg)" }}>
+        <div style={{ flex: 1, overflowY: "auto", background: BG }}>
           {selectedId ? (
             <MyWorkDetail desktopId={selectedId} />
           ) : (
@@ -533,7 +614,7 @@ export function MyWorkList() {
               justifyContent: "center",
               height: "100%",
               minHeight: 400,
-              color: "var(--vt-text-muted)",
+              color: TEXT2,
               fontSize: 14,
             }}>
               Pilih task untuk melihat detail

@@ -219,7 +219,7 @@ export function LoginPage() {
   const [branding, setBranding] = useState<LoginBranding>(DEFAULT_BRANDING);
   const nav = useNavigate();
   const [params] = useSearchParams();
-  const next = params.get("next") ?? "/m/work";
+  const next = params.get("next") ?? "/m/dashboard";
 
   useEffect(() => {
     probeSession().then((s) => {

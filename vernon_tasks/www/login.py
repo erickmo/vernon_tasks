@@ -5,13 +5,13 @@ no_cache = 1
 
 def get_context(context):
     if frappe.session.user != "Guest":
-        frappe.local.flags.redirect_location = "/m/work"
+        frappe.local.flags.redirect_location = "/m/dashboard"
         raise frappe.Redirect
 
     context.csrf_token = frappe.sessions.get_csrf_token()
-    redirect_to = frappe.form_dict.get("redirect_to") or "/m/work"
+    redirect_to = frappe.form_dict.get("redirect_to") or "/m/dashboard"
     if not redirect_to.startswith("/") or redirect_to.startswith("//"):
-        redirect_to = "/m/work"
+        redirect_to = "/m/dashboard"
     context.redirect_to = redirect_to
     context.dev_shortcuts = _get_dev_shortcuts()
 

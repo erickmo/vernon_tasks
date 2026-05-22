@@ -40,6 +40,8 @@ export type TelemetryEvent =
   | "push_pref_view"
   | "push_pref_changed"
   | "push_action_complete"
+  | "project_create_click"
+  | "project_manage_click"
   | "portal.page_view"
   | "portal.nav_click"
   | "portal.permission_denied"

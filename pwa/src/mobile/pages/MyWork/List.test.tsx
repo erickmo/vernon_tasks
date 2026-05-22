@@ -129,6 +129,6 @@ describe("MyWorkList", () => {
     expect(card.getAttribute("data-testid")).toBe("task-card");
     // Verify borderLeft is applied (happy-dom may expand shorthand styles)
     expect(card.style.borderLeft).toBeDefined();
-    expect(card.style.borderLeft).toContain("var(--vt-danger)");
+    expect(card.style.borderLeft).toContain("#dc2626");
   });
 });

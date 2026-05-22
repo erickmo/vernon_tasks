@@ -22,7 +22,7 @@
   "primary_color": "#6366f1",
   "text_color": null,
   "theme": "Vernon Tasks Theme",
-  "theme_scss": null,
-  "theme_url": null
+  "theme_scss": "\n@import url(\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap\");\n// backward compatibility. deprecated in v15\n$font-family-sans-serif: \"Inter\", \"InterVariable\", \"Inter\", -apple-system, BlinkMacSystemFont,\n\t\"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\",\n\t\"Droid Sans\", \"Helvetica Neue\", sans-serif;\n\n// override font stack if custom font is set in website theme\n:root {\n\t--font-stack: \"Inter\", \"InterVariable\", \"Inter\", -apple-system, BlinkMacSystemFont,\n\t\"Segoe UI\", \"Roboto\", \"Oxygen\", \"Ubuntu\", \"Cantarell\", \"Fira Sans\",\n\t\"Droid Sans\", \"Helvetica Neue\", sans-serif !important;\n}\n$primary: None;$enable-shadows: false;\n$enable-gradients: false;\n$enable-rounded: true;\n\n// Bootstrap Variable Overrides\n\n\n// Import themes from installed apps\n@import \"frappe/public/scss/website.bundle\";\n\n\n\n// Custom Theme\n:root {\n  --vt-purple: #6d28d9;\n  --vt-indigo: #6366f1;\n  --vt-violet: #8b5cf6;\n}\n.navbar {\n  backdrop-filter: blur(12px);\n  -webkit-backdrop-filter: blur(12px);\n  background: rgba(109, 40, 217, 0.95) !important;\n  border-bottom: 1px solid rgba(255,255,255,0.1);\n}\n.btn-primary {\n  background: linear-gradient(135deg, var(--vt-indigo), var(--vt-purple));\n  border: none;\n  border-radius: 8px;\n}\n.btn-primary:hover {\n  background: linear-gradient(135deg, var(--vt-purple), var(--vt-violet));\n  transform: translateY(-1px);\n  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.35);\n}\n\n:root {\n\t\n\t--primary: #{$primary};\n\t--primary-color: #{$primary};\n\t}\n",
+  "theme_url": "/files/website_theme/vernon_tasks_theme_0e16d3a0.css"
  }
 ]

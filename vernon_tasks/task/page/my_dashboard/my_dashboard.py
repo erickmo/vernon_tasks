@@ -103,7 +103,7 @@ def get_sprint_kanban() -> dict:
     sprint = frappe.db.get_value(
         "VT Sprint",
         {"status": ["in", _ACTIVE_SPRINT_STATUSES]},
-        ["name", "title", "start_date", "end_date"],
+        ["name", "sprint_title", "start_date", "end_date"],
         as_dict=True,
     )
     if not sprint:
@@ -146,6 +146,6 @@ def get_sprint_kanban() -> dict:
     progress_pct = round(100 * done_count / total) if total else 0
 
     return {
-        "sprint": {**sprint, "progress_pct": progress_pct},
+        "sprint": {**sprint, "title": sprint.get("sprint_title"), "progress_pct": progress_pct},
         "columns": columns,
     }
