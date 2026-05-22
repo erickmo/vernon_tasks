@@ -706,3 +706,37 @@ class TestMobileProjectEndpoints(VTPortalReportsTestBase):
     def test_unmanaged_project_rejected(self):
         with self.assertRaises(frappe.PermissionError):
             mobile_reports.get_mobile_project_velocity("VTP-NOT-MINE", 6)
+
+
+class TestMobileTeamEndpoints(VTPortalReportsTestBase):
+    """Mobile team endpoints: leaderboard, overdue, workload, completion."""
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+        frappe.set_user(self.leader_user)
+
+    def test_team_leaderboard_returns_rows(self):
+        out = mobile_reports.get_mobile_team_leaderboard("month", 10)
+        self.assertIn("rows", out)
+        self.assertIsInstance(out["rows"], list)
+
+    def test_team_overdue_returns_count(self):
+        out = mobile_reports.get_mobile_team_overdue()
+        self.assertIn("total", out)
+        self.assertIn("items", out)
+
+    def test_team_workload_returns_per_member(self):
+        out = mobile_reports.get_mobile_team_workload()
+        self.assertIn("members", out)
+
+    def test_team_completion_returns_percentage(self):
+        out = mobile_reports.get_mobile_team_completion("month")
+        self.assertIn("completion_pct", out)
+        self.assertIn("done", out)
+        self.assertIn("total", out)
+
+    def test_member_role_blocked(self):
+        frappe.set_user(self.member_user)
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.get_mobile_team_leaderboard("month", 10)

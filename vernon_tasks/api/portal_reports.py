@@ -555,3 +555,123 @@ def get_mobile_project_okr(project: str, period=None):
     if isinstance(rollup, list):
         return {"objectives": rollup}
     return rollup
+
+
+# ── Team-scoped mobile endpoints (Leader+; union of managed projects) ────────
+_LB_PERIOD_MAP = {"week": "week", "month": "month", "quarter": "quarter"}
+
+
+def _team_projects(user: str) -> list:
+    """Project names where `user` is leader/manager. Union basis for 'my team'."""
+    return [p["name"] for p in _visible_projects()]
+
+
+def _period_cutoff(period: str) -> str:
+    """Maps 'week'|'month'|'quarter' → ISO date string (today - N days)."""
+    from frappe.utils import nowdate, add_days
+    days_map = {"week": 7, "month": 30, "quarter": 90}
+    days = days_map.get(period, 30)
+    return add_days(nowdate(), -days)
+
+
+@frappe.whitelist()
+def get_mobile_team_leaderboard(period: str = "month", limit: int = 10):
+    """Leaderboard scoped to the union of members across the user's managed projects."""
+    _check_mobile_flag()
+    _require_leader()
+    limit = clamp_int(limit, 1, 50, "limit")
+    lb_period = _LB_PERIOD_MAP.get(period, "month")
+    user = frappe.session.user
+    projects = _team_projects(user)
+    key = f"pr:mobile:lb:{period}:{limit}:{user}"
+
+    def _build():
+        rows = _lb(lb_period, limit, project_filter=projects) if projects else []
+        return {"rows": rows, "period": period}
+
+    return _cache(key, _build)
+
+
+@frappe.whitelist()
+def get_mobile_team_overdue():
+    """Overdue tasks across the user's managed projects. Not cached."""
+    _check_mobile_flag()
+    _require_leader()
+    user = frappe.session.user
+    projects = _team_projects(user)
+    if not projects:
+        return {"total": 0, "items": []}
+    items = frappe.get_all(
+        "VT Task",
+        filters={
+            "project": ["in", projects],
+            "kanban_status": ["not in", ["Done", "Blocked"]],
+            "deadline": ["<", frappe.utils.today()],
+        },
+        fields=["name", "title as subject", "assigned_to as assignee",
+                "deadline as due_date", "project"],
+        limit=50,
+    )
+    return {"total": len(items), "items": items}
+
+
+@frappe.whitelist()
+def get_mobile_team_workload():
+    """Open task count per member across managed projects."""
+    _check_mobile_flag()
+    _require_leader()
+    user = frappe.session.user
+    projects = _team_projects(user)
+    key = f"pr:mobile:workload:team:{user}"
+
+    def _build():
+        if not projects:
+            return {"members": []}
+        rows = frappe.db.sql(
+            """
+            SELECT assigned_to AS user, COUNT(*) AS open_tasks
+            FROM `tabVT Task`
+            WHERE project IN %(projects)s
+              AND kanban_status NOT IN ('Done', 'Blocked')
+              AND assigned_to IS NOT NULL
+              AND assigned_to != ''
+            GROUP BY assigned_to
+            ORDER BY open_tasks DESC
+            """,
+            {"projects": tuple(projects)},
+            as_dict=True,
+        )
+        return {"members": rows}
+
+    return _cache(key, _build)
+
+
+@frappe.whitelist()
+def get_mobile_team_completion(period: str = "month"):
+    """Completion percentage across managed projects for the period."""
+    _check_mobile_flag()
+    _require_leader()
+    user = frappe.session.user
+    projects = _team_projects(user)
+    key = f"pr:mobile:completion:{period}:{user}"
+
+    def _build():
+        if not projects:
+            return {"completion_pct": 0.0, "done": 0, "total": 0}
+        cutoff = _period_cutoff(period)
+        total = frappe.db.count(
+            "VT Task",
+            {"project": ["in", projects], "creation": [">=", cutoff]},
+        )
+        done = frappe.db.count(
+            "VT Task",
+            {
+                "project": ["in", projects],
+                "pdca_phase": "DONE",
+                "modified": [">=", cutoff],
+            },
+        )
+        pct = round((done / total * 100), 1) if total else 0.0
+        return {"completion_pct": pct, "done": done, "total": total}
+
+    return _cache(key, _build)
