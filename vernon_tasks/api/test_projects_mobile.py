@@ -49,3 +49,48 @@ class TestGetProjectTasks:
             get_project_tasks("PROJ-001")
         call_filters = mock_get_all.call_args[1]["filters"]
         assert "pdca_phase" not in call_filters
+
+
+class TestCreateTask:
+    def test_creates_task_with_required_fields(self):
+        mock_doc = MagicMock()
+        mock_doc.as_dict.return_value = {
+            "name": "VT-0001", "title": "New Task", "project": "PROJ-001",
+            "pdca_phase": "Plan", "priority": "Medium",
+        }
+        with patch("frappe.get_doc", return_value=mock_doc):
+            from vernon_tasks.api.projects import create_task
+            result = create_task(project="PROJ-001", title="New Task")
+        mock_doc.insert.assert_called_once_with(ignore_permissions=False)
+        assert result["title"] == "New Task"
+
+    def test_defaults_pdca_plan_and_priority_medium(self):
+        mock_doc = MagicMock()
+        mock_doc.as_dict.return_value = {}
+        with patch("frappe.get_doc", return_value=mock_doc) as mock_get_doc:
+            from vernon_tasks.api.projects import create_task
+            create_task(project="PROJ-001", title="T")
+        call_kwargs = mock_get_doc.call_args[0][0]
+        assert call_kwargs["pdca_phase"] == "Plan"
+        assert call_kwargs["priority"] == "Medium"
+
+
+class TestUpdateTask:
+    def test_updates_specified_fields(self):
+        mock_doc = MagicMock()
+        mock_doc.title = "Old Title"
+        mock_doc.as_dict.return_value = {"name": "VT-0001", "title": "New Title"}
+        with patch("frappe.get_doc", return_value=mock_doc):
+            from vernon_tasks.api.projects import update_task
+            result = update_task(name="VT-0001", title="New Title")
+        assert mock_doc.title == "New Title"
+        mock_doc.save.assert_called_once_with(ignore_permissions=False)
+
+    def test_skips_none_fields(self):
+        mock_doc = MagicMock()
+        mock_doc.priority = "Low"
+        mock_doc.as_dict.return_value = {}
+        with patch("frappe.get_doc", return_value=mock_doc):
+            from vernon_tasks.api.projects import update_task
+            update_task(name="VT-0001", title="T")
+        assert mock_doc.priority == "Low"

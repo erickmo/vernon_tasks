@@ -173,3 +173,48 @@ def get_project_tasks(project: str, pdca_phase: str = None, assignee: str = None
         ],
         order_by="deadline asc, creation asc",
     )
+
+
+@frappe.whitelist()
+def create_task(
+    project: str,
+    title: str,
+    assigned_to: str = None,
+    deadline: str = None,
+    pdca_phase: str = None,
+    priority: str = None,
+) -> dict:
+    doc = frappe.get_doc({
+        "doctype": "VT Task",
+        "project": project,
+        "title": title,
+        "assigned_to": assigned_to,
+        "deadline": deadline,
+        "pdca_phase": pdca_phase or "Plan",
+        "priority": priority or "Medium",
+    })
+    doc.insert(ignore_permissions=False)
+    return doc.as_dict()
+
+
+@frappe.whitelist()
+def update_task(
+    name: str,
+    title: str = None,
+    assigned_to: str = None,
+    deadline: str = None,
+    pdca_phase: str = None,
+    priority: str = None,
+) -> dict:
+    doc = frappe.get_doc("VT Task", name)
+    for field, val in {
+        "title": title,
+        "assigned_to": assigned_to,
+        "deadline": deadline,
+        "pdca_phase": pdca_phase,
+        "priority": priority,
+    }.items():
+        if val is not None:
+            setattr(doc, field, val)
+    doc.save(ignore_permissions=False)
+    return doc.as_dict()
