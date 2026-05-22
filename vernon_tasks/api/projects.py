@@ -155,3 +155,21 @@ def bulk_update_projects(names, payload):
 
     frappe.db.commit()
     return {"updated": updated, "skipped": skipped}
+
+
+@frappe.whitelist()
+def get_project_tasks(project: str, pdca_phase: str = None, assignee: str = None) -> list:
+    filters = {"project": project, "docstatus": ["!=", 2]}
+    if pdca_phase:
+        filters["pdca_phase"] = pdca_phase
+    if assignee:
+        filters["assigned_to"] = assignee
+    return frappe.get_all(
+        "VT Task",
+        filters=filters,
+        fields=[
+            "name", "title", "assigned_to", "deadline", "priority",
+            "pdca_phase", "kanban_status", "base_points", "completion_date",
+        ],
+        order_by="deadline asc, creation asc",
+    )
