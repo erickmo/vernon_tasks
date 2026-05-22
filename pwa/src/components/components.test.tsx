@@ -43,7 +43,7 @@ describe("components", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={["/m/work"]}>
+        <MemoryRouter initialEntries={["/m/project"]}>
           <BottomNav />
         </MemoryRouter>
       </QueryClientProvider>,

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { ProjectTaskPanel } from "./ProjectTaskPanel";
+import type { ProjectTask } from "./api";
 
 vi.mock("./useProjectTasks", () => ({
   useProjectTasks: vi.fn(() => ({ data: undefined, isLoading: false })),
@@ -78,7 +79,7 @@ describe("ProjectTaskPanel", () => {
   it("filters tasks by PDCA phase chip click", async () => {
     const { useProjectTasks } = await import("./useProjectTasks");
     const mockHook = vi.mocked(useProjectTasks);
-    mockHook.mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useProjectTasks>);
+    mockHook.mockReturnValue({ data: [] as ProjectTask[], isLoading: false } as ReturnType<typeof useProjectTasks>);
     wrap(<ProjectTaskPanel projectId="PROJ-001" projectTitle="Alpha" />);
     fireEvent.click(screen.getByRole("button", { name: "Do" }));
     await waitFor(() => {
