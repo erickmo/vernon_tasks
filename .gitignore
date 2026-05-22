@@ -15,3 +15,4 @@ node_modules/
 vernon_tasks/public/node_modules
 vernon_tasks/public/public
 .superpowers/
+.worktrees/
