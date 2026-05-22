@@ -94,7 +94,8 @@ export type TelemetryEvent =
   | "reports.overdue_view_toggle"
   | "reports.permission_denied"
   | "reports_landing_view"
-  | "reports_card_tap";
+  | "reports_card_tap"
+  | "reports_my_view";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
