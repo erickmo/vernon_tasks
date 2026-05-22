@@ -8,6 +8,7 @@ export interface VtSettings {
   portal_sprints_enabled: boolean | 0 | 1;
   portal_notifications_enabled: boolean | 0 | 1;
   portal_reports_enabled: boolean | 0 | 1;
+  mobile_reports_enabled: boolean | 0 | 1;
 }
 
 async function fetchVtSettings(): Promise<VtSettings> {
@@ -21,6 +22,7 @@ async function fetchVtSettings(): Promise<VtSettings> {
       "portal_sprints_enabled",
       "portal_notifications_enabled",
       "portal_reports_enabled",
+      "mobile_reports_enabled",
     ]),
   });
   return res;
