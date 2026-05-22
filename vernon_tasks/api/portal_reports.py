@@ -456,7 +456,8 @@ def list_managed_projects():
     _check_mobile_flag()
     _require_leader()
     user = frappe.session.user
-    key = f"pr:mobile:managed:{user}"
+    bucket = _role_bucket()
+    key = f"pr:mobile:managed:{bucket}:{user}"
 
     def _build():
         projects = _visible_projects()
