@@ -41,7 +41,6 @@ describe("ProjectDetail", () => {
     renderPage("/m/reports/projects/VTP-1?period=month");
     fireEvent.click(screen.getByRole("button", { name: /Kuartal/i }));
     await waitFor(() => {
-      const link = document.querySelector("a");
       // MemoryRouter doesn't update window.location, so check via DOM state:
       // the Kuartal button should now be active (different background)
       const btn = screen.getByRole("button", { name: /Kuartal/i });

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Domain: Reports</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<h1>Reports Domain</h1>
+<p><strong>Owner:</strong> Erick Mo &nbsp;|&nbsp; <strong>Status:</strong> Active</p>
+
+<h2>Scope</h2>
+<p>Mobile + portal reporting hub. Aggregates analytics, OKR rollup, sprint velocity, risk, leaderboard, workload, and overdue tasks. Two surfaces:</p>
+<ul>
+  <li><code>/portal/reports</code> — desktop exec dashboard (3 tabs: OKR, Sprints, Team).</li>
+  <li><code>/m/reports</code> — mobile hub (3 cards: My Reports, Projects I Manage, My Team).</li>
+</ul>
+
+<h2>Endpoints</h2>
+<table>
+  <tr><th>Endpoint</th><th>Permission</th><th>Cache</th></tr>
+  <tr><td>list_managed_projects</td><td>Leader+</td><td>5m / user+bucket</td></tr>
+  <tr><td>get_mobile_project_velocity</td><td>Leader+ owns project</td><td>5m / user+project+n</td></tr>
+  <tr><td>get_mobile_project_forecast</td><td>Leader+ owns project</td><td>5m / user+project</td></tr>
+  <tr><td>get_mobile_project_risks</td><td>Leader+ owns project</td><td>none</td></tr>
+  <tr><td>get_mobile_project_okr</td><td>Leader+ owns project</td><td>5m / user+project+period</td></tr>
+  <tr><td>get_mobile_team_leaderboard</td><td>Leader+</td><td>5m / user+period+limit</td></tr>
+  <tr><td>get_mobile_team_overdue</td><td>Leader+</td><td>none</td></tr>
+  <tr><td>get_mobile_team_workload</td><td>Leader+</td><td>5m / user</td></tr>
+  <tr><td>get_mobile_team_completion</td><td>Leader+</td><td>5m / user+period</td></tr>
+</table>
+
+<h2>Feature flags</h2>
+<ul>
+  <li><code>portal_reports_enabled</code> (VT Settings) — gates <code>/portal/reports</code>.</li>
+  <li><code>mobile_reports_enabled</code> (VT Settings) — gates <code>/m/reports</code>.</li>
+</ul>
+
+<h2>Cross-Domain Events</h2>
+<h3>Triggers (I fire these)</h3>
+<table>
+  <tr><th>Event</th><th>Payload</th><th>Known Listeners</th></tr>
+  <tr><td>(none — Reports is read-only)</td><td>—</td><td>—</td></tr>
+</table>
+
+<h3>Listens (I react to these)</h3>
+<table>
+  <tr><th>Event</th><th>Source</th><th>My action</th></tr>
+  <tr><td>tasks.task.completed</td><td>tasks</td><td>Invalidate completion + workload cache</td></tr>
+  <tr><td>sprints.sprint.closed</td><td>sprints</td><td>Invalidate velocity cache</td></tr>
+  <tr><td>okr.kpi_snapshot.updated</td><td>okr</td><td>Invalidate OKR rollup cache</td></tr>
+</table>
+
+</body>
+</html>
