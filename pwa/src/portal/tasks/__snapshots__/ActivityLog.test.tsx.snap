@@ -24,7 +24,7 @@ exports[`ActivityLog > snapshot: 5-entry fixture 1`] = `
         <span
           class="activity-log__time"
         >
-          11 jam lalu
+          18 Mei
         </span>
         <button
           aria-label="delete"
@@ -49,7 +49,7 @@ exports[`ActivityLog > snapshot: 5-entry fixture 1`] = `
       >
         bob@test.local
          · 
-        11 jam lalu
+        18 Mei
       </span>
       <div
         class="activity-log__diff"
@@ -83,7 +83,7 @@ exports[`ActivityLog > snapshot: 5-entry fixture 1`] = `
         <span
           class="activity-log__time"
         >
-          10 jam lalu
+          18 Mei
         </span>
       </div>
       <div
@@ -102,7 +102,7 @@ exports[`ActivityLog > snapshot: 5-entry fixture 1`] = `
       >
         alice@test.local
          · 
-        10 jam lalu
+        18 Mei
       </span>
       <div
         class="activity-log__diff"
@@ -136,7 +136,7 @@ exports[`ActivityLog > snapshot: 5-entry fixture 1`] = `
         <span
           class="activity-log__time"
         >
-          9 jam lalu
+          18 Mei
         </span>
         <button
           aria-label="delete"
