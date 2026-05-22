@@ -435,3 +435,51 @@ def get_portal_overdue():
         }
 
     return _cache(key, _build)
+
+
+# ── Mobile Reports endpoints (Leader/Manager only) ───────────────────────────
+def _check_mobile_flag():
+    """Throws unless VT Settings.mobile_reports_enabled = 1."""
+    enabled = frappe.db.get_single_value("VT Settings", "mobile_reports_enabled")
+    if not int(enabled or 0):
+        frappe.throw("Mobile Reports is not enabled", frappe.PermissionError)
+
+
+@frappe.whitelist()
+def list_managed_projects():
+    """Projects the current user manages, with per-project KPI snippet.
+
+    Returns: {"projects": [{name, project_title, status, avg_velocity,
+                            risk_count, member_count}, ...]}
+    Permission: Leader+. Cached 5 min per user.
+    """
+    _check_mobile_flag()
+    _require_leader()
+    user = frappe.session.user
+    key = f"pr:mobile:managed:{user}"
+
+    def _build():
+        projects = _visible_projects()
+        out = []
+        for p in projects:
+            sprints = _vel_trend(p["name"], 6)
+            vels = [s.get("velocity", 0.0) for s in sprints]
+            avg = round(sum(vels) / len(vels), 1) if vels else 0.0
+            risk_data = _evaluate_risks(p["name"]) or {}
+            risk_count = len(risk_data.get("risks", []) or [])
+            members = frappe.get_all(
+                "Project Team Member",
+                filters={"parent": p["name"]},
+                pluck="user",
+            )
+            out.append({
+                "name": p["name"],
+                "project_title": p.get("project_title", p["name"]),
+                "status": p.get("status", "Active"),
+                "avg_velocity": avg,
+                "risk_count": risk_count,
+                "member_count": len(members),
+            })
+        return {"projects": out}
+
+    return _cache(key, _build)

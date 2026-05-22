@@ -2,6 +2,8 @@ import frappe
 import unittest
 from unittest.mock import patch, MagicMock
 
+from vernon_tasks.api import portal_reports as mobile_reports
+
 
 def _set_flag(val: int):
     frappe.db.set_single_value("VT Settings", "portal_reports_enabled", val)
@@ -580,3 +582,77 @@ class TestBusinessLogic(unittest.TestCase):
                        return_value=[]):
                 result = get_portal_risks()
         self.assertIsInstance(result.get("risks", result), list)
+
+
+# ── Mobile Reports tests ─────────────────────────────────────────────────────
+class VTPortalReportsTestBase(unittest.TestCase):
+    """Shared fixtures for mobile reports endpoint tests.
+
+    Creates one Leader user and one Member user (idempotent), and ensures
+    the mobile reports feature flag starts enabled. Subclasses may override
+    setUp to flip the flag.
+    """
+
+    leader_user = "leader_mr@test.local"
+    member_user = "member_mr@test.local"
+
+    @classmethod
+    def _ensure_user(cls, email, role):
+        if not frappe.db.exists("User", email):
+            frappe.get_doc({
+                "doctype": "User",
+                "email": email,
+                "first_name": email.split("@")[0].title(),
+                "send_welcome_email": 0,
+                "roles": [{"role": role}],
+            }).insert(ignore_permissions=True)
+        return email
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._ensure_user(cls.leader_user, "VT Leader")
+        cls._ensure_user(cls.member_user, "VT Member")
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+        frappe.db.commit()
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 0)
+        frappe.db.commit()
+        super().tearDown()
+
+
+class TestListManagedProjects(VTPortalReportsTestBase):
+    """Mobile endpoint: list of projects the current user manages, with KPI snippet."""
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+
+    def test_member_role_returns_403(self):
+        frappe.set_user(self.member_user)
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.list_managed_projects()
+
+    def test_leader_returns_own_projects_with_kpi_snippet(self):
+        frappe.set_user(self.leader_user)
+        result = mobile_reports.list_managed_projects()
+        self.assertIsInstance(result, dict)
+        self.assertIn("projects", result)
+        for row in result["projects"]:
+            self.assertIn("name", row)
+            self.assertIn("project_title", row)
+            self.assertIn("status", row)
+            self.assertIn("avg_velocity", row)
+            self.assertIn("risk_count", row)
+            self.assertIn("member_count", row)
+
+    def test_flag_off_throws(self):
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 0)
+        frappe.set_user(self.leader_user)
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.list_managed_projects()
