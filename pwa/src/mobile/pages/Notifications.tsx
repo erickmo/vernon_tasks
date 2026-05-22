@@ -65,7 +65,7 @@ export function NotificationsPage() {
 
   return (
     <PullToRefresh onRefresh={() => q.refetch().then(() => {})}>
-      <div style={{ background: "var(--vt-primary-light)", minHeight: "100%" }}>
+      <div style={{ background: "var(--vt-primary-light)", flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Sticky gradient header */}
         <header
           style={{
