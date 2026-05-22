@@ -484,3 +484,74 @@ def list_managed_projects():
         return {"projects": out}
 
     return _cache(key, _build)
+
+
+# ── Per-project mobile endpoints (Leader+; managed-only) ─────────────────────
+def _require_owns_project(project: str):
+    """Throws unless current user has project in _visible_projects()."""
+    if not any(p["name"] == project for p in _visible_projects()):
+        frappe.throw("Not authorized for this project", frappe.PermissionError)
+
+
+@frappe.whitelist()
+def get_mobile_project_velocity(project: str, n: int = 6):
+    """Velocity trend for a single managed project."""
+    _check_mobile_flag()
+    _require_leader()
+    _require_owns_project(project)
+    n = clamp_int(n, 1, 24, "n")
+    user = frappe.session.user
+    key = f"pr:mobile:vel:{project}:{n}:{user}"
+
+    def _build():
+        sprints = _vel_trend(project, n)
+        vels = [s.get("velocity", 0.0) for s in sprints]
+        avg = round(sum(vels) / len(vels), 1) if vels else 0.0
+        return {
+            "project": project,
+            "sprints": sprints,
+            "avg_velocity": avg,
+            "trend": _compute_trend(vels),
+        }
+
+    return _cache(key, _build)
+
+
+@frappe.whitelist()
+def get_mobile_project_forecast(project: str):
+    """Forecast for a single managed project."""
+    _check_mobile_flag()
+    _require_leader()
+    _require_owns_project(project)
+    user = frappe.session.user
+    key = f"pr:mobile:forecast:{project}:{user}"
+    return _cache(key, lambda: _forecast(project) or {})
+
+
+@frappe.whitelist()
+def get_mobile_project_risks(project: str):
+    """Risks for a single managed project. Not cached (changes per task move)."""
+    _check_mobile_flag()
+    _require_leader()
+    _require_owns_project(project)
+    return _evaluate_risks(project) or {"risks": []}
+
+
+@frappe.whitelist()
+def get_mobile_project_okr(project: str, period=None):
+    """OKR rollup for a single managed project.
+
+    Note: underlying okr_rollup_service.get_okr_rollup does not accept a
+    project filter, so the rollup is global. The project arg is retained for
+    permission scoping and future per-project rollup support.
+    """
+    _check_mobile_flag()
+    _require_leader()
+    _require_owns_project(project)
+    period_key = period or "current"
+    user = frappe.session.user
+    key = f"pr:mobile:okr:{project}:{period_key}:{user}"
+    rollup = _cache(key, lambda: _okr(period))
+    if isinstance(rollup, list):
+        return {"rows": rollup}
+    return rollup

@@ -595,6 +595,8 @@ class VTPortalReportsTestBase(unittest.TestCase):
 
     leader_user = "leader_mr@test.local"
     member_user = "member_mr@test.local"
+    project_title = "Mobile Reports Test Proj"
+    project_name = None  # set in setUpClass
 
     @classmethod
     def _ensure_user(cls, email, role):
@@ -609,10 +611,27 @@ class VTPortalReportsTestBase(unittest.TestCase):
         return email
 
     @classmethod
+    def _ensure_project(cls):
+        existing = frappe.db.exists("VT Project", {"title": cls.project_title})
+        if existing:
+            return existing
+        return frappe.get_doc({
+            "doctype": "VT Project",
+            "title": cls.project_title,
+            "project_owner": cls.leader_user,
+            "project_leader": cls.leader_user,
+            "start_date": "2026-01-01",
+            "end_date": "2026-12-31",
+            "status": "On Track",
+            "pdca_phase": "DO",
+        }).insert(ignore_permissions=True).name
+
+    @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls._ensure_user(cls.leader_user, "VT Leader")
         cls._ensure_user(cls.member_user, "VT Member")
+        cls.project_name = cls._ensure_project()
 
     def setUp(self):
         super().setUp()
@@ -656,3 +675,34 @@ class TestListManagedProjects(VTPortalReportsTestBase):
         frappe.set_user(self.leader_user)
         with self.assertRaises(frappe.PermissionError):
             mobile_reports.list_managed_projects()
+
+
+class TestMobileProjectEndpoints(VTPortalReportsTestBase):
+    """Mobile per-project endpoints: velocity, forecast, risks, OKR."""
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+        frappe.set_user(self.leader_user)
+
+    def test_velocity_returns_sprint_series(self):
+        out = mobile_reports.get_mobile_project_velocity(self.project_name, 6)
+        self.assertIn("sprints", out)
+        self.assertIn("avg_velocity", out)
+        self.assertIn("trend", out)
+
+    def test_forecast_returns_target_projected_gap(self):
+        out = mobile_reports.get_mobile_project_forecast(self.project_name)
+        self.assertIsInstance(out, dict)
+
+    def test_risks_returns_risk_list(self):
+        out = mobile_reports.get_mobile_project_risks(self.project_name)
+        self.assertIn("risks", out)
+
+    def test_okr_returns_rollup(self):
+        out = mobile_reports.get_mobile_project_okr(self.project_name)
+        self.assertIsInstance(out, dict)
+
+    def test_unmanaged_project_rejected(self):
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.get_mobile_project_velocity("VTP-NOT-MINE", 6)
