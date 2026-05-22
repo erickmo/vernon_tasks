@@ -33,9 +33,14 @@ describe("TopNav", () => {
     expect(screen.getByText("Report")).toBeInTheDocument();
   });
 
-  it("shows Work breadcrumb on /m/work", () => {
+  it("shows Project breadcrumb on /m/work (redirect compat)", () => {
     render(<Wrapper path="/m/work" />);
-    expect(screen.getByText("Work")).toBeInTheDocument();
+    expect(screen.getAllByText("Project").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows Project breadcrumb on /m/project", () => {
+    render(<Wrapper path="/m/project" />);
+    expect(screen.getAllByText("Project").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows Analytics breadcrumb on /m/analytics", () => {
