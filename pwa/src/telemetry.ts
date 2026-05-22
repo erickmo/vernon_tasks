@@ -94,6 +94,7 @@ export type TelemetryEvent =
   | "reports.overdue_view_toggle"
   | "reports.permission_denied"
   | "reports_landing_view"
+  | "reports_projects_view"
   | "reports_card_tap"
   | "reports_my_view";
 
