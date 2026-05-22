@@ -21,7 +21,8 @@ def make_task(project, title, pdca_phase="Plan", assigned_to=None):
 class TestGetProjectTasks:
     def test_returns_all_tasks_for_project(self):
         tasks = [make_task("PROJ-001", "Task A"), make_task("PROJ-001", "Task B")]
-        with patch("frappe.get_all", return_value=tasks):
+        with patch("frappe.has_permission", return_value=True), \
+             patch("frappe.get_all", return_value=tasks):
             from vernon_tasks.api.projects import get_project_tasks
             result = get_project_tasks("PROJ-001")
         assert len(result) == 2
@@ -29,7 +30,8 @@ class TestGetProjectTasks:
 
     def test_filters_by_pdca_phase(self):
         tasks = [make_task("PROJ-001", "Plan Task", pdca_phase="Plan")]
-        with patch("frappe.get_all", return_value=tasks) as mock_get_all:
+        with patch("frappe.has_permission", return_value=True), \
+             patch("frappe.get_all", return_value=tasks) as mock_get_all:
             from vernon_tasks.api.projects import get_project_tasks
             get_project_tasks("PROJ-001", pdca_phase="Plan")
         call_filters = mock_get_all.call_args[1]["filters"]
@@ -37,14 +39,16 @@ class TestGetProjectTasks:
 
     def test_filters_by_assignee(self):
         tasks = [make_task("PROJ-001", "My Task", assigned_to="alice@example.com")]
-        with patch("frappe.get_all", return_value=tasks) as mock_get_all:
+        with patch("frappe.has_permission", return_value=True), \
+             patch("frappe.get_all", return_value=tasks) as mock_get_all:
             from vernon_tasks.api.projects import get_project_tasks
             get_project_tasks("PROJ-001", assignee="alice@example.com")
         call_filters = mock_get_all.call_args[1]["filters"]
         assert call_filters.get("assigned_to") == "alice@example.com"
 
     def test_no_phase_filter_when_none(self):
-        with patch("frappe.get_all", return_value=[]) as mock_get_all:
+        with patch("frappe.has_permission", return_value=True), \
+             patch("frappe.get_all", return_value=[]) as mock_get_all:
             from vernon_tasks.api.projects import get_project_tasks
             get_project_tasks("PROJ-001")
         call_filters = mock_get_all.call_args[1]["filters"]
@@ -58,7 +62,8 @@ class TestCreateTask:
             "name": "VT-0001", "title": "New Task", "project": "PROJ-001",
             "pdca_phase": "Plan", "priority": "Medium",
         }
-        with patch("frappe.get_doc", return_value=mock_doc):
+        with patch("frappe.has_permission", return_value=True), \
+             patch("frappe.get_doc", return_value=mock_doc):
             from vernon_tasks.api.projects import create_task
             result = create_task(project="PROJ-001", title="New Task")
         mock_doc.insert.assert_called_once_with(ignore_permissions=False)
@@ -67,7 +72,8 @@ class TestCreateTask:
     def test_defaults_pdca_plan_and_priority_medium(self):
         mock_doc = MagicMock()
         mock_doc.as_dict.return_value = {}
-        with patch("frappe.get_doc", return_value=mock_doc) as mock_get_doc:
+        with patch("frappe.has_permission", return_value=True), \
+             patch("frappe.get_doc", return_value=mock_doc) as mock_get_doc:
             from vernon_tasks.api.projects import create_task
             create_task(project="PROJ-001", title="T")
         call_kwargs = mock_get_doc.call_args[0][0]

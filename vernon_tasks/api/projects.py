@@ -159,6 +159,7 @@ def bulk_update_projects(names, payload):
 
 @frappe.whitelist()
 def get_project_tasks(project: str, pdca_phase: str = None, assignee: str = None) -> list:
+    frappe.has_permission("VT Project", "read", doc=project, throw=True)
     filters = {"project": project, "docstatus": ["!=", 2]}
     if pdca_phase:
         filters["pdca_phase"] = pdca_phase
@@ -184,6 +185,7 @@ def create_task(
     pdca_phase: str = None,
     priority: str = None,
 ) -> dict:
+    frappe.has_permission("VT Project", "write", doc=project, throw=True)
     doc = frappe.get_doc({
         "doctype": "VT Task",
         "project": project,
