@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: Mobile Reports Hub</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<h1 id="mobile-reports-hub-design-spec">Mobile Reports Hub Design Spec</h1>
+<p><strong>Date:</strong> 2026-05-22
+<strong>Parent:</strong> <code>docs/superpowers/specs/2026-05-18-portal-reports-p5-design.html</code>
+<strong>Status:</strong> Draft — pending review
+<strong>Owner:</strong> Erick Mo</p>
+<hr />
+<h2 id="1-scope">1. Scope</h2>
+<p>Mobile <code>/m/reports</code> landing page with 3 role-filtered cards, drilling into category-specific reports. Replaces <code>/m/analytics</code> (redirect). Backend hybrid: reuse <code>vernon_tasks/api/portal_reports.py</code> for projects/team, reuse <code>vernon_tasks/api/analytics.py</code> for "My Reports". Role gating: Member sees only "My Reports"; Leader+ sees all three.</p>
+<p><strong>In scope:</strong></p>
+<ul>
+<li>Routes: <code>/m/reports</code>, <code>/m/reports/me</code>, <code>/m/reports/projects</code>, <code>/m/reports/projects/:id</code>, <code>/m/reports/team</code>.</li>
+<li>Redirect <code>/m/analytics</code> → <code>/m/reports/me</code>.</li>
+<li>BottomNav swap label <code>Analytics</code> → <code>Reports</code>.</li>
+<li>Role-filtered landing (hide cards without access).</li>
+<li>Feature flag <code>mobile_reports_enabled</code> (Check, default <code>0</code>) in VT Settings.</li>
+<li>One new whitelisted endpoint: <code>list_managed_projects</code> in <code>portal_reports.py</code>.</li>
+</ul>
+<p><strong>Out of scope:</strong></p>
+<ul>
+<li>New backend services (reuse existing).</li>
+<li>Drill into individual team member.</li>
+<li>Export PDF/CSV.</li>
+<li>Custom date pickers beyond preset period chips.</li>
+<li>New schema (no <code>VT Team</code> doctype).</li>
+</ul>
+<hr />
+<h2 id="2-routes-components">2. Routes + Components</h2>
+<pre><code>pwa/src/mobile/pages/Reports/
+  Landing.tsx              # /m/reports — 3 row-cards, role-filtered
+  MyReports.tsx            # /m/reports/me — wraps existing Analytics tabs
+  ProjectsList.tsx         # /m/reports/projects — managed project cards
+  ProjectDetail.tsx        # /m/reports/projects/:id — velocity/forecast/risk/OKR
+  TeamReport.tsx           # /m/reports/team — leaderboard/completion/overdue/workload
+  hooks/
+    useManagedProjects.ts  # wraps list_managed_projects
+    useReportsAccess.ts    # returns { canMyReports, canProjects, canTeam }
+  ReportsFeatureGate.tsx   # reads mobile_reports_enabled
+</code></pre>
+<p>Router (<code>router.tsx</code>):</p>
+<ul>
+<li>Add 5 routes under <code>AppShell</code> <code>&lt;AuthGuard&gt;</code> children.</li>
+<li>Replace <code>/m/analytics</code> element with <code>&lt;Navigate to="/m/reports/me" replace /&gt;</code>.</li>
+</ul>
+<p>BottomNav (<code>components/BottomNav.tsx</code>):</p>
+<ul>
+<li>Tab label <code>Analytics</code> → <code>Reports</code>, path <code>/m/analytics</code> → <code>/m/reports</code>, icon updated.</li>
+</ul>
+<p>All pages use the standard chain: <code>SafeArea → PullToRefresh → page (flex column)</code> matching the dashboard/notifications fix on <code>master</code>.</p>
+<hr />
+<h2 id="3-backend">3. Backend</h2>
+<h3 id="31-my-reports-reuse-analyticspy">3.1 My Reports — reuse <code>analytics.py</code></h3>
+<p>No changes. Frontend calls existing whitelisted endpoints:</p>
+<ul>
+<li><code>fetch_leaderboard(period, limit)</code></li>
+<li><code>fetch_velocity(project, weeks)</code></li>
+<li><code>fetch_streak(project)</code></li>
+<li><code>fetch_daily_completions()</code></li>
+</ul>
+<h3 id="32-projects-team-extend-portal_reportspy">3.2 Projects + Team — extend <code>portal_reports.py</code></h3>
+<p>One new endpoint:</p>
+<pre><code class="language-python">@frappe.whitelist()
+def list_managed_projects():
+    &quot;&quot;&quot;Projects where current user is leader/manager.
+    Each entry includes KPI snippet: velocity_avg, risk_count, member_count, status.
+    &quot;&quot;&quot;
+    _check_flag()
+    _require_leader()
+    user = frappe.session.user
+    return _cache(
+        f&quot;managed_projects:{user}&quot;,
+        lambda: _build_managed_projects(user),
+    )
+</code></pre>
+<p>Reuse existing portal_reports endpoints for drill-downs:</p>
+<ul>
+<li><code>get_velocity_trend(project)</code> → ProjectDetail velocity section</li>
+<li><code>get_forecast(project)</code> → ProjectDetail forecast card</li>
+<li><code>evaluate_risks(project)</code> → ProjectDetail risk flags</li>
+<li><code>get_okr_rollup(project)</code> → ProjectDetail OKR rollup</li>
+<li><code>get_leaderboard(scope='team', period)</code> → TeamReport leaderboard</li>
+<li><code>get_overdue(scope='team')</code> → TeamReport overdue list</li>
+</ul>
+<h3 id="33-team-scope-helper">3.3 Team scope helper</h3>
+<p>New private helper in <code>portal_reports.py</code>:</p>
+<pre><code class="language-python">def _team_projects(user: str) -&gt; list[str]:
+    &quot;&quot;&quot;Returns project names where user is leader/manager.
+    Used to scope team-wide queries to the union of managed-project members.
+    &quot;&quot;&quot;
+</code></pre>
+<p>Existing endpoints accept an optional <code>project_filter=[...]</code> list; if absent, add the parameter and default to all projects.</p>
+<h3 id="34-permission-caching">3.4 Permission + caching</h3>
+<ul>
+<li><code>_check_flag()</code> + <code>_require_leader()</code> on every project/team endpoint.</li>
+<li>My Reports endpoints already member-safe.</li>
+<li>5-minute TTL cache; key includes <code>user</code>.</li>
+</ul>
+<hr />
+<h2 id="4-page-designs">4. Page Designs</h2>
+<h3 id="41-landing-mreports">4.1 Landing (<code>/m/reports</code>)</h3>
+<ul>
+<li>Sticky header <code>Reports</code>.</li>
+<li>Row cards: 40px square icon + title + sub. Tap → drill.</li>
+<li>Cards rendered based on <code>useReportsAccess()</code>:</li>
+<li>Member → 1 card (My Reports).</li>
+<li>Leader with managed projects → 3 cards.</li>
+<li>Leader with 0 projects → 2 cards (My Reports + My Team if team non-empty, else 1).</li>
+</ul>
+<h3 id="42-myreports-mreportsme">4.2 MyReports (<code>/m/reports/me</code>)</h3>
+<ul>
+<li>Reuses current <code>Analytics.tsx</code> content verbatim.</li>
+<li>Sticky header <code>My Reports</code> + back arrow.</li>
+<li>Tabs: Leaderboard, Velocity, Streak.</li>
+</ul>
+<h3 id="43-projectslist-mreportsprojects">4.3 ProjectsList (<code>/m/reports/projects</code>)</h3>
+<ul>
+<li>Sticky header <code>Projects I Manage</code> + back.</li>
+<li>Card per project: name, status chip, 3 KPI mini-chips (avg velocity, risk count, member count).</li>
+<li>Tap → ProjectDetail.</li>
+<li>Empty: "No projects to report on."</li>
+</ul>
+<h3 id="44-projectdetail-mreportsprojectsid">4.4 ProjectDetail (<code>/m/reports/projects/:id</code>)</h3>
+<ul>
+<li>Sticky header: project name + back.</li>
+<li>Period chips (Week/Month/Quarter) — URL <code>?period=</code>.</li>
+<li>Sections (vertical scroll):</li>
+<li>VelocityChart.</li>
+<li>Forecast card (target, projected, gap).</li>
+<li>Risk flags list (color-tagged).</li>
+<li>OKR rollup table (compact mobile layout).</li>
+</ul>
+<h3 id="45-teamreport-mreportsteam">4.5 TeamReport (<code>/m/reports/team</code>)</h3>
+<ul>
+<li>Sticky header <code>My Team</code> + back.</li>
+<li>Period chips.</li>
+<li>Sections:</li>
+<li>LeaderboardTable (top 10, team-scoped).</li>
+<li>Completion ring chart (overall %).</li>
+<li>Overdue list (count + tap → task).</li>
+<li>Workload bar chart (per member).</li>
+</ul>
+<hr />
+<h2 id="5-data-flow-state">5. Data Flow + State</h2>
+<ul>
+<li>React Query keys:</li>
+<li><code>["reports","managed-projects"]</code></li>
+<li><code>["reports","project", id, period]</code></li>
+<li><code>["reports","team", period]</code></li>
+<li>Existing: <code>["leaderboard"]</code>, <code>["velocity", p]</code>, <code>["streak", p]</code>, <code>["daily-completions"]</code>.</li>
+<li><code>staleTime: 60_000</code> (matches existing analytics).</li>
+<li>Period chip state via URL search param (<code>?period=month</code>).</li>
+<li>Project selection lives in URL path, not React state.</li>
+</ul>
+<p>Telemetry events:</p>
+<ul>
+<li><code>reports_landing_view</code></li>
+<li><code>reports_card_tap { card }</code></li>
+<li><code>reports_my_view</code></li>
+<li><code>reports_project_view { project }</code></li>
+<li><code>reports_team_view</code></li>
+<li><code>reports_period_change { scope, period }</code></li>
+</ul>
+<hr />
+<h2 id="6-error-loading">6. Error + Loading</h2>
+<ul>
+<li>Each section: <code>Skeleton</code> while loading, <code>EmptyState</code> w/ Retry on error.</li>
+<li>403 from backend → toast + navigate back to <code>/m/reports</code>.</li>
+<li>Feature flag off → <code>ComingSoon</code> component.</li>
+<li>Offline → existing <code>OfflineBanner</code>; React Query serves stale cache.</li>
+</ul>
+<hr />
+<h2 id="7-tests">7. Tests</h2>
+<p>PWA:</p>
+<ul>
+<li><code>Landing.test.tsx</code> — role gating (Member sees 1, Leader sees 3, Leader w/ 0 projects sees ≤2).</li>
+<li><code>MyReports.test.tsx</code> — redirect from <code>/m/analytics</code>, tab persistence via URL.</li>
+<li><code>ProjectsList.test.tsx</code> — empty state, KPI chips render, tap navigates.</li>
+<li><code>ProjectDetail.test.tsx</code> — period chip refetch, all 4 sections render.</li>
+<li><code>TeamReport.test.tsx</code> — sections render, period state persists.</li>
+</ul>
+<p>Backend:</p>
+<ul>
+<li><code>test_portal_reports.py</code> — add cases for <code>list_managed_projects</code>:</li>
+<li>Member → 403.</li>
+<li>Leader → returns own projects only, with KPI snippet shape.</li>
+<li>Cache hit on repeat call within TTL.</li>
+<li>Feature flag off → 403.</li>
+</ul>
+<hr />
+<h2 id="8-rollout">8. Rollout</h2>
+<ol>
+<li>Land all code behind <code>mobile_reports_enabled=0</code>.</li>
+<li>Internal QA on staging; flip flag to <code>1</code>.</li>
+<li>After 1 sprint stable: delete <code>pwa/src/mobile/pages/Analytics.tsx</code> (route redirect remains).</li>
+</ol>
+<hr />
+<h2 id="9-open-questions">9. Open Questions</h2>
+<p>None at draft. To be filled if review surfaces issues.</p>
+</body>
+</html>
