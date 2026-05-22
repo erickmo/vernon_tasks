@@ -22,5 +22,5 @@ export function useProjectTasks(
 export function useInvalidateProjectTasks() {
   const qc = useQueryClient();
   return (projectId: string) =>
-    qc.invalidateQueries({ queryKey: projectTaskKeys.list(projectId, {}) });
+    qc.invalidateQueries({ queryKey: [projectTaskKeys.all[0], projectId] });
 }
