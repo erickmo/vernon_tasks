@@ -100,8 +100,8 @@ export function ProjectSidebar({ selectedId, onSelect }: Props) {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [editTarget, setEditTarget] = useState<ProjectRow | null>(null);
-  const { can } = usePermissions();
-  const canWrite = can("project.write");
+  const { hasPermission } = usePermissions();
+  const canWrite = hasPermission("project.write");
   const qc = useQueryClient();
 
   const statuses = TAB_STATUSES[tab];

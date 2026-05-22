@@ -9,7 +9,7 @@ vi.mock("../../../portal/projects/hooks/useProjects", () => ({
   useProjects: vi.fn(() => ({ data: [], isLoading: false })),
 }));
 vi.mock("../../../auth/usePermissions", () => ({
-  usePermissions: () => ({ can: () => true }),
+  usePermissions: () => ({ hasPermission: () => true }),
 }));
 vi.mock("../../../portal/projects/api/projects", () => ({
   createProject: vi.fn().mockResolvedValue({}),
