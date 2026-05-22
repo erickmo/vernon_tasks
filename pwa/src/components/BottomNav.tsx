@@ -4,7 +4,7 @@ import { useUnreadCount } from "../hooks/useUnreadCount";
 import { useIsLeader } from "../hooks/useIsLeader";
 
 const TABS_BASE = [
-  { to: "/m/work", label: t("nav.tasks"), key: "tasks" },
+  { to: "/m/project", label: t("nav.tasks"), key: "tasks" },
   { to: "/m/dashboard", label: t("nav.dashboard"), key: "dashboard" },
   { to: "/m/analytics", label: t("nav.analytics"), key: "analytics" },
   { to: "/m/me", label: t("nav.me"), key: "me" },

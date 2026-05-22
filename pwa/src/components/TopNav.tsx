@@ -18,7 +18,8 @@ const SHADOW_MD   = "0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)";
 
 const BREADCRUMB_MAP: { prefix: string; label: string }[] = [
   { prefix: "/m/dashboard", label: "Dashboard" },
-  { prefix: "/m/work",      label: "Work" },
+  { prefix: "/m/project",   label: "Project" },
+  { prefix: "/m/work",      label: "Project" },
   { prefix: "/m/analytics", label: "Analytics" },
   { prefix: "/m/leader",    label: "Leader" },
   { prefix: "/m/me",        label: "Me" },
@@ -31,7 +32,7 @@ function getBreadcrumb(pathname: string): string {
 
 const NAV2_ITEMS = [
   { label: "Dashboard", to: "/m/dashboard" },
-  { label: "Project",   to: "/m/work" },
+  { label: "Project",   to: "/m/project" },
   { label: "Report",    to: "/m/analytics" },
 ] as const;
 
