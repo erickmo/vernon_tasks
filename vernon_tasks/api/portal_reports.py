@@ -553,5 +553,5 @@ def get_mobile_project_okr(project: str, period=None):
     key = f"pr:mobile:okr:{project}:{period_key}:{user}"
     rollup = _cache(key, lambda: _okr(period))
     if isinstance(rollup, list):
-        return {"rows": rollup}
+        return {"objectives": rollup}
     return rollup
