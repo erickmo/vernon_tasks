@@ -3,6 +3,7 @@ const STRINGS = {
   "nav.tasks": "Tugas",
   "nav.dashboard": "Dashboard",
   "nav.analytics": "Analitik",
+  "nav.reports": "Laporan",
   "nav.me": "Saya",
   "login.title": "Masuk ke Vernon",
   "login.subtitle": "Selamat datang kembali",

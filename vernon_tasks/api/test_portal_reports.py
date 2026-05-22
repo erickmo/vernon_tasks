@@ -2,6 +2,8 @@ import frappe
 import unittest
 from unittest.mock import patch, MagicMock
 
+from vernon_tasks.api import portal_reports as mobile_reports
+
 
 def _set_flag(val: int):
     frappe.db.set_single_value("VT Settings", "portal_reports_enabled", val)
@@ -580,3 +582,161 @@ class TestBusinessLogic(unittest.TestCase):
                        return_value=[]):
                 result = get_portal_risks()
         self.assertIsInstance(result.get("risks", result), list)
+
+
+# ── Mobile Reports tests ─────────────────────────────────────────────────────
+class VTPortalReportsTestBase(unittest.TestCase):
+    """Shared fixtures for mobile reports endpoint tests.
+
+    Creates one Leader user and one Member user (idempotent), and ensures
+    the mobile reports feature flag starts enabled. Subclasses may override
+    setUp to flip the flag.
+    """
+
+    leader_user = "leader_mr@test.local"
+    member_user = "member_mr@test.local"
+    project_title = "Mobile Reports Test Proj"
+    project_name = None  # set in setUpClass
+
+    @classmethod
+    def _ensure_user(cls, email, role):
+        if not frappe.db.exists("User", email):
+            frappe.get_doc({
+                "doctype": "User",
+                "email": email,
+                "first_name": email.split("@")[0].title(),
+                "send_welcome_email": 0,
+                "roles": [{"role": role}],
+            }).insert(ignore_permissions=True)
+        return email
+
+    @classmethod
+    def _ensure_project(cls):
+        existing = frappe.db.exists("VT Project", {"title": cls.project_title})
+        if existing:
+            return existing
+        return frappe.get_doc({
+            "doctype": "VT Project",
+            "title": cls.project_title,
+            "project_owner": cls.leader_user,
+            "project_leader": cls.leader_user,
+            "start_date": "2026-01-01",
+            "end_date": "2026-12-31",
+            "status": "On Track",
+            "pdca_phase": "DO",
+        }).insert(ignore_permissions=True).name
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._ensure_user(cls.leader_user, "VT Leader")
+        cls._ensure_user(cls.member_user, "VT Member")
+        cls.project_name = cls._ensure_project()
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+        frappe.db.commit()
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 0)
+        frappe.db.commit()
+        super().tearDown()
+
+
+class TestListManagedProjects(VTPortalReportsTestBase):
+    """Mobile endpoint: list of projects the current user manages, with KPI snippet."""
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+
+    def test_member_role_returns_403(self):
+        frappe.set_user(self.member_user)
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.list_managed_projects()
+
+    def test_leader_returns_own_projects_with_kpi_snippet(self):
+        frappe.set_user(self.leader_user)
+        result = mobile_reports.list_managed_projects()
+        self.assertIsInstance(result, dict)
+        self.assertIn("projects", result)
+        for row in result["projects"]:
+            self.assertIn("name", row)
+            self.assertIn("project_title", row)
+            self.assertIn("status", row)
+            self.assertIn("avg_velocity", row)
+            self.assertIn("risk_count", row)
+            self.assertIn("member_count", row)
+
+    def test_flag_off_throws(self):
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 0)
+        frappe.set_user(self.leader_user)
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.list_managed_projects()
+
+
+class TestMobileProjectEndpoints(VTPortalReportsTestBase):
+    """Mobile per-project endpoints: velocity, forecast, risks, OKR."""
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+        frappe.set_user(self.leader_user)
+
+    def test_velocity_returns_sprint_series(self):
+        out = mobile_reports.get_mobile_project_velocity(self.project_name, 6)
+        self.assertIn("sprints", out)
+        self.assertIn("avg_velocity", out)
+        self.assertIn("trend", out)
+
+    def test_forecast_returns_target_projected_gap(self):
+        out = mobile_reports.get_mobile_project_forecast(self.project_name)
+        self.assertIsInstance(out, dict)
+
+    def test_risks_returns_risk_list(self):
+        out = mobile_reports.get_mobile_project_risks(self.project_name)
+        self.assertIn("risks", out)
+
+    def test_okr_returns_rollup(self):
+        out = mobile_reports.get_mobile_project_okr(self.project_name)
+        self.assertIsInstance(out, dict)
+
+    def test_unmanaged_project_rejected(self):
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.get_mobile_project_velocity("VTP-NOT-MINE", 6)
+
+
+class TestMobileTeamEndpoints(VTPortalReportsTestBase):
+    """Mobile team endpoints: leaderboard, overdue, workload, completion."""
+
+    def setUp(self):
+        super().setUp()
+        frappe.db.set_single_value("VT Settings", "mobile_reports_enabled", 1)
+        frappe.set_user(self.leader_user)
+
+    def test_team_leaderboard_returns_rows(self):
+        out = mobile_reports.get_mobile_team_leaderboard("month", 10)
+        self.assertIn("rows", out)
+        self.assertIsInstance(out["rows"], list)
+
+    def test_team_overdue_returns_count(self):
+        out = mobile_reports.get_mobile_team_overdue()
+        self.assertIn("total", out)
+        self.assertIn("items", out)
+
+    def test_team_workload_returns_per_member(self):
+        out = mobile_reports.get_mobile_team_workload()
+        self.assertIn("members", out)
+
+    def test_team_completion_returns_percentage(self):
+        out = mobile_reports.get_mobile_team_completion("month")
+        self.assertIn("completion_pct", out)
+        self.assertIn("done", out)
+        self.assertIn("total", out)
+
+    def test_member_role_blocked(self):
+        frappe.set_user(self.member_user)
+        with self.assertRaises(frappe.PermissionError):
+            mobile_reports.get_mobile_team_leaderboard("month", 10)

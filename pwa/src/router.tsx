@@ -11,19 +11,14 @@ import { DashboardPage } from "./mobile/pages/Dashboard";
 import { LeaderPage } from "./mobile/pages/Leader";
 import { PushPrefsPage } from "./mobile/pages/PushPrefs";
 import { PageSkeleton } from "./components/PageSkeleton";
+import { Landing as ReportsLanding } from "./mobile/pages/Reports/Landing";
+import { MyReports } from "./mobile/pages/Reports/MyReports";
+import { ProjectsList } from "./mobile/pages/Reports/ProjectsList";
+import { ProjectDetail } from "./mobile/pages/Reports/ProjectDetail";
+import { TeamReport } from "./mobile/pages/Reports/TeamReport";
+import { ReportsFeatureGate } from "./mobile/pages/Reports/ReportsFeatureGate";
 
-const AnalyticsPage = lazy(() =>
-  import("./mobile/pages/Analytics").then((m) => ({ default: m.AnalyticsPage })),
-);
 const PortalShell = lazy(() => import("./portal/PortalShell"));
-
-function LazyAnalytics() {
-  return (
-    <Suspense fallback={<div style={{ padding: 24 }}>…</div>}>
-      <AnalyticsPage />
-    </Suspense>
-  );
-}
 
 function LazyPortalShell() {
   return (
@@ -64,7 +59,12 @@ export const router = createBrowserRouter([
           { path: "/m/work", element: <Navigate to="/m/project" replace /> },
           { path: "/m/work/:id", element: <Navigate to="/m/project" replace /> },
           { path: "/m/dashboard", element: <DashboardPage /> },
-          { path: "/m/analytics", element: <LazyAnalytics /> },
+          { path: "/m/analytics", element: <Navigate to="/m/reports/me" replace /> },
+          { path: "/m/reports",              element: <ReportsFeatureGate><ReportsLanding /></ReportsFeatureGate> },
+          { path: "/m/reports/me",           element: <ReportsFeatureGate><MyReports /></ReportsFeatureGate> },
+          { path: "/m/reports/projects",     element: <ReportsFeatureGate><ProjectsList /></ReportsFeatureGate> },
+          { path: "/m/reports/projects/:id", element: <ReportsFeatureGate><ProjectDetail /></ReportsFeatureGate> },
+          { path: "/m/reports/team",         element: <ReportsFeatureGate><TeamReport /></ReportsFeatureGate> },
           { path: "/m/me", element: <MePage /> },
           { path: "/m/me/notifications", element: <NotificationsPage /> },
           { path: "/m/me/notifications/settings", element: <PushPrefsPage /> },

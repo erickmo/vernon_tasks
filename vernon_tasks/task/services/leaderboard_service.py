@@ -22,9 +22,14 @@ def period_window(period: str):
     return start, end
 
 
-def get_leaderboard(period: str, limit: int = 10) -> list[dict]:
+def get_leaderboard(period: str, limit: int = 10, project_filter: list | None = None) -> list[dict]:
     start, end = period_window(period)
-    rows = frappe.db.sql("""
+    params = {"done": _DONE_PHASE, "start": start, "end": end, "limit": limit}
+    project_clause = ""
+    if project_filter:
+        params["projects"] = tuple(project_filter)
+        project_clause = "AND project IN %(projects)s"
+    rows = frappe.db.sql(f"""
         SELECT
             assigned_to AS user,
             COALESCE(SUM(earned_points), 0) AS points,
@@ -34,10 +39,11 @@ def get_leaderboard(period: str, limit: int = 10) -> list[dict]:
           AND completion_date BETWEEN %(start)s AND %(end)s
           AND assigned_to IS NOT NULL
           AND assigned_to != ''
+          {project_clause}
         GROUP BY assigned_to
         ORDER BY points DESC, task_count DESC
         LIMIT %(limit)s
-    """, {"done": _DONE_PHASE, "start": start, "end": end, "limit": limit}, as_dict=True)
+    """, params, as_dict=True)
     return [{
         "user": r["user"],
         "points": float(r["points"]),

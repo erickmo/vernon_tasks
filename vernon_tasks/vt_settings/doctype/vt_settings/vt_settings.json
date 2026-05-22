@@ -27,6 +27,7 @@
     "portal_sprints_enabled",
     "portal_notifications_enabled",
     "portal_reports_enabled",
+    "mobile_reports_enabled",
     "portal_dashboard_v2_enabled"
   ],
   "fields": [
@@ -168,6 +169,13 @@
       "fieldname": "portal_reports_enabled",
       "fieldtype": "Check",
       "label": "Enable Portal Reports (P5)"
+    },
+    {
+      "fieldname": "mobile_reports_enabled",
+      "fieldtype": "Check",
+      "label": "Enable Mobile Reports",
+      "default": "0",
+      "description": "Toggles the /m/reports mobile hub."
     },
     {
       "default": "0",

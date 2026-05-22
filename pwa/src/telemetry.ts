@@ -92,7 +92,14 @@ export type TelemetryEvent =
   | "reports.velocity_n_change"
   | "reports.leaderboard_period_change"
   | "reports.overdue_view_toggle"
-  | "reports.permission_denied";
+  | "reports.permission_denied"
+  | "reports_landing_view"
+  | "reports_projects_view"
+  | "reports_card_tap"
+  | "reports_my_view"
+  | "reports_project_view"
+  | "reports_period_change"
+  | "reports_team_view";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api

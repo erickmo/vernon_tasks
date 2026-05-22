@@ -67,7 +67,7 @@ function PeriodChips({
   );
 }
 
-function LeaderboardTab() {
+export function LeaderboardTab() {
   const [period, setPeriod] = useState<Period>("month");
   const q = useQuery({
     queryKey: ["leaderboard", period],
@@ -96,7 +96,7 @@ function LeaderboardTab() {
   );
 }
 
-function VelocityTab() {
+export function VelocityTab() {
   const { projects, isLoading } = useUserProjects();
   const [project, setProject] = useState("");
   const effective = project || projects[0] || "";
@@ -140,7 +140,7 @@ function VelocityTab() {
   );
 }
 
-function StreakTab() {
+export function StreakTab() {
   const { projects, isLoading } = useUserProjects();
   const [project, setProject] = useState("");
   const effective = project || projects[0] || "";
