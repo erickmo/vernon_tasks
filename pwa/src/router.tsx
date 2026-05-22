@@ -4,8 +4,8 @@ import { AuthGuard } from "./auth/guard";
 import { LoginPage } from "./auth/login";
 import { AppShell } from "./AppShell";
 import { MyWorkList } from "./mobile/pages/MyWork/List";
-import { MyWorkDetail } from "./mobile/pages/MyWork/Detail";
 import { Onboarding } from "./mobile/pages/Onboarding";
+import { ProjectPage } from "./mobile/pages/Project";
 import { MePage } from "./mobile/pages/Me";
 import { NotificationsPage } from "./mobile/pages/Notifications";
 import { DashboardPage } from "./mobile/pages/Dashboard";
@@ -61,8 +61,8 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: "/m", element: <MyWorkList /> },
-          { path: "/m/work", element: <MyWorkList /> },
-          { path: "/m/work/:id", element: <MyWorkDetail /> },
+          { path: "/m/project", element: <ProjectPage /> },
+          { path: "/m/work", element: <Navigate to="/m/project" replace /> },
           { path: "/m/dashboard", element: <DashboardPage /> },
           { path: "/m/analytics", element: <LazyAnalytics /> },
           { path: "/m/me", element: <MePage /> },

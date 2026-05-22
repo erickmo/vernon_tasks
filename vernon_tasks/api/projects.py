@@ -155,3 +155,68 @@ def bulk_update_projects(names, payload):
 
     frappe.db.commit()
     return {"updated": updated, "skipped": skipped}
+
+
+@frappe.whitelist()
+def get_project_tasks(project: str, pdca_phase: str = None, assignee: str = None) -> list:
+    frappe.has_permission("VT Project", "read", doc=project, throw=True)
+    filters = {"project": project, "docstatus": ["!=", 2]}
+    if pdca_phase:
+        filters["pdca_phase"] = pdca_phase
+    if assignee:
+        filters["assigned_to"] = assignee
+    return frappe.get_all(
+        "VT Task",
+        filters=filters,
+        fields=[
+            "name", "title", "assigned_to", "deadline", "priority",
+            "pdca_phase", "kanban_status", "base_points", "completion_date",
+        ],
+        order_by="deadline asc, creation asc",
+    )
+
+
+@frappe.whitelist()
+def create_task(
+    project: str,
+    title: str,
+    assigned_to: str = None,
+    deadline: str = None,
+    pdca_phase: str = None,
+    priority: str = None,
+) -> dict:
+    frappe.has_permission("VT Project", "write", doc=project, throw=True)
+    doc = frappe.get_doc({
+        "doctype": "VT Task",
+        "project": project,
+        "title": title,
+        "assigned_to": assigned_to,
+        "deadline": deadline,
+        "pdca_phase": pdca_phase or "Plan",
+        "priority": priority or "Medium",
+    })
+    doc.insert(ignore_permissions=False)
+    return doc.as_dict()
+
+
+@frappe.whitelist()
+def update_task(
+    name: str,
+    title: str = None,
+    assigned_to: str = None,
+    deadline: str = None,
+    pdca_phase: str = None,
+    priority: str = None,
+) -> dict:
+    doc = frappe.get_doc("VT Task", name)
+    for field, val in {
+        "title": title,
+        "assigned_to": assigned_to,
+        "deadline": deadline,
+        "pdca_phase": pdca_phase,
+        "priority": priority,
+    }.items():
+        if val is not None:
+            setattr(doc, field, val)
+    doc.save(ignore_permissions=False)
+    return doc.as_dict()
