@@ -22,3 +22,7 @@ export async function createProject(values: Record<string, unknown>) {
 export async function updateProject(name: string, values: Record<string, unknown>) {
   return api.put(`/api/resource/VT Project/${encodeURIComponent(name)}`, values);
 }
+
+export async function deleteProject(name: string): Promise<void> {
+  return api.delete<void>(`/api/resource/VT Project/${encodeURIComponent(name)}`);
+}
