@@ -245,14 +245,17 @@ export function TaskSlideOver({ task, open, onClose, onSave }: Props) {
               Batal
             </button>
             <button
-              onClick={() => onSave({
-                name: task.name,
-                title,
-                assigned_to: assignedTo || undefined,
-                deadline: deadline || undefined,
-                pdca_phase: pdcaPhase,
-                priority,
-              })}
+              onClick={() => {
+                onSave({
+                  name: task.name,
+                  title,
+                  assigned_to: assignedTo || undefined,
+                  deadline: deadline || undefined,
+                  pdca_phase: pdcaPhase,
+                  priority,
+                });
+                setEditing(false);
+              }}
               style={{
                 flex: 2, background: "#7c4dab", color: "#fff", border: "none",
                 borderRadius: 8, padding: "10px", fontSize: 13,
