@@ -3,7 +3,6 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AuthGuard } from "./auth/guard";
 import { LoginPage } from "./auth/login";
 import { AppShell } from "./AppShell";
-import { MyWorkList } from "./mobile/pages/MyWork/List";
 import { Onboarding } from "./mobile/pages/Onboarding";
 import { ProjectPage } from "./mobile/pages/Project";
 import { MePage } from "./mobile/pages/Me";
@@ -60,9 +59,10 @@ export const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
-          { path: "/m", element: <MyWorkList /> },
+          { path: "/m", element: <Navigate to="/m/project" replace /> },
           { path: "/m/project", element: <ProjectPage /> },
           { path: "/m/work", element: <Navigate to="/m/project" replace /> },
+          { path: "/m/work/:id", element: <Navigate to="/m/project" replace /> },
           { path: "/m/dashboard", element: <DashboardPage /> },
           { path: "/m/analytics", element: <LazyAnalytics /> },
           { path: "/m/me", element: <MePage /> },

@@ -5,7 +5,7 @@ import { fmtDate } from "../i18n";
 export function KanbanCard({ item }: { item: KanbanItem }) {
   return (
     <Link
-      to={`/m/work/${encodeURIComponent(item.id)}`}
+      to="/m/project"
       style={{
         display: "block",
         padding: "var(--vt-space-3)",

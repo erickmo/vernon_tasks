@@ -45,7 +45,7 @@ export function NotificationsPage() {
       has_target: !!(n.document_type && n.document_name),
     });
     if (n.document_type === "VT Task" && n.document_name) {
-      nav(`/m/work/${encodeURIComponent(n.document_name)}`);
+      nav("/m/project");
     }
   }
 

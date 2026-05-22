@@ -17,7 +17,7 @@ export function Onboarding() {
   function next() {
     if (last) {
       localStorage.setItem("vt_pwa_onboarded", "1");
-      nav("/m/work", { replace: true });
+      nav("/m/project", { replace: true });
     } else {
       setI(i + 1);
     }
