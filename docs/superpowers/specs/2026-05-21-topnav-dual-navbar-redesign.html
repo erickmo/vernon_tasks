@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: TopNav Dual Navbar Redesign</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<h1>TopNav Dual Navbar Redesign</h1>
+<p><strong>Date:</strong> 2026-05-21 &nbsp;|&nbsp; <strong>Status:</strong> Approved</p>
+
+<h2>Scope</h2>
+<p>Redesign desktop navigation (<code>TopNav.tsx</code>) from a single-row tab bar into a two-row navbar. Change post-login redirect from <code>/m/work</code> to <code>/m/dashboard</code>. Increase content padding. No icon library — use inline SVG flat icons.</p>
+
+<h2>Navbar1 (top row, height 48px)</h2>
+<pre>
+[VERNON logo]  |  [Breadcrumb]  ·····spacer·····  [bell icon]  [avatar icon]
+</pre>
+<ul>
+  <li><strong>Logo</strong>: "VERNON" text, links to <code>/m/dashboard</code>, Barlow Condensed font, blue accent.</li>
+  <li><strong>Divider</strong>: 1px vertical line, muted color.</li>
+  <li><strong>Breadcrumb</strong>: derived from active route — maps path to label (Dashboard, Work, Analytics, Me, Leader).</li>
+  <li><strong>Spacer</strong>: flex-grow pushes right icons.</li>
+  <li><strong>Bell icon</strong>: flat inline SVG; click → dropdown overlay showing unread notifications (reuse <code>NotificationBell</code> + <code>useNotificationCount</code> hooks). Badge on icon when unread &gt; 0.</li>
+  <li><strong>Avatar icon</strong>: flat inline SVG person icon; click → dropdown with Profil link (<code>/m/me</code>) and Logout button (calls <code>frappe.call logout</code>).</li>
+</ul>
+
+<h2>Navbar2 (second row, height 40px, bg #f1f5f9)</h2>
+<pre>
+[Dashboard]  [Project]  [Report]
+</pre>
+<ul>
+  <li>Hardcoded items — no DocType fetch.</li>
+  <li>Dashboard → <code>/m/dashboard</code></li>
+  <li>Project → <code>/m/work</code></li>
+  <li>Report → <code>/m/analytics</code></li>
+  <li>Active item: border-bottom 2px blue, text color dark.</li>
+  <li>Background: <code>#f1f5f9</code> (light grey).</li>
+</ul>
+
+<h2>Responsiveness</h2>
+<ul>
+  <li><strong>&ge;768px</strong>: show navbar1 + navbar2. Hide <code>BottomNav</code>.</li>
+  <li><strong>&lt;768px</strong>: hide both navbars. Show <code>BottomNav</code> (unchanged).</li>
+  <li>Navbar2 scrolls horizontally on narrow desktop if items overflow.</li>
+</ul>
+
+<h2>Padding</h2>
+<ul>
+  <li><code>.db-root</code>: <code>20px 22px</code> → <code>28px 36px</code></li>
+  <li><code>@media max-width 767px</code>: <code>12px</code> → <code>16px</code></li>
+</ul>
+
+<h2>Login Redirect</h2>
+<ul>
+  <li><code>router.tsx</code> <code>OnboardingGate</code>: <code>/m/work</code> → <code>/m/dashboard</code></li>
+  <li><code>router.tsx</code> catch-all <code>*</code>: <code>/m/work</code> → <code>/m/dashboard</code></li>
+  <li><code>login.html</code> JS default redirect: <code>/m/work</code> → <code>/m/dashboard</code></li>
+</ul>
+
+<h2>Files Changed</h2>
+<ol>
+  <li><code>pwa/src/components/TopNav.tsx</code> — full redesign</li>
+  <li><code>pwa/src/theme/index.ts</code> — add topnav CSS tokens</li>
+  <li><code>pwa/src/portal/dashboard/dashboard.css</code> — padding increase</li>
+  <li><code>pwa/src/router.tsx</code> — redirect targets</li>
+  <li><code>vernon_tasks/www/login.html</code> — default redirect</li>
+</ol>
+
+<h2>Out of Scope</h2>
+<ul>
+  <li>BottomNav changes</li>
+  <li>Portal (<code>/portal/*</code>) TopBar</li>
+  <li>Mobile Dashboard content changes</li>
+</ul>
+</body>
+</html>

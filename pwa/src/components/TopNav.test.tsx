@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi } from "vitest";
 import { TopNav } from "./TopNav";
 
@@ -8,12 +9,15 @@ vi.mock("../hooks/useUnreadCount", () => ({
 }));
 
 function Wrapper({ path }: { path: string }) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="*" element={<TopNav />} />
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="*" element={<TopNav />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

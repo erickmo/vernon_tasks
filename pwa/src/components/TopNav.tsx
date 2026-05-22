@@ -1,7 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { logout } from "../auth/session";
 import { useUnreadCount } from "../hooks/useUnreadCount";
+import {
+  listNotifications,
+  markRead,
+  markAllRead,
+  Notification,
+} from "../api/notifications";
+import { fmtRelative } from "../i18n";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const C_BG        = "#ffffff";
@@ -13,8 +21,14 @@ const C_PRIMARY   = "#7c4dab";
 const C_PRIMARY_L = "#f3eeff";
 const C_DANGER    = "#dc2626";
 const C_DANGER_L  = "#fef2f2";
-const SHADOW_SM   = "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)";
 const SHADOW_MD   = "0 4px 16px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)";
+
+// ── Navbar surface tokens (on-primary) ─────────────────────────────────────────
+const C_NAV_BG      = "linear-gradient(135deg, #6836a0 0%, #7c4dab 100%)";
+const C_NAV_TEXT    = "#ffffff";
+const C_NAV_MUTED   = "rgba(255,255,255,0.60)";
+const C_NAV_BORDER  = "rgba(255,255,255,0.14)";
+const C_NAV_ACTIVE  = "rgba(255,255,255,0.18)";
 
 const BREADCRUMB_MAP: { prefix: string; label: string }[] = [
   { prefix: "/m/dashboard", label: "Dashboard" },
@@ -44,12 +58,8 @@ function getInitials(username: string | null): string {
   return local.slice(0, 2).toUpperCase();
 }
 
-function getAvatarColor(username: string | null): string {
-  if (!username) return C_PRIMARY;
-  const colors = ["#7c4dab","#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#06b6d4"];
-  let h = 0;
-  for (let i = 0; i < username.length; i++) h = username.charCodeAt(i) + ((h << 5) - h);
-  return colors[Math.abs(h) % colors.length];
+function getAvatarColor(_username: string | null): string {
+  return C_PRIMARY;
 }
 
 // ── SVG icons ─────────────────────────────────────────────────────────────────
@@ -82,47 +92,242 @@ function LogoMark() {
   );
 }
 
-// ── NotificationButton ─────────────────────────────────────────────────────────
-function NotificationButton({ unread, onNavigate }: { unread: number; onNavigate: () => void }) {
+// ── NotificationDropdown ───────────────────────────────────────────────────────
+function notifIcon(type?: string): string {
+  if (type === "Assignment") return "👤";
+  if (type === "Mention") return "💬";
+  if (type === "Alert") return "⚠️";
+  return "🔔";
+}
+
+function stripHtml(html?: string): string {
+  if (!html) return "";
+  return html.replace(/<[^>]+>/g, "").trim();
+}
+
+function NotificationDropdown({ unread }: { unread: number }) {
+  const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const nav = useNavigate();
+  const qc = useQueryClient();
   const badgeCount = unread > 99 ? "99+" : unread > 0 ? String(unread) : null;
+
+  const q = useQuery({
+    queryKey: ["notifications", "dropdown"],
+    queryFn: () => listNotifications(10, false).then((r) => r.results),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    function onOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  async function handleTap(n: Notification) {
+    if (n.read === 0) {
+      qc.setQueryData<Notification[]>(["notifications", "dropdown"], (prev) =>
+        prev?.map((x) => (x.name === n.name ? { ...x, read: 1 as const } : x)),
+      );
+      qc.invalidateQueries({ queryKey: ["unread-count"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      try { await markRead(n.name); } catch { /* best-effort */ }
+    }
+    setOpen(false);
+    if (n.document_type === "VT Task" && n.document_name) {
+      nav(`/m/work/${encodeURIComponent(n.document_name)}`);
+    } else {
+      nav("/m/me/notifications");
+    }
+  }
+
+  async function handleMarkAll() {
+    qc.setQueryData<Notification[]>(["notifications", "dropdown"], (prev) =>
+      prev?.map((x) => ({ ...x, read: 1 as const })),
+    );
+    qc.invalidateQueries({ queryKey: ["unread-count"] });
+    qc.invalidateQueries({ queryKey: ["notifications"] });
+    try { await markAllRead(); } catch { /* best-effort */ }
+  }
+
+  const items = q.data ?? [];
+  const hasUnread = items.some((n) => n.read === 0);
+
   return (
-    <button
-      onClick={onNavigate}
-      aria-label={unread > 0 ? `${unread} notifikasi belum dibaca` : "Notifikasi"}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        position: "relative",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 32, height: 32,
-        border: `1px solid ${hovered ? "rgba(0,0,0,0.12)" : C_BORDER}`,
-        background: hovered ? C_SURFACE : C_BG,
-        borderRadius: 8, cursor: "pointer",
-        color: hovered ? C_TEXT : C_MUTED,
-        transition: "all 0.15s",
-        boxShadow: hovered ? SHADOW_SM : "none",
-      }}
-    >
-      <IconBell />
-      {badgeCount && (
-        <span aria-hidden style={{
-          position: "absolute", top: -5, right: -5,
-          minWidth: 16, height: 16,
-          padding: "0 3px",
-          borderRadius: 99,
-          background: "#ef4444",
-          color: "#fff",
-          fontSize: 9,
-          fontWeight: 700,
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label={unread > 0 ? `${unread} notifikasi belum dibaca` : "Notifikasi"}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: `0 0 0 2px ${C_BG}`,
-          letterSpacing: "-0.02em",
+          width: 32, height: 32,
+          border: `1px solid ${open || hovered ? "rgba(255,255,255,0.30)" : C_NAV_BORDER}`,
+          background: open || hovered ? C_NAV_ACTIVE : "transparent",
+          borderRadius: 8, cursor: "pointer",
+          color: open || hovered ? C_NAV_TEXT : C_NAV_MUTED,
+          transition: "all 0.15s",
+          boxShadow: "none",
+        }}
+      >
+        <IconBell />
+        {badgeCount && (
+          <span aria-hidden style={{
+            position: "absolute", top: -5, right: -5,
+            minWidth: 16, height: 16,
+            padding: "0 3px",
+            borderRadius: 99,
+            background: "#ef4444",
+            color: "#fff",
+            fontSize: 9,
+            fontWeight: 700,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: `0 0 0 2px #6836a0`,
+            letterSpacing: "-0.02em",
+          }}>
+            {badgeCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div role="menu" style={{
+          position: "absolute",
+          top: "calc(100% + 6px)",
+          right: 0,
+          width: 360,
+          maxWidth: "calc(100vw - 32px)",
+          background: C_BG,
+          border: `1px solid ${C_BORDER}`,
+          borderRadius: 10,
+          boxShadow: SHADOW_MD,
+          zIndex: 200,
+          overflow: "hidden",
         }}>
-          {badgeCount}
-        </span>
+          {/* Header */}
+          <div style={{
+            padding: "10px 14px",
+            borderBottom: `1px solid ${C_BORDER}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: C_TEXT }}>
+              Notifikasi
+            </span>
+            <button
+              onClick={handleMarkAll}
+              disabled={!hasUnread}
+              style={{
+                fontSize: 11, fontWeight: 500,
+                color: hasUnread ? C_PRIMARY : C_MUTED,
+                background: "transparent", border: "none",
+                cursor: hasUnread ? "pointer" : "default",
+                padding: "2px 6px",
+                opacity: hasUnread ? 1 : 0.5,
+              }}
+            >
+              Tandai semua dibaca
+            </button>
+          </div>
+
+          {/* Body */}
+          <div style={{ maxHeight: 380, overflowY: "auto" }}>
+            {q.isLoading && (
+              <div style={{ padding: 20, textAlign: "center", fontSize: 12, color: C_MUTED }}>
+                Memuat…
+              </div>
+            )}
+            {!q.isLoading && items.length === 0 && (
+              <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: C_MUTED }}>
+                Belum ada notifikasi
+              </div>
+            )}
+            {items.map((n) => {
+              const isUnread = n.read === 0;
+              const excerpt = stripHtml(n.email_content).slice(0, 80);
+              const age = Date.now() - new Date(n.creation).getTime();
+              return (
+                <button
+                  key={n.name}
+                  onClick={() => handleTap(n)}
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    width: "100%", textAlign: "left",
+                    padding: "10px 14px 10px 12px",
+                    background: isUnread ? C_PRIMARY_L : "transparent",
+                    border: "none",
+                    borderBottom: `1px solid ${C_BORDER}`,
+                    borderLeft: isUnread ? `3px solid ${C_PRIMARY}` : "3px solid transparent",
+                    color: C_TEXT, cursor: "pointer",
+                  }}
+                >
+                  {/* Unread dot */}
+                  <span style={{
+                    flexShrink: 0, marginTop: 3,
+                    width: 7, height: 7, borderRadius: "50%",
+                    background: isUnread ? C_PRIMARY : "transparent",
+                    border: isUnread ? "none" : `1.5px solid ${C_MUTED}`,
+                  }} />
+                  <span style={{ fontSize: 16, flexShrink: 0, lineHeight: 1.2 }}>{notifIcon(n.type)}</span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 12,
+                      fontWeight: isUnread ? 600 : 500,
+                      color: C_TEXT,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {n.subject}
+                    </div>
+                    {excerpt && (
+                      <div style={{
+                        fontSize: 11, color: C_MUTED, marginTop: 2,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        {excerpt}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: isUnread ? C_PRIMARY : C_MUTED, marginTop: 3, fontWeight: isUnread ? 600 : 400 }}>
+                      {fmtRelative(age)}
+                    </div>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div style={{ borderTop: `1px solid ${C_BORDER}` }}>
+            <Link
+              to="/m/me/notifications"
+              onClick={() => setOpen(false)}
+              style={{
+                display: "block",
+                padding: "8px 14px",
+                fontSize: 12, fontWeight: 500,
+                color: C_PRIMARY,
+                textDecoration: "none",
+                textAlign: "center",
+              }}
+            >
+              Lihat semua notifikasi
+            </Link>
+          </div>
+        </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -171,11 +376,11 @@ function AvatarDropdown({ username }: { username: string | null }) {
         style={{
           display: "flex", alignItems: "center", gap: 6,
           height: 32, padding: "0 8px 0 4px",
-          border: `1px solid ${open ? "rgba(0,0,0,0.14)" : C_BORDER}`,
-          background: open ? C_SURFACE : C_BG,
+          border: `1px solid ${open ? "rgba(255,255,255,0.30)" : C_NAV_BORDER}`,
+          background: open ? C_NAV_ACTIVE : "transparent",
           borderRadius: 999, cursor: "pointer",
           transition: "all 0.15s",
-          boxShadow: open ? SHADOW_SM : "none",
+          boxShadow: "none",
         }}
       >
         <span style={{
@@ -189,12 +394,12 @@ function AvatarDropdown({ username }: { username: string | null }) {
           {initials}
         </span>
         <span style={{
-          fontSize: 12, fontWeight: 500, color: C_TEXT,
+          fontSize: 12, fontWeight: 500, color: C_NAV_TEXT,
           maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
         }}>
           {username ? username.split("@")[0] : "Akun"}
         </span>
-        <span style={{ color: C_MUTED, display: "flex", alignItems: "center" }}>
+        <span style={{ color: C_NAV_MUTED, display: "flex", alignItems: "center" }}>
           <IconChevron />
         </span>
       </button>
@@ -292,7 +497,6 @@ function AvatarDropdown({ username }: { username: string | null }) {
 // ── TopNav ─────────────────────────────────────────────────────────────────────
 export function TopNav() {
   const loc = useLocation();
-  const nav = useNavigate();
   const { data: unread = 0 } = useUnreadCount();
 
   const [username, setUsername] = useState<string | null>(
@@ -316,8 +520,8 @@ export function TopNav() {
       <header style={{
         position: "fixed", top: 0, left: 0, right: 0,
         height: "var(--top-nav1-h)",
-        background: C_BG,
-        borderBottom: `1px solid ${C_BORDER}`,
+        background: C_NAV_BG,
+        borderBottom: `1px solid ${C_NAV_BORDER}`,
         display: "flex", alignItems: "center",
         zIndex: 50,
         padding: "0 20px",
@@ -334,7 +538,7 @@ export function TopNav() {
           <span style={{
             fontSize: 14,
             fontWeight: 700,
-            color: C_TEXT,
+            color: C_NAV_TEXT,
             letterSpacing: "-0.02em",
             fontFamily: "'Outfit', system-ui, sans-serif",
           }}>
@@ -345,7 +549,7 @@ export function TopNav() {
         {/* Divider */}
         <div aria-hidden style={{
           width: 1, height: 16,
-          background: C_BORDER,
+          background: C_NAV_BORDER,
           margin: "0 14px",
           flexShrink: 0,
         }} />
@@ -354,17 +558,17 @@ export function TopNav() {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{
             fontSize: 13, fontWeight: 400,
-            color: C_MUTED,
+            color: C_NAV_MUTED,
           }}>
             Vernon
           </span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-            stroke={C_MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            stroke={C_NAV_MUTED} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <polyline points="9 18 15 12 9 6" />
           </svg>
           <span style={{
             fontSize: 13, fontWeight: 600,
-            color: C_TEXT,
+            color: C_NAV_TEXT,
           }}>
             {breadcrumb}
           </span>
@@ -375,10 +579,7 @@ export function TopNav() {
 
         {/* Right actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <NotificationButton
-            unread={unread}
-            onNavigate={() => nav("/m/me/notifications")}
-          />
+          <NotificationDropdown unread={unread} />
           <AvatarDropdown username={username} />
         </div>
       </header>
@@ -389,8 +590,8 @@ export function TopNav() {
         top: "var(--top-nav1-h)",
         left: 0, right: 0,
         height: "var(--top-nav2-h)",
-        background: C_BG,
-        borderBottom: `1px solid ${C_BORDER}`,
+        background: C_NAV_BG,
+        borderBottom: `1px solid ${C_NAV_BORDER}`,
         display: "flex", alignItems: "center",
         zIndex: 49,
         padding: "0 20px",
@@ -408,11 +609,11 @@ export function TopNav() {
                 display: "inline-flex", alignItems: "center",
                 padding: "3px 10px",
                 fontSize: 12, fontWeight: isActive ? 600 : 500,
-                color: isActive ? C_TEXT : C_MUTED,
+                color: isActive ? C_NAV_TEXT : C_NAV_MUTED,
                 textDecoration: "none",
                 borderRadius: 6,
-                background: isActive ? C_PRIMARY_L : "transparent",
-                border: isActive ? `1px solid rgba(124,77,171,0.18)` : "1px solid transparent",
+                background: isActive ? C_NAV_ACTIVE : "transparent",
+                border: isActive ? `1px solid ${C_NAV_BORDER}` : "1px solid transparent",
                 transition: "all 0.15s",
                 whiteSpace: "nowrap", flexShrink: 0,
               }}
