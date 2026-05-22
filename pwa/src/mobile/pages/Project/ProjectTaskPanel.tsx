@@ -62,6 +62,7 @@ export function ProjectTaskPanel({ projectId, projectTitle }: Props) {
     setLogTask(null);
     try {
       await logProgress(task.name, hours, note);
+      invalidate(projectId!);
       show("Progress dicatat");
     } catch {
       show("Gagal mencatat progress");
