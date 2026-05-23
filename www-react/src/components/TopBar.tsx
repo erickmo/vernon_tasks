@@ -10,9 +10,14 @@ export function TopBar({ onOpenPalette }: { onOpenPalette: () => void }) {
   const nav = useNavigate();
 
   async function onLogout() {
-    await logout();
-    qc.clear();
-    nav('/login', { replace: true });
+    try {
+      await logout();
+    } catch {
+      // network or 401 — proceed regardless; clearing cache + redirect is the safe end state
+    } finally {
+      qc.clear();
+      nav('/login', { replace: true });
+    }
   }
 
   return (
