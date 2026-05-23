@@ -4,7 +4,7 @@
   "creation": "2026-05-07 00:00:00.000000",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["title","project_owner","project_leader","column_break_1","start_date","end_date","status","pdca_phase","objective","team_section","team_members","milestone_section","milestones","docs_section","documentation","analytics_overrides_section","blocked_days_threshold","slip_pct_threshold","capacity_pct_threshold"],
+  "field_order": ["title","project_owner","project_leader","column_break_1","start_date","end_date","status","pdca_phase","objective","health_score","health_history_json","percent_done","team_section","team_members","milestone_section","milestones","docs_section","documentation","analytics_overrides_section","blocked_days_threshold","slip_pct_threshold","capacity_pct_threshold"],
   "fields": [
     {"fieldname": "title", "fieldtype": "Data", "label": "Project Title", "reqd": 1, "in_list_view": 1},
     {"fieldname": "project_owner", "fieldtype": "Link", "label": "Project Owner", "options": "User", "reqd": 1, "in_list_view": 1},
@@ -15,6 +15,9 @@
     {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Open\nOn Track\nAt Risk\nClosed", "default": "Open", "in_list_view": 1},
     {"fieldname": "pdca_phase", "fieldtype": "Select", "label": "PDCA Phase", "options": "PLAN\nDO\nCHECK\nACT\nCLOSED", "default": "PLAN", "in_list_view": 1},
     {"fieldname": "objective", "fieldtype": "Link", "label": "Linked Objective", "options": "Objective"},
+    {"fieldname": "health_score", "label": "Health Score", "fieldtype": "Float", "precision": "2", "default": 0, "description": "0-100 composite health computed by health_score_service"},
+    {"fieldname": "health_history_json", "label": "Health History (JSON)", "fieldtype": "Code", "options": "JSON", "description": "Trailing 8-week health scores as JSON array"},
+    {"fieldname": "percent_done", "label": "% Done", "fieldtype": "Percent", "default": 0, "description": "Computed from tasks DONE / total"},
     {"fieldname": "team_section", "fieldtype": "Section Break", "label": "Team"},
     {"fieldname": "team_members", "fieldtype": "Table", "label": "Team Members", "options": "Project Team Member"},
     {"fieldname": "milestone_section", "fieldtype": "Section Break", "label": "Milestones"},

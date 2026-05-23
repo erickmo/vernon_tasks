@@ -1,10 +1,13 @@
 {
   "actions": [], "creation": "2026-05-07 00:00:00.000000", "doctype": "DocType", "engine": "InnoDB",
-  "field_order": ["date","allocated_hours","is_override"],
+  "field_order": ["date","allocated_hours","is_override","owner_user","hour_start","hours_planned"],
   "fields": [
     {"fieldname": "date", "fieldtype": "Date", "label": "Date", "reqd": 1, "in_list_view": 1},
     {"default": "0", "fieldname": "allocated_hours", "fieldtype": "Float", "label": "Allocated Hours", "reqd": 1, "in_list_view": 1},
-    {"default": "0", "fieldname": "is_override", "fieldtype": "Check", "label": "Manual Override", "in_list_view": 1}
+    {"default": "0", "fieldname": "is_override", "fieldtype": "Check", "label": "Manual Override", "in_list_view": 1},
+    {"fieldname": "owner_user", "label": "Owner User", "fieldtype": "Link", "options": "User", "description": "User who owns this scheduled slot"},
+    {"fieldname": "hour_start", "label": "Hour Start", "fieldtype": "Int", "default": 8, "description": "Hour 0-23"},
+    {"fieldname": "hours_planned", "label": "Hours Planned", "fieldtype": "Float", "default": 1.0}
   ],
   "istable": 1, "modified": "2026-05-07 00:00:00.000000", "modified_by": "Administrator",
   "module": "Task", "name": "Task Schedule Entry", "owner": "Administrator", "permissions": []
