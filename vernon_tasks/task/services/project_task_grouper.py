@@ -1,10 +1,8 @@
 """Pre-group VT Tasks for a project by KR / PDCA / Sprint / Assignee / Due-date.
 
-Schema notes (see docs/superpowers/specs/2026-05-23-schema-mapping.md):
-- VT Task has no `linked_kr` column; KR attribution can only be inferred from
-  `VT Project.objective` -> `tabKey Result.objective`. Per-task linked_kr is
-  always NULL; all tasks land in the "Unlinked" bucket for the KR grouping.
-- VT Task has no `risk_flag`; surfaced as NULL.
+Schema notes:
+- VT Task.linked_kr (Link → Key Result) and VT Task.risk_flag (Select) are
+  read directly. Tasks without linked_kr land in the "Unlinked" bucket.
 - Field aliases: assigned_to AS assignee, deadline AS due_date,
   kanban_status AS status, title AS subject. Points coalesces leader override,
   earned, base.
@@ -48,9 +46,9 @@ def _load_tasks(project_id: str) -> list[dict]:
                t.deadline                                                   AS due_date,
                COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points,
                t.kanban_status                                              AS status,
-               NULL                                                         AS linked_kr,
+               t.linked_kr                                                  AS linked_kr,
                t.sprint,
-               NULL                                                         AS risk_flag
+               t.risk_flag                                                  AS risk_flag
           FROM `tabVT Task` t
          WHERE t.project = %(p)s
         """,

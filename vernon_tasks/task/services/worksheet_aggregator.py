@@ -68,21 +68,22 @@ def _load_entries(user: str, start: date, end: date) -> list:
             SELECT se.name,
                    se.parent AS task_id,
                    se.date,
-                   se.allocated_hours AS hours_planned,
+                   COALESCE(se.hours_planned, se.allocated_hours) AS hours_planned,
+                   COALESCE(se.hour_start, %(default_hour)s) AS hour_start,
                    t.title,
                    t.pdca_phase,
                    COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points,
-                   kr.name AS linked_kr,
+                   COALESCE(t.linked_kr, kr.name) AS linked_kr,
                    t.project
               FROM `{_SCHEDULE_ENTRY_TABLE}` se
               JOIN `{_TASK_TABLE}` t ON t.name = se.parent
               LEFT JOIN `{_PROJECT_TABLE}` p ON p.name = t.project
               LEFT JOIN `{_KEY_RESULT_TABLE}` kr ON kr.objective = p.objective
              WHERE se.parenttype = 'VT Task'
-               AND t.assigned_to = %(u)s
+               AND (se.owner_user = %(u)s OR (se.owner_user IS NULL AND t.assigned_to = %(u)s))
                AND se.date BETWEEN %(s)s AND %(e)s
             """,
-            {"u": user, "s": start, "e": end},
+            {"u": user, "s": start, "e": end, "default_hour": _DEFAULT_HOUR_START},
             as_dict=True,
         )
     except frappe.db.DatabaseError:
@@ -123,7 +124,7 @@ def _entry(e: dict) -> dict:
         "points": int(e.points or 0),
         "linked_kr": e.linked_kr,
         "project": e.project,
-        "hour_start": _DEFAULT_HOUR_START,
+        "hour_start": int(e.hour_start if e.hour_start is not None else _DEFAULT_HOUR_START),
         "hours_planned": float(e.hours_planned or 1),
     }
 

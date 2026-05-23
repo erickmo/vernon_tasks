@@ -211,14 +211,14 @@ def _sprint_percent_done(sprint_id: str) -> float:
 def _my_projects(user: str) -> list[dict]:
     """Projects where user is owner, leader, or team member.
 
-    VT Project has no `health_score` / `percent_done` columns; health is
-    derived via `health_score_service` and percent_done via task aggregates.
+    Reads persisted `p.health_score` directly; falls back to grey bucket
+    only when score is NULL.
     """
     try:
         rows = frappe.db.sql(
             """
             SELECT DISTINCT p.name, p.title, p.project_owner, p.project_leader,
-                   p.end_date
+                   p.end_date, p.health_score
               FROM `tabVT Project` p
               LEFT JOIN `tabProject Team Member` m
                      ON m.parent = p.name
@@ -237,10 +237,11 @@ def _my_projects(user: str) -> list[dict]:
     today = frappe.utils.getdate()
     out = []
     for r in rows:
+        score = r.health_score if r.health_score is not None else None
         out.append({
             "id": r.name,
             "name": r.title,
-            "health": _health_bucket(None),
+            "health": _health_bucket(score),
             "okr_progress": _project_okr_progress(r.name),
             "my_role": _user_role_in_project(user, r.name, r.project_owner, r.project_leader),
             "blocked_count": _project_blocked_count(r.name),
@@ -313,11 +314,27 @@ def _blocked_count(user: str) -> int:
 def _okr_delta_wow(user: str) -> float:
     """KR week-over-week confidence delta.
 
-    Key Result has no `confidence` / `confidence_last_week` columns in the
-    current schema (verified via doctype JSON). Returns 0.0 until those
-    fields are introduced.
+    Average of (confidence - confidence_last_week) across KRs reachable via
+    the user's owned/led projects → Objective → Key Result.
     """
-    return 0.0
+    try:
+        row = frappe.db.sql(
+            """
+            SELECT AVG(COALESCE(kr.confidence, 0) - COALESCE(kr.confidence_last_week, 0)) AS d
+              FROM `tabKey Result` kr
+              JOIN `tabObjective` o ON o.name = kr.objective
+              JOIN `tabVT Project` p ON p.objective = o.name
+             WHERE p.status != %(closed)s
+               AND (p.project_owner = %(u)s OR p.project_leader = %(u)s)
+            """,
+            {"u": user, "closed": _PROJECT_CLOSED_STATUS},
+            as_dict=True,
+        )
+    except frappe.db.DatabaseError:
+        return 0.0
+    if not row:
+        return 0.0
+    return round(float(row[0].d or 0), 3)
 
 
 def _next_deadline(user: str) -> dict | None:
