@@ -80,6 +80,7 @@ scheduler_events = {
     ],
     "hourly": [
         "vernon_tasks.task.services.scheduling_engine.check_deadline_notifications",
+        "vernon_tasks.task.services.report_subscription_runner.run_due_subscriptions",
     ],
 }
 
