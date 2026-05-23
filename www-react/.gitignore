@@ -6,7 +6,12 @@ playwright-report
 .env.local
 .DS_Store
 *.tsbuildinfo
+.tsbuild-node
 src/**/*.js
 src/**/*.d.ts
+tests/**/*.js
+tests/**/*.d.ts
 vite.config.js
 vite.config.d.ts
+vitest.config.js
+vitest.config.d.ts

@@ -11,10 +11,12 @@
     "noFallthroughCasesInSwitch": true,
     "useUnknownInCatchVariables": true,
     "isolatedModules": true,
+    "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] }
   },
