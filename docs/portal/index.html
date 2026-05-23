@@ -294,7 +294,7 @@ td.id-col{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);wh
   </div>
   <div class="topbar-meta">
     <span>v1.0</span>
-    <span>2026-05-19</span>
+    <span>2026-05-23</span>
   </div>
 </header>
 
@@ -327,6 +327,7 @@ td.id-col{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);wh
       <div class="nav-item" data-page="api-reference">API Reference</div>
       <div class="nav-item" data-page="adr-log">ADR Log</div>
       <div class="nav-item" data-page="desktop-portal">Desktop Portal</div>
+      <div class="nav-item" data-page="www-react">www-react Dashboard SPA</div>
     </div>
   </div>
 
@@ -407,7 +408,8 @@ td.id-col{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);wh
       <tr><td>Backend</td><td>Frappe v15 (Python)</td></tr>
       <tr><td>Desk UI</td><td>Frappe native desk pages</td></tr>
       <tr><td>PWA</td><td>React 18 + Vite 5 + TypeScript strict + TanStack Query 5</td></tr>
-      <tr><td>Desktop Portal</td><td>React 18 SPA served under <code>/portal/*</code> via Frappe</td></tr>
+      <tr><td>Desktop Portal (legacy, in-Frappe)</td><td>React 18 SPA served under <code>/portal/*</code> via Frappe (same origin as Desk)</td></tr>
+      <tr><td>www-react Dashboard (2026-05-23)</td><td>Standalone Vite + React 18 + TS strict + React Router 7 + TanStack Query 5 + Tailwind + dnd-kit + recharts + sonner + i18n. Own domain via Caddy reverse-proxy; cross-domain Frappe session cookie.</td></tr>
       <tr><td>Service Worker</td><td>Workbox StaleWhileRevalidate</td></tr>
       <tr><td>Auth</td><td>Frappe session cookie (no JWT)</td></tr>
       <tr><td>Push</td><td>Web Push API + VAPID</td></tr>
@@ -447,6 +449,21 @@ Frappe Desk Pages        |  React PWA (/m/* and /portal/*)
       <tr><td><code>/portal/tasks</code></td><td>Task detail slide-over</td><td>All (perm-gated)</td></tr>
       <tr><td><code>/portal/notifications</code></td><td>Full notification inbox</td><td>All</td></tr>
       <tr><td><code>/portal/reports</code></td><td>Exec reports (OKR / Sprints / Team)</td><td>Leader / Exec</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="so-www-react-routes">www-react Dashboard SPA Routes (own domain)</h2>
+  <p>Served from <code>dashboard.vernon.local</code> (or equivalent) via Caddy; talks to Frappe API across-origin with credentialed fetches.</p>
+  <table>
+    <thead><tr><th>Route</th><th>Page</th><th>Audience</th></tr></thead>
+    <tbody>
+      <tr><td><code>/login</code></td><td>Login (Frappe session cookie, cross-domain)</td><td>guest</td></tr>
+      <tr><td><code>/portal/dashboard</code></td><td>Today · Me · Sprints · Projects + AtRisk banner</td><td>IC / Leader / Exec (role-aware)</td></tr>
+      <tr><td><code>/portal/projects</code></td><td>Projects list</td><td>Member / PM / Leader</td></tr>
+      <tr><td><code>/portal/projects/:id/{tasks,overview,burndown,okr,members}</code></td><td>Project detail (5 tabs; Tasks default group by OKR/KR)</td><td>Member / PM / Leader</td></tr>
+      <tr><td><code>/portal/worksheet</code></td><td>Weekly dnd planner + capacity + Friday review + PM team view</td><td>IC / PM</td></tr>
+      <tr><td><code>/portal/reports</code></td><td>Reports hub</td><td>Leader / Exec</td></tr>
+      <tr><td><code>/portal/reports/:slug</code></td><td>6 slug reports + ScheduleModal</td><td>Leader / Exec</td></tr>
     </tbody>
   </table>
 </div>
@@ -815,6 +832,93 @@ npm run e2e</code></pre>
       <tr><td><code>portal_dashboard_v2_enabled</code></td><td>Dashboard v2</td></tr>
     </tbody>
   </table>
+</div>
+
+<!-- ── www-react Dashboard SPA ── -->
+<div class="page" id="page-www-react" data-audience="dev">
+  <div class="page-meta"><span class="badge badge-dev">Developer</span></div>
+  <h1 id="wwwreact-h1">www-react Dashboard SPA</h1>
+  <p>Standalone Vite + React 18 SPA shipped 2026-05-23. Runs on its own domain (e.g. <code>dashboard.vernon.local</code>) and talks to Frappe API across origins. <strong>Not</strong> part of the Frappe asset pipeline — built independently and served by Caddy.</p>
+
+  <h2 id="wwwreact-hosting">Hosting Model</h2>
+  <ul>
+    <li>Build artifact: <code>www-react/dist/</code> (static files).</li>
+    <li>Reverse-proxied by Caddy → see <code>caddy/dashboard.Caddyfile</code>.</li>
+    <li>SPA fallback: all non-asset routes → <code>index.html</code> (React Router 7 handles client routing).</li>
+  </ul>
+
+  <h2 id="wwwreact-auth">Cross-Domain Authentication</h2>
+  <ul>
+    <li>Login posts <code>usr</code>/<code>pwd</code> to <code>POST {VITE_API_BASE}/api/method/login</code> with <code>credentials: 'include'</code>.</li>
+    <li>Frappe site must set: <code>"allow_cors": "https://dashboard.vernon.local"</code> in <code>common_site_config.json</code>.</li>
+    <li>Session cookie response must include <code>SameSite=None; Secure</code>; configure Frappe accordingly (TLS required).</li>
+    <li>All API calls go through <code>@/lib/api</code> (axios + <code>withCredentials</code>) — no JWT.</li>
+  </ul>
+
+  <h2 id="wwwreact-stack">Stack</h2>
+  <table>
+    <thead><tr><th>Layer</th><th>Technology</th></tr></thead>
+    <tbody>
+      <tr><td>Build</td><td>Vite 5</td></tr>
+      <tr><td>Framework</td><td>React 18 + TypeScript strict</td></tr>
+      <tr><td>Routing</td><td>React Router 7</td></tr>
+      <tr><td>Data</td><td>TanStack Query 5</td></tr>
+      <tr><td>Styling</td><td>Tailwind CSS</td></tr>
+      <tr><td>DnD</td><td>dnd-kit</td></tr>
+      <tr><td>Charts</td><td>recharts</td></tr>
+      <tr><td>Toasts</td><td>sonner</td></tr>
+      <tr><td>i18n</td><td>react-i18next</td></tr>
+      <tr><td>Testing</td><td>Vitest + RTL + MockAdapter; Playwright e2e</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="wwwreact-pages">Pages</h2>
+  <ol>
+    <li><strong>Login</strong> — Frappe session cookie login (cross-domain).</li>
+    <li><strong>Dashboard</strong> (<code>/portal/dashboard</code>) — role-aware: Today / Me / Sprints / Projects tiles + AtRisk banner.</li>
+    <li><strong>Projects</strong> (<code>/portal/projects</code>, <code>/portal/projects/:id/{tasks,overview,burndown,okr,members}</code>) — list + 5 detail tabs; Tasks tab defaults to group by OKR / Key Result.</li>
+    <li><strong>Worksheet</strong> (<code>/portal/worksheet</code>) — weekly dnd planner with per-day capacity, Friday review flow, PM team view.</li>
+    <li><strong>Reports</strong> (<code>/portal/reports</code>, <code>/portal/reports/:slug</code>) — hub + 6 slug reports (project_health, okr_pacing, team_throughput, my_points, project_burndown_archive, risk_log) + ScheduleModal.</li>
+  </ol>
+
+  <h2 id="wwwreact-vs-mpwa">Differences vs <code>/m/*</code> PWA</h2>
+  <table>
+    <thead><tr><th>Aspect</th><th><code>/m/*</code> PWA</th><th>www-react</th></tr></thead>
+    <tbody>
+      <tr><td>Origin</td><td>Same as Frappe site</td><td>Separate domain (CORS + SameSite=None)</td></tr>
+      <tr><td>Asset pipeline</td><td>Frappe (<code>www/m.py</code> SPA hook)</td><td>Caddy serves static <code>dist/</code></td></tr>
+      <tr><td>Service worker</td><td>Workbox SWR (offline)</td><td>None — desktop only, always online</td></tr>
+      <tr><td>Target</td><td>Mobile-first (320–768px)</td><td>Desktop-first (≥1024px)</td></tr>
+      <tr><td>Push notifications</td><td>VAPID Web Push</td><td>Not in scope (toast only)</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="wwwreact-vs-portal">Differences vs existing <code>/portal/*</code> (in-Frappe)</h2>
+  <p>The existing <code>pwa/src/portal/</code> tree is served from the Frappe site under <code>/portal/*</code> on the same origin. The new www-react SPA <strong>also</strong> uses a <code>/portal/*</code> path prefix but on a <em>different domain</em>. They are two separate React applications with overlapping route names but no shared code or build pipeline. Migration / consolidation is out of scope for the 2026-05-23 ship.</p>
+
+  <h2 id="wwwreact-backend">Backend Endpoints Added 2026-05-23</h2>
+  <ul>
+    <li><code>portal_dashboard.get_home</code></li>
+    <li><code>portal_projects.{get_project_tasks, bulk_*, relink_task_kr, get_project_detail, get_project_members}</code></li>
+    <li><code>portal_worksheet.{get_worksheet, schedule_task, update_entry, unschedule, bulk_carry_over, get_team_worksheet}</code></li>
+    <li><code>portal_reports.{list_reports, run_report, export, create_subscription}</code></li>
+    <li><code>okr.get_for_project</code> · <code>sprints.get_burndown</code></li>
+    <li>Scheduler hourly: <code>report_subscription_runner.run_due_subscriptions</code></li>
+  </ul>
+
+  <h2 id="wwwreact-doctypes">Schema Changes</h2>
+  <p>See <a href="../superpowers/specs/2026-05-23-schema-mapping.html">schema-mapping spec</a>. Highlights:</p>
+  <ul>
+    <li>New doctypes: <code>VT Report Subscription</code> (+ Recipient child), <code>Risk Event</code>.</li>
+    <li>VT Project: <code>health_score</code>, <code>health_history_json</code>, <code>percent_done</code>.</li>
+    <li>VT Sprint: <code>actual_velocity</code>, <code>outcome</code>, <code>burndown_actual_json</code>, <code>percent_done</code>.</li>
+    <li>Key Result: <code>confidence</code>, <code>confidence_last_week</code>.</li>
+    <li>Task Schedule Entry: <code>owner_user</code>, <code>hour_start</code>, <code>hours_planned</code>.</li>
+    <li>VT Task: <code>linked_kr</code>, <code>risk_flag</code>.</li>
+  </ul>
+
+  <h2 id="wwwreact-adr">ADR</h2>
+  <p>See <a href="../adr/standalone-www-react-spa.html">ADR-021 — Standalone www-react SPA on separate domain</a>.</p>
 </div>
 
 <!-- ── User: My Work ── -->
