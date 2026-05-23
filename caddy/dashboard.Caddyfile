@@ -1,0 +1,41 @@
+# Vernon Dashboard (www-react) reverse proxy
+# Drop this file into /etc/caddy/conf.d/ (or import into main Caddyfile)
+# Requires real TLS cert (cookies need Secure).
+
+dashboard.vernon.local {
+    tls /etc/caddy/certs/vernon.crt /etc/caddy/certs/vernon.key
+
+    # SPA: serve built static assets, fall back to index.html for client routes
+    handle /assets/* {
+        root * /var/www/vernon-dashboard
+        file_server
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+    handle / {
+        root * /var/www/vernon-dashboard
+        try_files {path} /index.html
+        file_server
+    }
+
+    # Proxy Frappe API
+    @api path /api/* /assets/frappe/* /private/files/*
+    handle @api {
+        reverse_proxy https://erp.vernon.local {
+            header_up Host {http.reverse_proxy.upstream.hostport}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    # Cross-origin cookies require SameSite=None; Secure
+    header {
+        Access-Control-Allow-Origin "https://dashboard.vernon.local"
+        Access-Control-Allow-Credentials "true"
+        Access-Control-Allow-Headers "Content-Type, X-Frappe-CSRF-Token"
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    }
+
+    @options method OPTIONS
+    handle @options {
+        respond 204
+    }
+}
