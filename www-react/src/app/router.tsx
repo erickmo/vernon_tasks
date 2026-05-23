@@ -7,6 +7,7 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { WorksheetPage } from '@/features/worksheet/WorksheetPage';
 import { ReportHubPage } from '@/features/reports/ReportHubPage';
+import { ProjectListPage } from '@/features/projects/ProjectListPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return <h1 className="text-xl font-semibold">{title}</h1>;
@@ -39,7 +40,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { path: 'dashboard', element: <DashboardPage /> },
-          { path: 'projects', element: <PlaceholderPage title="Projects" /> },
+          { path: 'projects', element: <ProjectListPage /> },
           { path: 'projects/:id', element: <PlaceholderPage title="Project Detail" /> },
           { path: 'worksheet', element: <WorksheetPage /> },
           { path: 'reports', element: <ReportHubPage /> },
