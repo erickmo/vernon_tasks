@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Spec: Schema Mapping (2026-05-23)</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<h1 id="vernon-tasks-actual-schema-vs-plan-references-2026-05-23">Vernon Tasks — Actual Schema vs Plan References (2026-05-23)</h1>
+<p>Audit of every Frappe doctype JSON under <code>vernon_tasks/vernon_tasks/**/doctype/</code>
+to provide an authoritative field/table mapping for the follow-up agent that
+will rewrite <code>frappe.db.sql</code> calls in <code>vernon_tasks/api/*</code>.</p>
+<p>Source of truth: the <code>*.json</code> files committed in the repo. Anything not listed
+here does not exist as a doctype/field.</p>
+<hr />
+<h2 id="doctype-name-mapping">Doctype name mapping</h2>
+<table>
+<thead>
+<tr>
+<th>Plan name</th>
+<th>Actual doctype name</th>
+<th>Path</th>
+<th>istable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VT Task</td>
+<td><code>VT Task</code></td>
+<td><code>vernon_tasks/task/doctype/vt_task/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Project</td>
+<td><code>VT Project</code></td>
+<td><code>vernon_tasks/project/doctype/vt_project/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Project Member</td>
+<td><code>Project Team Member</code></td>
+<td><code>vernon_tasks/project/doctype/project_team_member/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>Project Milestone</td>
+<td><code>Project Milestone</code></td>
+<td><code>vernon_tasks/project/doctype/project_milestone/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>Project Documentation</td>
+<td><code>Project Documentation</code></td>
+<td><code>vernon_tasks/project/doctype/project_documentation/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>VT Sprint</td>
+<td><code>VT Sprint</code></td>
+<td><code>vernon_tasks/project/doctype/vt_sprint/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Sprint Task</td>
+<td><code>Sprint Task</code></td>
+<td><code>vernon_tasks/project/doctype/sprint_task/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>VT Objective</td>
+<td><code>Objective</code></td>
+<td><code>vernon_tasks/okr/doctype/objective/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Key Result</td>
+<td><code>Key Result</code></td>
+<td><code>vernon_tasks/okr/doctype/key_result/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT KPI Definition</td>
+<td><code>KPI Definition</code></td>
+<td><code>vernon_tasks/okr/doctype/kpi_definition/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT KPI Entry</td>
+<td><code>KPI Entry</code></td>
+<td><code>vernon_tasks/okr/doctype/kpi_entry/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Task Point Log</td>
+<td><code>Task Point Log</code></td>
+<td><code>vernon_tasks/task/doctype/task_point_log/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Task Schedule Entry</td>
+<td><code>Task Schedule Entry</code></td>
+<td><code>vernon_tasks/task/doctype/task_schedule_entry/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>VT Task Dependency</td>
+<td><code>Task Dependency</code></td>
+<td><code>vernon_tasks/task/doctype/task_dependency/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>VT Recurring Rule</td>
+<td><code>Recurring Rule</code></td>
+<td><code>vernon_tasks/task/doctype/recurring_rule/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Report Subscription</td>
+<td><code>VT Report Subscription</code></td>
+<td><code>vernon_tasks/task/doctype/vt_report_subscription/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>—</td>
+<td><code>VT Report Subscription Recipient</code></td>
+<td><code>vernon_tasks/task/doctype/vt_report_subscription_recipient/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>Work Profile</td>
+<td><code>Work Profile</code></td>
+<td><code>vernon_tasks/workforce/doctype/work_profile/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Work Schedule Day</td>
+<td><code>Work Schedule Day</code></td>
+<td><code>vernon_tasks/workforce/doctype/work_schedule_day/</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>Daily Summary</td>
+<td><code>Daily Summary</code></td>
+<td><code>vernon_tasks/workforce/doctype/daily_summary/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>User Point Summary</td>
+<td><code>User Point Summary</code></td>
+<td><code>vernon_tasks/workforce/doctype/user_point_summary/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Settings</td>
+<td><code>VT Settings</code></td>
+<td><code>vernon_tasks/vt_settings/doctype/vt_settings/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Vernon Push Subscription</td>
+<td><code>Vernon Push Subscription</code></td>
+<td><code>vernon_tasks/vt_settings/doctype/vernon_push_subscription/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Vernon Push Preference</td>
+<td><code>Vernon Push Preference</code></td>
+<td><code>vernon_tasks/vt_settings/doctype/vernon_push_preference/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Vernon Telemetry Event</td>
+<td><code>Vernon Telemetry Event</code></td>
+<td><code>vernon_tasks/vt_settings/doctype/vernon_telemetry_event/</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>VT Contact Request</td>
+<td><code>VT Contact Request</code></td>
+<td><code>vernon_tasks/vt_settings/doctype/vt_contact_request/</code></td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Note: <strong>no doctype is prefixed <code>VT</code> for Objective / Key Result / Task Point Log
+/ Task Schedule Entry / Project Team Member / Sprint Task / KPI*.</strong> Tables are
+<code>tabObjective</code>, <code>tabKey Result</code>, <code>tabTask Point Log</code>, etc.</p>
+<hr />
+<h2 id="vt-task-fields-table-tabvt-task">VT Task fields  (table: <code>tabVT Task</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>Plan field</th>
+<th>Actual field</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>assignee</code></td>
+<td><code>assigned_to</code></td>
+<td>Link → User</td>
+</tr>
+<tr>
+<td><code>subject</code> / <code>name</code></td>
+<td><code>title</code></td>
+<td>Data; doc <code>name</code> is autoname</td>
+</tr>
+<tr>
+<td><code>due_date</code></td>
+<td><code>deadline</code></td>
+<td>Date</td>
+</tr>
+<tr>
+<td><code>completed_on</code></td>
+<td><code>completion_date</code></td>
+<td>Date</td>
+</tr>
+<tr>
+<td><code>plan_started_on</code></td>
+<td><code>start_date</code></td>
+<td>Date</td>
+</tr>
+<tr>
+<td><code>points</code></td>
+<td><code>earned_points</code></td>
+<td>also <code>base_points</code>, <code>leader_override_points</code>, <code>weight</code></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>kanban_status</code></td>
+<td>enum: Backlog/Scheduled/In Progress/In Review/Revision/Done/Blocked</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td><code>pdca_phase</code></td>
+<td>enum: BACKLOG/PLAN/DO/CHECK/ACT/DONE</td>
+</tr>
+<tr>
+<td><code>linked_kr</code></td>
+<td>(missing)</td>
+<td>no FK to Key Result on VT Task</td>
+</tr>
+<tr>
+<td><code>risk_flag</code></td>
+<td>(missing)</td>
+<td>no risk flag stored; derive from blocked_days_threshold logic</td>
+</tr>
+<tr>
+<td><code>priority</code></td>
+<td><code>priority</code></td>
+<td>Low/Medium/High/Critical</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td><code>project</code></td>
+<td>Link → VT Project</td>
+</tr>
+<tr>
+<td><code>sprint</code></td>
+<td><code>sprint</code></td>
+<td>Link → VT Sprint</td>
+</tr>
+<tr>
+<td><code>kanban_rank</code></td>
+<td><code>kanban_rank</code></td>
+<td>Float</td>
+</tr>
+<tr>
+<td><code>estimated_hours</code></td>
+<td><code>estimated_hours</code></td>
+<td>Float</td>
+</tr>
+<tr>
+<td><code>actual_hours</code></td>
+<td><code>actual_hours</code></td>
+<td>Float</td>
+</tr>
+<tr>
+<td>review fields</td>
+<td><code>review_estimated_hours</code>, <code>review_scheduled_date</code></td>
+<td></td>
+</tr>
+<tr>
+<td>override</td>
+<td><code>override_reason</code>, <code>rejection_note</code>, <code>revision_count</code></td>
+<td></td>
+</tr>
+<tr>
+<td>recurring</td>
+<td><code>is_recurring</code>, <code>recurring_rule</code>, <code>next_occurrence</code>, <code>parent_task</code></td>
+<td></td>
+</tr>
+<tr>
+<td>child tables</td>
+<td><code>dependencies</code> (Task Dependency), <code>schedule_entries</code> (Task Schedule Entry)</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="vt-project-fields-tabvt-project">VT Project fields  (<code>tabVT Project</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>Plan field</th>
+<th>Actual field</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name_</code></td>
+<td><code>title</code></td>
+<td>doc name = autoname</td>
+</tr>
+<tr>
+<td><code>owner_user</code></td>
+<td><code>project_owner</code></td>
+<td>Link → User</td>
+</tr>
+<tr>
+<td><code>leader</code></td>
+<td><code>project_leader</code></td>
+<td>Link → User</td>
+</tr>
+<tr>
+<td><code>start_date</code></td>
+<td><code>start_date</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>end_date</code></td>
+<td><code>end_date</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>status</code></td>
+<td>Open/On Track/At Risk/Closed</td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td><code>pdca_phase</code></td>
+<td>PLAN/DO/CHECK/ACT/CLOSED</td>
+</tr>
+<tr>
+<td><code>objective</code></td>
+<td><code>objective</code></td>
+<td>Link → Objective</td>
+</tr>
+<tr>
+<td>members</td>
+<td><code>team_members</code> (child: <code>Project Team Member</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>milestones</td>
+<td><code>milestones</code> (child: <code>Project Milestone</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>docs</td>
+<td><code>documentation</code> (child: <code>Project Documentation</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>thresholds</td>
+<td><code>blocked_days_threshold</code>, <code>slip_pct_threshold</code>, <code>capacity_pct_threshold</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="project-team-member-tabproject-team-member-child">Project Team Member (<code>tabProject Team Member</code>, child)</h3>
+<ul>
+<li><code>user</code> (Link User), <code>role</code> (Owner/Leader/Member), <code>is_also_leader</code> (Check)</li>
+<li>Parent linkage via standard child columns: <code>parent</code>, <code>parenttype</code>, <code>parentfield</code>.</li>
+</ul>
+<hr />
+<h2 id="vt-sprint-fields-tabvt-sprint">VT Sprint fields  (<code>tabVT Sprint</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>Plan field</th>
+<th>Actual field</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code></td>
+<td><code>sprint_title</code></td>
+<td>Data</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td><code>project</code></td>
+<td>Link → VT Project</td>
+</tr>
+<tr>
+<td><code>start_date</code></td>
+<td><code>start_date</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>end_date</code></td>
+<td><code>end_date</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>status</code></td>
+<td>Planning/Active/Review/Closed</td>
+</tr>
+<tr>
+<td><code>goal</code></td>
+<td><code>goal</code></td>
+<td>Small Text</td>
+</tr>
+<tr>
+<td><code>tasks</code></td>
+<td><code>tasks</code> (child: <code>Sprint Task</code>)</td>
+<td>child table has only <code>task</code> (Link → VT Task)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>NOTE: most code joins tasks via <code>tabVT Task.sprint = sprint.name</code> (Link
+on the task), not via the <code>Sprint Task</code> child. Both representations exist.</p>
+</blockquote>
+<h3 id="sprint-task-tabsprint-task-child">Sprint Task (<code>tabSprint Task</code>, child)</h3>
+<ul>
+<li><code>task</code> (Link → VT Task) + standard <code>parent</code>, <code>parenttype</code>, <code>parentfield</code>.</li>
+</ul>
+<hr />
+<h2 id="objective-fields-tabobjective">Objective fields  (<code>tabObjective</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>Plan field</th>
+<th>Actual field</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>title</code></td>
+<td><code>title</code></td>
+</tr>
+<tr>
+<td><code>period</code></td>
+<td><code>period</code></td>
+</tr>
+<tr>
+<td><code>period_start</code></td>
+<td><code>period_start</code></td>
+</tr>
+<tr>
+<td><code>period_end</code></td>
+<td><code>period_end</code></td>
+</tr>
+<tr>
+<td><code>owner</code></td>
+<td><code>objective_owner</code></td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>status</code></td>
+</tr>
+<tr>
+<td><code>phase</code></td>
+<td><code>pdca_phase</code></td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>description</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="key-result-fields-tabkey-result">Key Result fields  (<code>tabKey Result</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>Plan field</th>
+<th>Actual field</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>objective</code></td>
+<td><code>objective</code></td>
+</tr>
+<tr>
+<td><code>metric</code> / <code>name</code></td>
+<td><code>metric</code></td>
+</tr>
+<tr>
+<td><code>target</code></td>
+<td><code>target_value</code></td>
+</tr>
+<tr>
+<td><code>current</code></td>
+<td><code>current_value</code></td>
+</tr>
+<tr>
+<td><code>unit</code></td>
+<td><code>unit</code></td>
+</tr>
+<tr>
+<td><code>progress</code> / <code>pct</code></td>
+<td><code>progress_percent</code></td>
+</tr>
+</tbody>
+</table>
+<p>No <code>linked_kr</code> back-reference on VT Task — relationship is Objective → Key Result only.</p>
+<hr />
+<h2 id="task-point-log-tabtask-point-log">Task Point Log  (<code>tabTask Point Log</code>)</h2>
+<table>
+<thead>
+<tr>
+<th>Plan field</th>
+<th>Actual field</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>task</code></td>
+<td><code>task</code> (Link → VT Task)</td>
+</tr>
+<tr>
+<td><code>user</code></td>
+<td><code>user</code></td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>transaction_type</code> (earned, early_bonus, late_penalty, revision_deduction, leader_override)</td>
+</tr>
+<tr>
+<td><code>amount</code></td>
+<td><code>amount</code></td>
+</tr>
+<tr>
+<td><code>original</code></td>
+<td><code>original_amount</code></td>
+</tr>
+<tr>
+<td><code>override_by</code></td>
+<td><code>overridden_by</code></td>
+</tr>
+<tr>
+<td><code>at</code></td>
+<td><code>log_timestamp</code> (Datetime)</td>
+</tr>
+<tr>
+<td><code>note</code></td>
+<td><code>note</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="task-schedule-entry-tabtask-schedule-entry-child-of-vt-task">Task Schedule Entry  (<code>tabTask Schedule Entry</code>, child of VT Task)</h2>
+<ul>
+<li><code>date</code>, <code>allocated_hours</code>, <code>is_override</code> (+ parent/parenttype/parentfield).</li>
+</ul>
+<h2 id="task-dependency-tabtask-dependency-child-of-vt-task">Task Dependency  (<code>tabTask Dependency</code>, child of VT Task)</h2>
+<ul>
+<li><code>blocked_by</code> (Link → VT Task), <code>dependency_type</code> (Finish-to-Start/Start-to-Start).</li>
+</ul>
+<h2 id="recurring-rule-tabrecurring-rule">Recurring Rule  (<code>tabRecurring Rule</code>)</h2>
+<ul>
+<li><code>rule_type</code> (Daily/Weekly/Monthly/Custom), <code>interval</code>, <code>days_of_week</code>, <code>day_of_month</code>, <code>end_date</code>, <code>max_occurrences</code>.</li>
+</ul>
+<h2 id="vt-report-subscription-tabvt-report-subscription">VT Report Subscription  (<code>tabVT Report Subscription</code>)</h2>
+<ul>
+<li><code>slug</code>, <code>title</code>, <code>cron</code>, <code>format</code> (csv/pdf), <code>enabled</code>, <code>filters_json</code>,
+  <code>recipients</code> (Table MultiSelect → <code>VT Report Subscription Recipient</code> with <code>user</code> Link),
+  <code>last_run_at</code>, <code>last_status</code>.</li>
+</ul>
+<hr />
+<h2 id="missing-doctypes-referenced-in-plan-do-not-exist-yet">Missing doctypes (referenced in plan, do not exist yet)</h2>
+<p>These must be <strong>stubbed out, NULL’d, or migrated</strong> before the SQL can compile:</p>
+<ul>
+<li><strong>VT Employee Capacity / Employee Capacity</strong> — no doctype. Closest substitute:
+  <code>Work Profile</code> + <code>Work Schedule Day</code> (child) under <code>workforce/</code>.</li>
+<li><strong>VT Risk Event / Risk Event</strong> — no doctype. No <code>risk_flag</code> column on VT Task either.</li>
+<li><strong>VT Task <code>linked_kr</code></strong> — no field. Tasks are linked to projects/sprints; KR
+  attribution can only be inferred via <code>VT Project.objective</code> → Key Result.</li>
+<li><strong>VT Task <code>completed_on</code> / <code>plan_started_on</code></strong> — use <code>completion_date</code> /
+  <code>start_date</code> instead.</li>
+<li><strong>VT Project <code>owner_user</code> / <code>leader</code></strong> — use <code>project_owner</code> / <code>project_leader</code>.</li>
+<li><strong>Sprint <code>title</code></strong> — use <code>sprint_title</code>.</li>
+</ul>
+<hr />
+<h2 id="existing-tables-that-should-be-used-not-the-vt-prefixed-versions">Existing tables that should be used (not the VT-prefixed versions)</h2>
+<table>
+<thead>
+<tr>
+<th>Wrong (in plan)</th>
+<th>Correct</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tabVT Objective</code></td>
+<td><code>tabObjective</code></td>
+</tr>
+<tr>
+<td><code>tabVT Key Result</code></td>
+<td><code>tabKey Result</code></td>
+</tr>
+<tr>
+<td><code>tabVT Task Point Log</code></td>
+<td><code>tabTask Point Log</code></td>
+</tr>
+<tr>
+<td><code>tabVT Task Schedule Entry</code></td>
+<td><code>tabTask Schedule Entry</code></td>
+</tr>
+<tr>
+<td><code>tabVT Task Dependency</code></td>
+<td><code>tabTask Dependency</code></td>
+</tr>
+<tr>
+<td><code>tabVT Project Member</code></td>
+<td><code>tabProject Team Member</code></td>
+</tr>
+<tr>
+<td><code>tabVT Sprint Task</code></td>
+<td><code>tabSprint Task</code></td>
+</tr>
+<tr>
+<td><code>tabVT Recurring Rule</code></td>
+<td><code>tabRecurring Rule</code></td>
+</tr>
+<tr>
+<td><code>tabVT KPI Definition</code></td>
+<td><code>tabKPI Definition</code></td>
+</tr>
+<tr>
+<td><code>tabVT KPI Entry</code></td>
+<td><code>tabKPI Entry</code></td>
+</tr>
+</tbody>
+</table>
+<p>Correct tables that already match plan: <code>tabVT Task</code>, <code>tabVT Project</code>,
+<code>tabVT Sprint</code>, <code>tabVT Report Subscription</code>, <code>tabVT Settings</code>,
+<code>tabVernon Push Subscription</code>, <code>tabVernon Push Preference</code>,
+<code>tabVernon Telemetry Event</code>, <code>tabVT Contact Request</code>.</p>
+<hr />
+<h2 id="sql-alias-recipe-for-follow-up-agent">SQL alias recipe (for follow-up agent)</h2>
+<p>Apply these mechanical rewrites inside any <code>frappe.db.sql</code> string under
+<code>vernon_tasks/api/*</code>:</p>
+<h3 id="table-renames">Table renames</h3>
+<pre><code class="language-text">`tabVT Objective`         → `tabObjective`
+`tabVT Key Result`        → `tabKey Result`
+`tabVT Task Point Log`    → `tabTask Point Log`
+`tabVT Task Schedule Entry` → `tabTask Schedule Entry`
+`tabVT Task Dependency`   → `tabTask Dependency`
+`tabVT Project Member`    → `tabProject Team Member`
+`tabVT Sprint Task`       → `tabSprint Task`
+`tabVT Recurring Rule`    → `tabRecurring Rule`
+</code></pre>
+<h3 id="vt-task-column-aliases-project-the-legacy-names-in-select">VT Task column aliases (project the legacy names in SELECT)</h3>
+<pre><code class="language-sql">SELECT
+  t.assigned_to       AS assignee,
+  t.title             AS subject,
+  t.deadline          AS due_date,
+  t.completion_date   AS completed_on,
+  t.start_date        AS plan_started_on,
+  t.earned_points     AS points,            -- or COALESCE(t.leader_override_points, t.earned_points, t.base_points)
+  t.kanban_status     AS status,
+  t.pdca_phase        AS phase,
+  NULL                AS linked_kr,         -- column does not exist
+  0                   AS risk_flag,         -- column does not exist
+  t.project, t.sprint, t.priority,
+  t.estimated_hours, t.actual_hours,
+  t.kanban_rank
+FROM `tabVT Task` t
+</code></pre>
+<h3 id="vt-project-column-aliases">VT Project column aliases</h3>
+<pre><code class="language-sql">SELECT
+  p.title           AS name_,
+  p.project_owner   AS owner_user,
+  p.project_leader  AS leader,
+  p.pdca_phase      AS phase,
+  p.status, p.start_date, p.end_date, p.objective
+FROM `tabVT Project` p
+</code></pre>
+<h3 id="vt-sprint-column-aliases">VT Sprint column aliases</h3>
+<pre><code class="language-sql">SELECT s.sprint_title AS title, s.project, s.start_date, s.end_date,
+       s.status, s.goal
+FROM `tabVT Sprint` s
+</code></pre>
+<h3 id="objective-key-result">Objective / Key Result</h3>
+<pre><code class="language-sql">SELECT o.title, o.period, o.period_start, o.period_end,
+       o.objective_owner AS owner, o.status, o.pdca_phase AS phase
+FROM `tabObjective` o
+LEFT JOIN `tabKey Result` kr ON kr.objective = o.name
+       -- kr.metric, kr.target_value, kr.current_value, kr.progress_percent
+</code></pre>
+<h3 id="task-point-log">Task Point Log</h3>
+<pre><code class="language-sql">SELECT l.task, l.user, l.transaction_type AS type,
+       l.amount, l.original_amount, l.overridden_by,
+       l.log_timestamp AS at, l.note
+FROM `tabTask Point Log` l
+</code></pre>
+<h3 id="sprint-membership-via-child-or-via-tasksprint">Sprint membership via child OR via Task.sprint</h3>
+<ul>
+<li>Existing code uses <code>tabVT Task.sprint = sprint.name</code> (preferred — fewer joins).</li>
+<li>The child table <code>tabSprint Task</code> (cols <code>task</code>, <code>parent</code>, <code>parenttype</code>, <code>parenttype='VT Sprint'</code>) exists but is redundant for tasks that already carry <code>sprint</code> FK.</li>
+</ul>
+<h3 id="drop-null-out-no-schema-support">Drop / NULL out (no schema support)</h3>
+<ul>
+<li><code>linked_kr</code>, <code>risk_flag</code> → project <code>NULL</code> to keep callers compiling.</li>
+<li>Employee capacity / risk-event queries → return <code>[]</code> until those doctypes exist.</li>
+</ul>
+<hr />
+<h2 id="quick-sanity-grep-targets-to-verify-after-rewrite">Quick sanity grep targets (to verify after rewrite)</h2>
+<p>After the follow-up rewrite, none of these should appear in
+<code>vernon_tasks/api/*.py</code> except inside comments:</p>
+<pre><code class="language-text">tabVT Objective | tabVT Key Result | tabVT Task Point Log
+tabVT Project Member | tabVT Sprint Task | tabVT Recurring Rule
+\.linked_kr | \.risk_flag | \.completed_on | \.plan_started_on
+SELECT [^,]*\bassignee\b(?! AS) | SELECT [^,]*\bdue_date\b(?! AS)
+</code></pre>
+</body>
+</html>
