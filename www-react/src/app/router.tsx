@@ -8,6 +8,12 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { WorksheetPage } from '@/features/worksheet/WorksheetPage';
 import { ReportHubPage } from '@/features/reports/ReportHubPage';
 import { ProjectListPage } from '@/features/projects/ProjectListPage';
+import { ProjectDetailPage } from '@/features/projects/ProjectDetailPage';
+import { TasksTab } from '@/features/projects/detail/tabs/TasksTab';
+import { OverviewTab } from '@/features/projects/detail/tabs/OverviewTab';
+import { BurndownTab } from '@/features/projects/detail/tabs/BurndownTab';
+import { OkrTab } from '@/features/projects/detail/tabs/OkrTab';
+import { MembersTab } from '@/features/projects/detail/tabs/MembersTab';
 
 function PlaceholderPage({ title }: { title: string }) {
   return <h1 className="text-xl font-semibold">{title}</h1>;
@@ -41,7 +47,18 @@ export const router = createBrowserRouter([
         children: [
           { path: 'dashboard', element: <DashboardPage /> },
           { path: 'projects', element: <ProjectListPage /> },
-          { path: 'projects/:id', element: <PlaceholderPage title="Project Detail" /> },
+          {
+            path: 'projects/:id',
+            element: <ProjectDetailPage />,
+            children: [
+              { index: true, element: <Navigate to="tasks" replace /> },
+              { path: 'tasks', element: <TasksTab /> },
+              { path: 'overview', element: <OverviewTab /> },
+              { path: 'burndown', element: <BurndownTab /> },
+              { path: 'okr', element: <OkrTab /> },
+              { path: 'members', element: <MembersTab /> },
+            ],
+          },
           { path: 'worksheet', element: <WorksheetPage /> },
           { path: 'reports', element: <ReportHubPage /> },
           { path: 'reports/:slug', element: <PlaceholderPage title="Report Detail" /> },
