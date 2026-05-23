@@ -2264,6 +2264,66 @@ documented in Leader Review section above.</p>
 <code>vernon_tasks/www/m/index.html</code> (built by Vite). All other paths
 client-routed by react-router.</p>
 
+<hr />
+<h2 id="portal-www-react">Portal — www-react Dashboard (2026-05-23)</h2>
+<p>Endpoints consumed by the standalone <code>www-react/</code> SPA. All are <code>@frappe.whitelist()</code>; call via <code>POST /api/method/&lt;dotted.path&gt;</code> with credentialed (cross-domain) fetch. Role gates use Frappe's role checks; unauthorised → 403. All read methods accept <code>GET</code> as well.</p>
+
+<h3 id="portal-dashboard">portal_dashboard</h3>
+<p><code>vernon_tasks.task.api.portal_dashboard.get_home</code> — role-aware landing payload.</p>
+<ul>
+<li><strong>Verb:</strong> GET/POST</li>
+<li><strong>Role:</strong> any authenticated user</li>
+<li><strong>Params:</strong> none</li>
+<li><strong>Response:</strong> <code>{today, me, sprints, projects, at_risk}</code> — each tile pre-aggregated for the role(s) the user holds.</li>
+</ul>
+
+<h3 id="portal-projects">portal_projects</h3>
+<table>
+<thead><tr><th>Method</th><th>Verb</th><th>Params</th><th>Response</th></tr></thead>
+<tbody>
+<tr><td><code>get_project_tasks(project, group_by='kr')</code></td><td>GET</td><td><code>project</code>, optional <code>group_by ∈ {kr, status, assignee, none}</code></td><td><code>{groups: [{key, label, tasks: [...]}]}</code></td></tr>
+<tr><td><code>get_project_detail(project)</code></td><td>GET</td><td><code>project</code></td><td><code>{project, health_score, percent_done, sprints, okrs}</code></td></tr>
+<tr><td><code>get_project_members(project)</code></td><td>GET</td><td><code>project</code></td><td><code>{members: [{user, role, capacity_h}]}</code></td></tr>
+<tr><td><code>bulk_update_status(task_ids[], kanban_status)</code></td><td>POST</td><td>list of task names + target status</td><td><code>{ok, updated: n}</code></td></tr>
+<tr><td><code>bulk_update_assignee(task_ids[], assignee)</code></td><td>POST</td><td>list + User</td><td><code>{ok, updated: n}</code></td></tr>
+<tr><td><code>bulk_update_priority(task_ids[], priority)</code></td><td>POST</td><td>list + priority</td><td><code>{ok, updated: n}</code></td></tr>
+<tr><td><code>relink_task_kr(task_id, key_result)</code></td><td>POST</td><td>task + KR name (nullable to unlink)</td><td><code>{ok}</code></td></tr>
+</tbody>
+</table>
+
+<h3 id="portal-worksheet">portal_worksheet</h3>
+<table>
+<thead><tr><th>Method</th><th>Verb</th><th>Params</th><th>Response</th></tr></thead>
+<tbody>
+<tr><td><code>get_worksheet(week_start)</code></td><td>GET</td><td>ISO date Monday</td><td><code>{days: [{date, entries, capacity_h, planned_h}], unscheduled: [...]}</code></td></tr>
+<tr><td><code>schedule_task(task_id, date, hour_start, hours_planned)</code></td><td>POST</td><td>task + day + hour + hours</td><td><code>{entry_name}</code> (Task Schedule Entry)</td></tr>
+<tr><td><code>update_entry(entry_name, hour_start?, hours_planned?, date?)</code></td><td>POST</td><td>entry name + optional fields</td><td><code>{ok}</code></td></tr>
+<tr><td><code>unschedule(entry_name)</code></td><td>POST</td><td>entry name</td><td><code>{ok}</code></td></tr>
+<tr><td><code>bulk_carry_over(week_start)</code></td><td>POST</td><td>ISO date</td><td><code>{ok, moved: n}</code> — Friday-review carry-over</td></tr>
+<tr><td><code>get_team_worksheet(week_start, project?)</code></td><td>GET</td><td>week + optional project filter</td><td><code>{users: [{user, days: [...]}]}</code> — PM view</td></tr>
+</tbody>
+</table>
+
+<h3 id="portal-reports">portal_reports</h3>
+<table>
+<thead><tr><th>Method</th><th>Verb</th><th>Params</th><th>Response</th></tr></thead>
+<tbody>
+<tr><td><code>list_reports()</code></td><td>GET</td><td>none</td><td><code>{reports: [{slug, title, audience}]}</code> — slugs: <code>project_health</code>, <code>okr_pacing</code>, <code>team_throughput</code>, <code>my_points</code>, <code>project_burndown_archive</code>, <code>risk_log</code></td></tr>
+<tr><td><code>run_report(slug, params={})</code></td><td>GET/POST</td><td>slug + report-specific params</td><td><code>{columns, rows, meta}</code> — dispatched via <code>task/services/reports/report_runner.run</code></td></tr>
+<tr><td><code>export(slug, format='csv', params={})</code></td><td>POST</td><td>slug + <code>format ∈ {csv, xlsx}</code> + params</td><td>file (Content-Disposition attachment)</td></tr>
+<tr><td><code>create_subscription(slug, params, recipients[], cadence)</code></td><td>POST</td><td>slug + params + email list + <code>cadence ∈ {daily, weekly, monthly}</code></td><td><code>{subscription_name}</code> — creates <code>VT Report Subscription</code> doc</td></tr>
+</tbody>
+</table>
+
+<h3 id="portal-okr-sprints">portal okr / sprints additions</h3>
+<ul>
+<li><code>vernon_tasks.task.api.okr.get_for_project(project)</code> — Objectives + KRs scoped to a project. Response: <code>{objectives: [{name, title, krs: [{name, title, current, target, confidence}]}]}</code>.</li>
+<li><code>vernon_tasks.task.api.sprints.get_burndown(sprint)</code> — ideal vs actual series. Response: <code>{ideal: [...], actual: [...], dates: [...]}</code>. Reads <code>burndown_actual_json</code> field.</li>
+</ul>
+
+<h3 id="portal-scheduler">Scheduler</h3>
+<p><code>vernon_tasks.task.services.report_subscription_runner.run_due_subscriptions</code> — registered as <code>scheduler_events.hourly</code>. Iterates <code>VT Report Subscription</code> docs whose <code>next_run_at</code> ≤ now, executes the runner, emails the rendered report to each Recipient row, advances <code>next_run_at</code> by cadence.</p>
+
 <footer>
   <p>Vernon Tasks · generated from <code>docs/API_REFERENCE.md</code></p>
 </footer>
