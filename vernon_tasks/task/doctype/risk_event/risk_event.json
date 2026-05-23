@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-05-23 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": ["project","task","detected_at","reason","severity","resolved_at"],
+  "fields": [
+    {"fieldname": "project", "label": "Project", "fieldtype": "Link", "options": "VT Project", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "task", "label": "Task", "fieldtype": "Link", "options": "VT Task"},
+    {"fieldname": "detected_at", "label": "Detected At", "fieldtype": "Datetime", "reqd": 1, "default": "now", "in_list_view": 1},
+    {"fieldname": "reason", "label": "Reason", "fieldtype": "Data", "reqd": 1, "in_list_view": 1, "description": "Short label e.g. 'overdue', 'no checkin >5d', 'health drop'"},
+    {"fieldname": "severity", "label": "Severity", "fieldtype": "Select", "options": "high\nmed\nlow", "default": "med", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "resolved_at", "label": "Resolved At", "fieldtype": "Datetime"}
+  ],
+  "modified": "2026-05-23 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Task",
+  "name": "Risk Event",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "read": 1, "role": "Vernon Leader", "write": 1},
+    {"create": 1, "delete": 1, "read": 1, "role": "System Manager", "write": 1},
+    {"create": 1, "read": 1, "role": "Vernon PM"}
+  ],
+  "sort_field": "detected_at",
+  "sort_order": "DESC",
+  "track_changes": 1
+}
