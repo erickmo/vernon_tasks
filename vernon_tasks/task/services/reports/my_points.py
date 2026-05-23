@@ -13,12 +13,18 @@ COLUMNS = [
 def run(filters: dict) -> dict:
     user = frappe.session.user
     try:
-        rows = frappe.db.sql("""
-            SELECT logged_on AS date, points, task FROM `tabVT Task Point Log`
-             WHERE recipient = %(u)s
-             ORDER BY logged_on DESC LIMIT 200
-        """, {"u": user}, as_dict=True)
-    except Exception:
+        rows = frappe.db.sql(
+            """
+            SELECT log_timestamp AS date, amount AS points, task
+              FROM `tabTask Point Log`
+             WHERE user = %(u)s
+             ORDER BY log_timestamp DESC
+             LIMIT 200
+            """,
+            {"u": user},
+            as_dict=True,
+        )
+    except frappe.db.SQLError:
         rows = []
     return {
         "viz": {"type": "line", "x": "date", "series": ["points"]},

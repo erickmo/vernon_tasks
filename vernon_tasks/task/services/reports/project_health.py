@@ -9,49 +9,40 @@ COLUMNS = [
     *[{"key": f"w{n}", "label": f"W-{n}", "type": "number"} for n in range(8, 0, -1)],
 ]
 
+# VT Project has no historical health columns; surface status only and
+# fall back to a single current snapshot until a health-history table exists.
+_STATUS_SCORE = {
+    "On Track": 100.0,
+    "Open": 75.0,
+    "At Risk": 40.0,
+    "Closed": 0.0,
+}
+
 
 def run(filters: dict) -> dict:
     try:
-        rows = frappe.db.sql("""
-            SELECT p.name AS project_id, p.title AS project_name,
-                   p.health_score AS w0,
-                   p.health_history_json
+        rows = frappe.db.sql(
+            """
+            SELECT p.name AS project_id, p.title AS project_name, p.status
               FROM `tabVT Project` p
-             WHERE p.status != 'Done'
-        """, as_dict=True)
-    except Exception:
+             WHERE p.status != 'Closed'
+            """,
+            as_dict=True,
+        )
+    except frappe.db.SQLError:
         rows = []
     out = []
     for r in rows:
-        history = frappe.parse_json(r.get("health_history_json") or "[]")
-        weeks = history[-8:] if len(history) >= 8 else ([0] * (8 - len(history)) + history)
+        current = _STATUS_SCORE.get(r.get("status"), 50.0)
         row = {"project_id": r.project_id, "project_name": r.project_name}
-        for i, score in enumerate(weeks):
-            row[f"w{8 - i}"] = float(score or 0)
-        row["trend"] = _trend_arrow(weeks)
+        for n in range(8, 0, -1):
+            row[f"w{n}"] = current if n == 1 else 0.0
+        row["trend"] = "->"
         out.append(row)
     return {
         "viz": {"type": "heatmap", "x_keys": [f"w{n}" for n in range(8, 0, -1)]},
         "rows": out,
-        "narrative": _narrative(out),
+        "narrative": [
+            "Health history not yet wired up; showing current status snapshot only.",
+        ],
     }
-
-
-def _trend_arrow(weeks: list) -> str:
-    if len(weeks) < 2:
-        return "-"
-    delta = (weeks[-1] or 0) - (weeks[0] or 0)
-    if abs(delta) < 2:
-        return "->"
-    return "up" if delta > 0 else "down"
-
-
-def _narrative(rows: list) -> list:
-    notes = []
-    decliners = [r for r in rows if r["trend"] == "down"]
-    for r in decliners[:3]:
-        delta = (r.get("w1") or 0) - (r.get("w8") or 0)
-        notes.append(f"{r['project_name']} health changed {round(delta, 1)}pts over 8w")
-    if not notes:
-        notes.append("No declining projects in the last 8 weeks.")
-    return notes

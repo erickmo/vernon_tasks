@@ -14,15 +14,18 @@ COLUMNS = [
 
 def run(filters: dict) -> dict:
     try:
-        rows = frappe.db.sql("""
+        rows = frappe.db.sql(
+            """
             SELECT o.name AS objective_id, o.title AS objective,
-                   kr.name AS kr_id, kr.title AS kr,
+                   kr.name AS kr_id, kr.metric AS kr,
                    kr.target_value, kr.current_value,
                    o.period_start, o.period_end
-              FROM `tabVT Key Result` kr
-              JOIN `tabVT Objective` o ON o.name = kr.objective
-        """, as_dict=True)
-    except Exception:
+              FROM `tabKey Result` kr
+              JOIN `tabObjective` o ON o.name = kr.objective
+            """,
+            as_dict=True,
+        )
+    except frappe.db.SQLError:
         rows = []
     from datetime import date
     today = date.today()

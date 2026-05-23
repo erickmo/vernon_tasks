@@ -12,17 +12,23 @@ COLUMNS = [
 
 def run(filters: dict) -> dict:
     try:
-        rows = frappe.db.sql("""
-            SELECT DATE_FORMAT(t.completed_on, '%%x-W%%v') AS week,
-                   SUM(t.points) AS velocity,
-                   AVG(TIMESTAMPDIFF(HOUR, t.plan_started_on, t.completed_on)) AS cycle_hours
+        rows = frappe.db.sql(
+            """
+            SELECT DATE_FORMAT(t.completion_date, '%%x-W%%v') AS week,
+                   SUM(COALESCE(t.leader_override_points,
+                                t.earned_points,
+                                t.base_points, 0)) AS velocity,
+                   AVG(TIMESTAMPDIFF(HOUR, t.start_date, t.completion_date)) AS cycle_hours
               FROM `tabVT Task` t
-             WHERE t.status = 'DONE'
-               AND t.completed_on >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK)
+             WHERE t.kanban_status = 'Done'
+               AND t.completion_date IS NOT NULL
+               AND t.completion_date >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK)
              GROUP BY week
              ORDER BY week
-        """, as_dict=True)
-    except Exception:
+            """,
+            as_dict=True,
+        )
+    except frappe.db.SQLError:
         rows = []
     out = [
         {"week": r.week, "velocity": int(r.velocity or 0), "cycle_hours": float(r.cycle_hours or 0)}
