@@ -6,11 +6,15 @@ from datetime import date, timedelta
 import frappe
 
 _DEFAULT_CAPACITY_HOURS = 40
+_WORKDAYS_PER_WEEK = 5
 _DAYS_IN_WEEK = 7
-_SCHEDULE_ENTRY_DOCTYPE = "VT Task Schedule Entry"
-_EMPLOYEE_CAPACITY_DOCTYPE = "VT Employee Capacity"
-_TASK_DOCTYPE = "VT Task"
-_OPEN_STATUSES = ("PLAN", "DO", "CHECK")
+_DEFAULT_HOUR_START = 8
+_SCHEDULE_ENTRY_TABLE = "tabTask Schedule Entry"
+_TASK_TABLE = "tabVT Task"
+_PROJECT_TABLE = "tabVT Project"
+_KEY_RESULT_TABLE = "tabKey Result"
+_WORK_PROFILE_DOCTYPE = "Work Profile"
+_OPEN_PHASES = ("PLAN", "DO", "CHECK")
 
 
 def build_worksheet(user: str, week_start: str) -> dict:
@@ -31,7 +35,7 @@ def build_worksheet(user: str, week_start: str) -> dict:
             "scheduled_hours": round(scheduled, 2),
         })
 
-    scheduled_task_ids = {e.task for e in entries}
+    scheduled_task_ids = {e.task_id for e in entries}
     unscheduled = _load_unscheduled(user, scheduled_task_ids)
 
     return {
@@ -51,53 +55,61 @@ def _parse_monday(s: str) -> date:
 
 
 def _get_capacity(user: str) -> float:
-    # Compat shim: doctype may not yet be installed.
-    if not frappe.db.table_exists(_EMPLOYEE_CAPACITY_DOCTYPE):
+    daily = frappe.db.get_value(_WORK_PROFILE_DOCTYPE, {"user": user}, "daily_target_hours")
+    if not daily:
         return float(_DEFAULT_CAPACITY_HOURS)
-    return float(
-        frappe.db.get_value(_EMPLOYEE_CAPACITY_DOCTYPE, {"employee": user}, "weekly_hours")
-        or _DEFAULT_CAPACITY_HOURS
-    )
+    return float(daily) * _WORKDAYS_PER_WEEK
 
 
 def _load_entries(user: str, start: date, end: date) -> list:
-    # Compat shim: schedule entry doctype may not yet be installed.
-    if not frappe.db.table_exists(_SCHEDULE_ENTRY_DOCTYPE):
-        return []
     try:
         return frappe.db.sql(
-            """
-            SELECT se.name, se.task, se.date, se.hour_start, se.hours_planned,
-                   t.title, t.pdca_phase, t.points, t.linked_kr, t.project
-              FROM `tabVT Task Schedule Entry` se
-              JOIN `tabVT Task` t ON t.name = se.task
-             WHERE se.owner_user = %(u)s
+            f"""
+            SELECT se.name,
+                   se.parent AS task_id,
+                   se.date,
+                   se.allocated_hours AS hours_planned,
+                   t.title,
+                   t.pdca_phase,
+                   COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points,
+                   kr.name AS linked_kr,
+                   t.project
+              FROM `{_SCHEDULE_ENTRY_TABLE}` se
+              JOIN `{_TASK_TABLE}` t ON t.name = se.parent
+              LEFT JOIN `{_PROJECT_TABLE}` p ON p.name = t.project
+              LEFT JOIN `{_KEY_RESULT_TABLE}` kr ON kr.objective = p.objective
+             WHERE se.parenttype = 'VT Task'
+               AND t.assigned_to = %(u)s
                AND se.date BETWEEN %(s)s AND %(e)s
             """,
             {"u": user, "s": start, "e": end},
             as_dict=True,
         )
-    except Exception:
-        # Compat shim: schema mismatch (e.g. VT Task missing planned columns).
+    except frappe.db.DatabaseError:
         return []
 
 
 def _load_unscheduled(user: str, scheduled_task_ids: set) -> list:
-    if not frappe.db.table_exists(_TASK_DOCTYPE):
-        return []
     try:
         rows = frappe.db.sql(
-            """
-            SELECT name, title, pdca_phase, points, linked_kr, project, due_date
-              FROM `tabVT Task`
-             WHERE assignee = %(u)s
-               AND status IN %(statuses)s
+            f"""
+            SELECT t.name,
+                   t.title,
+                   t.pdca_phase,
+                   COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points,
+                   kr.name AS linked_kr,
+                   t.project,
+                   t.deadline AS due_date
+              FROM `{_TASK_TABLE}` t
+              LEFT JOIN `{_PROJECT_TABLE}` p ON p.name = t.project
+              LEFT JOIN `{_KEY_RESULT_TABLE}` kr ON kr.objective = p.objective
+             WHERE t.assigned_to = %(u)s
+               AND t.pdca_phase IN %(phases)s
             """,
-            {"u": user, "statuses": _OPEN_STATUSES},
+            {"u": user, "phases": _OPEN_PHASES},
             as_dict=True,
         )
-    except Exception:
-        # Compat shim: VT Task schema may differ from planned schema.
+    except frappe.db.DatabaseError:
         return []
     return [_unscheduled(r) for r in rows if r.name not in scheduled_task_ids]
 
@@ -105,13 +117,13 @@ def _load_unscheduled(user: str, scheduled_task_ids: set) -> list:
 def _entry(e: dict) -> dict:
     return {
         "id": e.name,
-        "task_id": e.task,
+        "task_id": e.task_id,
         "title": e.title,
         "pdca": e.pdca_phase,
         "points": int(e.points or 0),
         "linked_kr": e.linked_kr,
         "project": e.project,
-        "hour_start": int(e.hour_start or 8),
+        "hour_start": _DEFAULT_HOUR_START,
         "hours_planned": float(e.hours_planned or 1),
     }
 
