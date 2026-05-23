@@ -5,6 +5,7 @@ import { PortalShell } from '@/layouts/PortalShell';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { WorksheetPage } from '@/features/worksheet/WorksheetPage';
+import { ReportHubPage } from '@/features/reports/ReportHubPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return <h1 className="text-xl font-semibold">{title}</h1>;
@@ -40,7 +41,7 @@ export const router = createBrowserRouter([
           { path: 'projects', element: <PlaceholderPage title="Projects" /> },
           { path: 'projects/:id', element: <PlaceholderPage title="Project Detail" /> },
           { path: 'worksheet', element: <WorksheetPage /> },
-          { path: 'reports', element: <PlaceholderPage title="Reports" /> },
+          { path: 'reports', element: <ReportHubPage /> },
           { path: 'reports/:slug', element: <PlaceholderPage title="Report Detail" /> },
         ],
       },
