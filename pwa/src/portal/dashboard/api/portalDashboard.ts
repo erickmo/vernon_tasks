@@ -34,6 +34,13 @@ export interface TimelineTask {
   done: boolean;
 }
 
+export interface OwnerOkr {
+  name: string;
+  title: string;
+  progress_pct: number;
+  trend_delta?: number;
+}
+
 export interface PortfolioProject {
   project: string;
   title: string;
@@ -61,4 +68,7 @@ export const portalDashboardApi = {
 
   getPortfolioSummary: () =>
     api.get<PortfolioProject[]>(`${BASE}.get_portfolio_summary`),
+
+  getOwnerOkrs: () =>
+    api.get<OwnerOkr[]>(`${BASE}.get_owner_okrs`),
 };

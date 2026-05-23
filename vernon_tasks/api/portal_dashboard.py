@@ -201,6 +201,54 @@ def get_my_tasks_timeline(days_back: int = 3, days_forward: int = 3) -> dict:
 
 
 @frappe.whitelist()
+def get_owner_okrs() -> list:
+    """Objectives owned by the current user (via owned VT Projects).
+
+    Aggregates Key Result rows per Objective to compute:
+      - ``progress_pct``: rounded average of ``progress_percent`` across KRs.
+      - ``trend_delta``: avg(confidence - confidence_last_week), rounded to int.
+
+    Manager only — mirrors :func:`get_portfolio_summary` access rules.
+    """
+    roles = set(frappe.get_roles(frappe.session.user))
+    if not _is_manager(roles):
+        raise frappe.PermissionError("Manager role required")
+
+    user = frappe.session.user
+    try:
+        rows = frappe.db.sql(
+            """
+            SELECT o.name AS name,
+                   o.title AS title,
+                   AVG(COALESCE(kr.progress_percent, 0)) AS progress_pct,
+                   AVG(COALESCE(kr.confidence, 0) - COALESCE(kr.confidence_last_week, 0)) AS trend_delta
+              FROM `tabObjective` o
+              JOIN `tabVT Project` p ON p.objective = o.name
+              LEFT JOIN `tabKey Result` kr ON kr.objective = o.name
+             WHERE p.status != %(closed)s
+               AND p.project_owner = %(u)s
+               AND o.pdca_phase != %(closed_phase)s
+             GROUP BY o.name, o.title
+             ORDER BY progress_pct ASC
+            """,
+            {"u": user, "closed": "Closed", "closed_phase": "CLOSED"},
+            as_dict=True,
+        )
+    except frappe.db.DatabaseError:
+        return []
+
+    return [
+        {
+            "name": r["name"],
+            "title": r["title"] or r["name"],
+            "progress_pct": int(round(float(r["progress_pct"] or 0))),
+            "trend_delta": int(round(float(r["trend_delta"] or 0))),
+        }
+        for r in rows
+    ]
+
+
+@frappe.whitelist()
 def get_portfolio_summary() -> list:
     """Project list with RAG status. Manager only."""
     roles = set(frappe.get_roles(frappe.session.user))

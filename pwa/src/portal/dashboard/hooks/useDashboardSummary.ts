@@ -7,6 +7,7 @@ export const dashboardKeys = {
   unassigned: (project?: string) => ["dashboard", "unassigned", project] as const,
   timeline: (back: number, fwd: number) => ["dashboard", "timeline", back, fwd] as const,
   portfolio: ["dashboard", "portfolio"] as const,
+  ownerOkrs: ["dashboard", "ownerOkrs"] as const,
 };
 
 export function useDashboardSummary() {

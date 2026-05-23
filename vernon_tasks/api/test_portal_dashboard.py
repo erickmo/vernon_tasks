@@ -66,3 +66,27 @@ class TestTimeline(unittest.TestCase):
         with patch("frappe.get_roles", return_value=["VT Leader"]):
             with self.assertRaises(frappe.PermissionError):
                 get_portfolio_summary()
+
+
+class TestOwnerOkrs(unittest.TestCase):
+    def setUp(self):
+        frappe.set_user("Administrator")
+
+    def test_owner_okrs_requires_manager(self):
+        from vernon_tasks.api.portal_dashboard import get_owner_okrs
+        with patch("frappe.get_roles", return_value=["VT Leader"]):
+            with self.assertRaises(frappe.PermissionError):
+                get_owner_okrs()
+
+    def test_owner_okrs_returns_list_for_manager(self):
+        from vernon_tasks.api.portal_dashboard import get_owner_okrs
+        with patch("frappe.get_roles", return_value=["VT Manager"]):
+            result = get_owner_okrs()
+        self.assertIsInstance(result, list)
+        for r in result:
+            self.assertIn("name", r)
+            self.assertIn("title", r)
+            self.assertIn("progress_pct", r)
+            self.assertIn("trend_delta", r)
+            self.assertIsInstance(r["progress_pct"], int)
+            self.assertIsInstance(r["trend_delta"], int)

@@ -7,6 +7,7 @@
 import { useState, useCallback, type DragEvent } from "react";
 import { usePermissions } from "../../auth/usePermissions";
 import { useDashboardSummary } from "./hooks/useDashboardSummary";
+import { useOwnerOkrs } from "./hooks/useOwnerOkrs";
 import { getSectionOrder, saveSectionOrder, type SectionId } from "./hooks/useSectionOrder";
 import { getCollapseState, toggleCollapseState } from "./hooks/useSectionCollapse";
 import { SummaryBar } from "./SummaryBar";
@@ -84,8 +85,8 @@ export function DashboardPage() {
     return true; // "member" is always visible
   });
 
-  // OKR data placeholder — will be wired in P6.2 when OKR endpoint is ready.
-  const okrs: { name: string; title: string; progress_pct: number; trend_delta?: number }[] = [];
+  const ownerOkrsQuery = useOwnerOkrs(isOwner);
+  const okrs = ownerOkrsQuery.data ?? [];
 
   return (
     <div className="db-root">

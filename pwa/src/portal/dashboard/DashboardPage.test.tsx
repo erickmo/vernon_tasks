@@ -22,6 +22,7 @@ function wrap() {
   vi.spyOn(dashApi.portalDashboardApi, "getUnassignedTasks").mockResolvedValue([]);
   vi.spyOn(dashApi.portalDashboardApi, "getMyTasksTimeline").mockResolvedValue({});
   vi.spyOn(dashApi.portalDashboardApi, "getPortfolioSummary").mockResolvedValue([]);
+  vi.spyOn(dashApi.portalDashboardApi, "getOwnerOkrs").mockResolvedValue([]);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
