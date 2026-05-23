@@ -4,6 +4,7 @@ import { AuthLayout } from '@/layouts/AuthLayout';
 import { PortalShell } from '@/layouts/PortalShell';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { LoginPage } from '@/features/auth/LoginPage';
+import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { WorksheetPage } from '@/features/worksheet/WorksheetPage';
 import { ReportHubPage } from '@/features/reports/ReportHubPage';
 
@@ -37,7 +38,7 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
         children: [
-          { path: 'dashboard', element: <PlaceholderPage title="Dashboard" /> },
+          { path: 'dashboard', element: <DashboardPage /> },
           { path: 'projects', element: <PlaceholderPage title="Projects" /> },
           { path: 'projects/:id', element: <PlaceholderPage title="Project Detail" /> },
           { path: 'worksheet', element: <WorksheetPage /> },
