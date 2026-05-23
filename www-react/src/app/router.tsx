@@ -7,6 +7,7 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { WorksheetPage } from '@/features/worksheet/WorksheetPage';
 import { ReportHubPage } from '@/features/reports/ReportHubPage';
+import { ReportDetailPage } from '@/features/reports/ReportDetailPage';
 import { ProjectListPage } from '@/features/projects/ProjectListPage';
 import { ProjectDetailPage } from '@/features/projects/ProjectDetailPage';
 import { TasksTab } from '@/features/projects/detail/tabs/TasksTab';
@@ -61,7 +62,7 @@ export const router = createBrowserRouter([
           },
           { path: 'worksheet', element: <WorksheetPage /> },
           { path: 'reports', element: <ReportHubPage /> },
-          { path: 'reports/:slug', element: <PlaceholderPage title="Report Detail" /> },
+          { path: 'reports/:slug', element: <ReportDetailPage /> },
         ],
       },
       { path: '*', element: <div className="p-8">404</div> },
