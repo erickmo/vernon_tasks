@@ -1,0 +1,46 @@
+{
+  "actions": [],
+  "autoname": "field:slug",
+  "creation": "2026-05-23 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "slug",
+    "title",
+    "cron",
+    "format",
+    "enabled",
+    "filters_section",
+    "filters_json",
+    "recipients_section",
+    "recipients",
+    "status_section",
+    "last_run_at",
+    "last_status"
+  ],
+  "fields": [
+    {"fieldname": "slug", "fieldtype": "Data", "label": "Slug", "reqd": 1, "unique": 1, "in_list_view": 1},
+    {"fieldname": "title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "cron", "fieldtype": "Data", "label": "Cron", "reqd": 1, "description": "Standard cron expression (e.g. '0 8 * * 1')"},
+    {"fieldname": "format", "fieldtype": "Select", "label": "Format", "options": "csv\npdf", "default": "csv", "reqd": 1, "in_list_view": 1},
+    {"default": "1", "fieldname": "enabled", "fieldtype": "Check", "label": "Enabled"},
+    {"fieldname": "filters_section", "fieldtype": "Section Break", "label": "Filters"},
+    {"fieldname": "filters_json", "fieldtype": "Code", "label": "Filters (JSON)", "options": "JSON"},
+    {"fieldname": "recipients_section", "fieldtype": "Section Break", "label": "Recipients"},
+    {"fieldname": "recipients", "fieldtype": "Table MultiSelect", "label": "Recipients", "options": "VT Report Subscription Recipient"},
+    {"fieldname": "status_section", "fieldtype": "Section Break", "label": "Status"},
+    {"fieldname": "last_run_at", "fieldtype": "Datetime", "label": "Last Run At", "read_only": 1},
+    {"fieldname": "last_status", "fieldtype": "Data", "label": "Last Status", "read_only": 1}
+  ],
+  "modified": "2026-05-23 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Task",
+  "name": "VT Report Subscription",
+  "owner": "Administrator",
+  "permissions": [
+    {"create": 1, "delete": 1, "read": 1, "role": "VT Leader", "write": 1},
+    {"create": 1, "delete": 1, "read": 1, "role": "System Manager", "write": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}
