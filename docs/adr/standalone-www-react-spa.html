@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR Standalone www-react SPA — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>Standalone www-react SPA</strong></div>
+
+<header class="hero">
+  <h1>ADR · Standalone www-react SPA</h1>
+  <div class="sub">ADR-021 — Build the new desktop dashboard as a standalone Vite + React SPA on its own domain</div>
+</header>
+
+<article class="adr" id="adr-021">
+  <h2>ADR-021 — Standalone www-react SPA on separate domain</h2>
+  <div class="meta-row">
+    <span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span>
+    <span><strong>Date:</strong> 2026-05-23</span>
+    <span><strong>Spec:</strong> <a href="../superpowers/specs/2026-05-23-www-react-dashboard-design.html">www-react Dashboard Design</a></span>
+    <span><strong>Related:</strong> <a href="foundation.html#adr-002">ADR-002</a>, <a href="foundation.html#adr-005">ADR-005</a></span>
+  </div>
+
+  <div class="section-label">Context</div>
+  <p>We need a desktop-first dashboard that serves IC + Leader + Exec audiences with a single role-aware UI: weekly worksheet planner, project-level OKR/KR drill-down, bulk task actions, and scheduled exports. We already ship two frontends — Frappe Desk pages and the <code>/m/*</code> mobile PWA. The <code>pwa/src/portal/*</code> tree under <code>/portal/*</code> on the Frappe origin grew organically out of the PWA bundle and is coupled to Frappe's asset pipeline, the Workbox service worker, and the same-origin session-cookie path. Extending it for the new desktop dashboard would mean further tangling desktop and mobile concerns in one bundle and one deploy artifact.</p>
+
+  <div class="section-label">Decision</div>
+  <p>Build the new desktop dashboard as a <strong>standalone Vite + React 18 + TypeScript</strong> SPA in <code>www-react/</code>, deployed to its own domain (e.g. <code>dashboard.vernon.local</code>) via Caddy reverse-proxy. Auth reuses the Frappe session cookie cross-domain (CORS allowlist + <code>SameSite=None; Secure</code>) — no JWT, consistent with <a href="foundation.html#adr-005">ADR-005</a>. The SPA depends on no Frappe asset hooks; it ships static <code>dist/</code> served by Caddy. Stack: React Router 7, TanStack Query 5, Tailwind, dnd-kit, recharts, sonner, react-i18next, Vitest + Playwright. Caddy snippet lives at <code>caddy/dashboard.Caddyfile</code>.</p>
+
+  <div class="section-label">Consequences</div>
+  <ul>
+    <li>+ Clean stack — no Frappe asset pipeline coupling; <code>npm run build</code> is the entire build.</li>
+    <li>+ Single role-aware SPA for IC + Leader + Exec — no per-role bundle split, no Desk context switch.</li>
+    <li>+ Future-proof: dashboard scales independently of Frappe (CDN, separate cache, separate rollout).</li>
+    <li>+ Brand differentiation — own domain, own theme, no Desk chrome leaking in.</li>
+    <li>+ Reuses Frappe session cookie (ADR-005) — no new auth surface.</li>
+    <li>− Cross-domain auth complexity: requires <code>allow_cors</code> in <code>common_site_config.json</code>, <code>SameSite=None; Secure</code> cookie, mandatory TLS in all environments.</li>
+    <li>− Duplicate base-layer components vs <code>pwa/src/portal/*</code> (buttons, tables, form primitives). Accepted; consolidation deferred until either side stabilises.</li>
+    <li>− Two deploy artifacts (Frappe bench + Caddy static) and two build pipelines.</li>
+    <li>− Two SPAs with overlapping <code>/portal/*</code> route names on different origins — operational documentation must call this out (see <a href="../portal/index.html#page-www-react">portal docs § www-react</a>).</li>
+  </ul>
+
+  <div class="section-label">Alternatives</div>
+  <ul>
+    <li><strong>Extend <code>pwa/src/portal/*</code> under the Frappe origin</strong> — rejected. Couples desktop dashboard to Workbox service worker, mobile breakpoints, and Frappe's static-asset hooks; widens an already-large bundle; ties dashboard rollout to the PWA release train.</li>
+    <li><strong>New Frappe Desk pages</strong> — rejected. Desk's chrome and form-builder model do not fit a custom dnd planner / role-aware landing; would regress the desktop UX vs current Desk pages.</li>
+    <li><strong>Server-rendered Frappe web pages (Jinja)</strong> — rejected. Too dynamic for SSR; would lose TanStack Query caching and dnd ergonomics.</li>
+    <li><strong>Same-origin subpath (<code>/dashboard/*</code> via Frappe)</strong> — rejected. Avoids the CORS surface but reintroduces the asset-pipeline coupling we are trying to escape.</li>
+  </ul>
+</article>
+
+<nav class="nav-prev-next">
+  <a href="index.html">← ADR Index</a>
+</nav>
+
+<footer>ADR Standalone www-react SPA · part of <a href="index.html">ADR v1.0</a>.</footer>
+
+</div>
+</body>
+</html>
