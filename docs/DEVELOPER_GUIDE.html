@@ -39,6 +39,7 @@
 <li><a href="#frontend">Frontend</a></li>
 <li><a href="#development-setup">Development Setup</a></li>
 <li><a href="#coding-conventions">Coding Conventions</a></li>
+<li><a href="#working-on-www-react">Working on www-react</a></li>
 </ol>
 <hr />
 <h2 id="overview">Overview</h2>
@@ -1019,6 +1020,62 @@ def calculate_points(task):
 </tr>
 </tbody>
 </table>
+<hr />
+<h2 id="working-on-www-react">Working on www-react</h2>
+<p>The <code>www-react/</code> directory is a standalone Vite + React 18 + TypeScript (strict) SPA shipped 2026-05-23. It is <strong>not</strong> part of the Frappe asset pipeline — it builds independently and is served from its own domain by Caddy (see <a href="adr/standalone-www-react-spa.html">ADR-021</a>).</p>
+
+<h3 id="www-react-layout">Project Layout</h3>
+<pre><code>www-react/
+├── src/
+│   ├── app/             # Router config, providers, root shell
+│   ├── components/      # Cross-feature UI primitives (Button, Table, Modal, …)
+│   ├── features/
+│   │   ├── auth/        # Login page + session bootstrap
+│   │   ├── dashboard/   # /portal/dashboard (Today/Me/Sprints/Projects)
+│   │   ├── projects/    # /portal/projects + 5 detail tabs
+│   │   ├── worksheet/   # /portal/worksheet (weekly dnd planner + PM team view)
+│   │   └── reports/     # /portal/reports hub + 6 slug reports + ScheduleModal
+│   ├── hooks/           # Cross-feature hooks (useDebounce, useMediaQuery, …)
+│   └── lib/             # api (axios + session cookie), i18n, formatters
+├── tests/               # Vitest unit + integration (MockAdapter)
+├── playwright.config.ts # Playwright e2e
+└── README.md            # Hosting + cross-domain auth checklist
+</code></pre>
+
+<h3 id="www-react-dev">Dev Workflow</h3>
+<pre><code>cd www-react
+npm install
+cp .env.example .env          # set VITE_API_BASE to your Frappe origin
+npm run dev                   # http://localhost:5174
+npm test                      # vitest unit + integration
+npm run e2e                   # Playwright (auto-starts dev server)
+npm run typecheck             # tsc --noEmit
+npm run build                 # dist/
+</code></pre>
+
+<h3 id="www-react-api">Frappe API Client</h3>
+<p>All HTTP traffic goes through <code>@/lib/api</code> (axios with <code>withCredentials: true</code>). Cross-domain Frappe session cookie auth — no JWT, no token refresh. The Frappe site must allow the dashboard origin via <code>"allow_cors"</code> in <code>common_site_config.json</code>, and the session cookie must be <code>SameSite=None; Secure</code> (TLS required everywhere). All mutating calls send the <code>X-Frappe-CSRF-Token</code> header — fetched once after login and cached in memory.</p>
+
+<h3 id="www-react-query">TanStack Query Keys Convention</h3>
+<p>Query keys are tuples namespaced by feature, then resource, then params:</p>
+<pre><code>['dashboard', 'home']
+['projects', 'list']
+['projects', 'detail', projectId]
+['projects', 'tasks', projectId, { groupBy }]
+['worksheet', weekStartIso]
+['reports', 'list']
+['reports', 'run', slug, params]
+</code></pre>
+<p>Mutations invalidate the narrowest matching prefix (e.g. <code>['projects', 'detail', projectId]</code> after a task bulk update). Use <code>queryClient.invalidateQueries({ queryKey: […] })</code>; never call <code>refetch()</code> directly from components.</p>
+
+<h3 id="www-react-tdd">TDD Pattern</h3>
+<ul>
+<li>Write the failing test first using <strong>Vitest + RTL + axios-mock-adapter</strong>. Mount the component inside a <code>QueryClientProvider</code> + <code>MemoryRouter</code> test harness from <code>tests/utils/render.tsx</code>.</li>
+<li>Stub the API at the axios layer with <code>MockAdapter</code>; assert the request URL/payload <em>and</em> the rendered output.</li>
+<li>Snapshot only stable, low-information surfaces (toast text, table headings). Avoid full-tree snapshots.</li>
+<li>Playwright e2e covers cross-page flows (login → dashboard → drill into project → schedule report) against a live Frappe site behind an env flag.</li>
+</ul>
+
 <hr />
 <p><em>Vernon Tasks Developer Guide — maintained by the Vernon Corp engineering team.</em></p>
 

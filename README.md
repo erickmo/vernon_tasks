@@ -7,11 +7,50 @@ Agile/Sprint execution, smart scheduling, and gamified point system.
 
 ## Surfaces
 
+Three frontends now coexist:
+
 - **Desk pages** (`vernon_tasks/task/page/`): my_dashboard, my_work,
   my_analytics, leader_dashboard, leader_review, leader_analytics,
   exec_analytics
-- **Mobile PWA** at `/m/` (this README, section below)
+- **Mobile PWA** at `/m/*` on the Frappe origin (see section below)
+- **Vernon Dashboard (www-react)** — standalone desktop SPA on its own
+  domain (see section below)
 - **REST API**: see `docs/API_REFERENCE.md`
+
+## Vernon Dashboard (www-react)
+
+Standalone Vite + React 18 + TypeScript SPA for the desktop dashboard
+(IC + Leader + Exec, role-aware). Runs on its own domain via Caddy
+reverse-proxy and authenticates with the Frappe site cross-origin using
+the existing session cookie (CORS + `SameSite=None; Secure`).
+
+- **Path:** `apps/vernon_tasks/www-react/`
+- **Routes:** `/login`, `/portal/dashboard`, `/portal/projects`,
+  `/portal/projects/:id/{tasks,overview,burndown,okr,members}`,
+  `/portal/worksheet`, `/portal/reports`, `/portal/reports/:slug`
+- **Stack:** React Router 7, TanStack Query 5, Tailwind, dnd-kit,
+  recharts, sonner, react-i18next; Vitest + Playwright
+
+### Build
+
+    cd www-react
+    npm install
+    npm run build        # output: www-react/dist/
+
+### Deploy
+
+1. Upload `www-react/dist/` to the gateway host (e.g.
+   `/var/www/vernon-dashboard`).
+2. Apply `caddy/dashboard.Caddyfile` and reload Caddy.
+3. Add `"allow_cors": "https://dashboard.vernon.local"` to the Frappe
+   site's `common_site_config.json`.
+4. See `www-react/README.md` for the full checklist.
+
+### Spec
+
+- Design: `docs/superpowers/specs/2026-05-23-www-react-dashboard-design.html`
+- Schema: `docs/superpowers/specs/2026-05-23-schema-mapping.html`
+- ADR: `docs/adr/standalone-www-react-spa.html` (ADR-021)
 
 ## Mobile PWA
 
