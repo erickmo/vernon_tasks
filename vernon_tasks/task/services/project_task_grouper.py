@@ -1,10 +1,13 @@
 """Pre-group VT Tasks for a project by KR / PDCA / Sprint / Assignee / Due-date.
 
-NOTE: This module references several VT Task fields (linked_kr, risk_flag) and
-a VT Objective.linked_project relation that do not currently exist in the
-DocType JSON. SQL calls are wrapped in try/except so the module remains usable
-(and unit-testable) before those schema migrations land. Once the fields are
-added, the except branches become unreachable.
+Schema notes (see docs/superpowers/specs/2026-05-23-schema-mapping.md):
+- VT Task has no `linked_kr` column; KR attribution can only be inferred from
+  `VT Project.objective` -> `tabKey Result.objective`. Per-task linked_kr is
+  always NULL; all tasks land in the "Unlinked" bucket for the KR grouping.
+- VT Task has no `risk_flag`; surfaced as NULL.
+- Field aliases: assigned_to AS assignee, deadline AS due_date,
+  kanban_status AS status, title AS subject. Points coalesces leader override,
+  earned, base.
 """
 from __future__ import annotations
 
@@ -31,18 +34,29 @@ def group_tasks(project_id: str, group_by: GroupBy) -> list[dict]:
 
 
 def _load_tasks(project_id: str) -> list[dict]:
-    try:
-        return frappe.db.sql("""
-            SELECT t.name, t.title, t.pdca_phase, t.assignee,
-                   t.due_date, t.points, t.status,
-                   t.linked_kr, t.sprint, t.risk_flag
-              FROM `tabVT Task` t
-             WHERE t.project = %(p)s
-        """, {"p": project_id}, as_dict=True)
-    except Exception:
-        # Fields missing or table empty — return no tasks so callers degrade
-        # gracefully. Real failures will surface once schema catches up.
-        return []
+    """Load tasks for a project, projecting legacy aliases.
+
+    VT Task columns: title, pdca_phase, assigned_to, deadline, kanban_status,
+    sprint, base_points, earned_points, leader_override_points.
+    """
+    return frappe.db.sql(
+        """
+        SELECT t.name,
+               t.title,
+               t.pdca_phase,
+               t.assigned_to                                                AS assignee,
+               t.deadline                                                   AS due_date,
+               COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points,
+               t.kanban_status                                              AS status,
+               NULL                                                         AS linked_kr,
+               t.sprint,
+               NULL                                                         AS risk_flag
+          FROM `tabVT Task` t
+         WHERE t.project = %(p)s
+        """,
+        {"p": project_id},
+        as_dict=True,
+    )
 
 
 def _task_row(t: dict) -> dict:
@@ -79,15 +93,21 @@ def _group_by_kr(project_id: str, tasks: list[dict]) -> list[dict]:
 
 
 def _kr_meta_for_project(project_id: str) -> dict[str, dict]:
-    try:
-        rows = frappe.db.sql("""
-            SELECT kr.name, kr.title, kr.target_value, kr.current_value
-              FROM `tabVT Key Result` kr
-              JOIN `tabVT Objective` o ON o.name = kr.objective
-             WHERE o.linked_project = %(p)s
-        """, {"p": project_id}, as_dict=True)
-    except Exception:
-        rows = []
+    """Resolve KRs reachable from this project via Project.objective -> KR.objective."""
+    rows = frappe.db.sql(
+        """
+        SELECT kr.name,
+               kr.metric         AS title,
+               kr.target_value,
+               kr.current_value,
+               kr.progress_percent
+          FROM `tabKey Result` kr
+          JOIN `tabVT Project` p ON p.objective = kr.objective
+         WHERE p.name = %(p)s
+        """,
+        {"p": project_id},
+        as_dict=True,
+    )
     out: dict[str, dict] = {}
     for r in rows:
         target = float(r.target_value or 0)
