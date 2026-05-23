@@ -20,6 +20,10 @@ CHECKIN_STALE_DAYS = 5
 _TEAM_ROLES = ("leader", "pm")
 _DEFAULT_WEEKLY_HOURS = 40
 _STREAK_MAX_LOOKBACK_DAYS = 365
+_PROJECT_CLOSED_STATUS = "Closed"
+_TASK_DONE_PHASE = "DONE"
+_TASK_BLOCKED_STATUS = "Blocked"
+_SPRINT_ACTIVE_STATUS = "Active"
 
 
 def build_home_payload(user: str, role: Role) -> dict:
@@ -68,18 +72,42 @@ def _at_risk(user: str, role: str) -> list[dict]:
 
 
 def _user_project_ids(user: str, scope: str) -> list[str]:
-    """Return project IDs the user is involved in. Empty if doctype absent."""
+    """Return project IDs the user is involved in.
+
+    VT Project has `project_owner` + `project_leader` (Link → User) and
+    `team_members` (child table `Project Team Member`). Scope='self' returns
+    projects the user owns or leads; scope='team' additionally includes
+    projects where they appear as a team member.
+    """
     try:
-        rows = frappe.db.sql(
-            """
-            SELECT name FROM `tabVT Project`
-             WHERE status != 'Done' AND project_lead = %(u)s
-            """,
-            {"u": user},
-            as_dict=True,
-        )
+        if scope == "team":
+            rows = frappe.db.sql(
+                """
+                SELECT DISTINCT p.name
+                  FROM `tabVT Project` p
+                  LEFT JOIN `tabProject Team Member` m
+                         ON m.parent = p.name
+                        AND m.parenttype = 'VT Project'
+                 WHERE p.status != %(closed)s
+                   AND (p.project_owner = %(u)s
+                        OR p.project_leader = %(u)s
+                        OR m.user = %(u)s)
+                """,
+                {"u": user, "closed": _PROJECT_CLOSED_STATUS},
+                as_dict=True,
+            )
+        else:
+            rows = frappe.db.sql(
+                """
+                SELECT name FROM `tabVT Project`
+                 WHERE status != %(closed)s
+                   AND (project_owner = %(u)s OR project_leader = %(u)s)
+                """,
+                {"u": user, "closed": _PROJECT_CLOSED_STATUS},
+                as_dict=True,
+            )
         return [r["name"] for r in rows]
-    except Exception:
+    except frappe.db.DatabaseError:
         return []
 
 
@@ -119,68 +147,91 @@ def _me(user: str) -> dict:
 # ── sprints ────────────────────────────────────────────────────────────────
 
 def _active_sprints(user: str) -> list[dict]:
-    """Active sprints user is involved in.
+    """Active sprints user is involved in via assigned VT Tasks.
 
-    Plan joins `tabVT Sprint Task` (which doesn't exist). We fall back to
-    sprints owned via VT Task.assigned_to.
+    VT Sprint has no `percent_done` or `burndown_actual_json` columns; both
+    are derived on read by callers, so we surface empty defaults here.
     """
     try:
         rows = frappe.db.sql(
             """
-            SELECT s.name, s.title, s.start_date, s.end_date,
-                   s.percent_done, s.burndown_actual_json
+            SELECT s.name, s.sprint_title AS title, s.start_date, s.end_date
               FROM `tabVT Sprint` s
               JOIN `tabVT Task` t ON t.sprint = s.name
              WHERE t.assigned_to = %(u)s
-               AND s.status = 'Active'
+               AND s.status = %(active)s
              GROUP BY s.name
              ORDER BY s.end_date ASC
             """,
-            {"u": user},
+            {"u": user, "active": _SPRINT_ACTIVE_STATUS},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return []
 
     today = frappe.utils.getdate()
     out = []
     for r in rows:
         days_left = max(0, (r.end_date - today).days) if r.end_date else 0
-        try:
-            spark = frappe.parse_json(r.burndown_actual_json or "[]")
-        except Exception:
-            spark = []
         out.append({
             "id": r.name,
             "name": r.title,
             "days_left": days_left,
-            "percent_done": float(r.percent_done or 0),
-            "burndown_spark": spark,
+            "percent_done": _sprint_percent_done(r.name),
+            "burndown_spark": [],
         })
     return out
+
+
+def _sprint_percent_done(sprint_id: str) -> float:
+    """Compute percent_done from VT Task pdca_phase='DONE' / total in sprint."""
+    try:
+        row = frappe.db.sql(
+            """
+            SELECT
+              SUM(CASE WHEN pdca_phase = %(done)s THEN 1 ELSE 0 END) AS done_n,
+              COUNT(*) AS total
+              FROM `tabVT Task`
+             WHERE sprint = %(s)s
+            """,
+            {"s": sprint_id, "done": _TASK_DONE_PHASE},
+            as_dict=True,
+        )
+    except frappe.db.DatabaseError:
+        return 0.0
+    r = row[0] if row else {}
+    total = int(r.get("total") or 0)
+    if not total:
+        return 0.0
+    return round(int(r.get("done_n") or 0) / total * 100, 1)
 
 
 # ── projects ───────────────────────────────────────────────────────────────
 
 def _my_projects(user: str) -> list[dict]:
-    """Plan joins `tabVT Project Member` (doesn't exist). Fall back to
-    project_lead match.
+    """Projects where user is owner, leader, or team member.
+
+    VT Project has no `health_score` / `percent_done` columns; health is
+    derived via `health_score_service` and percent_done via task aggregates.
     """
     try:
         rows = frappe.db.sql(
             """
-            SELECT p.name, p.title, p.project_lead,
-                   p.health_score, p.percent_done, p.end_date,
-                   (SELECT COUNT(*) FROM `tabVT Task` t
-                     WHERE t.project = p.name AND t.kanban_status = 'Blocked') AS blocked
+            SELECT DISTINCT p.name, p.title, p.project_owner, p.project_leader,
+                   p.end_date
               FROM `tabVT Project` p
-             WHERE p.project_lead = %(u)s
-               AND p.status != 'Done'
+              LEFT JOIN `tabProject Team Member` m
+                     ON m.parent = p.name
+                    AND m.parenttype = 'VT Project'
+             WHERE p.status != %(closed)s
+               AND (p.project_owner = %(u)s
+                    OR p.project_leader = %(u)s
+                    OR m.user = %(u)s)
             """,
-            {"u": user},
+            {"u": user, "closed": _PROJECT_CLOSED_STATUS},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return []
 
     today = frappe.utils.getdate()
@@ -189,13 +240,23 @@ def _my_projects(user: str) -> list[dict]:
         out.append({
             "id": r.name,
             "name": r.title,
-            "health": _health_bucket(r.health_score),
+            "health": _health_bucket(None),
             "okr_progress": _project_okr_progress(r.name),
-            "my_role": _user_role_in_project(user, r.name),
-            "blocked_count": int(r.blocked or 0),
+            "my_role": _user_role_in_project(user, r.name, r.project_owner, r.project_leader),
+            "blocked_count": _project_blocked_count(r.name),
             "days_left": max(0, (r.end_date - today).days) if r.end_date else None,
         })
     return out
+
+
+def _project_blocked_count(project_id: str) -> int:
+    try:
+        return int(frappe.db.count(
+            "VT Task",
+            {"project": project_id, "kanban_status": _TASK_BLOCKED_STATUS},
+        ))
+    except frappe.db.DatabaseError:
+        return 0
 
 
 # ── primitives ─────────────────────────────────────────────────────────────
@@ -211,9 +272,10 @@ def _health_bucket(score: float | None) -> str:
 
 
 def _ontime_rate(user: str, days: int) -> float:
-    """Use VT Task actual fields: assigned_to, pdca_phase='DONE',
-    completion_date, deadline. (Plan used non-existent assignee/status/
-    due_date/completed_on names.)
+    """On-time rate over last N days for user's done tasks.
+
+    Uses VT Task actual fields: assigned_to, pdca_phase, completion_date,
+    deadline. Aliases legacy names in SELECT for downstream compatibility.
     """
     try:
         row = frappe.db.sql(
@@ -223,13 +285,13 @@ def _ontime_rate(user: str, days: int) -> float:
               COUNT(*) AS total
               FROM `tabVT Task`
              WHERE assigned_to = %(u)s
-               AND pdca_phase = 'DONE'
+               AND pdca_phase = %(done)s
                AND completion_date >= DATE_SUB(CURDATE(), INTERVAL %(d)s DAY)
             """,
-            {"u": user, "d": days},
+            {"u": user, "d": days, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return 0.0
     r = row[0] if row else {}
     total = int(r.get("total") or 0)
@@ -240,53 +302,43 @@ def _ontime_rate(user: str, days: int) -> float:
 
 def _blocked_count(user: str) -> int:
     try:
-        return int(frappe.db.count("VT Task", {"assigned_to": user, "kanban_status": "Blocked"}))
-    except Exception:
+        return int(frappe.db.count(
+            "VT Task",
+            {"assigned_to": user, "kanban_status": _TASK_BLOCKED_STATUS},
+        ))
+    except frappe.db.DatabaseError:
         return 0
 
 
 def _okr_delta_wow(user: str) -> float:
-    """Plan references `tabVT Key Result` (doesn't exist). Returns 0.0 when
-    table is absent.
+    """KR week-over-week confidence delta.
+
+    Key Result has no `confidence` / `confidence_last_week` columns in the
+    current schema (verified via doctype JSON). Returns 0.0 until those
+    fields are introduced.
     """
-    try:
-        rows = frappe.db.sql(
-            """
-            SELECT confidence, confidence_last_week
-              FROM `tabVT Key Result`
-             WHERE owner_user = %(u)s
-            """,
-            {"u": user},
-            as_dict=True,
-        )
-    except Exception:
-        return 0.0
-    if not rows:
-        return 0.0
-    deltas = [
-        (float(r.confidence or 0) - float(r.confidence_last_week or 0))
-        for r in rows
-    ]
-    return round(sum(deltas) / len(deltas), 3)
+    return 0.0
 
 
 def _next_deadline(user: str) -> dict | None:
     try:
         row = frappe.db.sql(
             """
-            SELECT name, title, deadline FROM `tabVT Task`
-             WHERE assigned_to = %(u)s AND pdca_phase != 'DONE' AND deadline IS NOT NULL
+            SELECT name, title, deadline AS due_date FROM `tabVT Task`
+             WHERE assigned_to = %(u)s
+               AND pdca_phase != %(done)s
+               AND deadline IS NOT NULL
              ORDER BY deadline ASC LIMIT 1
             """,
-            {"u": user},
+            {"u": user, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return None
     if not row:
         return None
     r = row[0]
-    return {"id": r.name, "title": r.title, "due_date": str(r.deadline)}
+    return {"id": r.name, "title": r.title, "due_date": str(r.due_date)}
 
 
 def _pdca_queue_counts(user: str) -> dict[str, int]:
@@ -294,33 +346,34 @@ def _pdca_queue_counts(user: str) -> dict[str, int]:
         rows = frappe.db.sql(
             """
             SELECT pdca_phase, COUNT(*) AS n FROM `tabVT Task`
-             WHERE assigned_to = %(u)s AND pdca_phase != 'DONE'
+             WHERE assigned_to = %(u)s AND pdca_phase != %(done)s
              GROUP BY pdca_phase
             """,
-            {"u": user},
+            {"u": user, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return {}
     return {r.pdca_phase: int(r.n) for r in rows}
 
 
 def _points_week(user: str) -> int:
-    """Plan references `tabVT Task Point Log` (doesn't exist). Falls back to
-    earned_points sum from VT Task.
+    """Sum of earned points for user from Task Point Log over last 7 days.
+
+    Uses `tabTask Point Log` (no `VT` prefix) with real columns
+    `user`, `amount`, `log_timestamp`.
     """
     try:
         row = frappe.db.sql(
             """
-            SELECT SUM(earned_points) AS p FROM `tabVT Task`
-             WHERE assigned_to = %(u)s
-               AND pdca_phase = 'DONE'
-               AND completion_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+            SELECT SUM(amount) AS p FROM `tabTask Point Log`
+             WHERE user = %(u)s
+               AND log_timestamp >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
             """,
             {"u": user},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return 0
     return int((row[0].p if row and row[0].p else 0))
 
@@ -333,9 +386,11 @@ def _streak_days(user: str) -> int:
         d = today - timedelta(days=offset)
         try:
             n = frappe.db.count("VT Task", {
-                "assigned_to": user, "pdca_phase": "DONE", "completion_date": d,
+                "assigned_to": user,
+                "pdca_phase": _TASK_DONE_PHASE,
+                "completion_date": d,
             })
-        except Exception:
+        except frappe.db.DatabaseError:
             return streak
         if n:
             streak += 1
@@ -345,57 +400,73 @@ def _streak_days(user: str) -> int:
 
 
 def _capacity_used_pct(user: str) -> float:
-    """Plan references `tabVT Employee Capacity` and `tabVT Task Schedule Entry`
-    (don't exist). Falls back to estimated_hours on the user's in-flight tasks
-    against a default weekly capacity.
-    """
-    try:
-        cap = frappe.db.get_value(
-            "VT Employee Capacity", {"employee": user}, "weekly_hours"
-        )
-    except Exception:
-        cap = None
-    cap = float(cap or _DEFAULT_WEEKLY_HOURS)
+    """Capacity used as ratio of remaining estimated hours / weekly capacity.
 
+    No `VT Employee Capacity` doctype exists; we use a default weekly hours
+    constant. `VT Task Schedule Entry` exists as a child table but is not
+    yet populated reliably, so we fall back to (estimated - actual) hours on
+    in-flight tasks.
+    """
+    cap = float(_DEFAULT_WEEKLY_HOURS)
     try:
         scheduled = frappe.db.sql(
             """
             SELECT SUM(GREATEST(estimated_hours - actual_hours, 0)) AS h
               FROM `tabVT Task`
              WHERE assigned_to = %(u)s
-               AND pdca_phase != 'DONE'
+               AND pdca_phase != %(done)s
             """,
-            {"u": user},
+            {"u": user, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return 0.0
     used = float((scheduled[0].h if scheduled and scheduled[0].h else 0))
     return round((used / cap) if cap else 0.0, 3)
 
 
 def _project_okr_progress(project_id: str) -> float:
+    """Average progress of KRs under the project's linked Objective.
+
+    Relationship: VT Project.objective → Objective → Key Result.objective.
+    """
     try:
         row = frappe.db.sql(
             """
             SELECT AVG(kr.current_value / NULLIF(kr.target_value, 0)) AS p
-              FROM `tabVT Key Result` kr
-              JOIN `tabVT Objective` o ON o.name = kr.objective
-             WHERE o.linked_project = %(p)s
+              FROM `tabKey Result` kr
+              JOIN `tabObjective` o ON o.name = kr.objective
+              JOIN `tabVT Project` p ON p.objective = o.name
+             WHERE p.name = %(p)s
             """,
             {"p": project_id},
             as_dict=True,
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         return 0.0
     return round(float(row[0].p or 0), 3) if row else 0.0
 
 
-def _user_role_in_project(user: str, project_id: str) -> str:
+def _user_role_in_project(
+    user: str,
+    project_id: str,
+    project_owner: str | None = None,
+    project_leader: str | None = None,
+) -> str:
+    """Resolve user's role within a project.
+
+    Priority: owner > leader > team_members.role > 'member'.
+    """
+    if project_owner and project_owner == user:
+        return "owner"
+    if project_leader and project_leader == user:
+        return "leader"
     try:
         role = frappe.db.get_value(
-            "VT Project Member", {"parent": project_id, "user": user}, "role"
+            "Project Team Member",
+            {"parent": project_id, "parenttype": "VT Project", "user": user},
+            "role",
         )
-    except Exception:
+    except frappe.db.DatabaseError:
         role = None
     return role or "member"
