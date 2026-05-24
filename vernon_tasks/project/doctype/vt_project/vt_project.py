@@ -16,6 +16,16 @@ class VTProject(Document):
         if self.end_date and self.start_date and getdate(self.end_date) <= getdate(self.start_date):
             frappe.throw("End Date must be after Start Date")
         self._validate_pdca_transition()
+        self._validate_team_excludes_owner_leader()
+
+    def _validate_team_excludes_owner_leader(self):
+        blocked = {u for u in (self.project_owner, self.project_leader) if u}
+        for row in self.team_members or []:
+            if row.user in blocked:
+                role = "Owner" if row.user == self.project_owner else "Leader"
+                frappe.throw(
+                    f"{row.user} is already the Project {role}; cannot be added as a Team Member"
+                )
 
     def _validate_pdca_transition(self):
         if self.is_new():

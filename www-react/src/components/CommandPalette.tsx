@@ -5,6 +5,7 @@ const commands = [
   { id: 'go-dashboard', label: 'Go to Dashboard', to: '/portal/dashboard' },
   { id: 'go-worksheet', label: 'Go to Worksheet', to: '/portal/worksheet' },
   { id: 'go-projects',  label: 'Go to Projects',  to: '/portal/projects' },
+  { id: 'go-brands',    label: 'Go to Brands',    to: '/portal/brands' },
   { id: 'go-reports',   label: 'Go to Reports',   to: '/portal/reports' },
 ];
 

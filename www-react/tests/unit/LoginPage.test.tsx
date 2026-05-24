@@ -27,22 +27,42 @@ describe('LoginPage', () => {
 
   it('submits credentials and navigates to next param', async () => {
     mock.onPost('/api/method/login').reply(200, { message: 'Logged In' });
-    mock.onGet('/api/method/frappe.auth.get_logged_user').reply(200, { message: 'mo' });
+    mock.onGet('/api/method/vernon_tasks.task.api.boot.boot').reply(200, {
+      message: { user: 'mo', csrf_token: 'tok', roles: [] },
+    });
     mock.onGet(/\/api\/resource\/User\//).reply(200, { data: { name: 'mo', full_name: 'Mo', roles: [] } });
 
     setup();
-    await userEvent.type(screen.getByLabelText(/email/i), 'mo@vernon.id');
+    await userEvent.type(screen.getByLabelText(/email atau username/i), 'mo');
     await userEvent.type(screen.getByLabelText(/password/i), 'secret');
-    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    await userEvent.click(screen.getByRole('button', { name: /masuk/i }));
+    expect(await screen.findByText('PROJECTS')).toBeInTheDocument();
+  });
+
+  it('accepts username without @ symbol', async () => {
+    mock.onPost('/api/method/login').reply((config) => {
+      const body = new URLSearchParams(config.data);
+      expect(body.get('usr')).toBe('mo');
+      return [200, { message: 'Logged In' }];
+    });
+    mock.onGet('/api/method/vernon_tasks.task.api.boot.boot').reply(200, {
+      message: { user: 'mo', csrf_token: 'tok', roles: [] },
+    });
+    mock.onGet(/\/api\/resource\/User\//).reply(200, { data: { name: 'mo', full_name: 'Mo', roles: [] } });
+
+    setup();
+    await userEvent.type(screen.getByLabelText(/email atau username/i), 'mo');
+    await userEvent.type(screen.getByLabelText(/password/i), 'secret');
+    await userEvent.click(screen.getByRole('button', { name: /masuk/i }));
     expect(await screen.findByText('PROJECTS')).toBeInTheDocument();
   });
 
   it('shows error on invalid creds', async () => {
     mock.onPost('/api/method/login').reply(401, { message: 'Invalid' });
     setup();
-    await userEvent.type(screen.getByLabelText(/email/i), 'x@y.z');
+    await userEvent.type(screen.getByLabelText(/email atau username/i), 'mo');
     await userEvent.type(screen.getByLabelText(/password/i), 'bad');
-    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/invalid/i);
+    await userEvent.click(screen.getByRole('button', { name: /masuk/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/salah/i);
   });
 });

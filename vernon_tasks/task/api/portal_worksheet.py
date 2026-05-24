@@ -138,7 +138,7 @@ def bulk_carry_over(week_start: str) -> dict:
             },
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         rows = []
 
     copied = 0
@@ -228,7 +228,7 @@ def get_team_worksheet(week_start: str) -> list[dict]:
             {"s": start, "e": end},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return []
 
     by_user: dict[str, dict] = {}

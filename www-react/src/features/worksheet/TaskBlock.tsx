@@ -32,20 +32,22 @@ export function TaskBlock({
       aria-label={title}
       aria-grabbed={isDragging}
       className={clsx(
-        'rounded border bg-white dark:bg-slate-900 p-2 text-xs cursor-grab active:cursor-grabbing',
-        variant === 'scheduled' ? 'border-brand/40' : 'border-slate-200 dark:border-slate-800',
+        'group rounded-xl border bg-white p-2.5 text-xs cursor-grab active:cursor-grabbing transition-shadow',
+        variant === 'scheduled'
+          ? 'border-brand/30 shadow-[0_1px_2px_rgba(15,23,42,0.04)]'
+          : 'border-slate-100 shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_2px_8px_rgba(15,23,42,0.06)]',
         isDragging && 'opacity-50',
       )}
     >
       <div className="flex justify-between gap-2">
-        <span className="font-medium truncate">{title}</span>
-        <span className="text-[10px] text-slate-500">{project}</span>
+        <span className="truncate font-medium text-slate-900">{title}</span>
+        <span className="shrink-0 text-[10px] text-slate-500">{project}</span>
       </div>
-      <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-500">
-        <span className="px-1 rounded bg-slate-100 dark:bg-slate-800">{pdca}</span>
-        <span>{points} pt</span>
-        {hours !== undefined && <span>{hours}h</span>}
-        {linkedKr && <span title="Linked KR">◎</span>}
+      <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-500">
+        <span className="chip-slate h-5 px-1.5 text-[10px]">{pdca}</span>
+        <span className="tabular-nums">{points} pt</span>
+        {hours !== undefined && <span className="tabular-nums">{hours}h</span>}
+        {linkedKr && <span title="Linked KR" className="text-brand">◎</span>}
       </div>
     </div>
   );

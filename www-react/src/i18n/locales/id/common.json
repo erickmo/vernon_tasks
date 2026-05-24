@@ -1,5 +1,5 @@
 {
   "appName": "Vernon Dashboard",
-  "auth": { "signIn": "Masuk", "signOut": "Keluar", "email": "Email", "password": "Kata sandi", "invalid": "Email atau kata sandi salah" },
+  "auth": { "signIn": "Masuk", "signOut": "Keluar", "identifier": "Email atau Username", "password": "Kata sandi", "invalid": "Email/username atau kata sandi salah" },
   "nav": { "dashboard": "Dasbor", "worksheet": "Lembar Kerja", "projects": "Proyek", "reports": "Laporan" }
 }

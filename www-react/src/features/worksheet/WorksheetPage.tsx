@@ -17,6 +17,7 @@ import { UnscheduledTray } from './UnscheduledTray';
 import { FridayReviewBanner } from './FridayReviewBanner';
 import { TeamView } from './TeamView';
 import { useSession } from '@/features/auth/useSession';
+import { AlertTriangleIcon } from '@/components/icons';
 import type { Worksheet } from './types';
 
 const DEFAULT_HOUR_START = 8;
@@ -122,7 +123,12 @@ export function WorksheetPage() {
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading…</p>;
   if (isError || !data)
-    return <p className="text-sm text-risk-red">Failed to load worksheet.</p>;
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 px-6 py-12 text-center">
+        <AlertTriangleIcon className="h-8 w-8 text-rose-400" />
+        <p className="text-sm text-rose-600">Failed to load worksheet.</p>
+      </div>
+    );
 
   const capacityUsedPct = data.capacity_hours
     ? data.days.reduce((sum, d) => sum + d.scheduled_hours, 0) / data.capacity_hours
@@ -135,6 +141,7 @@ export function WorksheetPage() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <div className="flex-1 flex flex-col min-h-0">
       <WeekHeader
         weekStart={weekStart}
         capacityHours={data.capacity_hours}
@@ -146,17 +153,27 @@ export function WorksheetPage() {
         onViewChange={setView}
       />
       {canSeeTeam && (
-        <div className="flex justify-end mb-2">
-          <div className="inline-flex border border-slate-300 dark:border-slate-700 rounded">
+        <div className="mb-4 flex justify-end">
+          <div className="inline-flex items-center gap-1 rounded-full border border-slate-100 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <button
               onClick={() => setTab('personal')}
-              className={clsx('px-3 py-1 text-xs', tab === 'personal' ? 'bg-brand text-white' : '')}
+              className={clsx(
+                'h-7 rounded-full px-3 text-[12px] font-medium transition',
+                tab === 'personal'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900',
+              )}
             >
               Personal
             </button>
             <button
               onClick={() => setTab('team')}
-              className={clsx('px-3 py-1 text-xs', tab === 'team' ? 'bg-brand text-white' : '')}
+              className={clsx(
+                'h-7 rounded-full px-3 text-[12px] font-medium transition',
+                tab === 'team'
+                  ? 'bg-brand text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900',
+              )}
             >
               Team
             </button>
@@ -165,15 +182,18 @@ export function WorksheetPage() {
       )}
       <FridayReviewBanner weekStart={weekStart} />
       {tab === 'team' && canSeeTeam ? (
-        <TeamView weekStart={weekStart} />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <TeamView weekStart={weekStart} />
+        </div>
       ) : (
-        <div className="flex gap-3">
+        <div className="flex-1 min-h-0 flex gap-3">
           <UnscheduledTray tasks={data.unscheduled} />
-          <div className="flex-1">
+          <div className="flex-1 min-w-0 h-full">
             <WeekGrid days={visibleDays} />
           </div>
         </div>
       )}
+      </div>
     </DndContext>
   );
 }

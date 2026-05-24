@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { DatePicker } from '@/components/DatePicker';
 import type { ReportFilters } from './types';
 
 function ymd(d: Date): string {
@@ -30,38 +31,30 @@ export function FilterPanel({
   }
 
   return (
-    <div className="flex items-end gap-3 mb-4">
-      <div>
-        <label htmlFor="report-from" className="block text-xs text-slate-500">
-          From
-        </label>
-        <input
-          id="report-from"
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className="text-sm border border-slate-300 dark:border-slate-700 rounded px-2 py-1 bg-transparent"
-        />
+    <div className="card p-4 mb-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-[180px]">
+          <label
+            htmlFor="report-from"
+            className="block text-[11px] uppercase tracking-wider text-slate-500 mb-1"
+          >
+            From
+          </label>
+          <DatePicker id="report-from" value={from} onChange={setFrom} />
+        </div>
+        <div className="flex-1 min-w-[180px]">
+          <label
+            htmlFor="report-to"
+            className="block text-[11px] uppercase tracking-wider text-slate-500 mb-1"
+          >
+            To
+          </label>
+          <DatePicker id="report-to" value={to} onChange={setTo} />
+        </div>
+        <button type="button" onClick={apply} className="btn-primary btn-sm">
+          Apply
+        </button>
       </div>
-      <div>
-        <label htmlFor="report-to" className="block text-xs text-slate-500">
-          To
-        </label>
-        <input
-          id="report-to"
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className="text-sm border border-slate-300 dark:border-slate-700 rounded px-2 py-1 bg-transparent"
-        />
-      </div>
-      <button
-        type="button"
-        onClick={apply}
-        className="text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700"
-      >
-        Apply
-      </button>
     </div>
   );
 }

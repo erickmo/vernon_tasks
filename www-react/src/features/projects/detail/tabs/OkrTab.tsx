@@ -1,6 +1,8 @@
 import { useOutletContext } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { SectionHead } from '@/components/SectionHead';
+import { TargetIcon } from '@/components/icons';
 import type { ProjectDetail } from '../../types';
 
 type OkrPayload = {
@@ -28,40 +30,54 @@ export function OkrTab() {
     queryKey: ['project', project.id, 'okr'],
     queryFn: () => fetchOkr(project.id),
   });
-  if (isLoading) return <p className="text-sm text-slate-500">Loading…</p>;
-  if (isError || !data) return <p className="text-sm text-risk-red">Failed to load OKR.</p>;
-  if (!data.objective) return <p className="text-sm text-slate-500">No linked objective.</p>;
+  if (isLoading)
+    return <div className="card p-8 text-center text-sm text-slate-500">Loading…</div>;
+  if (isError || !data)
+    return <div className="card p-8 text-center text-sm text-rose-600">Failed to load OKR.</div>;
+  if (!data.objective)
+    return (
+      <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/40 p-12 text-center">
+        <TargetIcon className="mx-auto h-8 w-8 text-slate-300" />
+        <p className="mt-3 text-sm text-slate-500">No linked objective.</p>
+      </div>
+    );
 
   return (
     <div className="space-y-4">
-      <div className="border border-slate-200 dark:border-slate-800 rounded p-4">
-        <h2 className="font-semibold">{data.objective.title}</h2>
-        <p className="text-xs text-slate-500">Phase: {data.objective.phase}</p>
-      </div>
-      <ul className="space-y-2">
+      <section className="card p-5">
+        <SectionHead
+          title={data.objective.title}
+          hint={<span className="chip-slate">Phase: {data.objective.phase}</span>}
+        />
+      </section>
+      <ul className="space-y-3">
         {data.key_results.map((kr) => {
           const progress = kr.target ? kr.current / kr.target : 0;
           const gap = progress - kr.pace_expected;
           return (
-            <li
-              key={kr.id}
-              className="border border-slate-200 dark:border-slate-800 rounded p-3 text-sm"
-            >
-              <div className="flex justify-between items-baseline">
-                <span className="font-medium">{kr.title}</span>
-                <span className="text-xs">
+            <li key={kr.id} className="card p-4">
+              <div className="flex justify-between items-baseline gap-3">
+                <span className="font-medium text-slate-900">{kr.title}</span>
+                <span className="text-xs text-slate-500 tabular-nums">
                   {kr.current}/{kr.target}
                 </span>
               </div>
-              <div className="h-1.5 mt-2 rounded bg-slate-200 dark:bg-slate-700 overflow-hidden">
+              <div className="h-2 mt-3 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className="h-full bg-brand"
+                  className="h-full bg-gradient-to-r from-brand to-brand-hover"
                   style={{ width: `${Math.round(progress * 100)}%` }}
                 />
               </div>
-              <p className={`text-xs mt-1 ${gap >= 0 ? 'text-risk-green' : 'text-risk-red'}`}>
-                {gap >= 0 ? '+' : ''}
-                {Math.round(gap * 100)}pp vs pace
+              <p className="mt-2">
+                {gap >= 0 ? (
+                  <span className="chip-green">
+                    +{Math.round(gap * 100)}pp vs pace
+                  </span>
+                ) : (
+                  <span className="chip-red">
+                    {Math.round(gap * 100)}pp vs pace
+                  </span>
+                )}
               </p>
             </li>
           );

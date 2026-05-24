@@ -29,6 +29,12 @@ Standalone Vite + React 18 SPA for the Vernon Tasks desktop dashboard.
 4. Verify cross-origin cookie: `curl -i https://dashboard.vernon.local/api/method/login -d 'usr=...&pwd=...'`
    Response must include `Set-Cookie: sid=...; Secure; SameSite=None`.
 
+## Auth
+
+- Login form accepts **email or username** (Frappe `login` API resolves both). No client-side `@` validation.
+- Two-column layout: brand panel (gradient + product highlights) on `lg+`, form card on the right; mobile collapses to single column.
+- Locale-driven copy (`auth.identifier`, `auth.signIn`, `auth.invalid`).
+
 ## Spec / Plans
 
 - Spec: `../docs/superpowers/specs/2026-05-23-www-react-dashboard-design.html`

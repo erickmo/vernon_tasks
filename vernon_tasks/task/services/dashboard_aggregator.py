@@ -107,7 +107,7 @@ def _user_project_ids(user: str, scope: str) -> list[str]:
                 as_dict=True,
             )
         return [r["name"] for r in rows]
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return []
 
 
@@ -166,7 +166,7 @@ def _active_sprints(user: str) -> list[dict]:
             {"u": user, "active": _SPRINT_ACTIVE_STATUS},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return []
 
     today = frappe.utils.getdate()
@@ -197,7 +197,7 @@ def _sprint_percent_done(sprint_id: str) -> float:
             {"s": sprint_id, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0.0
     r = row[0] if row else {}
     total = int(r.get("total") or 0)
@@ -231,7 +231,7 @@ def _my_projects(user: str) -> list[dict]:
             {"u": user, "closed": _PROJECT_CLOSED_STATUS},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return []
 
     today = frappe.utils.getdate()
@@ -256,7 +256,7 @@ def _project_blocked_count(project_id: str) -> int:
             "VT Task",
             {"project": project_id, "kanban_status": _TASK_BLOCKED_STATUS},
         ))
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0
 
 
@@ -292,7 +292,7 @@ def _ontime_rate(user: str, days: int) -> float:
             {"u": user, "d": days, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0.0
     r = row[0] if row else {}
     total = int(r.get("total") or 0)
@@ -307,7 +307,7 @@ def _blocked_count(user: str) -> int:
             "VT Task",
             {"assigned_to": user, "kanban_status": _TASK_BLOCKED_STATUS},
         ))
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0
 
 
@@ -330,7 +330,7 @@ def _okr_delta_wow(user: str) -> float:
             {"u": user, "closed": _PROJECT_CLOSED_STATUS},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0.0
     if not row:
         return 0.0
@@ -350,7 +350,7 @@ def _next_deadline(user: str) -> dict | None:
             {"u": user, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return None
     if not row:
         return None
@@ -369,7 +369,7 @@ def _pdca_queue_counts(user: str) -> dict[str, int]:
             {"u": user, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return {}
     return {r.pdca_phase: int(r.n) for r in rows}
 
@@ -390,7 +390,7 @@ def _points_week(user: str) -> int:
             {"u": user},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0
     return int((row[0].p if row and row[0].p else 0))
 
@@ -407,7 +407,7 @@ def _streak_days(user: str) -> int:
                 "pdca_phase": _TASK_DONE_PHASE,
                 "completion_date": d,
             })
-        except frappe.db.DatabaseError:
+        except (frappe.db.OperationalError, frappe.db.ProgrammingError):
             return streak
         if n:
             streak += 1
@@ -436,7 +436,7 @@ def _capacity_used_pct(user: str) -> float:
             {"u": user, "done": _TASK_DONE_PHASE},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0.0
     used = float((scheduled[0].h if scheduled and scheduled[0].h else 0))
     return round((used / cap) if cap else 0.0, 3)
@@ -459,7 +459,7 @@ def _project_okr_progress(project_id: str) -> float:
             {"p": project_id},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return 0.0
     return round(float(row[0].p or 0), 3) if row else 0.0
 
@@ -484,6 +484,6 @@ def _user_role_in_project(
             {"parent": project_id, "parenttype": "VT Project", "user": user},
             "role",
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         role = None
     return role or "member"

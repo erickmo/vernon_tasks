@@ -73,11 +73,20 @@
 
 <h3>Auth Flow</h3>
 <ol>
-<li><code>/login</code> POSTs <code>api/method/login</code> with (usr, pwd) — Frappe sets <code>sid</code> cookie cross-domain</li>
+<li><code>/login</code> POSTs <code>api/method/login</code> with (usr, pwd) — Frappe sets <code>sid</code> cookie cross-domain. <code>usr</code> accepts <strong>email OR username</strong> — no client-side <code>@</code> validation (input is <code>type="text"</code>, not <code>type="email"</code>). Frappe resolves both against the User doctype.</li>
 <li>All subsequent requests use <code>credentials: 'include'</code></li>
 <li>401 interceptor → clear React Query cache → redirect <code>/login?next=&lt;path&gt;</code></li>
 <li>Logout → <code>api/method/logout</code> + cache clear</li>
 </ol>
+
+<h4>Login Page Design</h4>
+<ul>
+<li>Two-column layout (≥ <code>lg</code>): left brand panel with gradient (slate-900 → blue-700) + subtle grid overlay + product highlights; right column hosts the form card. Single-column on mobile with inline brand mark.</li>
+<li>Card: rounded-2xl, soft shadow, generous padding (<code>p-8</code>), <code>focus:ring-brand/30</code> on inputs.</li>
+<li>Inputs: identifier field labeled <em>"Email atau Username"</em> with placeholder <code>nama.anda atau email@vernon.id</code>; password field with autocomplete <code>current-password</code>.</li>
+<li>Submit copy follows locale (<code>Masuk</code> / <code>Sign in</code>); busy state shows <code>Memasukkan…</code>.</li>
+<li>Error surface: red-tinted banner with role=<code>alert</code> — generic message, no enumeration leak.</li>
+</ul>
 
 <h3>Route Map</h3>
 <table>

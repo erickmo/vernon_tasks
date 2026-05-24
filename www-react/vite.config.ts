@@ -7,7 +7,22 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },
-  server: { port: 5174, strictPort: true },
+  server: {
+    port: 5174,
+    strictPort: true,
+    allowedHosts: ['.trycloudflare.com'],
+    proxy: {
+      '/api': {
+        target: 'http://task.localhost:8080',
+        changeOrigin: true,
+        cookieDomainRewrite: '',
+      },
+      '/assets': {
+        target: 'http://task.localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     sourcemap: true,
     rollupOptions: {

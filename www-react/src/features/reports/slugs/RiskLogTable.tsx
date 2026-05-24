@@ -6,8 +6,11 @@ import type { ReportPayload } from '../types';
  */
 export function RiskLogTable({ payload }: { payload: ReportPayload }) {
   return (
-    <div className="text-xs text-slate-500 mb-2">
-      {payload.rows.length} risk events in the last 30 days.
+    <div className="flex items-center gap-2">
+      <span className="chip-amber tabular-nums">{payload.rows.length}</span>
+      <span className="text-xs text-slate-500">
+        risk events in the last 30 days.
+      </span>
     </div>
   );
 }

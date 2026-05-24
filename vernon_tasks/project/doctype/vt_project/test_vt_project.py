@@ -4,6 +4,15 @@ from frappe.tests.utils import FrappeTestCase
 OWNER_EMAIL = "test_proj_owner@example.com"
 LEADER_EMAIL = "test_proj_leader@example.com"
 MEMBER_EMAIL = "test_proj_member@example.com"
+DEFAULT_BRAND = "Default"
+
+
+def ensure_default_brand():
+    if not frappe.db.exists("VT Brand", DEFAULT_BRAND):
+        frappe.get_doc({"doctype": "VT Brand", "brand_name": DEFAULT_BRAND}).insert(
+            ignore_permissions=True
+        )
+    return DEFAULT_BRAND
 
 
 def make_user(email, role):
@@ -20,6 +29,7 @@ def make_project(**kwargs):
     defaults = {
         "doctype": "VT Project",
         "title": "Test Project",
+        "brand": ensure_default_brand(),
         "project_owner": OWNER_EMAIL,
         "project_leader": LEADER_EMAIL,
         "start_date": "2026-05-01",

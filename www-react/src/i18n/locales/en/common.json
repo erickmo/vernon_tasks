@@ -1,5 +1,5 @@
 {
   "appName": "Vernon Dashboard",
-  "auth": { "signIn": "Sign in", "signOut": "Sign out", "email": "Email", "password": "Password", "invalid": "Invalid email or password" },
+  "auth": { "signIn": "Sign in", "signOut": "Sign out", "identifier": "Email or username", "password": "Password", "invalid": "Invalid email/username or password" },
   "nav": { "dashboard": "Dashboard", "worksheet": "Worksheet", "projects": "Projects", "reports": "Reports" }
 }

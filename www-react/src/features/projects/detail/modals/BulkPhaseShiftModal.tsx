@@ -28,14 +28,16 @@ export function BulkPhaseShiftModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center"
+      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center"
     >
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-lg w-96 space-y-4">
-        <h2 className="font-semibold">Phase shift {taskIds.length} tasks</h2>
+      <div className="card w-full max-w-md p-6 space-y-4">
+        <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
+          Phase shift {taskIds.length} tasks
+        </h2>
         <select
           value={phase}
           onChange={(e) => setPhase(e.target.value)}
-          className="w-full border border-slate-300 dark:border-slate-700 rounded px-2 py-1 bg-transparent"
+          className="input"
         >
           <option value="">Select new phase…</option>
           {PHASES.map((p) => (
@@ -45,13 +47,13 @@ export function BulkPhaseShiftModal({
           ))}
         </select>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="text-sm">
+          <button onClick={onClose} className="btn-ghost btn-sm">
             Cancel
           </button>
           <button
             disabled={!phase || m.isPending}
             onClick={() => m.mutate()}
-            className="text-sm bg-brand text-white px-3 py-1.5 rounded disabled:opacity-60"
+            className="btn-primary btn-sm"
           >
             {m.isPending ? 'Shifting…' : 'Shift'}
           </button>

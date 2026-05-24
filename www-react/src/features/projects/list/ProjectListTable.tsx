@@ -7,18 +7,27 @@ export function ProjectListTable({
   selected,
   onToggle,
   onToggleAll,
+  canEdit = false,
+  canDelete = false,
+  onEdit,
+  onDelete,
 }: {
   rows: ProjectListRow[];
   selected: Set<string>;
   onToggle: (id: string) => void;
   onToggleAll: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  onEdit?: (row: ProjectListRow) => void;
+  onDelete?: (row: ProjectListRow) => void;
 }) {
+  const showActions = canEdit || canDelete;
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   return (
     <table className="w-full text-sm">
-      <thead className="text-left text-[11px] uppercase tracking-wider text-slate-500">
-        <tr className="border-b border-slate-200 dark:border-slate-800">
-          <th className="py-2 w-8">
+      <thead className="text-left text-[11px] uppercase tracking-[0.08em] text-slate-500">
+        <tr className="border-b border-slate-100">
+          <th className="px-4 py-3 w-8">
             <input
               type="checkbox"
               checked={allSelected}
@@ -26,22 +35,24 @@ export function ProjectListTable({
               aria-label="Select all"
             />
           </th>
-          <th>Name</th>
-          <th>Health</th>
-          <th>%done</th>
-          <th>Days left</th>
-          <th>Blocked</th>
-          <th>Owner</th>
-          <th>Current sprint</th>
+          <th className="py-3 font-medium">Name</th>
+          <th className="py-3 font-medium">Brand</th>
+          <th className="py-3 font-medium">Health</th>
+          <th className="py-3 font-medium">% done</th>
+          <th className="py-3 font-medium">Days left</th>
+          <th className="py-3 font-medium">Blocked</th>
+          <th className="py-3 font-medium">Owner</th>
+          <th className="py-3 font-medium pr-4">Current sprint</th>
+          {showActions && <th className="py-3 font-medium pr-4 text-right">Actions</th>}
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr
             key={r.id}
-            className="border-b border-slate-100 dark:border-slate-900 hover:bg-slate-50 dark:hover:bg-slate-900"
+            className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/60 transition-colors"
           >
-            <td className="py-2">
+            <td className="px-4 py-3">
               <input
                 type="checkbox"
                 aria-label={`Select ${r.name}`}
@@ -49,28 +60,70 @@ export function ProjectListTable({
                 onChange={() => onToggle(r.id)}
               />
             </td>
-            <td>
-              <Link to={`/portal/projects/${r.id}`} className="text-brand hover:underline">
+            <td className="py-3">
+              <Link
+                to={`/portal/projects/${r.id}`}
+                className="font-medium text-slate-900 hover:text-brand"
+              >
                 {r.name}
               </Link>
             </td>
-            <td>
-              <HealthDot bucket={r.health} />
-            </td>
-            <td>{Math.round(r.percent_done * 100)}%</td>
-            <td>{r.days_left ?? '—'}</td>
-            <td className={r.blocked_count > 0 ? 'text-risk-red' : ''}>{r.blocked_count}</td>
-            <td>{r.owner.name}</td>
-            <td>
-              {r.current_sprint ? (
-                <span>
-                  {r.current_sprint.name}{' '}
-                  <span className="text-xs text-slate-500">({r.current_sprint.days_left}d)</span>
-                </span>
+            <td className="py-3 text-slate-600">
+              {r.brand ? (
+                <span className="chip-slate">{r.brand}</span>
               ) : (
-                <span className="text-slate-500">—</span>
+                <span className="text-slate-400">—</span>
               )}
             </td>
+            <td className="py-3">
+              <HealthDot bucket={r.health} />
+            </td>
+            <td className="py-3 tabular-nums">{Math.round(r.percent_done * 100)}%</td>
+            <td className="py-3 tabular-nums">{r.days_left ?? '—'}</td>
+            <td className="py-3 tabular-nums">
+              {r.blocked_count > 0 ? (
+                <span className="chip-red">{r.blocked_count}</span>
+              ) : (
+                <span className="text-slate-400">0</span>
+              )}
+            </td>
+            <td className="py-3 text-slate-600">{r.owner.name}</td>
+            <td className="py-3 pr-4">
+              {r.current_sprint ? (
+                <span className="text-slate-700">
+                  {r.current_sprint.name}{' '}
+                  <span className="text-xs text-slate-500 tabular-nums">
+                    ({r.current_sprint.days_left}d)
+                  </span>
+                </span>
+              ) : (
+                <span className="text-slate-400">—</span>
+              )}
+            </td>
+            {showActions && (
+              <td className="py-3 pr-4 text-right whitespace-nowrap">
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => onEdit?.(r)}
+                    className="text-xs font-medium text-brand hover:underline mr-3"
+                    aria-label={`Edit ${r.name}`}
+                  >
+                    Edit
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => onDelete?.(r)}
+                    className="text-xs font-medium text-rose-600 hover:underline"
+                    aria-label={`Delete ${r.name}`}
+                  >
+                    Delete
+                  </button>
+                )}
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

@@ -16,10 +16,6 @@ export const useTheme = create<ThemeState>()(
   ),
 );
 
-export function applyTheme(theme: ThemeState['theme']) {
-  const resolved =
-    theme === 'system'
-      ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      : theme;
-  document.documentElement.classList.toggle('dark', resolved === 'dark');
+export function applyTheme(_theme: ThemeState['theme']) {
+  document.documentElement.classList.remove('dark');
 }

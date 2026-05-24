@@ -4,10 +4,17 @@ import clsx from 'clsx';
 type Tone = 'neutral' | 'positive' | 'warning' | 'danger';
 
 const TONE_COLOR: Record<Tone, string> = {
-  neutral: 'text-slate-900 dark:text-slate-100',
-  positive: 'text-risk-green',
-  warning: 'text-risk-amber',
-  danger: 'text-risk-red',
+  neutral: 'text-slate-900',
+  positive: 'text-emerald-600',
+  warning: 'text-amber-600',
+  danger: 'text-rose-600',
+};
+
+const TONE_RING: Record<Tone, string> = {
+  neutral: 'before:bg-slate-200',
+  positive: 'before:bg-emerald-400',
+  warning: 'before:bg-amber-400',
+  danger: 'before:bg-rose-400',
 };
 
 export function MetricTile({
@@ -28,13 +35,15 @@ export function MetricTile({
     <Wrap
       onClick={onClick}
       className={clsx(
-        'text-left rounded-lg border border-slate-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900',
-        onClick && 'hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer',
+        'relative text-left w-full p-5 overflow-hidden',
+        'before:absolute before:left-0 before:top-4 before:bottom-4 before:w-[3px] before:rounded-r-full',
+        TONE_RING[tone],
+        onClick ? 'card-hover hover:-translate-y-0.5 cursor-pointer' : 'card',
       )}
     >
-      <div className="text-[11px] uppercase tracking-wider text-slate-500">{label}</div>
-      <div className={clsx('text-2xl font-semibold mt-1', TONE_COLOR[tone])}>{value}</div>
-      {hint && <div className="text-xs text-slate-500 mt-1">{hint}</div>}
+      <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-slate-500">{label}</div>
+      <div className={clsx('text-[32px] leading-none font-bold mt-3 tracking-tight tabular-nums', TONE_COLOR[tone])}>{value}</div>
+      {hint && <div className="text-xs text-slate-500 mt-2">{hint}</div>}
     </Wrap>
   );
 }

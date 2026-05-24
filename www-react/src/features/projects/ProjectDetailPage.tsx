@@ -12,10 +12,12 @@ export function ProjectDetailPage() {
     enabled: !!id,
   });
   if (!id) return <Navigate to="/portal/projects" replace />;
-  if (isLoading) return <p className="text-sm text-slate-500">Loading…</p>;
-  if (isError || !data) return <p className="text-sm text-risk-red">Project not found.</p>;
+  if (isLoading)
+    return <div className="card p-8 text-center text-sm text-slate-500">Loading…</div>;
+  if (isError || !data)
+    return <div className="card p-8 text-center text-sm text-rose-600">Project not found.</div>;
   return (
-    <div>
+    <div className="space-y-6">
       <DetailHeader project={data} />
       <TabsNav />
       <Outlet context={data} />

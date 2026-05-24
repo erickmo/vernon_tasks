@@ -234,7 +234,7 @@ def get_owner_okrs() -> list:
             {"u": user, "closed": "Closed", "closed_phase": "CLOSED"},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return []
 
     return [

@@ -1,4 +1,5 @@
 import { MetricTile } from '@/components/MetricTile';
+import { SectionHead } from '@/components/SectionHead';
 import type { MeCardData } from '../types';
 
 const CAPACITY_OVER = 1;
@@ -18,8 +19,8 @@ function capacityTone(used: number) {
 export function MeCard({ data }: { data: MeCardData }) {
   return (
     <section aria-label="Me">
-      <h2 className="text-sm font-semibold mb-3">Me</h2>
-      <div className="grid grid-cols-2 gap-3">
+      <SectionHead title="Me" />
+      <div className="grid grid-cols-2 gap-4">
         <MetricTile label="Points (7d)" value={data.points_week} />
         <MetricTile label="Streak" value={`${data.streak_days}d`} />
         <MetricTile

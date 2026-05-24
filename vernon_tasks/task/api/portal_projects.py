@@ -44,6 +44,7 @@ def list_projects(filters: str | dict | None = None) -> list[dict]:
         fields=[
             "name",
             "title",
+            "brand",
             "project_leader AS project_lead",
             "end_date",
             "status",
@@ -56,6 +57,7 @@ def list_projects(filters: str | dict | None = None) -> list[dict]:
             {
                 "id": r.get("name"),
                 "name": r.get("title") or r.get("name"),
+                "brand": r.get("brand"),
                 "health": _health_bucket(None),
                 "percent_done": 0.0,
                 "days_left": _days_left(r.get("end_date")),
@@ -91,6 +93,9 @@ def _apply_client_filters(rows: list[dict], f: dict) -> list[dict]:
         out = [r for r in out if search in (r.get("name") or "").lower()]
     if f.get("has_blockers"):
         out = [r for r in out if (r.get("blocked_count") or 0) > 0]
+    brand = f.get("brand")
+    if brand:
+        out = [r for r in out if r.get("brand") == brand]
     sort = f.get("sort")
     if sort == "blocked_desc":
         out = sorted(out, key=lambda r: -(r.get("blocked_count") or 0))
@@ -174,18 +179,34 @@ def get_project_detail(project_id: str) -> dict:
     if not frappe.has_permission("VT Project", "read", project_id):
         raise frappe.PermissionError
     p = frappe.get_doc("VT Project", project_id)
+    team_members = [
+        {
+            "user": row.get("user"),
+            "role": row.get("role") or "Member",
+            "is_also_leader": bool(row.get("is_also_leader")),
+        }
+        for row in (getattr(p, TEAM_MEMBER_FIELD, None) or [])
+    ]
     return {
         "id": p.name,
         "title": getattr(p, "title", p.name),
+        "brand": getattr(p, "brand", None),
+        "project_owner": getattr(p, "project_owner", None),
+        "project_leader": getattr(p, "project_leader", None),
         "project_lead": getattr(p, "project_leader", None),
         "health_score": 0.0,
         "percent_done": 0.0,
         "start_date": str(p.start_date) if getattr(p, "start_date", None) else None,
         "end_date": str(p.end_date) if getattr(p, "end_date", None) else None,
         "status": getattr(p, "status", None),
+        "pdca_phase": getattr(p, "pdca_phase", None),
         "active_sprint": _safe_active_sprint(p.name),
         "linked_objective": getattr(p, "objective", None),
         "blocked_count": _safe_blocked_count(p.name),
+        "blocked_days_threshold": getattr(p, "blocked_days_threshold", None),
+        "slip_pct_threshold": getattr(p, "slip_pct_threshold", None),
+        "capacity_pct_threshold": getattr(p, "capacity_pct_threshold", None),
+        "team_members": team_members,
     }
 
 
@@ -201,6 +222,68 @@ def get_project_tasks(project_id: str, group_by: str = "kr") -> list[dict]:
     if not frappe.has_permission("VT Project", "read", project_id):
         raise frappe.PermissionError
     return group_tasks(project_id=project_id, group_by=group_by)
+
+
+# ---------------------------------------------------------------------------
+# User search (for owner/leader/member pickers)
+# ---------------------------------------------------------------------------
+
+USER_SEARCH_LIMIT = 20
+
+
+@frappe.whitelist()
+def search_users(query: str = "", limit: int = USER_SEARCH_LIMIT) -> list[dict]:
+    """Return enabled non-Guest users matching `query` by name/email.
+
+    Used by the portal Project modal pickers for owner / leader / team members.
+    """
+    require_login()
+    q = max_str(query or "", 100).strip()
+    try:
+        limit_int = max(1, min(int(limit), 50))
+    except (TypeError, ValueError):
+        limit_int = USER_SEARCH_LIMIT
+    like = f"%{q}%" if q else None
+    if like:
+        rows = frappe.db.sql(
+            """
+            SELECT name, full_name, email, user_image
+              FROM `tabUser`
+             WHERE enabled = 1
+               AND name != 'Guest'
+               AND user_type = 'System User'
+               AND (full_name LIKE %(like)s
+                    OR name LIKE %(like)s
+                    OR email LIKE %(like)s)
+             ORDER BY full_name ASC
+             LIMIT %(lim)s
+            """,
+            {"like": like, "lim": limit_int},
+            as_dict=True,
+        )
+    else:
+        rows = frappe.db.sql(
+            """
+            SELECT name, full_name, email, user_image
+              FROM `tabUser`
+             WHERE enabled = 1
+               AND name != 'Guest'
+               AND user_type = 'System User'
+             ORDER BY full_name ASC
+             LIMIT %(lim)s
+            """,
+            {"lim": limit_int},
+            as_dict=True,
+        )
+    return [
+        {
+            "user": r.get("name"),
+            "full_name": r.get("full_name") or r.get("name"),
+            "email": r.get("email") or r.get("name"),
+            "avatar": r.get("user_image") or None,
+        }
+        for r in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +363,164 @@ def _coerce_id_list(task_ids: Any) -> list[str]:
 # ---------------------------------------------------------------------------
 # Members
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# CRUD (create / update / delete)
+# ---------------------------------------------------------------------------
+
+PROJECT_DOCTYPE = "VT Project"
+EDITABLE_PROJECT_FIELDS = (
+    "title",
+    "brand",
+    "project_owner",
+    "project_leader",
+    "start_date",
+    "end_date",
+    "status",
+    "pdca_phase",
+    "objective",
+    "blocked_days_threshold",
+    "slip_pct_threshold",
+    "capacity_pct_threshold",
+)
+REQUIRED_CREATE_FIELDS = ("title", "brand", "project_owner", "start_date", "end_date")
+TEAM_MEMBER_ROLES = {"Owner", "Leader", "Member"}
+TEAM_MEMBER_FIELD = "team_members"
+
+
+def _parse_payload(payload: Any) -> dict:
+    """Parse a JSON-string or dict project payload into a plain dict."""
+    if payload is None:
+        return {}
+    if isinstance(payload, dict):
+        return payload
+    try:
+        import json
+
+        return json.loads(payload) or {}
+    except (TypeError, ValueError):
+        raise frappe.ValidationError("invalid payload")
+
+
+def _whitelisted_fields(payload: dict) -> dict:
+    """Strip payload to fields the portal is allowed to set on VT Project."""
+    return {k: payload[k] for k in EDITABLE_PROJECT_FIELDS if k in payload}
+
+
+def _normalize_team_members(raw: Any) -> list[dict] | None:
+    """Coerce a payload `team_members` blob into clean child-row dicts.
+
+    Returns None if the payload omits the key (so the caller leaves the
+    existing roster untouched). Returns [] when explicitly cleared.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        import json
+
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            raise frappe.ValidationError("invalid team_members payload")
+    if not isinstance(raw, list):
+        raise frappe.ValidationError("team_members must be a list")
+    out: list[dict] = []
+    seen: set[str] = set()
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        user = max_str(entry.get("user") or "", 140)
+        if not user or user in seen:
+            continue
+        role = entry.get("role") or "Member"
+        if role not in TEAM_MEMBER_ROLES:
+            role = "Member"
+        out.append(
+            {
+                "user": user,
+                "role": role,
+                "is_also_leader": 1 if entry.get("is_also_leader") else 0,
+            }
+        )
+        seen.add(user)
+    return out
+
+
+def _apply_team_members(doc, members: list[dict] | None) -> None:
+    if members is None:
+        return
+    doc.set(TEAM_MEMBER_FIELD, [])
+    for row in members:
+        doc.append(TEAM_MEMBER_FIELD, row)
+
+
+def _project_can_manage() -> dict:
+    """Return UI capability flags for the current user on VT Project."""
+    return {
+        "can_create": bool(frappe.has_permission(PROJECT_DOCTYPE, "create")),
+        "can_write": bool(frappe.has_permission(PROJECT_DOCTYPE, "write")),
+        "can_delete": bool(frappe.has_permission(PROJECT_DOCTYPE, "delete")),
+    }
+
+
+@frappe.whitelist()
+def get_project_permissions() -> dict:
+    """Capability flags consumed by the React portal to gate CRUD UI."""
+    require_login()
+    return _project_can_manage()
+
+
+@frappe.whitelist()
+def create_project(payload: str | dict) -> dict:
+    """Create a VT Project. Requires VT Manager or VT Leader role."""
+    require_login()
+    if not frappe.has_permission(PROJECT_DOCTYPE, "create"):
+        raise frappe.PermissionError
+    parsed = _parse_payload(payload)
+    data = _whitelisted_fields(parsed)
+    missing = [f for f in REQUIRED_CREATE_FIELDS if not data.get(f)]
+    if missing:
+        raise frappe.ValidationError(f"missing required fields: {', '.join(missing)}")
+    members = _normalize_team_members(parsed.get("team_members"))
+    doc = frappe.get_doc({"doctype": PROJECT_DOCTYPE, **data})
+    _apply_team_members(doc, members)
+    doc.insert(ignore_permissions=False)
+    return {"id": doc.name, "title": doc.title}
+
+
+@frappe.whitelist()
+def update_project(project_id: str, payload: str | dict) -> dict:
+    """Update editable fields on a VT Project. Requires write perm on the doc."""
+    require_login()
+    project_id = max_str(project_id, 140)
+    if not frappe.has_permission(PROJECT_DOCTYPE, "write", doc=project_id):
+        raise frappe.PermissionError
+    parsed = _parse_payload(payload)
+    data = _whitelisted_fields(parsed)
+    members = _normalize_team_members(parsed.get("team_members"))
+    if not data and members is None:
+        return {"id": project_id, "updated": []}
+    doc = frappe.get_doc(PROJECT_DOCTYPE, project_id)
+    for field, value in data.items():
+        setattr(doc, field, value)
+    _apply_team_members(doc, members)
+    doc.save(ignore_permissions=False)
+    updated = list(data.keys())
+    if members is not None:
+        updated.append("team_members")
+    return {"id": doc.name, "updated": updated}
+
+
+@frappe.whitelist()
+def delete_project(project_id: str) -> dict:
+    """Delete a VT Project. Requires VT Manager role (delete perm)."""
+    require_login()
+    project_id = max_str(project_id, 140)
+    if not frappe.has_permission(PROJECT_DOCTYPE, "delete", doc=project_id):
+        raise frappe.PermissionError
+    frappe.delete_doc(PROJECT_DOCTYPE, project_id, ignore_permissions=False)
+    return {"deleted": project_id}
 
 
 @frappe.whitelist()

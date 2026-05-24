@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { MetricTile } from '@/components/MetricTile';
+import { SectionHead } from '@/components/SectionHead';
 import type { TodayCardData } from '../types';
 
 const ONTIME_POSITIVE = 0.8;
@@ -32,8 +33,8 @@ export function TodayCard({ data }: { data: TodayCardData }) {
   if (data.org_health_score !== undefined) {
     return (
       <section aria-label="Today">
-        <h2 className="text-sm font-semibold mb-3">Today</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <SectionHead title="Today" />
+        <div className="grid grid-cols-3 gap-4">
           <MetricTile label="Org Health Score" value={Math.round(data.org_health_score)} />
           <MetricTile label="On-time 7d" value={pct(data.ontime_rate_7d)} tone={ontime} />
           <MetricTile
@@ -49,8 +50,8 @@ export function TodayCard({ data }: { data: TodayCardData }) {
 
   return (
     <section aria-label="Today">
-      <h2 className="text-sm font-semibold mb-3">Today</h2>
-      <div className="grid grid-cols-3 gap-3">
+      <SectionHead title="Today" />
+      <div className="grid grid-cols-3 gap-4">
         <MetricTile
           label="On-time 7d"
           value={pct(data.ontime_rate_7d)}

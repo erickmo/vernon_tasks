@@ -1,3 +1,4 @@
 vernon_tasks.patches.v1_x.add_objective_period_dates
 vernon_tasks.patches.v1_x.add_vt_task_kanban_rank
 vernon_tasks.patches.v1_x.add_portal_notifications_flag
+vernon_tasks.patches.v1_x.add_brand_to_vt_project

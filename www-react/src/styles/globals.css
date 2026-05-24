@@ -19,5 +19,70 @@
   body {
     background: rgb(var(--bg));
     color: rgb(var(--fg));
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    letter-spacing: -0.01em;
+  }
+  h1, h2, h3, h4 { letter-spacing: -0.02em; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-full
+           text-sm font-medium transition-all duration-150
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white shadow-sm hover:bg-brand-hover hover:shadow
+           active:translate-y-px;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-slate-700 border border-slate-200 shadow-sm
+           hover:bg-slate-50 hover:border-slate-300;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+  }
+  .btn-sm { @apply h-8 px-3 text-[13px]; }
+  .btn-icon {
+    @apply inline-flex items-center justify-center h-9 w-9 rounded-full
+           text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl border border-slate-100
+           shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)];
+  }
+  .card-hover {
+    @apply card transition-shadow hover:shadow-[0_2px_4px_rgba(15,23,42,0.06),0_8px_24px_rgba(15,23,42,0.06)];
+  }
+
+  .input {
+    @apply h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm
+           placeholder:text-slate-400
+           focus:outline-none focus:border-brand focus:ring-4 focus:ring-brand/10
+           transition;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium;
+  }
+  .chip-brand   { @apply chip bg-brand-subtle text-brand; }
+  .chip-green   { @apply chip bg-emerald-50 text-emerald-700; }
+  .chip-amber   { @apply chip bg-amber-50 text-amber-700; }
+  .chip-red     { @apply chip bg-rose-50 text-rose-700; }
+  .chip-slate   { @apply chip bg-slate-100 text-slate-600; }
+
+  .menu {
+    @apply rounded-2xl border border-slate-100 bg-white
+           shadow-[0_4px_8px_rgba(15,23,42,0.04),0_16px_40px_rgba(15,23,42,0.10)]
+           overflow-hidden;
+  }
+  .menu-item {
+    @apply flex items-center gap-2 w-full text-left px-3.5 py-2.5 text-sm text-slate-700
+           hover:bg-slate-50 transition;
+  }
+  .menu-item-danger {
+    @apply menu-item text-rose-600 hover:bg-rose-50;
   }
 }

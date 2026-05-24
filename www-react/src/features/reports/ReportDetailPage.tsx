@@ -10,6 +10,7 @@ import { MyPointsTimeline } from './slugs/MyPointsTimeline';
 import { BurndownArchiveList } from './slugs/BurndownArchiveList';
 import { RiskLogTable } from './slugs/RiskLogTable';
 import { ScheduleModal } from './ScheduleModal';
+import { TrendingUpIcon } from '@/components/icons';
 import type { ReportFilters, ReportPayload } from './types';
 
 const VIZ: Record<string, (p: ReportPayload) => JSX.Element> = {
@@ -34,19 +35,24 @@ export function ReportDetailPage() {
   });
 
   if (!slug) {
-    return <p className="text-sm text-red-600">Missing report slug.</p>;
+    return <p className="text-sm text-rose-600">Missing report slug.</p>;
   }
   if (isLoading) {
     return <p className="text-sm text-slate-500">Running report…</p>;
   }
   if (isError || !data) {
-    return <p className="text-sm text-red-600">Failed to run report.</p>;
+    return <p className="text-sm text-rose-600">Failed to run report.</p>;
   }
 
   const vizFactory =
     VIZ[slug] ??
     (() => (
-      <p className="text-sm text-slate-500">No visualization for {slug}.</p>
+      <div className="rounded-2xl border border-dashed border-slate-200 py-10 text-center">
+        <TrendingUpIcon className="mx-auto h-7 w-7 text-slate-300" />
+        <div className="mt-2 text-sm text-slate-500">
+          No visualization for {slug}.
+        </div>
+      </div>
     ));
 
   return (

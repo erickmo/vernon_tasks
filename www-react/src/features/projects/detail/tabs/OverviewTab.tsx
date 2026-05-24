@@ -1,28 +1,29 @@
 import { useOutletContext } from 'react-router-dom';
+import { SectionHead } from '@/components/SectionHead';
 import type { ProjectDetail } from '../../types';
 
 export function OverviewTab() {
   const project = useOutletContext<ProjectDetail>();
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <section className="lg:col-span-2 border border-slate-200 dark:border-slate-800 rounded p-4">
-        <h2 className="font-semibold mb-2">Burndown</h2>
+      <section className="card lg:col-span-2 p-5">
+        <SectionHead title="Burndown" />
         <p className="text-sm text-slate-500">
           See{' '}
           <a
             href={`/portal/projects/${project.id}/burndown`}
-            className="text-brand underline"
+            className="text-brand hover:underline"
           >
             Burndown tab
           </a>{' '}
           for full chart.
         </p>
-        <p className="mt-2 text-sm">{forecastVerdict(project)}</p>
+        <p className="mt-2 text-sm text-slate-700">{forecastVerdict(project)}</p>
       </section>
-      <section className="border border-slate-200 dark:border-slate-800 rounded p-4">
-        <h2 className="font-semibold mb-2">Key metrics</h2>
+      <section className="card p-5">
+        <SectionHead title="Key metrics" />
         <dl className="text-sm space-y-2">
-          <Row label="%done" value={`${Math.round(project.percent_done * 100)}%`} />
+          <Row label="% done" value={`${Math.round(project.percent_done * 100)}%`} />
           <Row label="Days left" value={daysLeft(project)} />
           <Row label="Blocked" value={project.blocked_count} />
           <Row
@@ -37,9 +38,9 @@ export function OverviewTab() {
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between border-b border-slate-100 dark:border-slate-900 pb-1">
+    <div className="flex justify-between border-b border-slate-100 last:border-b-0 pb-1.5">
       <dt className="text-slate-500">{label}</dt>
-      <dd>{value}</dd>
+      <dd className="font-medium text-slate-900 tabular-nums">{value}</dd>
     </div>
   );
 }

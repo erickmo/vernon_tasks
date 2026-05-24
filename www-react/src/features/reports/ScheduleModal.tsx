@@ -58,14 +58,22 @@ export function ScheduleModal({
       role="dialog"
       aria-modal="true"
       aria-label="Schedule report"
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center"
     >
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-lg w-full max-w-md space-y-3">
-        <h2 className="font-semibold">Schedule report</h2>
+      <div className="card p-6 w-full max-w-md space-y-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+            Subscription
+          </div>
+          <h2 className="text-[20px] font-semibold tracking-tight text-slate-900 mt-0.5">
+            Schedule report
+          </h2>
+        </div>
+
         <div>
           <label
             htmlFor="schedule-cron"
-            className="block text-xs text-slate-500"
+            className="block text-[11px] uppercase tracking-wider text-slate-500 mb-1"
           >
             Cron (UTC)
           </label>
@@ -73,16 +81,17 @@ export function ScheduleModal({
             id="schedule-cron"
             value={cron}
             onChange={(e) => setCron(e.target.value)}
-            className="w-full text-sm border border-slate-300 dark:border-slate-700 rounded px-2 py-1 bg-transparent"
+            className="input"
           />
-          <p className="text-[11px] text-slate-500 mt-1">
+          <p className="text-[11px] text-slate-500 mt-1.5">
             Default: Mondays 08:00 UTC
           </p>
         </div>
+
         <div>
           <label
             htmlFor="schedule-format"
-            className="block text-xs text-slate-500"
+            className="block text-[11px] uppercase tracking-wider text-slate-500 mb-1"
           >
             Format
           </label>
@@ -90,16 +99,17 @@ export function ScheduleModal({
             id="schedule-format"
             value={format}
             onChange={(e) => setFormat(e.target.value as ReportExportFormat)}
-            className="w-full text-sm border border-slate-300 dark:border-slate-700 rounded px-2 py-1 bg-transparent"
+            className="input"
           >
             <option value="csv">CSV</option>
             <option value="pdf">PDF</option>
           </select>
         </div>
+
         <div>
           <label
             htmlFor="schedule-recipients"
-            className="block text-xs text-slate-500"
+            className="block text-[11px] uppercase tracking-wider text-slate-500 mb-1"
           >
             Recipients (comma-separated emails)
           </label>
@@ -108,14 +118,15 @@ export function ScheduleModal({
             value={recipients}
             onChange={(e) => setRecipients(e.target.value)}
             placeholder="ada@vernon.id, leo@vernon.id"
-            className="w-full text-sm border border-slate-300 dark:border-slate-700 rounded px-2 py-1 bg-transparent"
+            className="input"
           />
         </div>
+
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={onClose}
-            className="text-sm px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700"
+            className="btn-secondary btn-sm"
           >
             Cancel
           </button>
@@ -123,7 +134,7 @@ export function ScheduleModal({
             type="button"
             onClick={submit}
             disabled={busy}
-            className="text-sm bg-purple-600 text-white px-3 py-1.5 rounded disabled:opacity-60 hover:bg-purple-700"
+            className="btn-primary btn-sm"
           >
             {busy ? 'Creating…' : 'Create'}
           </button>

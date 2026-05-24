@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { BrandPicker } from '@/components/BrandPicker';
 import type { ProjectListFilters } from '../types';
 
 const CHIPS: { key: keyof ProjectListFilters; label: string }[] = [
   { key: 'mine', label: 'My projects' },
-  { key: 'active', label: 'Status≠done' },
-  { key: 'has_blockers', label: 'Has-blockers' },
-  { key: 'sprint_active', label: 'Sprint=active' },
-  { key: 'risk_high', label: 'Risk=high' },
+  { key: 'active', label: 'Status ≠ done' },
+  { key: 'has_blockers', label: 'Has blockers' },
+  { key: 'sprint_active', label: 'Sprint active' },
+  { key: 'risk_high', label: 'Risk high' },
 ];
 
 const SORTS: { key: NonNullable<ProjectListFilters['sort']>; label: string }[] = [
@@ -43,13 +44,15 @@ export function FilterBar({
   }, [search]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 mb-4">
-      <input
-        placeholder="Search projects…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="text-sm px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 bg-transparent"
-      />
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="w-full sm:w-72">
+        <input
+          placeholder="Search projects…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="input"
+        />
+      </div>
       {CHIPS.map((c) => {
         const active = Boolean(value[c.key]);
         return (
@@ -66,16 +69,23 @@ export function FilterBar({
               onChange(next);
             }}
             className={clsx(
-              'text-xs px-3 py-1 rounded-full border',
+              'h-8 px-3 rounded-full text-[13px] font-medium transition',
               active
-                ? 'bg-brand text-white border-brand'
-                : 'border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300',
+                ? 'bg-brand-subtle text-brand'
+                : 'text-slate-600 hover:bg-slate-100',
             )}
           >
             {c.label}
           </button>
         );
       })}
+      <div className="w-52">
+        <BrandPicker
+          value={value.brand ?? ''}
+          onChange={(v) => onChange({ ...value, brand: v || undefined })}
+          placeholder="Filter by brand…"
+        />
+      </div>
       <select
         value={value.sort ?? ''}
         onChange={(e) =>
@@ -84,7 +94,7 @@ export function FilterBar({
             sort: (e.target.value || undefined) as ProjectListFilters['sort'],
           })
         }
-        className="ml-auto text-xs bg-transparent border border-slate-300 dark:border-slate-700 rounded px-2 py-1"
+        className="input ml-auto h-8 w-auto px-3 text-[13px]"
       >
         <option value="">Sort…</option>
         {SORTS.map((s) => (

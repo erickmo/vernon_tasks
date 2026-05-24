@@ -9,16 +9,22 @@ export function AtRiskBanner({ items }: { items: RiskItem[] }) {
   return (
     <div
       role="alert"
-      className="rounded-lg border border-risk-red/40 bg-risk-red/10 px-4 py-3 mb-6 flex items-center gap-3"
+      className="card border-rose-100 bg-gradient-to-r from-rose-50/80 via-rose-50/40 to-transparent px-5 py-4 flex flex-wrap items-center gap-x-5 gap-y-2"
     >
-      <span className="text-risk-red font-semibold text-sm">
+      <span className="inline-flex items-center gap-2.5 text-rose-700 font-semibold text-sm">
+        <span className="relative inline-flex h-2.5 w-2.5">
+          <span className="absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-60 animate-ping" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+        </span>
         {items.length} {items.length === 1 ? 'project' : 'projects'} at risk
       </span>
-      <span className="text-sm text-slate-600 dark:text-slate-300">·</span>
-      <ul className="flex gap-4 text-sm">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         {head.map((it) => (
           <li key={it.project_id}>
-            <Link to={`/portal/projects/${it.project_id}`} className="underline">
+            <Link
+              to={`/portal/projects/${it.project_id}`}
+              className="font-medium text-slate-900 hover:text-rose-700 underline-offset-2 hover:underline"
+            >
               {it.project_name}
             </Link>{' '}
             <span className="text-slate-500">— {it.reason}</span>

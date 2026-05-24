@@ -10,20 +10,28 @@ const DAILY_CAPACITY_HOURS = 8;
 export function DayColumn({ day }: { day: WorksheetDay }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${day.date}` });
   const dt = parseISO(day.date);
+  const isToday = day.date === format(new Date(), 'yyyy-MM-dd');
   return (
     <div
       ref={setNodeRef}
       data-day-date={day.date}
       className={clsx(
-        'flex flex-col gap-2 border border-slate-200 dark:border-slate-800 rounded p-2 min-h-[24rem]',
-        isOver && 'bg-brand/5 border-brand',
+        'card flex h-full min-h-[24rem] flex-col gap-2 p-3 transition-colors',
+        isOver && 'border-brand bg-brand-subtle/40',
       )}
     >
       <header className="text-xs">
-        <div className="font-semibold">{format(dt, 'EEE')}</div>
-        <div className="text-slate-500">{format(dt, 'MMM d')}</div>
+        <div
+          className={clsx(
+            'font-semibold tracking-tight',
+            isToday ? 'text-brand' : 'text-slate-900',
+          )}
+        >
+          {format(dt, 'EEE')}
+        </div>
+        <div className="text-slate-500 tabular-nums">{format(dt, 'MMM d')}</div>
       </header>
-      <ul className="flex flex-col gap-2 flex-1">
+      <ul className="flex flex-1 min-h-0 flex-col gap-2 overflow-y-auto">
         {day.entries.map((e) => (
           <li key={e.id}>
             <TaskBlock
@@ -38,6 +46,11 @@ export function DayColumn({ day }: { day: WorksheetDay }) {
             />
           </li>
         ))}
+        {day.entries.length === 0 && (
+          <li className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center text-[11px] text-slate-400">
+            Drop tasks here
+          </li>
+        )}
       </ul>
       <CapacityBar scheduled={day.scheduled_hours} capacity={DAILY_CAPACITY_HOURS} />
     </div>

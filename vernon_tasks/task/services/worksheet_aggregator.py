@@ -86,7 +86,7 @@ def _load_entries(user: str, start: date, end: date) -> list:
             {"u": user, "s": start, "e": end, "default_hour": _DEFAULT_HOUR_START},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return []
 
 
@@ -110,7 +110,7 @@ def _load_unscheduled(user: str, scheduled_task_ids: set) -> list:
             {"u": user, "phases": _OPEN_PHASES},
             as_dict=True,
         )
-    except frappe.db.DatabaseError:
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
         return []
     return [_unscheduled(r) for r in rows if r.name not in scheduled_task_ids]
 

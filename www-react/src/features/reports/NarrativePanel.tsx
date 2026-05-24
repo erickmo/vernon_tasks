@@ -3,13 +3,16 @@ export function NarrativePanel({ items }: { items: string[] }) {
     return null;
   }
   return (
-    <aside className="lg:w-64 border border-slate-200 dark:border-slate-800 rounded p-4">
-      <h2 className="text-xs uppercase tracking-wider text-slate-500 mb-2">
+    <aside className="lg:w-64 card p-5 h-fit">
+      <h2 className="text-[11px] uppercase tracking-[0.14em] text-slate-500 mb-3">
         Highlights
       </h2>
-      <ul className="space-y-2 text-sm">
+      <ul className="space-y-2 text-sm text-slate-700">
         {items.map((it, i) => (
-          <li key={i}>• {it}</li>
+          <li key={i} className="flex gap-2">
+            <span className="text-brand">•</span>
+            <span>{it}</span>
+          </li>
         ))}
       </ul>
     </aside>

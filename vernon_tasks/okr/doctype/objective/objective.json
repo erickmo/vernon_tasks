@@ -29,5 +29,8 @@
   ],
   "sort_field": "period",
   "sort_order": "DESC",
+  "title_field": "title",
+  "search_fields": "title,period,objective_owner",
+  "show_title_field_in_link": 1,
   "track_changes": 1
 }

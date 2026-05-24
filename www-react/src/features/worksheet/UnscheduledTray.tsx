@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TaskBlock } from './TaskBlock';
+import { SparklesIcon } from '@/components/icons';
 import type { UnscheduledTask } from './types';
 
 export function UnscheduledTray({ tasks }: { tasks: UnscheduledTask[] }) {
@@ -10,18 +11,19 @@ export function UnscheduledTray({ tasks }: { tasks: UnscheduledTask[] }) {
       t.project.toLowerCase().includes(q.toLowerCase()),
   );
   return (
-    <aside className="w-64 border border-slate-200 dark:border-slate-800 rounded p-2 flex flex-col gap-2">
+    <aside className="card flex w-64 h-full flex-col gap-3 p-3">
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search unscheduled…"
         aria-label="Search unscheduled"
-        className="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-transparent"
+        className="input h-9 text-[13px]"
       />
-      <div className="text-[10px] uppercase tracking-wider text-slate-500">
-        Unscheduled · {tasks.length}
+      <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        <span>Unscheduled</span>
+        <span className="chip-slate">{tasks.length}</span>
       </div>
-      <ul className="flex flex-col gap-2 flex-1 overflow-y-auto">
+      <ul className="flex flex-1 min-h-0 flex-col gap-2 overflow-y-auto">
         {filtered.map((t) => (
           <li key={t.task_id}>
             <TaskBlock
@@ -34,7 +36,12 @@ export function UnscheduledTray({ tasks }: { tasks: UnscheduledTask[] }) {
             />
           </li>
         ))}
-        {filtered.length === 0 && <li className="text-xs text-slate-500">No tasks.</li>}
+        {filtered.length === 0 && (
+          <li className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-slate-200 px-3 py-8 text-center">
+            <SparklesIcon className="h-6 w-6 text-slate-300" />
+            <span className="text-xs text-slate-500">All caught up — no tasks.</span>
+          </li>
+        )}
       </ul>
     </aside>
   );

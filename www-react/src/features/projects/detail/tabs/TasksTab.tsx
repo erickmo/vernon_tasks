@@ -10,6 +10,7 @@ import { BulkActionBar } from '../../list/BulkActionBar';
 import { BulkMoveSprintModal } from '../modals/BulkMoveSprintModal';
 import { BulkReassignModal } from '../modals/BulkReassignModal';
 import { BulkPhaseShiftModal } from '../modals/BulkPhaseShiftModal';
+import { CheckCircleIcon, AlertTriangleIcon } from '@/components/icons';
 
 const OPTIONS: { key: GroupBy; label: string }[] = [
   { key: 'kr', label: 'OKR/KR' },
@@ -48,18 +49,20 @@ export function TasksTab() {
   const clear = () => setSelected(new Set());
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs uppercase tracking-wider text-slate-500">Group by</span>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
+          Group by
+        </span>
         {OPTIONS.map((o) => (
           <button
             key={o.key}
             onClick={() => set(o.key)}
             className={clsx(
-              'text-xs px-2 py-1 rounded border',
+              'h-8 px-3 rounded-full text-[13px] font-medium transition',
               group === o.key
-                ? 'bg-brand text-white border-brand'
-                : 'border-slate-300 dark:border-slate-700 text-slate-600',
+                ? 'bg-brand-subtle text-brand'
+                : 'text-slate-600 hover:bg-slate-100',
             )}
           >
             {o.label}
@@ -75,8 +78,18 @@ export function TasksTab() {
         onPhaseShift={() => setModal('phase')}
       />
 
-      {isLoading && <p className="text-sm text-slate-500">Loading tasks…</p>}
-      {isError && <p className="text-sm text-risk-red">Failed to load tasks.</p>}
+      {isLoading && (
+        <div className="card p-8 text-center text-sm text-slate-500">Loading tasks…</div>
+      )}
+      {isError && (
+        <div className="card p-8 text-center text-sm text-rose-600">Failed to load tasks.</div>
+      )}
+      {data && data.length === 0 && (
+        <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-white/40 p-12 text-center">
+          <CheckCircleIcon className="mx-auto h-8 w-8 text-slate-300" />
+          <p className="mt-3 text-sm text-slate-500">No tasks in this view.</p>
+        </div>
+      )}
       {data &&
         data.map((bucket) => (
           <BucketBlock
@@ -117,6 +130,15 @@ export function TasksTab() {
   );
 }
 
+const PDCA_CHIP: Record<string, string> = {
+  BACKLOG: 'chip-slate',
+  PLAN: 'chip-brand',
+  DO: 'chip-amber',
+  CHECK: 'chip-brand',
+  DONE: 'chip-green',
+  ACT: 'chip-green',
+};
+
 function BucketBlock({
   bucket,
   selected,
@@ -127,47 +149,42 @@ function BucketBlock({
   onToggle: (id: string) => void;
 }) {
   return (
-    <section className="mb-6">
-      <header className="flex items-baseline gap-3 mb-2">
-        <h3 className="font-semibold text-sm">{bucket.label}</h3>
-        <span className="text-xs text-slate-500">{bucket.tasks.length} tasks</span>
+    <section className="card p-5">
+      <header className="flex items-center gap-3 mb-3">
+        <h3 className="text-[15px] font-semibold tracking-tight text-slate-900">
+          {bucket.label}
+        </h3>
+        <span className="chip-slate tabular-nums">{bucket.tasks.length}</span>
         {bucket.meta?.target !== undefined && (
-          <div className="flex-1 h-1.5 rounded bg-slate-200 dark:bg-slate-700 overflow-hidden max-w-xs">
+          <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden max-w-xs">
             <div
-              className="h-full bg-brand"
+              className="h-full bg-gradient-to-r from-brand to-brand-hover"
               style={{ width: `${Math.round((bucket.meta.progress ?? 0) * 100)}%` }}
             />
           </div>
         )}
       </header>
-      <ul className="border border-slate-200 dark:border-slate-800 rounded divide-y divide-slate-100 dark:divide-slate-900">
+      <ul className="divide-y divide-slate-100">
         {bucket.tasks.map((t) => (
-          <li key={t.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+          <li
+            key={t.id}
+            className="flex items-center gap-3 py-2.5 text-sm hover:bg-slate-50/60 rounded-lg px-2 -mx-2 transition-colors"
+          >
             <input
               type="checkbox"
               aria-label={`Select ${t.title}`}
               checked={selected.has(t.id)}
               onChange={() => onToggle(t.id)}
             />
-            <span
-              className={clsx('px-1.5 py-0.5 rounded text-[10px] font-semibold', {
-                'bg-slate-200 text-slate-700': t.pdca === 'BACKLOG',
-                'bg-blue-100 text-blue-700': t.pdca === 'PLAN',
-                'bg-amber-100 text-amber-700': t.pdca === 'DO',
-                'bg-purple-100 text-purple-700': t.pdca === 'CHECK',
-                'bg-green-100 text-green-700': t.pdca === 'DONE' || t.pdca === 'ACT',
-              })}
-            >
-              {t.pdca}
-            </span>
-            <span className="flex-1 truncate">{t.title}</span>
+            <span className={PDCA_CHIP[t.pdca] ?? 'chip-slate'}>{t.pdca}</span>
+            <span className="flex-1 truncate text-slate-800">{t.title}</span>
             <span className="text-xs text-slate-500">{t.assignee ?? '—'}</span>
-            <span className="text-xs text-slate-500">{t.due_date ?? '—'}</span>
-            <span className="text-xs">{t.points} pt</span>
+            <span className="text-xs text-slate-500 tabular-nums">{t.due_date ?? '—'}</span>
+            <span className="text-xs text-slate-700 tabular-nums">{t.points} pt</span>
             {t.risk_flag && (
-              <span className="text-xs text-risk-red" title={t.risk_flag}>
-                ⚠
-              </span>
+              <AlertTriangleIcon className="h-3.5 w-3.5 text-rose-500" aria-label={t.risk_flag}>
+                <title>{t.risk_flag}</title>
+              </AlertTriangleIcon>
             )}
           </li>
         ))}

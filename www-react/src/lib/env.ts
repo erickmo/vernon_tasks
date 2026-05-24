@@ -14,6 +14,4 @@ export const env: Env = {
   APP_NAME: read('VITE_APP_NAME', 'Vernon Dashboard'),
 };
 
-if (!env.API_BASE) {
-  throw new Error('VITE_API_BASE is required');
-}
+// Empty API_BASE = same-origin (Vite dev proxy or prod reverse-proxy).
