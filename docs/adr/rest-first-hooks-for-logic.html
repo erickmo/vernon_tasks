@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ADR REST-First, Hooks-For-Logic — Vernon Tasks</title>
+<link rel="stylesheet" href="../assets/style.css" />
+<script defer src="../assets/layout.js"></script>
+</head>
+<body data-root="../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../index.html">Docs</a> · <a href="index.html">ADR</a> · <strong>REST-First, Hooks-For-Logic</strong></div>
+
+<header class="hero">
+  <h1>ADR · REST-First, Hooks-For-Logic</h1>
+  <div class="sub">ADR-022 — Prefer Frappe REST CRUD; move domain rules into doctype controllers, not custom whitelisted wrappers</div>
+</header>
+
+<article class="adr" id="adr-022">
+  <h2>ADR-022 — REST-first, hooks-for-logic</h2>
+  <div class="meta-row">
+    <span><strong>Status:</strong> <span class="badge accepted">Accepted</span></span>
+    <span><strong>Date:</strong> 2026-05-25</span>
+    <span><strong>Scope:</strong> www-react SPA → vernon_tasks backend</span>
+    <span><strong>Implementation status:</strong> Partial — VT Brand + VT Project single-doc CRUD shipped; aggregations remain custom</span>
+  </div>
+
+  <h3>Context</h3>
+  <p>The www-react SPA originally used custom whitelisted endpoints
+  (<code>/api/method/vernon_tasks.brand.api.portal_brands.*</code>,
+  <code>/api/method/vernon_tasks.task.api.portal_projects.*</code>) for
+  basic CRUD on <code>VT Brand</code> and <code>VT Project</code>. Most
+  of those endpoints were thin wrappers around
+  <code>frappe.get_doc</code> / <code>insert</code> / <code>save</code> /
+  <code>delete_doc</code> with a small amount of domain logic (field
+  whitelisting, FK integrity check, rename on PK change).</p>
+
+  <p>This duplicates code Frappe already provides and adds a maintenance
+  surface that drifts from the doctype itself.</p>
+
+  <h3>Decision</h3>
+  <ol>
+    <li><strong>REST-first.</strong> Single-document CRUD MUST use Frappe's
+      built-in REST endpoints (<code>/api/resource/{DocType}</code> with
+      <code>GET</code> / <code>POST</code> / <code>PUT</code> / <code>DELETE</code>).
+      The frontend client maps the Frappe primary key <code>name</code> to
+      our domain <code>id</code> at the boundary.</li>
+    <li><strong>Hooks-for-logic.</strong> Domain rules that previously lived
+      in the wrapper move into the doctype controller
+      (<code>validate</code>, <code>on_trash</code>, <code>autoname</code>,
+      permlevel) so the rule fires regardless of how the document is
+      mutated (REST, scripted, fixture import, child relationship).</li>
+    <li><strong>Custom endpoints only for orchestration.</strong> Endpoints
+      that aggregate across doctypes, perform multi-document batch
+      operations, or compute derived data (e.g.
+      <code>list_projects</code> with <code>blocked_count</code>,
+      <code>get_project_detail</code>, <code>bulk_move_tasks</code>,
+      <code>get_burndown</code>) stay on <code>/api/method/...</code>.</li>
+  </ol>
+
+  <h3>Concrete changes</h3>
+  <table>
+    <tr><th>Concern</th><th>Before</th><th>After</th></tr>
+    <tr>
+      <td>Brand CRUD (create/read/update/delete/list/search)</td>
+      <td><code>/api/method/...portal_brands.*</code></td>
+      <td><code>/api/resource/VT Brand</code> via <code>brandsApi.ts</code></td>
+    </tr>
+    <tr>
+      <td>Brand FK integrity on delete</td>
+      <td>Manual check inside <code>delete_brand</code> wrapper</td>
+      <td><code>VTBrand.on_trash</code> doctype controller</td>
+    </tr>
+    <tr>
+      <td>Brand rename on <code>brand_name</code> change</td>
+      <td>Manual <code>frappe.rename_doc</code> in <code>update_brand</code></td>
+      <td>Doctype <code>autoname: field:brand_name</code> — REST <code>PUT</code> auto-renames</td>
+    </tr>
+    <tr>
+      <td>Project single-doc CRUD</td>
+      <td><code>/api/method/...portal_projects.create/update/delete</code></td>
+      <td><code>/api/resource/VT Project</code> via <code>projectsApi.ts</code></td>
+    </tr>
+    <tr>
+      <td>Project FK integrity on delete</td>
+      <td>None (Frappe default already blocks)</td>
+      <td>Unchanged — Frappe's <code>check_if_doc_is_linked</code> covers
+        <code>VT Task</code>, <code>VT Sprint</code>, <code>Risk Event</code>,
+        <code>KPI Entry</code> references automatically.</td>
+    </tr>
+    <tr>
+      <td>Project list / detail / bulk ops / OKR enrich / burndown</td>
+      <td>Custom <code>/api/method/...</code> endpoints</td>
+      <td>Unchanged — kept custom (aggregation + multi-doc orchestration)</td>
+    </tr>
+    <tr>
+      <td>Legacy <code>vernon_tasks/api/{projects,sprints}.py</code></td>
+      <td>Used by old <code>pwa/</code> SPA</td>
+      <td>Unchanged — retire together with <code>pwa/</code></td>
+    </tr>
+  </table>
+
+  <h3>Consequences</h3>
+  <h4>Positive</h4>
+  <ul>
+    <li>Less Python wrapper code to maintain; doctype is the single source of truth.</li>
+    <li>Domain rules fire from any mutation path (REST, fixtures, scripted, child propagation).</li>
+    <li>Frontend benefits from standard Frappe REST filter operators, pagination, ordering.</li>
+    <li>Permission enforcement comes free from Frappe's role/permlevel system.</li>
+  </ul>
+  <h4>Negative / trade-offs</h4>
+  <ul>
+    <li>Frappe REST responses use <code>name</code> (PK) — frontend must map to
+      <code>id</code> at the API boundary (one helper per resource).</li>
+    <li>Capability flags (<code>can_create</code> / <code>can_write</code> /
+      <code>can_delete</code>) are not natively returned in a single REST call;
+      we still ship a small <code>get_*_permissions</code> custom endpoint
+      for the portal's optimistic UI gating.</li>
+    <li>Field-level whitelisting now relies on permlevel + role permissions
+      rather than a Python dict — protected fields must be declared in the
+      doctype JSON, not in code.</li>
+  </ul>
+
+  <h3>Anti-patterns this ADR rules out</h3>
+  <ul>
+    <li>Creating a new <code>@frappe.whitelist()</code> wrapper just to rename
+      response fields. Map at the frontend boundary instead.</li>
+    <li>Re-implementing Frappe's link integrity check (<code>check_if_doc_is_linked</code>)
+      inside a custom delete endpoint.</li>
+    <li>Calling <code>frappe.rename_doc</code> manually for doctypes whose
+      <code>autoname</code> is <code>field:&lt;field&gt;</code>.</li>
+  </ul>
+
+  <h3>References</h3>
+  <ul>
+    <li>Frappe REST API: <a href="https://docs.frappe.io/framework/user/en/api/rest">docs.frappe.io/framework/user/en/api/rest</a></li>
+    <li><a href="standalone-www-react-spa.html">ADR-021 — Standalone www-react SPA</a></li>
+    <li>Frontend modules: <code>www-react/src/features/brands/brandsApi.ts</code>, <code>www-react/src/features/projects/projectsApi.ts</code></li>
+    <li>Backend controller: <code>vernon_tasks/brand/doctype/vt_brand/vt_brand.py</code></li>
+  </ul>
+</article>
+
+</div>
+</body>
+</html>
