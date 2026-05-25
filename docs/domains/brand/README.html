@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Domain: Brand</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Domain: Brand</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/domains/brand/README.html</span>
+  </div>
+</header>
+
+<h1 id="domain-brand">Domain: Brand</h1>
+<p>A <strong>VT Brand</strong> is the top-level scope unit. Projects, Objectives, KPI Definitions, and Health Score snapshots are all scoped by Brand. Brand is also the unit of multi-tenant separation in the dashboard rollup.</p>
+
+<h2 id="modules">Modules</h2>
+<ul>
+  <li><code>vernon_tasks/brand/doctype/vt_brand/</code> — controller, JSON schema, tests</li>
+  <li><code>vernon_tasks/brand/api/brand_strategy.py</code> — whitelisted endpoints (delegates to controller)</li>
+  <li><code>www-react/src/features/brands/</code> — portal CRUD UI</li>
+</ul>
+
+<h2 id="fields">Fields</h2>
+<table>
+  <thead>
+    <tr><th>Field</th><th>Type</th><th>Rules</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>brand_name</code></td><td>Data (PK via <code>autoname:field</code>)</td><td>required · unique · permanent · ≤ 140 chars · no control chars · whitespace normalized</td></tr>
+    <tr><td><code>logo</code></td><td>Attach Image</td><td>auto-generated SVG avatar if empty; user uploads preserved</td></tr>
+    <tr><td><code>description</code></td><td>Small Text</td><td>optional · ≤ 2000 chars</td></tr>
+  </tbody>
+</table>
+
+<h2 id="validations">Validations &amp; Lifecycle Rules</h2>
+<p>All rules live in <code>vt_brand.py</code> (Frappe controller hooks) so the standard REST endpoints (<code>/api/resource/VT Brand</code>) enforce them automatically — no custom wrapper needed. See <strong>ADR-022 — REST-first, hooks-for-logic</strong>.</p>
+<table>
+  <thead>
+    <tr><th>Hook</th><th>Rule</th><th>Failure</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>autoname</code></td><td>Reject control chars in raw input; collapse whitespace; trim</td><td><code>ValidationError</code> — "Nama brand tidak boleh mengandung karakter kontrol"</td></tr>
+    <tr><td><code>validate</code></td><td>Re-normalize on updates; enforce length caps; reject empty</td><td><code>MandatoryError</code> / <code>ValidationError</code> — Indonesian message</td></tr>
+    <tr><td><code>before_rename</code></td><td>Block all renames — <code>brand_name</code> is the permanent primary key</td><td><code>ValidationError</code> — "Brand tidak dapat di-rename; hapus dan buat ulang"</td></tr>
+    <tr><td><code>before_save</code></td><td>Regenerate auto-avatar when logo is empty or was an avatar; preserve custom uploads</td><td>—</td></tr>
+    <tr><td><code>after_insert</code></td><td>Generate initial avatar for new docs without logo</td><td>—</td></tr>
+    <tr><td><code>on_trash</code></td><td>Block delete when ≥ 1 VT Project still references this brand (FK integrity)</td><td><code>ValidationError</code> — "Brand masih dipakai N proyek; pindahkan dulu sebelum dihapus"</td></tr>
+  </tbody>
+</table>
+
+<h2 id="constants">Validation Constants</h2>
+<pre><code>BRAND_NAME_MAX_LEN  = 140  # Data column VARCHAR(140)
+DESCRIPTION_MAX_LEN = 2000 # Small Text payload cap
+</code></pre>
+
+<h2 id="avatar">Avatar Generation</h2>
+<p>When no logo is uploaded, the controller renders a deterministic initial-based SVG avatar:</p>
+<ul>
+  <li>First non-whitespace char of <code>brand_name</code> uppercased</li>
+  <li>Background colour picked from a 10-colour palette using <code>md5(brand_name)[0] % 10</code> (stable across renders)</li>
+  <li>Persisted as a public <code>File</code> doc (filename: <code>brand-avatar-{slug}.svg</code>) — not a data URL, because <code>Attach Image</code> is VARCHAR(140) and a data URL would overflow</li>
+  <li>User-uploaded logos (any path NOT starting with <code>/files/brand-avatar-</code>) are never overwritten</li>
+</ul>
+
+<h2 id="permissions">Permissions</h2>
+<table>
+  <thead><tr><th>Role</th><th>Read</th><th>Create</th><th>Write</th><th>Delete</th></tr></thead>
+  <tbody>
+    <tr><td>VT Manager</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>VT Leader</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>VT Member</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+  </tbody>
+</table>
+
+<h2 id="cross-domain-events">Cross-Domain Events</h2>
+
+<h3 id="triggers">Triggers (I fire these)</h3>
+<table>
+  <thead><tr><th>Event</th><th>Payload</th><th>Listeners</th></tr></thead>
+  <tbody>
+    <tr><td>brand.created</td><td>{brand_name}</td><td>(none yet — reserved for analytics seeding)</td></tr>
+    <tr><td>brand.deleted</td><td>{brand_name}</td><td>(none yet — gated by FK guard, so subscribers can assume zero linked projects)</td></tr>
+  </tbody>
+</table>
+
+<h3 id="listens">Listens (I react to these)</h3>
+<table>
+  <thead><tr><th>Event</th><th>Source</th><th>My action</th></tr></thead>
+  <tbody>
+    <tr><td>—</td><td>—</td><td>Brand is a leaf in the event graph; it has no inbound reactions today</td></tr>
+  </tbody>
+</table>
+
+<h2 id="cross-references">Cross-References</h2>
+<ul>
+  <li><strong>VT Project</strong> (<code>project</code> domain) — link field <code>brand</code>. Enforced FK from this side via <code>on_trash</code>.</li>
+  <li><strong>Objective</strong> (<code>okr</code> domain) — link field <code>brand</code> (required). If a Project links an Objective, <code>project.brand</code> must equal <code>objective.brand</code> (enforced in <code>vt_project.validate</code>).</li>
+  <li><strong>KPI Definition</strong> (<code>okr</code>) — <code>brand</code> fetched from parent Objective.</li>
+  <li><strong>Health Score Service</strong> (<code>task/services/health_score_service.py</code>) — <code>list_brand_health_scores()</code> iterates VT Brand to produce per-brand snapshots.</li>
+</ul>
+
+<h2 id="adrs">ADRs</h2>
+<ul>
+  <li><strong>ADR-022</strong> — REST-first, hooks-for-logic. All Brand business rules in controller; no custom whitelisted wrappers for plain CRUD. See <code>docs/adr/rest-first-hooks-for-logic.html</code>.</li>
+</ul>
+
+<h2 id="tests">Test Suite</h2>
+<p>Path: <code>vernon_tasks/brand/doctype/vt_brand/test_vt_brand.py</code> — 16 tests across 5 classes:</p>
+<ul>
+  <li><code>TestVTBrandCRUD</code> — create, read, update, delete happy paths</li>
+  <li><code>TestVTBrandValidations</code> — reqd, unique, normalize, length caps, control chars</li>
+  <li><code>TestVTBrandRenameGuard</code> — rename rejection (ADR-022 PK permanence)</li>
+  <li><code>TestVTBrandAvatar</code> — after_insert avatar gen, before_save regen, custom-logo preservation</li>
+  <li><code>TestVTBrandFKGuard</code> — on_trash FK block + allow-when-no-links</li>
+</ul>
+
+<footer>
+  <p>Vernon Tasks · <code>docs/domains/brand/README.html</code></p>
+</footer>
+
+</div>
+</body>
+</html>
