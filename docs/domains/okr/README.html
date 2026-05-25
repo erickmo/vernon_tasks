@@ -19,16 +19,98 @@
 </header>
 
 <h1 id="domain-okr">Domain: OKR</h1>
-<p>Objectives, Key Results, KPI definitions and entries. Feeds Health Score.</p>
+<p>Objectives, Key Results, KPI definitions and entries. Scoped by <strong>VT Brand</strong>. Feeds Health Score.</p>
+<h2 id="hierarchy">Hierarchy</h2>
+<pre><code>VT Brand
+  └── Objective (period, owner, pdca, brand reqd)
+        ├── Key Result (target/current/progress)
+        └── KPI Definition (brand fetched from objective) → KPI Entry
+</code></pre>
+<p>VT Project also links to Brand. If a Project links an Objective, <code>project.brand</code> must match <code>objective.brand</code> (enforced in <code>vt_project.validate</code>).</p>
 <h2 id="modules">Modules</h2>
 <ul>
 <li><code>vernon_tasks/okr/doctype/</code> — <code>objective</code>, <code>key_result</code>, <code>kpi_definition</code>, <code>kpi_entry</code></li>
 <li>Report: <code>kpi_achievement</code></li>
 </ul>
 <h2 id="health-score">Health Score</h2>
-<pre><code>score = okr_pct × 0.40 + ontime_pct × 0.30 + velocity_health × 0.30
+<pre><code>score = okr_pct × 0.50 + ontime_pct × 0.30 + velocity_health × 0.20
 </code></pre>
 <p>Service: <code>vernon_tasks/task/services/health_score_service.py</code> + <code>test_health_score_service.py</code>.</p>
+<p>Two entry points:</p>
+<ul>
+<li><code>get_health_score(brand=None)</code> — global if no brand, scoped if brand passed. SQL filters Objective.brand, VT Task→Project.brand, VT Project.brand.</li>
+<li><code>list_brand_health_scores()</code> — iterates VT Brand, returns one snapshot per brand. Exposed via <code>exec_analytics.list_brand_health</code>.</li>
+</ul>
+<h2 id="validations">Validations &amp; Lifecycle Rules</h2>
+<p>All rules live in the doctype controllers (Frappe Hooks-First per <strong>ADR-022</strong> — REST-first, hooks-for-logic). Standard <code>/api/resource/{Doctype}</code> endpoints enforce them automatically.</p>
+
+<h3 id="objective-rules">Objective</h3>
+<table>
+  <thead><tr><th>Hook</th><th>Rule</th><th>Failure message</th></tr></thead>
+  <tbody>
+    <tr><td><code>validate</code></td><td>Title trimmed + collapsed; required; ≤ 140 chars</td><td>"Judul objective wajib diisi" / "… maksimal 140 karakter"</td></tr>
+    <tr><td><code>validate</code></td><td>Period grammar: <code>YYYY</code> | <code>YYYY-Hn</code> | <code>YYYY-Qn</code> | <code>YYYY-MM</code>; auto-fills period_start/end when blank</td><td>"Format periode tidak valid …"</td></tr>
+    <tr><td><code>validate</code></td><td>period_end ≥ period_start</td><td>"Tanggal akhir periode tidak boleh sebelum tanggal mulai"</td></tr>
+    <tr><td><code>validate</code></td><td>PDCA transition guard (Deming cycle: PLAN→DO→CHECK→ACT/CLOSED, ACT→PLAN/DO; CLOSED terminal)</td><td>"Transisi PDCA tidak valid …"</td></tr>
+    <tr><td><code>validate</code></td><td>When PDCA reaches CLOSED, status is forced to <code>Closed</code></td><td>—</td></tr>
+    <tr><td><code>on_trash</code></td><td>Block delete when Key Result or KPI Definition still link here</td><td>"Objective masih dipakai oleh: …"</td></tr>
+  </tbody>
+</table>
+
+<h3 id="key-result-rules">Key Result</h3>
+<table>
+  <thead><tr><th>Hook</th><th>Rule</th><th>Failure message</th></tr></thead>
+  <tbody>
+    <tr><td><code>validate</code></td><td>Metric trimmed + collapsed; required; ≤ 140 chars</td><td>"Metric wajib diisi" / "… maksimal 140 karakter"</td></tr>
+    <tr><td><code>validate</code></td><td>target_value &gt; 0</td><td>"Target Value harus lebih besar dari 0"</td></tr>
+    <tr><td><code>validate</code></td><td>current_value ≥ 0</td><td>"Current Value tidak boleh negatif"</td></tr>
+    <tr><td><code>validate</code></td><td>confidence ∈ [0, 100] (also confidence_last_week)</td><td>"Confidence harus antara 0 dan 100"</td></tr>
+    <tr><td><code>validate</code></td><td><code>progress_percent = clamp(current/target, 0..1) × 100</code> auto-computed</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h3 id="kpi-definition-rules">KPI Definition</h3>
+<table>
+  <thead><tr><th>Hook</th><th>Rule</th><th>Failure message</th></tr></thead>
+  <tbody>
+    <tr><td><code>autoname</code></td><td>kpi_name trimmed + collapsed (PK is permanent)</td><td>—</td></tr>
+    <tr><td><code>validate</code></td><td>kpi_name ≤ 140 chars; formula ≤ 5000 chars</td><td>"Nama KPI maksimal 140 karakter" / "Formula maksimal 5000 karakter"</td></tr>
+    <tr><td><code>validate</code></td><td>When objective is linked, <code>kpi.brand == objective.brand</code></td><td>"Brand KPI (…) harus sama dengan brand Objective (…)"</td></tr>
+    <tr><td><code>before_rename</code></td><td>Block all renames (kpi_name is permanent PK)</td><td>"KPI Definition tidak dapat di-rename …"</td></tr>
+    <tr><td><code>on_trash</code></td><td>Block delete when ≥ 1 KPI Entry references this definition</td><td>"KPI Definition masih punya N entry …"</td></tr>
+  </tbody>
+</table>
+
+<h3 id="kpi-entry-rules">KPI Entry</h3>
+<table>
+  <thead><tr><th>Hook</th><th>Rule</th><th>Failure message</th></tr></thead>
+  <tbody>
+    <tr><td><code>validate</code></td><td>date ≤ today (no future measurements)</td><td>"Tanggal entry tidak boleh di masa depan"</td></tr>
+    <tr><td><code>validate</code></td><td>Unique per (kpi_definition, date) — dedupe</td><td>"Sudah ada entry untuk KPI '…' pada tanggal …"</td></tr>
+    <tr><td><code>validate</code></td><td>When project is set, <code>project.brand == kpi.brand</code></td><td>"Brand project (…) tidak sama dengan brand KPI (…)"</td></tr>
+  </tbody>
+</table>
+
+<h3 id="validation-constants">Validation Constants</h3>
+<pre><code>OBJECTIVE_TITLE_MAX_LEN = 140
+KR_METRIC_MAX_LEN       = 140
+KPI_NAME_MAX_LEN        = 140
+KPI_FORMULA_MAX_LEN     = 5000
+CONFIDENCE_MIN, CONFIDENCE_MAX = 0.0, 100.0
+</code></pre>
+
+<h2 id="test-suite">Test Suite</h2>
+<table>
+  <thead><tr><th>Module</th><th>Tests</th><th>Classes</th></tr></thead>
+  <tbody>
+    <tr><td><code>objective/test_objective.py</code></td><td>19</td><td>CRUD, Validations, PDCA, OnTrash, Progress</td></tr>
+    <tr><td><code>key_result/test_key_result.py</code></td><td>14</td><td>CRUD, Validations, Progress</td></tr>
+    <tr><td><code>kpi_definition/test_kpi_definition.py</code></td><td>10</td><td>CRUD, Validations, BrandMatch, RenameGuard, OnTrash</td></tr>
+    <tr><td><code>kpi_entry/test_kpi_entry.py</code></td><td>9</td><td>CRUD, Validations, BrandCoherence</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>52</strong></td><td></td></tr>
+  </tbody>
+</table>
+
 <h2 id="cross-domain-events">Cross-Domain Events</h2>
 <h3 id="triggers">Triggers</h3>
 <table>
