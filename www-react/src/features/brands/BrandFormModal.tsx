@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrand, updateBrand } from './brandsApi';
@@ -23,7 +23,7 @@ export function BrandFormModal({
   const [error, setError] = useState<string | null>(null);
   const qc = useQueryClient();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !mode) return;
     setError(null);
     setValues(mode.kind === 'edit' ? { ...EMPTY, ...mode.initial } : EMPTY);
