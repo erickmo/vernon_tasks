@@ -9,12 +9,17 @@ describe('session api', () => {
 
   it('login POSTs usr+pwd to /api/method/login', async () => {
     mock.onPost('/api/method/login').reply(200, { message: 'Logged In' });
+    mock.onGet('/api/method/vernon_tasks.task.api.boot.boot').reply(200, {
+      message: { user: 'mo@vernon.id', csrf_token: 'tok', roles: ['System Manager'] },
+    });
     await login('mo@vernon.id', 'secret');
     expect(mock.history.post[0]?.data).toBe('usr=mo%40vernon.id&pwd=secret');
   });
 
-  it('fetchSession returns FrappeUser from get_logged_user + user detail', async () => {
-    mock.onGet('/api/method/frappe.auth.get_logged_user').reply(200, { message: 'mo@vernon.id' });
+  it('fetchSession returns FrappeUser from boot + user detail', async () => {
+    mock.onGet('/api/method/vernon_tasks.task.api.boot.boot').reply(200, {
+      message: { user: 'mo@vernon.id', csrf_token: 'tok', roles: ['System Manager'] },
+    });
     mock.onGet('/api/resource/User/mo@vernon.id').reply(200, {
       data: { name: 'mo@vernon.id', full_name: 'Mo', user_image: null, language: 'id', roles: [{ role: 'System Manager' }] },
     });

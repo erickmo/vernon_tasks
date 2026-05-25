@@ -23,7 +23,9 @@ function wrap(ui: React.ReactNode, route = '/portal/dashboard') {
 describe('ProtectedRoute', () => {
   it('renders children when session resolves', async () => {
     const mock = new MockAdapter(api);
-    mock.onGet('/api/method/frappe.auth.get_logged_user').reply(200, { message: 'u' });
+    mock.onGet('/api/method/vernon_tasks.task.api.boot.boot').reply(200, {
+      message: { user: 'u', csrf_token: 't', roles: ['System Manager'] },
+    });
     mock.onGet(/\/api\/resource\/User\//).reply(200, { data: { name: 'u', full_name: 'U', roles: [] } });
     wrap(<div>SECRET</div>);
     expect(await screen.findByText('SECRET')).toBeInTheDocument();
@@ -31,7 +33,7 @@ describe('ProtectedRoute', () => {
 
   it('redirects to /login on 401', async () => {
     const mock = new MockAdapter(api);
-    mock.onGet('/api/method/frappe.auth.get_logged_user').reply(401);
+    mock.onGet('/api/method/vernon_tasks.task.api.boot.boot').reply(401);
     wrap(<div>SECRET</div>);
     expect(await screen.findByText('LOGIN')).toBeInTheDocument();
   });
