@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BRAND_KEY,
@@ -8,6 +8,7 @@ import {
 } from './brandsApi';
 import type { Brand } from './types';
 import { BrandFormModal, type BrandFormMode } from './BrandFormModal';
+import { ApiErrorMessage } from '@/lib/ApiErrorMessage';
 
 export function BrandListPage() {
   const [search, setSearch] = useState('');
@@ -22,7 +23,15 @@ export function BrandListPage() {
     staleTime: 5 * 60 * 1000,
   });
   const [modalMode, setModalMode] = useState<BrandFormMode | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Brand | null>(null);
+  const [pendingDelete, setPendingDeleteState] = useState<Brand | null>(null);
+  const deleteDialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const d = deleteDialogRef.current;
+    if (!d) return;
+    if (pendingDelete && !d.open) d.showModal();
+    if (!pendingDelete && d.open) d.close();
+  }, [pendingDelete]);
 
   const canCreate = !!perms?.can_create;
   const canEdit = !!perms?.can_write;
@@ -32,9 +41,14 @@ export function BrandListPage() {
     mutationFn: (id: string) => deleteBrand(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['brands'] });
-      setPendingDelete(null);
+      setPendingDeleteState(null);
     },
   });
+
+  function setPendingDelete(b: Brand | null) {
+    del.reset();
+    setPendingDeleteState(b);
+  }
 
   return (
     <div className="space-y-6">
@@ -167,13 +181,16 @@ export function BrandListPage() {
         onClose={() => setModalMode(null)}
       />
 
-      {pendingDelete && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center"
-        >
-          <div className="card w-full max-w-sm p-6 space-y-4">
+      <dialog
+        ref={deleteDialogRef}
+        onClose={() => setPendingDelete(null)}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setPendingDelete(null);
+        }}
+        className="fixed top-1/2 left-1/2 right-auto bottom-auto m-0 -translate-x-1/2 -translate-y-1/2 max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-sm rounded-2xl p-0 bg-transparent backdrop:bg-slate-900/40 backdrop:backdrop-blur-sm"
+      >
+        {pendingDelete && (
+          <div className="card w-full p-6 space-y-4">
             <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">
               Delete brand?
             </h2>
@@ -182,11 +199,11 @@ export function BrandListPage() {
               linked to projects cannot be deleted.
             </p>
             {del.isError && (
-              <div className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                {(del.error as any)?.response?.data?.exception ||
-                  (del.error as any)?.response?.data?.message ||
-                  'Failed to delete brand.'}
-              </div>
+              <ApiErrorMessage
+                error={del.error}
+                fallback="Failed to delete brand."
+                className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700"
+              />
             )}
             <div className="flex justify-end gap-2">
               <button
@@ -206,8 +223,8 @@ export function BrandListPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </dialog>
     </div>
   );
 }

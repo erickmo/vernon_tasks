@@ -1,5 +1,4 @@
-import { useLayoutEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createBrand, updateBrand } from './brandsApi';
 import type { BrandFormValues } from './types';
@@ -22,12 +21,20 @@ export function BrandFormModal({
   const [values, setValues] = useState<BrandFormValues>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const qc = useQueryClient();
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   useLayoutEffect(() => {
     if (!open || !mode) return;
     setError(null);
     setValues(mode.kind === 'edit' ? { ...EMPTY, ...mode.initial } : EMPTY);
   }, [open, mode]);
+
+  useEffect(() => {
+    const d = dialogRef.current;
+    if (!d) return;
+    if (open && !d.open) d.showModal();
+    if (!open && d.open) d.close();
+  }, [open]);
 
   const m = useMutation({
     mutationFn: async () => {
@@ -50,7 +57,7 @@ export function BrandFormModal({
     },
   });
 
-  if (!open || !mode) return null;
+  if (!mode) return null;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,18 +75,18 @@ export function BrandFormModal({
 
   const title = mode.kind === 'create' ? 'New brand' : 'Edit brand';
 
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 sm:p-6 overflow-y-auto"
-      onMouseDown={(e) => {
+  return (
+    <dialog
+      ref={dialogRef}
+      onClose={onClose}
+      onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
+      className="fixed top-1/2 left-1/2 right-auto bottom-auto m-0 -translate-x-1/2 -translate-y-1/2 max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] max-w-md rounded-2xl p-0 bg-transparent backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm"
     >
       <form
         onSubmit={submit}
-        className="card w-full max-w-md my-auto flex flex-col overflow-hidden"
+        className="card w-full flex flex-col overflow-hidden"
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
           <h2 className="text-base font-semibold tracking-tight text-slate-900">{title}</h2>
@@ -148,7 +155,6 @@ export function BrandFormModal({
           </button>
         </div>
       </form>
-    </div>,
-    document.body,
+    </dialog>
   );
 }
