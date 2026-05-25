@@ -25,6 +25,78 @@
 <li><code>vernon_tasks/project/doctype/</code> — <code>vt_project</code>, <code>vt_sprint</code>, <code>sprint_task</code>, <code>project_team_member</code>, <code>project_milestone</code>, <code>project_documentation</code></li>
 <li>Reports: <code>sprint_velocity</code>, <code>project_progress_vs_okr</code></li>
 </ul>
+<h2 id="validations">Validations &amp; Lifecycle Rules</h2>
+<p>All rules in doctype controllers per <strong>ADR-022</strong>. Child rows are validated explicitly via parent <code>_validate_children</code> wiring (Frappe doesn't auto-call child <code>validate()</code>).</p>
+
+<h3 id="vt-project-rules">VT Project</h3>
+<table>
+  <thead><tr><th>Hook</th><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td><code>validate</code></td><td>title normalize + ≤ 200 char; end_date strictly &gt; start_date</td></tr>
+    <tr><td><code>validate</code></td><td>PDCA transition guard (PLAN→DO→CHECK→ACT/CLOSED, ACT→PLAN/DO; CLOSED terminal); pdca=CLOSED forces status=Closed</td></tr>
+    <tr><td><code>validate</code></td><td>linked Objective brand must equal project.brand</td></tr>
+    <tr><td><code>validate</code></td><td>owner/leader cannot appear in team_members</td></tr>
+    <tr><td><code>on_trash</code></td><td>block delete while VT Task or VT Sprint links exist</td></tr>
+  </tbody>
+</table>
+
+<h3 id="vt-sprint-rules">VT Sprint</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>sprint_title normalize + ≤ 140 char; end_date &gt; start_date; range fits inside project.start..end</td></tr>
+    <tr><td>Status flow forward-only: Planning → Active → Review → Closed</td></tr>
+    <tr><td>Every Sprint Task in <code>tasks</code> must belong to the same project; no duplicate task rows</td></tr>
+  </tbody>
+</table>
+
+<h3 id="sprint-task-rules">Sprint Task</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>task required; must reference an existing VT Task</td></tr>
+  </tbody>
+</table>
+
+<h3 id="ptm-rules">Project Team Member</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>user required + must exist; role ∈ {Owner, Leader, Member}</td></tr>
+    <tr><td>is_also_leader rejected on Owner rows (Owner already outranks)</td></tr>
+  </tbody>
+</table>
+
+<h3 id="milestone-rules">Project Milestone</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>milestone_title normalize + ≤ 200 char; status ∈ {Open, Completed}</td></tr>
+    <tr><td>due_date (when set) must be inside parent project's date range</td></tr>
+  </tbody>
+</table>
+
+<h3 id="documentation-rules">Project Documentation</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>doc_title normalize + ≤ 200 char; content ≤ 50000 char</td></tr>
+  </tbody>
+</table>
+
+<h2 id="test-suite">Test Suite</h2>
+<table>
+  <thead><tr><th>Module</th><th>Tests</th></tr></thead>
+  <tbody>
+    <tr><td><code>vt_project/test_vt_project.py</code></td><td>18</td></tr>
+    <tr><td><code>vt_sprint/test_vt_sprint.py</code></td><td>13</td></tr>
+    <tr><td><code>project_team_member/test_project_team_member.py</code></td><td>5</td></tr>
+    <tr><td><code>project_milestone/test_project_milestone.py</code></td><td>5</td></tr>
+    <tr><td><code>project_documentation/test_project_documentation.py</code></td><td>3</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>44</strong></td></tr>
+  </tbody>
+</table>
+
 <h2 id="cross-domain-events">Cross-Domain Events</h2>
 <h3 id="triggers">Triggers</h3>
 <table>
