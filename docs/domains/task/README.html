@@ -31,6 +31,91 @@
 <p>Source: <code>docs/PRD.md</code> §4.2 (Doctypes), §4.3 (PDCA), §4.4 (Points), §4.5 (Scheduling).</p>
 <h2 id="state-machine">State Machine</h2>
 <p><code>BACKLOG → PLAN → DO → CHECK → DONE/ACT</code>. See PRD §4.3.</p>
+
+<h2 id="validations">Validations &amp; Lifecycle Rules</h2>
+<p>All rules in doctype controllers — Frappe Hooks-First per <strong>ADR-022</strong>.</p>
+
+<h3 id="vt-task-rules">VT Task</h3>
+<table>
+  <thead><tr><th>Hook</th><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td><code>validate</code></td><td>title normalize + ≤ 200 char; deadline &gt; start_date; weight &gt; 0; hours ≥ 0</td></tr>
+    <tr><td><code>validate</code></td><td>leader_override_points requires non-empty override_reason</td></tr>
+    <tr><td><code>validate</code></td><td>PDCA transition guard (BACKLOG → PLAN → DO → CHECK → ACT/DONE/DO; ACT → DO; DONE terminal)</td></tr>
+    <tr><td><code>validate</code></td><td>kanban_status auto-mirrors pdca_phase unless manually set to "Blocked"</td></tr>
+    <tr><td><code>validate</code></td><td>is_recurring requires recurring_rule</td></tr>
+    <tr><td><code>validate</code></td><td>self-block dependencies rejected; child rows of <code>schedule_entries</code> + <code>dependencies</code> validated via <code>_validate_children</code></td></tr>
+    <tr><td><code>on_submit</code></td><td>If pdca_phase == DONE, stamp completion_date = today</td></tr>
+  </tbody>
+</table>
+
+<h3 id="task-schedule-entry-rules">Task Schedule Entry</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>allocated_hours ∈ (0, 24]; hours_planned ∈ [0, 24]; hour_start ∈ [0, 23]</td></tr>
+  </tbody>
+</table>
+
+<h3 id="task-dependency-rules">Task Dependency</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>blocked_by required, must reference an existing VT Task; dependency_type ∈ {Finish-to-Start, Start-to-Start}; self-block detected at parent</td></tr>
+  </tbody>
+</table>
+
+<h3 id="task-point-log-rules">Task Point Log (append-only ledger)</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>amount sign matches transaction_type: <code>earned</code>/<code>early_bonus</code> &gt; 0; <code>late_penalty</code>/<code>revision_deduction</code> &lt; 0; <code>leader_override</code> ≠ 0</td></tr>
+    <tr><td>log_timestamp ≤ now</td></tr>
+    <tr><td><code>leader_override</code> requires <code>overridden_by</code> + <code>note</code></td></tr>
+    <tr><td>Rows are immutable once inserted (task/user/type/amount/timestamp can't change)</td></tr>
+  </tbody>
+</table>
+
+<h3 id="risk-event-rules">Risk Event</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>reason normalize + ≤ 140 char; severity ∈ {high, med, low}; resolved_at ≥ detected_at; task.project must equal risk_event.project</td></tr>
+  </tbody>
+</table>
+
+<h3 id="recurring-rule-rules">Recurring Rule</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>rule_type ∈ {Daily, Weekly, Monthly, Custom}; interval ∈ [1, 365]; day_of_month ∈ [1, 31]; days_of_week ⊆ {Mon..Sun}</td></tr>
+    <tr><td>max_occurrences ≥ 1; end_date ≥ today on create</td></tr>
+  </tbody>
+</table>
+
+<h3 id="report-sub-rules">VT Report Subscription</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>slug ∈ ALLOWED_SLUGS (whitelist); cron is 5-field expression; filters_json must parse as JSON; recipients non-empty + unique; each recipient.user must exist</td></tr>
+  </tbody>
+</table>
+
+<h2 id="test-suite">Test Suite</h2>
+<table>
+  <thead><tr><th>Module</th><th>Tests</th></tr></thead>
+  <tbody>
+    <tr><td><code>vt_task/test_vt_task.py</code></td><td>18</td></tr>
+    <tr><td><code>task_schedule_entry/test_task_schedule_entry.py</code></td><td>9</td></tr>
+    <tr><td><code>task_dependency/test_task_dependency.py</code></td><td>5</td></tr>
+    <tr><td><code>task_point_log/test_task_point_log.py</code></td><td>12</td></tr>
+    <tr><td><code>risk_event/test_risk_event.py</code></td><td>8</td></tr>
+    <tr><td><code>recurring_rule/test_recurring_rule.py</code></td><td>18</td></tr>
+    <tr><td><code>vt_report_subscription/test_vt_report_subscription.py</code></td><td>11</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>81</strong></td></tr>
+  </tbody>
+</table>
+
 <h2 id="cross-domain-events">Cross-Domain Events</h2>
 <h3 id="triggers-i-fire">Triggers (I fire)</h3>
 <table>
