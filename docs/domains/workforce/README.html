@@ -25,6 +25,62 @@
 <li><code>vernon_tasks/workforce/doctype/</code> — <code>work_profile</code>, <code>work_schedule_day</code>, <code>user_point_summary</code>, <code>daily_summary</code></li>
 <li>Reports: <code>my_points_progress</code>, <code>team_workload_overview</code></li>
 </ul>
+<h2 id="validations">Validations &amp; Lifecycle Rules</h2>
+<p>All rules in doctype controllers per <strong>ADR-022</strong>. Frappe Hooks-First.</p>
+
+<h3 id="work-profile-rules">Work Profile</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>daily_target_hours ∈ (0, 24]</td></tr>
+    <tr><td>work_start_time &lt; work_end_time when both set</td></tr>
+    <tr><td>working_days: child <code>validate</code> wired; no duplicate day_of_week</td></tr>
+  </tbody>
+</table>
+
+<h3 id="schedule-day-rules">Work Schedule Day (child)</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>day_of_week required + must be a weekday name (Mon..Sun)</td></tr>
+    <tr><td>When is_working &amp; both times set, start_time &lt; end_time</td></tr>
+  </tbody>
+</table>
+
+<h3 id="daily-summary-rules">Daily Summary</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>user must exist; date required, ≤ today (no future)</td></tr>
+    <tr><td>target / scheduled / completed hours each ∈ [0, 24]</td></tr>
+    <tr><td>total_points_today is signed (negative allowed for net penalty days)</td></tr>
+    <tr><td>Natural unique key (user, date) via name format <code>DS-{user}-{date}</code></td></tr>
+  </tbody>
+</table>
+
+<h3 id="ups-rules">User Point Summary</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>user must exist; period grammar matches Objective (YYYY | YYYY-Hn | YYYY-Qn | YYYY-MM)</td></tr>
+    <tr><td>total_earned / total_bonus / total_penalty ≥ 0 (raw aggregates)</td></tr>
+    <tr><td>total_override_delta signed (overrides can subtract)</td></tr>
+    <tr><td>net_points auto-synced on save: <code>earned + bonus − penalty + override_delta</code></td></tr>
+    <tr><td>Natural unique key (user, period) via name format <code>UPS-{user}-{period}</code></td></tr>
+  </tbody>
+</table>
+
+<h2 id="test-suite">Test Suite</h2>
+<table>
+  <thead><tr><th>Module</th><th>Tests</th></tr></thead>
+  <tbody>
+    <tr><td><code>work_profile/test_work_profile.py</code></td><td>12</td></tr>
+    <tr><td><code>daily_summary/test_daily_summary.py</code></td><td>8</td></tr>
+    <tr><td><code>user_point_summary/test_user_point_summary.py</code></td><td>11</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>31</strong></td></tr>
+  </tbody>
+</table>
+
 <h2 id="cross-domain-events">Cross-Domain Events</h2>
 <h3 id="listens">Listens</h3>
 <table>
