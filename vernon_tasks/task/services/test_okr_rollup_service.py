@@ -3,10 +3,22 @@ from frappe.tests.utils import FrappeTestCase
 from vernon_tasks.task.services.okr_rollup_service import get_okr_rollup
 
 
+ROLLUP_TEST_BRAND = "Test Rollup Brand"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", ROLLUP_TEST_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand", "brand_name": ROLLUP_TEST_BRAND,
+        }).insert(ignore_permissions=True)
+
+
 def _make_objective(title, period, status="Open"):
+    _ensure_brand()
     return frappe.get_doc({
         "doctype": "Objective",
         "title": title,
+        "brand": ROLLUP_TEST_BRAND,
         "period": period,
         "objective_owner": frappe.session.user,
         "status": status,

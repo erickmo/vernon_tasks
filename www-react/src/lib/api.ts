@@ -33,7 +33,8 @@ export function onUnauthorized(fn: () => void) {
 api.interceptors.response.use(
   (res) => res,
   (err: AxiosError) => {
-    if (err.response?.status === 401 && unauthorizedHandler) {
+    const status = err.response?.status;
+    if ((status === 401 || status === 403) && unauthorizedHandler) {
       unauthorizedHandler();
     }
     return Promise.reject(err);

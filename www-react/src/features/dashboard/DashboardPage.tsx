@@ -6,6 +6,7 @@ import { TodayCard } from './components/TodayCard';
 import { MeCard } from './components/MeCard';
 import { SprintsScroller } from './components/SprintsScroller';
 import { ProjectsGrid } from './components/ProjectsGrid';
+import { BrandHealthRollup } from './components/BrandHealthRollup';
 import type { Role } from './types';
 
 const STALE_TIME_MS = 60_000;
@@ -103,6 +104,7 @@ export function DashboardPage() {
           <MeCard data={data.me} />
         </div>
       </div>
+      {(role === 'exec' || role === 'leader') && <BrandHealthRollup />}
       <SprintsScroller sprints={data.sprints} />
       <ProjectsGrid projects={data.projects} />
     </div>

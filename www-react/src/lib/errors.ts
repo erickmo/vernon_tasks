@@ -82,10 +82,10 @@ function matchLinkExists(text: string): LinkExists | null {
   if (!m) return null;
   return {
     kind: 'link_exists',
-    doctype: m[1].trim(),
-    name: m[2].trim(),
-    linkedDoctype: m[3].trim(),
-    linkedName: m[4].trim(),
+    doctype: (m[1] ?? '').trim(),
+    name: (m[2] ?? '').trim(),
+    linkedDoctype: (m[3] ?? '').trim(),
+    linkedName: (m[4] ?? '').trim(),
   };
 }
 

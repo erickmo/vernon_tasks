@@ -3,14 +3,25 @@ import unittest
 from datetime import date
 from vernon_tasks.api.okr import list_objectives, get_objective_with_krs, bulk_advance_pdca
 
+API_TEST_BRAND = "Test API Brand"
+
+
+def _ensure_api_brand():
+    if not frappe.db.exists("VT Brand", API_TEST_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand", "brand_name": API_TEST_BRAND,
+        }).insert(ignore_permissions=True)
+
 
 class TestListObjectives(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        _ensure_api_brand()
         if not frappe.db.exists("Objective", {"title": "Test OKR 2026-Q2"}):
             frappe.get_doc({
                 "doctype": "Objective",
                 "title": "Test OKR 2026-Q2",
+                "brand": API_TEST_BRAND,
                 "period": "2026-Q2",
                 "period_start": date(2026, 4, 1),
                 "period_end": date(2026, 6, 30),
@@ -58,11 +69,13 @@ class TestGetObjectiveWithKrs(unittest.TestCase):
 class TestBulkAdvancePdca(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        _ensure_api_brand()
         cls.names = []
         for phase in ("PLAN", "DO", "CLOSED"):
             doc = frappe.get_doc({
                 "doctype": "Objective",
                 "title": f"PDCA test {phase}",
+                "brand": API_TEST_BRAND,
                 "period": "2026-Q3",
                 "objective_owner": "Administrator",
                 "status": "Open",

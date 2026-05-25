@@ -10,6 +10,8 @@ import { ReportHubPage } from '@/features/reports/ReportHubPage';
 import { ReportDetailPage } from '@/features/reports/ReportDetailPage';
 import { ProjectListPage } from '@/features/projects/ProjectListPage';
 import { BrandListPage } from '@/features/brands/BrandListPage';
+import { StrategyPage } from '@/features/strategy/StrategyPage';
+import { BrandDetailPage } from '@/features/strategy/BrandDetailPage';
 import { ProjectDetailPage } from '@/features/projects/ProjectDetailPage';
 import { TasksTab } from '@/features/projects/detail/tabs/TasksTab';
 import { OverviewTab } from '@/features/projects/detail/tabs/OverviewTab';
@@ -46,6 +48,8 @@ export const router = createBrowserRouter([
           { path: 'dashboard', element: <DashboardPage /> },
           { path: 'projects', element: <ProjectListPage /> },
           { path: 'brands', element: <BrandListPage /> },
+          { path: 'strategy', element: <StrategyPage /> },
+          { path: 'strategy/:brand', element: <BrandDetailPage /> },
           {
             path: 'projects/:id',
             element: <ProjectDetailPage />,

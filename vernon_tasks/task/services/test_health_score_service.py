@@ -1,7 +1,10 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
-from vernon_tasks.task.services.health_score_service import get_health_score
+from vernon_tasks.task.services.health_score_service import (
+    get_health_score,
+    list_brand_health_scores,
+)
 
 
 class TestHealthScore(FrappeTestCase):
@@ -27,8 +30,11 @@ class TestHealthScore(FrappeTestCase):
         # Create a project + a single late task + a single on-time task within 90 days
         for n in frappe.get_all("VT Project", {"title": "HS-OnTime"}, ["name"]):
             frappe.delete_doc("VT Project", n["name"], force=True)
+        if not frappe.db.exists("VT Brand", "HS Test Brand"):
+            frappe.get_doc({"doctype": "VT Brand", "brand_name": "HS Test Brand"}).insert(ignore_permissions=True)
         p = frappe.get_doc({
             "doctype": "VT Project", "title": "HS-OnTime",
+            "brand": "HS Test Brand",
             "project_owner": frappe.session.user,
             "start_date": add_days(today(), -30),
             "end_date": add_days(today(), 30),
@@ -56,3 +62,21 @@ class TestHealthScore(FrappeTestCase):
         # Just assert that ontime_pct is sane (0..100); other test data on site means we don't pin a value
         self.assertGreaterEqual(r["ontime_pct"], 0.0)
         self.assertLessEqual(r["ontime_pct"], 100.0)
+
+    def test_brand_scoped_returns_brand_field(self):
+        if not frappe.db.exists("VT Brand", "Brand Scope Test"):
+            frappe.get_doc({"doctype": "VT Brand", "brand_name": "Brand Scope Test"}).insert(ignore_permissions=True)
+        r = get_health_score(brand="Brand Scope Test")
+        self.assertEqual(r["brand"], "Brand Scope Test")
+        for key in ("score", "okr_pct", "ontime_pct", "velocity_health"):
+            self.assertIn(key, r)
+
+    def test_list_brand_health_returns_per_brand(self):
+        if not frappe.db.exists("VT Brand", "Brand List Test"):
+            frappe.get_doc({"doctype": "VT Brand", "brand_name": "Brand List Test"}).insert(ignore_permissions=True)
+        rows = list_brand_health_scores()
+        self.assertIsInstance(rows, list)
+        self.assertTrue(any(r["brand"] == "Brand List Test" for r in rows))
+        for r in rows:
+            self.assertIn("brand_name", r)
+            self.assertIn("score", r)

@@ -4,9 +4,10 @@
   "creation": "2026-05-07 00:00:00.000000",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["title","period","period_start","period_end","column_break_1","objective_owner","status","pdca_phase","description_section","description"],
+  "field_order": ["title","brand","period","period_start","period_end","column_break_1","objective_owner","status","pdca_phase","description_section","description"],
   "fields": [
     {"fieldname": "title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "brand", "fieldtype": "Link", "label": "Brand", "options": "VT Brand", "reqd": 1, "in_list_view": 1},
     {"fieldname": "period", "fieldtype": "Data", "label": "Period", "description": "e.g. 2026-Q2 or 2026", "reqd": 1, "in_list_view": 1},
     {"fieldname": "period_start", "fieldtype": "Date", "label": "Period Start", "description": "Auto-filled from period string; editable."},
     {"fieldname": "period_end", "fieldtype": "Date", "label": "Period End", "description": "Auto-filled from period string; editable."},
@@ -17,7 +18,7 @@
     {"fieldname": "description_section", "fieldtype": "Section Break", "label": "Description"},
     {"fieldname": "description", "fieldtype": "Long Text", "label": "Description"}
   ],
-  "modified": "2026-05-07 00:00:00.000000",
+  "modified": "2026-05-25 00:00:00.000000",
   "modified_by": "Administrator",
   "module": "Okr",
   "name": "Objective",
@@ -30,7 +31,7 @@
   "sort_field": "period",
   "sort_order": "DESC",
   "title_field": "title",
-  "search_fields": "title,period,objective_owner",
+  "search_fields": "title,brand,period,objective_owner",
   "show_title_field_in_link": 1,
   "track_changes": 1
 }

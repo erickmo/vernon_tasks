@@ -75,7 +75,12 @@
     <tr>
       <td>Brand rename on <code>brand_name</code> change</td>
       <td>Manual <code>frappe.rename_doc</code> in <code>update_brand</code></td>
-      <td>Doctype <code>autoname: field:brand_name</code> — REST <code>PUT</code> auto-renames</td>
+      <td><strong>Not supported.</strong> Doctype uses default
+        <code>allow_rename: 0</code>, so <code>brand_name</code> is the
+        permanent primary key. <code>brandsApi.updateBrand</code> rejects
+        a changed <code>brand_name</code> with a friendly Indonesian error
+        before hitting the backend; UI disables the field in edit mode.
+        To "rename" a brand, delete it (FK-guarded) and recreate.</td>
     </tr>
     <tr>
       <td>Project single-doc CRUD</td>
@@ -128,8 +133,10 @@
       response fields. Map at the frontend boundary instead.</li>
     <li>Re-implementing Frappe's link integrity check (<code>check_if_doc_is_linked</code>)
       inside a custom delete endpoint.</li>
-    <li>Calling <code>frappe.rename_doc</code> manually for doctypes whose
-      <code>autoname</code> is <code>field:&lt;field&gt;</code>.</li>
+    <li>Calling <code>frappe.rename_doc</code> on a doctype that has not
+      explicitly set <code>allow_rename: 1</code>. Frappe will throw
+      <code>ValidationError: &lt;doctype&gt; not allowed to be renamed</code>;
+      treat the autoname field as immutable instead.</li>
   </ul>
 
   <h3>References</h3>

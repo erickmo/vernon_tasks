@@ -6,6 +6,7 @@ const ITEMS = [
   { to: '/portal/worksheet', label: 'Worksheet' },
   { to: '/portal/projects', label: 'Projects' },
   { to: '/portal/brands', label: 'Brands' },
+  { to: '/portal/strategy', label: 'Strategy' },
   { to: '/portal/reports', label: 'Reports' },
 ];
 

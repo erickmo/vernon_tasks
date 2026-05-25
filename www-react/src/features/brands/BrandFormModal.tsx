@@ -42,18 +42,30 @@ export function BrandFormModal({
       if (mode.kind === 'create') return createBrand(values);
       return updateBrand(mode.brandId, values);
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['brands'] });
-      qc.invalidateQueries({ queryKey: ['brand-search'] });
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['brands'], refetchType: 'all' }),
+        qc.invalidateQueries({ queryKey: ['brand'], refetchType: 'all' }),
+        qc.invalidateQueries({ queryKey: ['brand-search'], refetchType: 'all' }),
+        qc.invalidateQueries({ queryKey: ['brand-search-single'], refetchType: 'all' }),
+        qc.invalidateQueries({ queryKey: ['brand-strategy'], refetchType: 'all' }),
+      ]);
       onClose();
     },
     onError: (err: any) => {
-      const msg =
+      const raw =
         err?.response?.data?.exception ||
         err?.response?.data?.message ||
         err?.message ||
-        'Failed to save brand';
-      setError(String(msg));
+        '';
+      let msg = String(raw);
+      if (/not allowed to be renamed/i.test(msg)) {
+        msg =
+          'Nama brand tidak bisa diubah. Untuk mengganti nama, hapus brand ini lalu buat brand baru (pastikan tidak ada proyek yang masih terhubung).';
+      } else if (!msg) {
+        msg = 'Gagal menyimpan brand. Coba lagi.';
+      }
+      setError(msg);
     },
   });
 
@@ -104,12 +116,18 @@ export function BrandFormModal({
           <label className="block space-y-1.5">
             <span className="block text-xs font-medium text-slate-600">Brand name *</span>
             <input
-              className="input"
+              className="input disabled:bg-slate-50 disabled:text-slate-500"
               value={values.brand_name}
               onChange={(e) => set('brand_name', e.target.value)}
-              autoFocus
+              autoFocus={mode.kind === 'create'}
               required
+              disabled={mode.kind === 'edit'}
             />
+            {mode.kind === 'edit' && (
+              <span className="block text-[11px] text-slate-400">
+                Nama brand tidak bisa diubah setelah dibuat.
+              </span>
+            )}
           </label>
 
           <label className="block space-y-1.5">

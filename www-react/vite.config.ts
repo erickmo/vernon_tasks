@@ -21,6 +21,14 @@ export default defineConfig({
         target: 'http://task.localhost:8080',
         changeOrigin: true,
       },
+      '/files': {
+        target: 'http://task.localhost:8080',
+        changeOrigin: true,
+      },
+      '/private/files': {
+        target: 'http://task.localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
   build: {

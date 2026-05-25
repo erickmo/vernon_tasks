@@ -94,8 +94,27 @@ export async function createBrand(payload: BrandFormValues): Promise<Brand> {
   return toBrand(res.data.data);
 }
 
+/**
+ * Nama brand bersifat permanen (doctype `allow_rename: 0`, autoname
+ * `field:brand_name`). Jika user mengubah `brand_name`, kita tolak di
+ * frontend dengan pesan Bahasa Indonesia yang ramah — backend akan
+ * melempar `ValidationError: VT Brand not allowed to be renamed` yang
+ * tidak informatif untuk pengguna.
+ */
+export class BrandRenameNotAllowedError extends Error {
+  constructor() {
+    super(
+      'Nama brand tidak bisa diubah. Untuk mengganti nama, hapus brand ini lalu buat brand baru (pastikan tidak ada proyek yang masih terhubung).',
+    );
+    this.name = 'BrandRenameNotAllowedError';
+  }
+}
+
 export async function updateBrand(id: string, payload: Partial<BrandFormValues>): Promise<Brand> {
-  // PUT auto-renames the doc when `brand_name` (autoname field) changes.
+  const newName = payload.brand_name?.trim();
+  if (newName && newName !== id) {
+    throw new BrandRenameNotAllowedError();
+  }
   const res = await api.put<{ data: FrappeBrandRow }>(
     `${RESOURCE}/${encodeURIComponent(id)}`,
     payload,

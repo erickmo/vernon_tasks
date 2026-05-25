@@ -12,10 +12,11 @@ import type {
 import { DatePicker } from './DatePicker';
 import { UserPicker } from './UserPicker';
 import { BrandPicker } from './BrandPicker';
+import { ObjectivePicker } from './ObjectivePicker';
 
 const STATUS_OPTIONS: ProjectStatus[] = ['Open', 'On Track', 'At Risk', 'Closed'];
 const PDCA_OPTIONS: ProjectPdcaPhase[] = ['PLAN', 'DO', 'CHECK', 'ACT', 'CLOSED'];
-const MEMBER_ROLES: ProjectMemberRole[] = ['Owner', 'Leader', 'Member'];
+const MEMBER_ROLES: ProjectMemberRole[] = ['Member'];
 
 const EMPTY_FORM: ProjectFormValues = {
   title: '',
@@ -148,13 +149,13 @@ export function ProjectFormModal({
     >
       <form
         onSubmit={submit}
-        className="card w-full sm:w-[90vw] lg:w-[75vw] max-w-[1600px] my-auto flex flex-col max-h-[92vh] overflow-hidden"
+        className="card w-full sm:w-[85vw] lg:w-[62vw] max-w-[1100px] my-auto flex flex-col max-h-[92vh] overflow-hidden"
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-8 py-5">
           <div>
             <h2 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Configure team, schedule, and analytics for this project.
+              Configure team and schedule for this project.
             </p>
           </div>
           <button
@@ -167,8 +168,8 @@ export function ProjectFormModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7 space-y-6">
+        <div className="flex-1 overflow-y-auto px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-7 space-y-5">
 
         <Section label="Basics">
           <Field label="Title *">
@@ -183,26 +184,16 @@ export function ProjectFormModal({
           <Field label="Brand *">
             <BrandPicker
               value={values.brand}
-              onChange={(v) => set('brand', v)}
+              onChange={(v) => {
+                setValues((cur) => ({
+                  ...cur,
+                  brand: v,
+                  objective: v !== cur.brand ? '' : cur.objective,
+                }));
+              }}
               allowClear={false}
             />
           </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Owner *">
-              <UserPicker
-                value={values.project_owner}
-                onChange={(v) => set('project_owner', v)}
-                allowClear={false}
-              />
-            </Field>
-            <Field label="Leader">
-              <UserPicker
-                value={values.project_leader ?? ''}
-                onChange={(v) => set('project_leader', v)}
-              />
-            </Field>
-          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Start date *">
@@ -250,70 +241,38 @@ export function ProjectFormModal({
             </Field>
           </div>
 
-          <Field label="Linked Objective (ID)">
-            <input
-              className="input"
-              placeholder="OBJ-…"
+          <Field label="Linked Objective">
+            <ObjectivePicker
               value={values.objective ?? ''}
-              onChange={(e) => set('objective', e.target.value)}
+              onChange={(v) => set('objective', v)}
+              brand={values.brand}
+              disabled={!values.brand}
+              placeholder={values.brand ? 'Pick objective…' : 'Pick a brand first'}
             />
           </Field>
         </Section>
 
-        <Section label="Analytics Thresholds" collapsible>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Blocked days">
-              <input
-                type="number"
-                min={0}
-                className="input"
-                placeholder="inherit"
-                value={values.blocked_days_threshold ?? ''}
-                onChange={(e) =>
-                  set(
-                    'blocked_days_threshold',
-                    e.target.value === '' ? null : Number(e.target.value),
-                  )
-                }
+          </div>
+
+          <div className="lg:col-span-5 space-y-5 lg:border-l lg:border-slate-100 lg:pl-6">
+
+        <Section label="Ownership">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Owner *">
+              <UserPicker
+                value={values.project_owner}
+                onChange={(v) => set('project_owner', v)}
+                allowClear={false}
               />
             </Field>
-            <Field label="Slip %">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                className="input"
-                placeholder="inherit"
-                value={values.slip_pct_threshold ?? ''}
-                onChange={(e) =>
-                  set(
-                    'slip_pct_threshold',
-                    e.target.value === '' ? null : Number(e.target.value),
-                  )
-                }
-              />
-            </Field>
-            <Field label="Capacity %">
-              <input
-                type="number"
-                min={0}
-                max={200}
-                className="input"
-                placeholder="inherit"
-                value={values.capacity_pct_threshold ?? ''}
-                onChange={(e) =>
-                  set(
-                    'capacity_pct_threshold',
-                    e.target.value === '' ? null : Number(e.target.value),
-                  )
-                }
+            <Field label="Leader">
+              <UserPicker
+                value={values.project_leader ?? ''}
+                onChange={(v) => set('project_leader', v)}
               />
             </Field>
           </div>
         </Section>
-          </div>
-
-          <div className="lg:col-span-5 space-y-6 lg:border-l lg:border-slate-100 lg:pl-8">
 
         <Section label="Team Members">
           <div className="space-y-2">

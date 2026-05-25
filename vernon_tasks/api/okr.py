@@ -36,10 +36,15 @@ def list_objectives(filters=None):
         conditions.append("o.pdca_phase IN %(pdca_phases)s")
         params["pdca_phases"] = tuple(pdca_phases)
 
+    brands = filters.get("brands") or []
+    if brands:
+        conditions.append("o.brand IN %(brands)s")
+        params["brands"] = tuple(brands)
+
     where = " AND ".join(conditions)
     sql = f"""
         SELECT
-          o.name, o.title, o.period, o.period_start, o.period_end,
+          o.name, o.title, o.brand, o.period, o.period_start, o.period_end,
           o.objective_owner, o.status, o.pdca_phase, o.modified,
           COALESCE(AVG(kr.progress_percent), 0) AS progress_avg
         FROM `tabObjective` o
