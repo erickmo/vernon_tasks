@@ -5,8 +5,9 @@ import { useInvalidateSession } from './useSession';
 import { env } from '@/lib/env';
 
 export function LoginPage() {
-  const [usr, setUsr] = useState('');
-  const [pwd, setPwd] = useState('');
+  const devPrefill = import.meta.env.MODE === 'development';
+  const [usr, setUsr] = useState(devPrefill ? 'administrator' : '');
+  const [pwd, setPwd] = useState(devPrefill ? 'admin' : '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const nav = useNavigate();

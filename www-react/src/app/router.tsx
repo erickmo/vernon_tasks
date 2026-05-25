@@ -17,10 +17,6 @@ import { BurndownTab } from '@/features/projects/detail/tabs/BurndownTab';
 import { OkrTab } from '@/features/projects/detail/tabs/OkrTab';
 import { MembersTab } from '@/features/projects/detail/tabs/MembersTab';
 
-function PlaceholderPage({ title }: { title: string }) {
-  return <h1 className="text-xl font-semibold">{title}</h1>;
-}
-
 function RouterOutlet() {
   return <Outlet />;
 }
