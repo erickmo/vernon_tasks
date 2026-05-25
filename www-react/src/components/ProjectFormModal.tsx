@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createProject, updateProject } from '@/features/projects/projectsApi';
@@ -52,7 +52,7 @@ export function ProjectFormModal({
   const [error, setError] = useState<string | null>(null);
   const qc = useQueryClient();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !mode) return;
     setError(null);
     if (mode.kind === 'edit') {
