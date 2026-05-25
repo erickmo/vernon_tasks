@@ -30,6 +30,82 @@
 <ul>
 <li><code>Vernon Telemetry Event</code> — 90 days, purged via scheduler <code>purge_old_telemetry</code>.</li>
 </ul>
+<h2 id="modules-list">Doctypes</h2>
+<ul>
+  <li><code>vt_settings</code> (Single) — point calc knobs, daily target default, analytics defaults, push VAPID keys, portal feature flags</li>
+  <li><code>vernon_push_subscription</code> — Web Push endpoint per device</li>
+  <li><code>vernon_push_preference</code> — per-user notification toggles (PK: user)</li>
+  <li><code>vt_contact_request</code> — landing-page contact form submissions</li>
+  <li><code>vernon_telemetry_event</code> — append-only product analytics</li>
+</ul>
+
+<h2 id="validations">Validations &amp; Lifecycle Rules</h2>
+<p>All rules in doctype controllers per <strong>ADR-022</strong>.</p>
+
+<h3 id="vt-settings-rules">VT Settings (Single)</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>weight_multiplier ∈ (0, 1000]</td></tr>
+    <tr><td>early_bonus_rate / late_penalty_rate / revision_deduct_rate ∈ [0, 1.0] (fractions per day)</td></tr>
+    <tr><td>default_daily_target_hours ∈ (0, 24]</td></tr>
+    <tr><td>default_blocked_days_threshold ≥ 0</td></tr>
+  </tbody>
+</table>
+
+<h3 id="push-sub-rules">Vernon Push Subscription</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>user must exist; endpoint required + must be <code>https://</code></td></tr>
+    <tr><td>p256dh + auth required (JSON length caps applied)</td></tr>
+    <tr><td>endpoint immutable after insert (re-subscribe = delete + new row)</td></tr>
+    <tr><td>before_insert stamps <code>last_seen</code> if blank</td></tr>
+  </tbody>
+</table>
+
+<h3 id="push-pref-rules">Vernon Push Preference</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>user must exist; user is the permanent PK</td></tr>
+    <tr><td>before_rename blocked</td></tr>
+  </tbody>
+</table>
+
+<h3 id="contact-rules">VT Contact Request</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>full_name normalize + ≤ 200 char; company ≤ 200; message ≤ 5000</td></tr>
+    <tr><td>email server-side format validation (<code>validate_email_address</code>); lowercased canonical</td></tr>
+    <tr><td>status ∈ {New, Contacted, Closed}</td></tr>
+  </tbody>
+</table>
+
+<h3 id="telemetry-rules">Vernon Telemetry Event</h3>
+<table>
+  <thead><tr><th>Rule</th></tr></thead>
+  <tbody>
+    <tr><td>event name matches <code>[a-zA-Z0-9_.]{1,64}</code> (group-by friendly)</td></tr>
+    <tr><td>timestamp not in future (5-min clock-skew tolerance, site TZ aware)</td></tr>
+    <tr><td>props ≤ 10000 char + must parse as JSON when set</td></tr>
+    <tr><td>before_insert defaults: timestamp = now_datetime(), user = session.user</td></tr>
+  </tbody>
+</table>
+
+<h2 id="test-suite">Test Suite</h2>
+<table>
+  <thead><tr><th>Module</th><th>Tests</th></tr></thead>
+  <tbody>
+    <tr><td><code>vt_settings/test_vt_settings.py</code></td><td>8</td></tr>
+    <tr><td><code>vernon_push_subscription/test_vernon_push_subscription.py</code></td><td>8</td></tr>
+    <tr><td><code>vt_contact_request/test_vt_contact_request.py</code></td><td>8</td></tr>
+    <tr><td><code>vernon_telemetry_event/test_vernon_telemetry_event.py</code></td><td>7</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>31</strong></td></tr>
+  </tbody>
+</table>
+
 <h2 id="cross-domain-events">Cross-Domain Events</h2>
 <h3 id="triggers">Triggers</h3>
 <table>

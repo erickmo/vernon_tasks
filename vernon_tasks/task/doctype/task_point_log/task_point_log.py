@@ -11,11 +11,11 @@ or override). Validations enforce:
 
 Source of truth: docs/domains/task/README.html (Scoring section).
 """
-from datetime import datetime
+from datetime import timedelta
 
 import frappe
 from frappe.model.document import Document
-from frappe.utils import get_datetime
+from frappe.utils import get_datetime, now_datetime
 
 # --- Transaction taxonomy ------------------------------------------------
 POSITIVE_TYPES = ("earned", "early_bonus")
@@ -67,11 +67,15 @@ class TaskPointLog(Document):
 			)
 
 	def _validate_timestamp_not_future(self) -> None:
-		"""log_timestamp must be at or before "now" — entries are historical."""
+		"""log_timestamp must be at or before "now" — entries are historical.
+
+		Compares against Frappe's site-tz `now_datetime()` with a 5-minute
+		skew tolerance for client clocks.
+		"""
 		if not self.log_timestamp:
 			return
 		ts = get_datetime(self.log_timestamp)
-		if ts > datetime.now():
+		if ts > now_datetime() + timedelta(minutes=5):
 			frappe.throw(
 				"Log Timestamp tidak boleh di masa depan",
 				frappe.ValidationError,

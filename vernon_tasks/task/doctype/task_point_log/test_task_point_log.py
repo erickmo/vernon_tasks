@@ -1,8 +1,9 @@
 """Tests for Task Point Log — append-only ledger semantics."""
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import now_datetime
 
 TEST_BRAND = "Test Point Log Brand"
 TEST_USER = "test_point_log@example.com"
@@ -59,7 +60,7 @@ class _PLBase(FrappeTestCase):
 			"user": TEST_USER,
 			"transaction_type": "earned",
 			"amount": 10.0,
-			"log_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+			"log_timestamp": now_datetime().strftime("%Y-%m-%d %H:%M:%S"),
 		}
 		base.update(overrides)
 		return frappe.get_doc(base)
@@ -104,7 +105,8 @@ class TestPointLogSignRules(_PLBase):
 
 class TestPointLogTimestamp(_PLBase):
 	def test_future_timestamp_rejected(self):
-		future = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+		"""1 hour is well past the 5-minute clock-skew tolerance."""
+		future = (now_datetime() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
 		with self.assertRaises(frappe.ValidationError):
 			self._make(log_timestamp=future).insert(ignore_permissions=True)
 
