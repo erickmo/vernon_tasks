@@ -104,6 +104,7 @@ class Objective(Document):
 		self._validate_period_and_auto_fill()
 		self._validate_period_range()
 		self._validate_period_within_derived()
+		self._validate_owner_enabled()
 		self._validate_pdca_transition()
 		self._sync_status_with_pdca()
 
@@ -173,6 +174,23 @@ class Objective(Document):
 			frappe.throw(
 				f"period_end ({self.period_end}) melewati akhir periode "
 				f"terderivasi '{self.period}' ({derived_end})",
+				frappe.ValidationError,
+			)
+
+	def _validate_owner_enabled(self) -> None:
+		"""Reject objective_owner who is a disabled User.
+
+		Why: a disabled owner cannot receive notifications or approve
+		PDCA transitions. Frappe's Link field only enforces existence,
+		not active status.
+		"""
+		if not self.objective_owner:
+			return
+		enabled = frappe.db.get_value("User", self.objective_owner, "enabled")
+		if not enabled:
+			frappe.throw(
+				f"Objective owner '{self.objective_owner}' adalah user "
+				"non-aktif. Pilih user yang enabled.",
 				frappe.ValidationError,
 			)
 
