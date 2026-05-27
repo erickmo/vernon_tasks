@@ -118,6 +118,43 @@ class TestKPIEntryValidations(FrappeTestCase):
 				"value": 1.0,
 			}).insert(ignore_permissions=True)
 
+	# Gap-5 — per-KPI policy untuk nilai negatif.
+	# Default KPI = count/level (tolak negatif). Opt-in via
+	# `allow_negative=1` di KPI Definition untuk KPI delta.
+	def test_negative_value_rejected_when_flag_off(self):
+		"""KPI default (allow_negative=0) → negatif ditolak."""
+		with self.assertRaises(frappe.ValidationError):
+			frappe.get_doc({
+				"doctype": "KPI Entry",
+				"kpi_definition": KPI_NAME,
+				"date": today(),
+				"value": -10.0,
+			}).insert(ignore_permissions=True)
+
+	def test_negative_value_allowed_when_flag_on(self):
+		"""KPI dengan allow_negative=1 → negatif diterima (delta-style)."""
+		frappe.db.set_value("KPI Definition", KPI_NAME, "allow_negative", 1)
+		try:
+			doc = frappe.get_doc({
+				"doctype": "KPI Entry",
+				"kpi_definition": KPI_NAME,
+				"date": today(),
+				"value": -25.0,
+			}).insert(ignore_permissions=True)
+			self.assertEqual(doc.value, -25.0)
+		finally:
+			frappe.db.set_value("KPI Definition", KPI_NAME, "allow_negative", 0)
+
+	def test_positive_value_always_allowed(self):
+		"""Nilai positif diterima terlepas dari flag."""
+		doc = frappe.get_doc({
+			"doctype": "KPI Entry",
+			"kpi_definition": KPI_NAME,
+			"date": today(),
+			"value": 99.0,
+		}).insert(ignore_permissions=True)
+		self.assertEqual(doc.value, 99.0)
+
 	def test_dedupe_per_kpi_and_date(self):
 		"""Two entries with the same (kpi_definition, date) are rejected."""
 		frappe.get_doc({
