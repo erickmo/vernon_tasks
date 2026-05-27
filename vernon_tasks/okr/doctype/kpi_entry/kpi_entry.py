@@ -23,8 +23,31 @@ class KPIEntry(Document):
 
 	def validate(self) -> None:
 		self._validate_date_not_future()
+		self._validate_value_sign()
 		self._validate_unique_per_date()
 		self._validate_project_brand_matches_kpi()
+
+	def _validate_value_sign(self) -> None:
+		"""Reject negative value unless parent KPI Definition has
+		`allow_negative=1`.
+
+		Why: count/level-style KPIs (revenue, headcount, units sold) cannot
+		go below zero. Delta-style KPIs (week-over-week change, error-rate
+		delta) legitimately go negative — they opt in via the
+		`allow_negative` flag on KPI Definition.
+		"""
+		if self.value is None or self.value >= 0:
+			return
+		if not self.kpi_definition:
+			return
+		allow = frappe.db.get_value("KPI Definition", self.kpi_definition, "allow_negative")
+		if not allow:
+			frappe.throw(
+				f"KPI '{self.kpi_definition}' tidak mengizinkan nilai negatif. "
+				"Aktifkan 'Allow Negative Values' di KPI Definition jika "
+				"KPI ini merepresentasikan delta.",
+				frappe.ValidationError,
+			)
 
 	def _validate_date_not_future(self) -> None:
 		"""Reject dates after today — entries are observed history.
