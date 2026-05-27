@@ -181,6 +181,28 @@ class TestObjectiveValidations(FrappeTestCase):
 				period_end="2026-07-01",
 			).insert(ignore_permissions=True)
 
+	# Gap-2 — objective_owner harus User aktif. Owner non-aktif berarti
+	# tidak ada penanggung jawab nyata → notifikasi & approval routing buntu.
+	def test_disabled_owner_rejected(self):
+		"""User dengan enabled=0 ditolak sebagai owner."""
+		disabled_email = "disabled_owner@example.com"
+		if not frappe.db.exists("User", disabled_email):
+			frappe.get_doc({
+				"doctype": "User", "email": disabled_email,
+				"first_name": "Disabled", "enabled": 0,
+				"roles": [{"role": "VT Manager"}],
+			}).insert(ignore_permissions=True)
+		else:
+			frappe.db.set_value("User", disabled_email, "enabled", 0)
+		with self.assertRaises(frappe.ValidationError):
+			self._make(objective_owner=disabled_email).insert(ignore_permissions=True)
+
+	def test_enabled_owner_accepted(self):
+		"""User aktif diterima sebagai owner."""
+		doc = self._make().insert(ignore_permissions=True)
+		self.assertEqual(doc.objective_owner, TEST_USER)
+		doc.delete()
+
 	def test_period_override_within_derived_range_accepted(self):
 		"""Sub-range fully inside derived period → allowed."""
 		doc = self._make(
