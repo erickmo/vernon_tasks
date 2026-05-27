@@ -21,6 +21,7 @@ import re
 
 import frappe
 from frappe.model.document import Document
+from frappe.utils import getdate
 
 # --- Validation caps ------------------------------------------------------
 OBJECTIVE_TITLE_MAX_LEN = 140
@@ -102,6 +103,7 @@ class Objective(Document):
 		self._validate_title()
 		self._validate_period_and_auto_fill()
 		self._validate_period_range()
+		self._validate_period_within_derived()
 		self._validate_pdca_transition()
 		self._sync_status_with_pdca()
 
@@ -144,6 +146,33 @@ class Objective(Document):
 		if self.period_start and self.period_end and self.period_end < self.period_start:
 			frappe.throw(
 				"Tanggal akhir periode tidak boleh sebelum tanggal mulai",
+				frappe.ValidationError,
+			)
+
+	def _validate_period_within_derived(self) -> None:
+		"""Caller-overridden period_start/period_end must stay inside the
+		range derived from the `period` string.
+
+		Why: the planner UI allows overriding the auto-filled dates to model
+		a partial sub-range (e.g. Q2 objective that runs Apr 15 – May 10).
+		Without this guard, the override can silently exit the declared
+		period (e.g. period=2026-Q2, period_start=2026-01-01), corrupting
+		any downstream rollup that joins by `period`.
+		"""
+		derived = _derive_period_range(self.period) if self.period else None
+		if derived is None:
+			return
+		derived_start, derived_end = derived
+		if self.period_start and getdate(self.period_start) < derived_start:
+			frappe.throw(
+				f"period_start ({self.period_start}) lebih awal dari awal "
+				f"periode terderivasi '{self.period}' ({derived_start})",
+				frappe.ValidationError,
+			)
+		if self.period_end and getdate(self.period_end) > derived_end:
+			frappe.throw(
+				f"period_end ({self.period_end}) melewati akhir periode "
+				f"terderivasi '{self.period}' ({derived_end})",
 				frappe.ValidationError,
 			)
 
