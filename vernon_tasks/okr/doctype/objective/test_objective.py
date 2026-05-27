@@ -160,6 +160,37 @@ class TestObjectiveValidations(FrappeTestCase):
 				period_end="2026-04-01",
 			).insert(ignore_permissions=True)
 
+	# Gap-1 — period_start/period_end overrides must stay within derived range
+	# (PRD-OKR-period-bounds). Without this, planners can silently escape the
+	# declared period (e.g. period=2026-Q2 but period_start=2026-01-01).
+	def test_period_start_before_derived_range_rejected(self):
+		"""period_start earlier than derived period start → reject."""
+		with self.assertRaises(frappe.ValidationError):
+			self._make(
+				period="2026-Q2",  # Apr 1 .. Jun 30
+				period_start="2026-03-31",
+				period_end="2026-05-10",
+			).insert(ignore_permissions=True)
+
+	def test_period_end_after_derived_range_rejected(self):
+		"""period_end later than derived period end → reject."""
+		with self.assertRaises(frappe.ValidationError):
+			self._make(
+				period="2026-Q2",
+				period_start="2026-04-15",
+				period_end="2026-07-01",
+			).insert(ignore_permissions=True)
+
+	def test_period_override_within_derived_range_accepted(self):
+		"""Sub-range fully inside derived period → allowed."""
+		doc = self._make(
+			period="2026-Q2",
+			period_start="2026-04-15",
+			period_end="2026-05-10",
+		).insert(ignore_permissions=True)
+		self.assertEqual(str(doc.period_start), "2026-04-15")
+		doc.delete()
+
 
 class TestObjectivePDCA(FrappeTestCase):
 	"""PDCA transition guard."""
