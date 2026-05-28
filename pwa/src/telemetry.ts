@@ -99,7 +99,11 @@ export type TelemetryEvent =
   | "reports_my_view"
   | "reports_project_view"
   | "reports_period_change"
-  | "reports_team_view";
+  | "reports_team_view"
+  | "dashboard_tab_view"
+  | "dashboard_project_filter"
+  | "dashboard_agenda_chip_tap"
+  | "dashboard_next_action_tap";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
