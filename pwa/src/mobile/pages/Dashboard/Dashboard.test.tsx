@@ -83,4 +83,15 @@ describe("DashboardLayout", () => {
     expect(screen.getByText("Saya pimpin")).toBeInTheDocument();
     expect(screen.getByText("Berisiko")).toBeInTheDocument();
   });
+
+  it("tab strip exposes nav landmark with aria-label", async () => {
+    render(<Wrapper path="/m/dashboard/me" />);
+    const nav = screen.getByRole("navigation", { name: /dashboard tabs/i });
+    expect(nav).toBeInTheDocument();
+    // active link gets aria-current=page from NavLink
+    await waitFor(() => {
+      const active = nav.querySelector('a[aria-current="page"]');
+      expect(active?.textContent).toMatch(/saya/i);
+    });
+  });
 });

@@ -78,7 +78,13 @@ function TabBadge({ count, active }: { count: number; active: boolean }) {
   );
 }
 
-function TabStrip({ badges }: { badges: { me: number; projects: number; schedule: number } }) {
+function TabStrip({
+  badges,
+  loading,
+}: {
+  badges: { me: number; projects: number; schedule: number };
+  loading: boolean;
+}) {
   return (
     <div
       style={{
@@ -90,7 +96,9 @@ function TabStrip({ badges }: { badges: { me: number; projects: number; schedule
         borderBottom: `1px solid ${TOKENS.BD}`,
       }}
     >
-      <div
+      <nav
+        aria-label="Dashboard tabs"
+        aria-busy={loading || undefined}
         style={{
           display: "flex",
           gap: 4,
@@ -106,6 +114,7 @@ function TabStrip({ badges }: { badges: { me: number; projects: number; schedule
             <NavLink
               key={t.to}
               to={t.to}
+              aria-label={badge > 0 ? `${t.label} (${badge})` : t.label}
               style={({ isActive }) => ({
                 flex: 1,
                 padding: "8px 10px",
@@ -130,7 +139,7 @@ function TabStrip({ badges }: { badges: { me: number; projects: number; schedule
             </NavLink>
           );
         })}
-      </div>
+      </nav>
     </div>
   );
 }
@@ -168,10 +177,12 @@ export function DashboardLayout() {
     return { me, projects, schedule };
   }, [meQ.data, projQ.data, schedQ.data]);
 
+  const badgesLoading = meQ.isLoading || projQ.isLoading || schedQ.isLoading;
+
   return (
     <div style={{ background: TOKENS.BG, minHeight: "100%", color: TOKENS.TEXT }}>
       <PageHeader />
-      <TabStrip badges={badges} />
+      <TabStrip badges={badges} loading={badgesLoading} />
       <div style={{ padding: "12px 14px 32px" }}>
         <Outlet />
       </div>

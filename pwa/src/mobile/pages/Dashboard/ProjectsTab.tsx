@@ -118,7 +118,13 @@ export function ProjectsTab() {
       )}
 
       {q.data && (
-        <>
+        <div
+          aria-busy={q.isFetching && !q.isLoading ? true : undefined}
+          style={{
+            opacity: q.isFetching && !q.isLoading ? 0.55 : 1,
+            transition: "opacity 120ms ease",
+          }}
+        >
           {q.data.led.length === 0 && q.data.member.length === 0 && (
             <EmptyState title="Belum ada proyek" body="Tidak ada proyek pada filter ini." />
           )}
@@ -144,7 +150,7 @@ export function ProjectsTab() {
               </div>
             </>
           )}
-        </>
+        </div>
       )}
     </div>
   );
