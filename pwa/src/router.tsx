@@ -7,7 +7,10 @@ import { Onboarding } from "./mobile/pages/Onboarding";
 import { ProjectPage } from "./mobile/pages/Project";
 import { MePage } from "./mobile/pages/Me";
 import { NotificationsPage } from "./mobile/pages/Notifications";
-import { DashboardPage } from "./mobile/pages/Dashboard";
+import { DashboardLayout } from "./mobile/pages/Dashboard";
+import { MeTab } from "./mobile/pages/Dashboard/MeTab";
+import { ProjectsTab } from "./mobile/pages/Dashboard/ProjectsTab";
+import { ScheduleTab } from "./mobile/pages/Dashboard/ScheduleTab";
 import { LeaderPage } from "./mobile/pages/Leader";
 import { PushPrefsPage } from "./mobile/pages/PushPrefs";
 import { PageSkeleton } from "./components/PageSkeleton";
@@ -58,7 +61,16 @@ export const router = createBrowserRouter([
           { path: "/m/project", element: <ProjectPage /> },
           { path: "/m/work", element: <Navigate to="/m/project" replace /> },
           { path: "/m/work/:id", element: <Navigate to="/m/project" replace /> },
-          { path: "/m/dashboard", element: <DashboardPage /> },
+          {
+            path: "/m/dashboard",
+            element: <DashboardLayout />,
+            children: [
+              { index: true, element: <Navigate to="/m/dashboard/me" replace /> },
+              { path: "me", element: <MeTab /> },
+              { path: "projects", element: <ProjectsTab /> },
+              { path: "schedule", element: <ScheduleTab /> },
+            ],
+          },
           { path: "/m/analytics", element: <Navigate to="/m/reports/me" replace /> },
           { path: "/m/reports",              element: <ReportsFeatureGate><ReportsLanding /></ReportsFeatureGate> },
           { path: "/m/reports/me",           element: <ReportsFeatureGate><MyReports /></ReportsFeatureGate> },
