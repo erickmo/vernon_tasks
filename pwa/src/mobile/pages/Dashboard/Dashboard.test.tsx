@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi } from "vitest";
@@ -82,6 +82,18 @@ describe("DashboardLayout", () => {
     await waitFor(() => expect(screen.getByText("Semua")).toBeInTheDocument());
     expect(screen.getByText("Saya pimpin")).toBeInTheDocument();
     expect(screen.getByText("Berisiko")).toBeInTheDocument();
+  });
+
+  it("clicking ProjectsTab filter refetches with new filter key", async () => {
+    const mod = await import("../../../api/dashboard");
+    const fetchSpy = vi.mocked(mod.fetchMyProjects);
+    fetchSpy.mockClear();
+    render(<Wrapper path="/m/dashboard/projects" />);
+    await waitFor(() => expect(screen.getByText("Berisiko")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Berisiko"));
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith("at_risk");
+    });
   });
 
   it("tab strip exposes nav landmark with aria-label", async () => {
