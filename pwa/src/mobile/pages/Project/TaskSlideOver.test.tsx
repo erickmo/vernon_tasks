@@ -23,7 +23,7 @@ describe("TaskSlideOver", () => {
   it("calls onClose when backdrop clicked", () => {
     const onClose = vi.fn();
     render(<TaskSlideOver task={task} open onClose={onClose} onSave={vi.fn()} />);
-    fireEvent.click(screen.getByTestId("slide-backdrop"));
+    fireEvent.click(screen.getByTestId("modal-backdrop"));
     expect(onClose).toHaveBeenCalled();
   });
 
