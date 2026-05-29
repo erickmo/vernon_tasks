@@ -12,6 +12,7 @@ import { MeTab } from "./mobile/pages/Dashboard/MeTab";
 import { ProjectsTab } from "./mobile/pages/Dashboard/ProjectsTab";
 import { ScheduleTab } from "./mobile/pages/Dashboard/ScheduleTab";
 import { LeaderPage } from "./mobile/pages/Leader";
+import { SprintBoardMobile } from "./mobile/pages/Sprint/SprintBoardMobile";
 import { PushPrefsPage } from "./mobile/pages/PushPrefs";
 import { PageSkeleton } from "./components/PageSkeleton";
 import { Landing as ReportsLanding } from "./mobile/pages/Reports/Landing";
@@ -81,6 +82,7 @@ export const router = createBrowserRouter([
           { path: "/m/me/notifications", element: <NotificationsPage /> },
           { path: "/m/me/notifications/settings", element: <PushPrefsPage /> },
           { path: "/m/leader", element: <LeaderPage /> },
+          { path: "/m/sprint/:sprintId", element: <SprintBoardMobile /> },
         ],
       },
     ],
