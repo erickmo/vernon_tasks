@@ -1,7 +1,14 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { SprintCommitmentCard } from "./SprintCommitmentCard";
 import type { MeSprint } from "../../../../api/dashboard";
+
+const navigate = vi.fn();
+vi.mock("react-router-dom", async (orig) => ({
+  ...(await orig<typeof import("react-router-dom")>()),
+  useNavigate: () => navigate,
+}));
 
 const base: MeSprint = {
   name: "Sprint 5",
@@ -43,5 +50,18 @@ describe("SprintCommitmentCard", () => {
   it("shows risk badge label from RISK_META", () => {
     render(<SprintCommitmentCard sprint={{ ...base, risk: "behind" }} />);
     expect(screen.getByText("Behind")).toBeInTheDocument();
+  });
+});
+
+describe("SprintCommitmentCard entry point", () => {
+  it("navigates to the mobile sprint board on tap", () => {
+    navigate.mockClear();
+    render(
+      <MemoryRouter>
+        <SprintCommitmentCard sprint={base} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId("sprint-commitment-card"));
+    expect(navigate).toHaveBeenCalledWith("/m/sprint/Sprint 5");
   });
 });

@@ -1,4 +1,6 @@
+import { useNavigate } from "react-router-dom";
 import type { MeSprint } from "../../../../api/dashboard";
+import { trackSprintBoardOpen } from "../../../../telemetry";
 import { fmtDateShort, RISK_META, TOKENS } from "./shared";
 
 interface Props {
@@ -6,16 +8,35 @@ interface Props {
 }
 
 export function SprintCommitmentCard({ sprint }: Props) {
+  const navigate = useNavigate();
   const pct = Math.max(0, Math.min(100, sprint.progress_pct));
   const riskMeta = RISK_META[sprint.risk];
+
+  // Entry point into the mobile sprint board; fire telemetry then route.
+  function openBoard() {
+    trackSprintBoardOpen(sprint.name);
+    navigate(`/m/sprint/${sprint.name}`);
+  }
+
   return (
     <div
+      data-testid="sprint-commitment-card"
+      role="button"
+      tabIndex={0}
+      onClick={openBoard}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openBoard();
+        }
+      }}
       style={{
         background: TOKENS.CARD,
         borderRadius: 10,
         boxShadow: TOKENS.SHADOW,
         borderLeft: `3px solid ${TOKENS.PURPLE}`,
         padding: "14px 16px",
+        cursor: "pointer",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
