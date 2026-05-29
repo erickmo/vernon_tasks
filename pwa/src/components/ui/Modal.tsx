@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void;
   variant: Variant;
   labelledBy?: string;
+  ariaLabel?: string;
   busy?: boolean;
   zIndex?: number;
   children: ReactNode;
@@ -34,7 +35,7 @@ function containerStyle(variant: Variant, z: number): React.CSSProperties {
     boxShadow: "-4px 0 24px rgba(0,0,0,0.12)" };
 }
 
-export function Modal({ open, onClose, variant, labelledBy, busy, zIndex, children }: Props) {
+export function Modal({ open, onClose, variant, labelledBy, ariaLabel, busy, zIndex, children }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const prevFocus = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -100,6 +101,7 @@ export function Modal({ open, onClose, variant, labelledBy, busy, zIndex, childr
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
+        aria-label={ariaLabel}
         tabIndex={-1}
         style={containerStyle(variant, z)}
       >

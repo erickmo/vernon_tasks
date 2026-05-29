@@ -57,6 +57,11 @@ describe("Modal", () => {
     expect(document.activeElement).toBe(first);
   });
 
+  it("renders aria-label on dialog when ariaLabel prop provided", () => {
+    render(<Modal open onClose={vi.fn()} variant="center" ariaLabel="My Dialog"><p>hi</p></Modal>);
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-label", "My Dialog");
+  });
+
   it("Shift+Tab from first focusable cycles to last", () => {
     render(
       <Modal open onClose={vi.fn()} variant="center">
