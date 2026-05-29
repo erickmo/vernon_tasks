@@ -29,8 +29,8 @@ export function OfflineBanner() {
       style={{
         position: "sticky",
         top: 0,
-        background: "var(--vt-text-muted)",
-        color: "var(--vt-bg)",
+        background: "var(--vt-danger)",
+        color: "#fff",
         textAlign: "center",
         padding: "var(--vt-space-2)",
         fontSize: 13,

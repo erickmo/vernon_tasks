@@ -27,6 +27,11 @@ import { useCompleteCounter } from "../../../hooks/useCompleteCounter";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { t } from "../../../i18n";
 import { logEvent } from "../../../telemetry";
+import { ProjectFormModal } from "../../../components/ProjectFormModal";
+import { QuickAddTaskModal } from "../../../components/QuickAddTaskModal";
+import { createProject } from "../../../portal/projects/api/projects";
+import { projectKeys } from "../../../portal/projects/hooks/keys";
+import { useProjects } from "../../../portal/projects/hooks/useProjects";
 
 /* ── Tokens (match Dashboard) ─────────────────────────────── */
 const BG     = "#f1f5f9";
@@ -52,6 +57,18 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
   const todayStr = new Date().toLocaleDateString("id-ID", {
     weekday: "long", day: "numeric", month: "long",
   });
+  const [showCreate, setShowCreate] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const qc = useQueryClient();
+  const { data: projectRows = [] } = useProjects({});
+  const quickAddProjects = projectRows.map(p => ({ name: p.name, title: p.title }));
+
+  async function handleCreateProject(values: { title: string; status: string }) {
+    await createProject({ title: values.title, status: values.status });
+    setShowCreate(false);
+    qc.invalidateQueries({ queryKey: projectKeys.lists() });
+  }
+
   return (
     <header
       style={{
@@ -81,11 +98,29 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
           Pekerjaan Saya
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <a
-            href="/app/vt-project/new?vt_project=new"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => logEvent("project_create_click", {})}
+          <button
+            onClick={() => { logEvent("quick_add_task_open", {}); setShowQuickAdd(true); }}
+            aria-label="Tugas Baru"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              background: "transparent",
+              color: INDIGO,
+              border: `1px solid ${BD}`,
+              borderRadius: 99,
+              padding: "5px 10px",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            + Tugas
+          </button>
+          <button
+            onClick={() => { logEvent("project_create_click", {}); setShowCreate(true); }}
+            aria-label="Buat Proyek"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -96,13 +131,13 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
               padding: "5px 10px",
               fontSize: 11,
               fontWeight: 600,
-              textDecoration: "none",
               lineHeight: 1,
+              border: "none",
+              cursor: "pointer",
             }}
-            aria-label="Buat Proyek"
           >
             + Proyek
-          </a>
+          </button>
           <a
             href="/app/vt-project"
             target="_blank"
@@ -190,6 +225,24 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
           </span>
         )}
       </div>
+
+      {showCreate && (
+        <ProjectFormModal
+          mode="create"
+          onSave={handleCreateProject}
+          onCancel={() => setShowCreate(false)}
+        />
+      )}
+      {showQuickAdd && (
+        <QuickAddTaskModal
+          projects={quickAddProjects}
+          onClose={() => setShowQuickAdd(false)}
+          onCreated={() => {
+            setShowQuickAdd(false);
+            qc.invalidateQueries({ queryKey: ["my-work"] });
+          }}
+        />
+      )}
     </header>
   );
 }

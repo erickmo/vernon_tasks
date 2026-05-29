@@ -60,6 +60,15 @@ describe("ProjectSidebar", () => {
     expect(onSelect).toHaveBeenCalledWith("PROJ-001", "Alpha");
   });
 
+  it("shows create CTA in empty state when canWrite, opening the modal", async () => {
+    const { useProjects } = await import("../../../portal/projects/hooks/useProjects");
+    vi.mocked(useProjects).mockReturnValue({ data: [] as ProjectRow[], isLoading: false } as ReturnType<typeof useProjects>);
+    wrap(<ProjectSidebar selectedId={null} onSelect={vi.fn()} />);
+    const cta = await screen.findByRole("button", { name: /buat proyek pertama/i });
+    fireEvent.click(cta);
+    expect(screen.getByText("Buat Proyek")).toBeInTheDocument();
+  });
+
   it("filters project list by search input", async () => {
     const { useProjects } = await import("../../../portal/projects/hooks/useProjects");
     vi.mocked(useProjects).mockReturnValue({
