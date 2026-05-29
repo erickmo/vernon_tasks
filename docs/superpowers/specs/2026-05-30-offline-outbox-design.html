@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Offline Outbox (Sync Queue + Retry)</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Offline Outbox — Sync Queue + Retry</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-30-offline-outbox-design.html</span>
+  </div>
+</header>
+
+<h1 id="offline-outbox">Offline Outbox — Sync Queue + Retry</h1>
+<p><strong>Date:</strong> 2026-05-30<br />
+<strong>Scope:</strong> v2 — let task mutations be queued while offline (no optimistic UI), drained on reconnect or via a "Sync now" button. Upgrade OfflineBanner to show pending count.<br />
+<strong>Approach (approved):</strong> Outbox WITHOUT optimistic updates — queued actions show as "pending"; UI does not pretend the mutation already applied.<br />
+<strong>Pre-state (verified):</strong> No outbox exists. Mutations are explicitly blocked offline (button disabled + toast "Sambungkan internet dulu"). Read-cache in IndexedDB via idb-keyval; sync timestamps in localStorage. <code>offline_seen</code> telemetry defined but never fired.</p>
+<hr />
+
+<h2 id="1-architecture">1. Architecture</h2>
+<table>
+<thead><tr><th>File</th><th>Responsibility</th></tr></thead>
+<tbody>
+<tr><td><code>cache/outbox.ts</code></td><td>IndexedDB-backed queue of pending mutations (enqueue, list, remove, count) keyed under <code>vt:outbox:</code>.</td></tr>
+<tr><td><code>hooks/useOnline.ts</code></td><td>Shared online/offline state (replaces ad-hoc <code>navigator.onLine</code> checks).</td></tr>
+<tr><td><code>sync/outboxRunner.ts</code></td><td>Drains the outbox: dispatches each queued action to its API, removes on success, retains + backs off on failure. Single-flight (no concurrent drains).</td></tr>
+<tr><td><code>hooks/useOutbox.ts</code></td><td>React binding: exposes <code>pendingCount</code>, <code>syncing</code>, <code>syncNow()</code>; auto-drains on reconnect.</td></tr>
+<tr><td><code>components/OfflineBanner.tsx</code></td><td>Upgraded: shows offline state AND pending count + "Sync now" button (visible whenever pending &gt; 0, even online).</td></tr>
+</tbody>
+</table>
+
+<h2 id="2-outbox-model">2. Outbox model</h2>
+<p>An outbox entry is a serializable description of one mutation:</p>
+<pre><code>interface OutboxEntry {
+  id: string;            // uuid (crypto.randomUUID)
+  kind: "complete" | "log_progress" | "snooze" | "create_task";
+  payload: Record&lt;string, unknown&gt;;  // args for the API call
+  createdAt: number;     // epoch ms
+  attempts: number;      // retry counter
+  lastError?: string;
+}</code></pre>
+<ul>
+<li>Stored as a single array under one idb key (<code>vt:outbox:queue</code>) for simplicity; small N expected.</li>
+<li><code>kind</code> maps to an API dispatcher in <code>outboxRunner</code> (a registry: kind → function(payload)). New mutation kinds register here.</li>
+<li>No optimistic cache writes. After a successful drain, the runner invalidates the affected react-query keys so the UI refetches the true server state.</li>
+</ul>
+
+<h2 id="3-enqueue-flow">3. Enqueue flow (mutation interception)</h2>
+<p>Today the mobile actions check <code>navigator.onLine</code> and block when offline. Change that branch: when offline, instead of the toast-and-abort, <strong>enqueue</strong> the action and show a toast "Disimpan, akan dikirim saat online" + the pending badge updates. When online, behave exactly as today (direct mutation).</p>
+<ul>
+<li>Sites to update: <code>MyWork/List.tsx</code> complete/log/snooze; <code>QuickAddTaskModal</code> create (create_task). Each already has the params needed for the API.</li>
+<li>The undo-window (<code>useUndoableMutation</code>) stays for online completes; offline path skips the undo window and enqueues directly.</li>
+<li>Keep mutations that are not safe to queue (e.g. comment add) online-only for now — out of scope.</li>
+</ul>
+
+<h2 id="4-drain-retry">4. Drain + retry</h2>
+<ul>
+<li><strong>Trigger:</strong> (a) automatically when <code>online</code> transitions false→true; (b) manually via "Sync now".</li>
+<li><strong>Order:</strong> FIFO by <code>createdAt</code>.</li>
+<li><strong>Per entry:</strong> call dispatcher; on success remove entry + collect affected query keys; on failure increment <code>attempts</code>, store <code>lastError</code>, keep entry, stop the run (do not block the queue head forever — but a poison entry exceeding <code>MAX_ATTEMPTS</code> (5) is moved to a "failed" state surfaced in the banner as "N gagal" with a retry/discard affordance).</li>
+<li><strong>Single-flight:</strong> a module-level flag prevents overlapping drains.</li>
+<li><strong>After run:</strong> invalidate collected query keys once; stamp last-sync time.</li>
+</ul>
+
+<h2 id="5-banner-ux">5. Banner UX</h2>
+<ul>
+<li>Offline + no pending → current message ("Mode offline · terakhir sinkron …"), danger background.</li>
+<li>Pending &gt; 0 (offline OR online) → "<code>N</code> aksi menunggu" + a "Sync now" button (disabled while <code>syncing</code>; shows spinner text "Menyinkronkan…").</li>
+<li>Failed &gt; 0 → "<code>N</code> gagal" with "Coba lagi" (re-queues) — keep minimal.</li>
+<li>Online + zero pending → banner returns null (unchanged).</li>
+<li>a11y: banner stays <code>role="status"</code>; Sync button is a real <code>&lt;button&gt;</code> with accessible label.</li>
+</ul>
+
+<h2 id="6-telemetry">6. Telemetry</h2>
+<p>Fire (add to <code>TelemetryEvent</code> union): <code>outbox_enqueue</code> ({kind}), <code>outbox_drain_start</code> ({count}), <code>outbox_drain_done</code> ({ok, failed}), <code>offline_seen</code> (wire the existing-but-unused event when banner first shows offline).</p>
+
+<h2 id="7-testing">7. Testing</h2>
+<ul>
+<li><code>outbox.ts</code>: enqueue/list/remove/count round-trip against a fake idb (mock idb-keyval like <code>cache.test.ts</code> does).</li>
+<li><code>outboxRunner.ts</code>: drains in FIFO; removes on success; retains + increments attempts on failure; single-flight; moves to failed after MAX_ATTEMPTS.</li>
+<li><code>useOnline</code>: reflects online/offline events.</li>
+<li><code>OfflineBanner</code>: renders pending count + Sync button when pending&gt;0; Sync click calls syncNow; null when online & empty.</li>
+<li>Enqueue integration: offline complete in MyWork enqueues instead of toast-abort (mock useOnline=false).</li>
+<li>Gate: full <code>pnpm vitest run</code> + tsc + build.</li>
+</ul>
+
+<h2 id="8-out-of-scope">8. Out of scope</h2>
+<ul>
+<li>Optimistic UI / local echo of queued mutations.</li>
+<li>Conflict resolution beyond last-write-wins on the server.</li>
+<li>Service-worker background-sync (Workbox plugin) — app-level drain only for now.</li>
+<li>Queuing comment/non-task mutations.</li>
+</ul>
+
+</div>
+</body>
+</html>
