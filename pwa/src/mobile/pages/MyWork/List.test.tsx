@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,6 +7,16 @@ import { MyWorkList } from "./List";
 vi.mock("../../../portal/projects/hooks/useProjects", () => ({
   useProjects: () => ({ data: [{ name: "PROJ-001", title: "Alpha", status: "Open" }], isLoading: false }),
 }));
+
+const enqueueMock = vi.fn().mockResolvedValue({ id: "x" });
+vi.mock("../../../cache/outbox", () => ({ enqueue: (...a: unknown[]) => enqueueMock(...a) }));
+vi.mock("../../../hooks/useOutbox", () => ({
+  useOutbox: () => ({ pendingCount: 0, failedCount: 0, syncing: false, syncNow: vi.fn(), retry: vi.fn(), refresh: vi.fn() }),
+}));
+
+beforeEach(() => {
+  Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+});
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -169,5 +179,18 @@ describe("MyWorkList", () => {
     const btn = await screen.findByRole("button", { name: /tugas baru/i });
     fireEvent.click(btn);
     expect(screen.getByText("Tugas Baru")).toBeInTheDocument();
+  });
+});
+
+describe("MyWorkList offline enqueue", () => {
+  it("enqueues a complete instead of blocking when offline", async () => {
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: { overdue: [], today: [{ id: "T1", title: "Buat laporan" }], upcoming: [] } }), { status: 200 }),
+    ));
+    wrap(<MyWorkList />);
+    await waitFor(() => expect(screen.getByText("Buat laporan")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByLabelText("complete")[0]);
+    await waitFor(() => expect(enqueueMock).toHaveBeenCalledWith("complete", { task_id: "T1" }));
   });
 });

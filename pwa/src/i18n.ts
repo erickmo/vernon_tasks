@@ -46,6 +46,7 @@ const STRINGS = {
   "actions.snoozed_toast": "Ditunda. Batalkan?",
   "actions.logged_toast": "Log tersimpan.",
   "actions.offline": "Sambungkan internet dulu",
+  "actions.queued": "Disimpan, akan dikirim saat online",
   "actions.forbidden": "Tidak ada akses",
   "actions.failed": "Gagal. Coba lagi",
   "actions.undo": "Batalkan",
