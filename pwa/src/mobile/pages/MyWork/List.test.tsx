@@ -4,6 +4,10 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MyWorkList } from "./List";
 
+vi.mock("../../../portal/projects/hooks/useProjects", () => ({
+  useProjects: () => ({ data: [{ name: "PROJ-001", title: "Alpha", status: "Open" }], isLoading: false }),
+}));
+
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -149,5 +153,21 @@ describe("MyWorkList", () => {
     const btn = await screen.findByRole("button", { name: /buat proyek/i });
     fireEvent.click(btn);
     expect(screen.getByText("Buat Proyek")).toBeInTheDocument();
+  });
+
+  it("opens quick-add task modal from header button", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { overdue: [], today: [], upcoming: [] } }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(<MyWorkList />);
+    const btn = await screen.findByRole("button", { name: /tugas baru/i });
+    fireEvent.click(btn);
+    expect(screen.getByText("Tugas Baru")).toBeInTheDocument();
   });
 });
