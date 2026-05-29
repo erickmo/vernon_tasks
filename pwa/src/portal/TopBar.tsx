@@ -5,20 +5,13 @@ import { portalNav, filterNavByPermissions } from "./nav";
 import { NotificationsFeatureGate } from "./notifications/NotificationsFeatureGate";
 import { NotificationBell } from "./notifications/NotificationBell";
 import { useNotificationCount } from "./notifications/hooks/useNotificationCount";
+import { Badge } from "../components/ui/Badge";
 
 const NOTIFICATIONS_NAV_KEY = "notifications";
 
 function NavBadge() {
-  const { data: count } = useNotificationCount();
-  if (!count || count <= 0) return null;
-  return (
-    <span
-      className="portal-topbar__nav-badge"
-      aria-label={`${count} unread notifications`}
-    >
-      {count}
-    </span>
-  );
+  const { data: count = 0 } = useNotificationCount();
+  return <Badge variant="count" count={count} tone="danger" ariaLabel={`${count} unread notifications`} />;
 }
 
 export function TopBar() {

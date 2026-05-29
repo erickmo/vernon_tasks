@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { logout, probeSession } from "../../auth/session";
 import { useUnreadCount } from "../../hooks/useUnreadCount";
 import { PushToggle } from "../../components/PushToggle";
+import { Badge } from "../../components/ui/Badge";
 import { t } from "../../i18n";
 
 function getInitials(name: string | null): string {
@@ -122,20 +123,7 @@ export function MePage() {
                 color: "var(--vt-text-muted)",
               }}
             >
-              {unread.data && unread.data > 0 ? (
-                <span
-                  style={{
-                    background: "var(--vt-danger)",
-                    color: "white",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    padding: "2px 8px",
-                    borderRadius: 999,
-                  }}
-                >
-                  {unread.data}
-                </span>
-              ) : null}
+              <Badge variant="count" count={unread.data ?? 0} />
               →
             </span>
           </Link>

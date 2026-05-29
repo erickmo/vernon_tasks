@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { t } from "../i18n";
 import { useUnreadCount } from "../hooks/useUnreadCount";
 import { useIsLeader } from "../hooks/useIsLeader";
+import { Badge } from "./ui/Badge";
 
 const TABS_BASE = [
   { to: "/m/project", label: t("nav.tasks"), key: "tasks" },
@@ -52,18 +53,9 @@ export function BottomNav() {
           <span style={{ position: "relative" }}>
             {tab.label}
             {tab.key === "me" && unread.data && unread.data > 0 ? (
-              <span
-                aria-label={`${unread.data} unread`}
-                style={{
-                  position: "absolute",
-                  top: -4,
-                  right: -10,
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "var(--vt-danger)",
-                }}
-              />
+              <span style={{ position: "absolute", top: -4, right: -10 }}>
+                <Badge variant="dot" ariaLabel={`${unread.data} unread`} />
+              </span>
             ) : null}
           </span>
         </NavLink>

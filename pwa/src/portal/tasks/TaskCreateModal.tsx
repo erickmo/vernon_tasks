@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Modal } from "../../components/ui/Modal";
 import { createTask } from "./api/tasks";
 import type { KanbanStatus, PdcaPhase, SprintDetail, TaskCardData } from "../sprints/api/types";
 import type { CreateTaskPayload } from "./api/types";
@@ -129,7 +130,8 @@ export function TaskCreateModal({
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Buat Tugas Baru">
+    <Modal variant="center" open onClose={onClose} ariaLabel="Buat Tugas Baru" busy={submitting}>
+      <div>
       <form onSubmit={handleSubmit} noValidate>
         <div>
           <label htmlFor="tc-title">Judul Tugas *</label>
@@ -245,6 +247,7 @@ export function TaskCreateModal({
           </button>
         </div>
       </form>
-    </div>
+      </div>
+    </Modal>
   );
 }

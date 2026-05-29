@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { login } from "../auth/session";
 import { t } from "../i18n";
+import { Modal } from "./ui/Modal";
 
 interface Props {
   open: boolean;
@@ -12,8 +13,6 @@ export function ReloginModal({ open, onResolve }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const usr = localStorage.getItem("vt_last_user") ?? "";
-
-  if (!open) return null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,17 +29,7 @@ export function ReloginModal({ open, onResolve }: Props) {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "grid",
-        placeItems: "center",
-        zIndex: 100,
-        padding: 16,
-      }}
-    >
+    <Modal open={open} onClose={() => onResolve(false)} variant="center" zIndex={100} busy={busy} labelledBy="relogin-title">
       <form
         onSubmit={submit}
         style={{
@@ -52,7 +41,7 @@ export function ReloginModal({ open, onResolve }: Props) {
           width: "100%",
         }}
       >
-        <h3 style={{ marginTop: 0 }}>{t("relogin.title")}</h3>
+        <h3 id="relogin-title" style={{ marginTop: 0 }}>{t("relogin.title")}</h3>
         <p style={{ color: "var(--vt-text-muted)" }}>{t("relogin.body")}</p>
         <p style={{ fontSize: 13 }}>{usr}</p>
         <input
@@ -73,6 +62,6 @@ export function ReloginModal({ open, onResolve }: Props) {
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

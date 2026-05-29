@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Modal } from "../../../components/ui/Modal";
 import type { ProjectTask } from "./api";
 
 const PDCA_PHASES = ["Plan", "Do", "Check", "Act"];
@@ -37,31 +38,15 @@ export function TaskSlideOver({ task, open, onClose, onSave }: Props) {
     }
   }, [open, task]);
 
-  if (!open) return null;
-
   return (
-    <>
-      <div
-        data-testid="slide-backdrop"
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 50,
-        }}
-      />
-      <div
-        style={{
-          position: "fixed", top: 0, right: 0, bottom: 0, width: 360,
-          maxWidth: "100vw", background: "#ffffff",
-          boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
-          zIndex: 51, display: "flex", flexDirection: "column",
-        }}
-      >
+    <Modal variant="slide" open={open} onClose={onClose} zIndex={50} labelledBy="taskslide-title">
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* Header */}
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "16px 20px", borderBottom: "1px solid #e8edf3",
         }}>
-          <span style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
+          <span id="taskslide-title" style={{ fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
             {editing ? "Edit Task" : "Detail Task"}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
@@ -267,6 +252,6 @@ export function TaskSlideOver({ task, open, onClose, onSave }: Props) {
           </div>
         )}
       </div>
-    </>
+    </Modal>
   );
 }

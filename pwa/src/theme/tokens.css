@@ -13,6 +13,12 @@
   --vt-text: #111318;
   --vt-text-muted: #6b7280;
   --vt-border: #eef0f3;
+  --vt-nav-bg: linear-gradient(135deg, #6836a0 0%, #7c4dab 100%);
+  --vt-nav-bg-solid: #6836a0;
+  --vt-nav-text: #ffffff;
+  --vt-nav-muted: rgba(255, 255, 255, 0.6);
+  --vt-nav-border: rgba(255, 255, 255, 0.14);
+  --vt-nav-active: rgba(255, 255, 255, 0.18);
   --vt-primary: #7c4dab;
   --vt-primary-dark: #3d1f6e;
   --vt-primary-mid: #5a2d8c;

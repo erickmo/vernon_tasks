@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DueRange, SearchFilters } from "../api/search";
 import { t, StringKey } from "../i18n";
+import { Modal } from "./ui/Modal";
 
 interface Props {
   open: boolean;
@@ -22,8 +23,6 @@ export function FilterSheet({ open, initial, onApply, onCancel }: Props) {
   const [project, setProject] = useState<string>(initial.project ?? "");
   const [dueRange, setDueRange] = useState<DueRange>(initial.due_range ?? "all");
 
-  if (!open) return null;
-
   function togglePriority(p: string) {
     setPriority((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   }
@@ -39,30 +38,9 @@ export function FilterSheet({ open, initial, onApply, onCancel }: Props) {
   }
 
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "grid",
-        placeItems: "end center",
-        zIndex: 100,
-        paddingBottom: "calc(var(--bottom-nav-h) + var(--safe-bottom))",
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "var(--vt-bg)",
-          color: "var(--vt-text)",
-          width: "100%",
-          maxWidth: 480,
-          padding: 24,
-          borderRadius: "16px 16px 0 0",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>{t("filter.title")}</h3>
+    <Modal open={open} onClose={onCancel} variant="sheet" zIndex={100} labelledBy="filter-title">
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: 24 }}>
+        <h3 id="filter-title" style={{ marginTop: 0 }}>{t("filter.title")}</h3>
 
         <section style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 13, color: "var(--vt-text-muted)", marginBottom: 8 }}>
@@ -146,6 +124,6 @@ export function FilterSheet({ open, initial, onApply, onCancel }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

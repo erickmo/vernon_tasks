@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { Modal } from "./ui/Modal";
 
 interface Props {
   open: boolean;
@@ -6,22 +7,9 @@ interface Props {
 }
 
 export function IOSInstallModal({ open, onClose }: Props) {
-  if (!open) return null;
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "grid",
-        placeItems: "center",
-        zIndex: 110,
-        padding: 16,
-      }}
-    >
+    <Modal open={open} onClose={onClose} variant="center" zIndex={110} labelledBy="ios-install-title">
       <div
-        onClick={(e) => e.stopPropagation()}
         style={{
           background: "var(--vt-bg)",
           color: "var(--vt-text)",
@@ -31,7 +19,7 @@ export function IOSInstallModal({ open, onClose }: Props) {
           width: "100%",
         }}
       >
-        <h3 style={{ marginTop: 0 }}>{t("install.ios.title")}</h3>
+        <h3 id="ios-install-title" style={{ marginTop: 0 }}>{t("install.ios.title")}</h3>
         <ol style={{ paddingLeft: 20, lineHeight: 1.6 }}>
           <li>{t("install.ios.step1")}</li>
           <li>{t("install.ios.step2")}</li>
@@ -52,6 +40,6 @@ export function IOSInstallModal({ open, onClose }: Props) {
           {t("install.ios.close")}
         </button>
       </div>
-    </div>
+    </Modal>
   );
 }
