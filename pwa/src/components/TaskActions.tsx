@@ -13,6 +13,7 @@ const BTN_STYLE: React.CSSProperties = {
   color: "white",
   fontSize: 13,
   fontWeight: 600,
+  minHeight: 44,
 };
 
 export function TaskActions({ onComplete, onLog, onSnooze, disabled }: Props) {
