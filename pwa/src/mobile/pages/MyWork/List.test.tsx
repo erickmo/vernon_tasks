@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MyWorkList } from "./List";
@@ -130,5 +130,24 @@ describe("MyWorkList", () => {
     // Verify borderLeft is applied (happy-dom may expand shorthand styles)
     expect(card.style.borderLeft).toBeDefined();
     expect(card.style.borderLeft).toContain("#dc2626");
+  });
+
+  it("opens in-app create-project modal from + Proyek button", async () => {
+    vi.mock("../../../portal/projects/api/projects", () => ({
+      createProject: vi.fn().mockResolvedValue({}),
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: { overdue: [], today: [], upcoming: [] } }),
+          { status: 200 },
+        ),
+      ),
+    );
+    wrap(<MyWorkList />);
+    const btn = await screen.findByRole("button", { name: /buat proyek/i });
+    fireEvent.click(btn);
+    expect(screen.getByText("Buat Proyek")).toBeInTheDocument();
   });
 });

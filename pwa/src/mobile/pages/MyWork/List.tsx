@@ -27,6 +27,9 @@ import { useCompleteCounter } from "../../../hooks/useCompleteCounter";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { t } from "../../../i18n";
 import { logEvent } from "../../../telemetry";
+import { ProjectFormModal } from "../../../components/ProjectFormModal";
+import { createProject } from "../../../portal/projects/api/projects";
+import { projectKeys } from "../../../portal/projects/hooks/keys";
 
 /* ── Tokens (match Dashboard) ─────────────────────────────── */
 const BG     = "#f1f5f9";
@@ -52,6 +55,15 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
   const todayStr = new Date().toLocaleDateString("id-ID", {
     weekday: "long", day: "numeric", month: "long",
   });
+  const [showCreate, setShowCreate] = useState(false);
+  const qc = useQueryClient();
+
+  async function handleCreateProject(values: { title: string; status: string }) {
+    await createProject({ title: values.title, status: values.status });
+    setShowCreate(false);
+    qc.invalidateQueries({ queryKey: projectKeys.lists() });
+  }
+
   return (
     <header
       style={{
@@ -81,11 +93,9 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
           Pekerjaan Saya
         </h1>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <a
-            href="/app/vt-project/new?vt_project=new"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => logEvent("project_create_click", {})}
+          <button
+            onClick={() => { logEvent("project_create_click", {}); setShowCreate(true); }}
+            aria-label="Buat Proyek"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -96,13 +106,13 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
               padding: "5px 10px",
               fontSize: 11,
               fontWeight: 600,
-              textDecoration: "none",
               lineHeight: 1,
+              border: "none",
+              cursor: "pointer",
             }}
-            aria-label="Buat Proyek"
           >
             + Proyek
-          </a>
+          </button>
           <a
             href="/app/vt-project"
             target="_blank"
@@ -190,6 +200,14 @@ function WorkListHeader({ data, onResetFilters, filtersActive }: WorkListHeaderP
           </span>
         )}
       </div>
+
+      {showCreate && (
+        <ProjectFormModal
+          mode="create"
+          onSave={handleCreateProject}
+          onCancel={() => setShowCreate(false)}
+        />
+      )}
     </header>
   );
 }
