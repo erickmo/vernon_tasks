@@ -25,4 +25,9 @@ describe("Badge", () => {
     const { container } = render(<Badge variant="count" count={0} />);
     expect(container.firstChild).toBeNull();
   });
+
+  it("returns null for count variant when count is negative", () => {
+    const { container } = render(<Badge variant="count" count={-3} />);
+    expect(container.firstChild).toBeNull();
+  });
 });

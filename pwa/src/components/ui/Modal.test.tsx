@@ -41,4 +41,34 @@ describe("Modal", () => {
     render(<Modal open onClose={vi.fn()} variant="center"><button>act</button></Modal>);
     expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true);
   });
+
+  it("Tab from last focusable cycles to first", () => {
+    render(
+      <Modal open onClose={vi.fn()} variant="center">
+        <button>first</button>
+        <button>last</button>
+      </Modal>,
+    );
+    const buttons = screen.getAllByRole("button");
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    last.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: false });
+    expect(document.activeElement).toBe(first);
+  });
+
+  it("Shift+Tab from first focusable cycles to last", () => {
+    render(
+      <Modal open onClose={vi.fn()} variant="center">
+        <button>first</button>
+        <button>last</button>
+      </Modal>,
+    );
+    const buttons = screen.getAllByRole("button");
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    first.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
 });

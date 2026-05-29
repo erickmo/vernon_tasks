@@ -37,8 +37,13 @@ function containerStyle(variant: Variant, z: number): React.CSSProperties {
 export function Modal({ open, onClose, variant, labelledBy, busy, zIndex, children }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const prevFocus = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const z = zIndex ?? Z_DEFAULT[variant];
 
+  // Keep onCloseRef current every render so keydown handler never goes stale.
+  onCloseRef.current = onClose;
+
+  // Effect A: save/restore focus only — deps [open].
   useEffect(() => {
     if (!open) return;
     prevFocus.current = document.activeElement as HTMLElement | null;
@@ -47,9 +52,17 @@ export function Modal({ open, onClose, variant, labelledBy, busy, zIndex, childr
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
     (focusable ?? el)?.focus();
+    return () => {
+      prevFocus.current?.focus?.();
+    };
+  }, [open]);
 
+  // Effect B: keydown handler (Escape + tab-trap) — deps [open].
+  useEffect(() => {
+    if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Escape") { onCloseRef.current(); return; }
+      const el = dialogRef.current;
       if (e.key !== "Tab" || !el) return;
       const items = Array.from(
         el.querySelectorAll<HTMLElement>(
@@ -59,22 +72,27 @@ export function Modal({ open, onClose, variant, labelledBy, busy, zIndex, childr
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      } else if (document.activeElement === el) {
+        // Container itself holds focus — move to first focusable element.
+        e.preventDefault(); first.focus();
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      prevFocus.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (
     <>
       <div
         data-testid="modal-backdrop"
-        onClick={() => { if (!busy) onClose(); }}
+        onClick={() => { if (!busy) onCloseRef.current(); }}
         style={{ position: "fixed", inset: 0, background: OVERLAY_BG[variant], zIndex: z }}
       />
       <div

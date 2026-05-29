@@ -18,7 +18,7 @@ export function Badge({ variant, count = 0, max = 99, tone = "danger", ring, ari
       />
     );
   }
-  if (!count) return null;
+  if (count <= 0) return null;
   const label = count > max ? `${max}+` : String(count);
   return (
     <span
