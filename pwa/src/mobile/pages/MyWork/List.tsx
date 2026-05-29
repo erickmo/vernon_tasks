@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
+import { useOnline } from "../../../hooks/useOnline";
+import { enqueue } from "../../../cache/outbox";
 import { MyWorkDetail } from "./Detail";
 import { fetchMyWork, MyWork, TaskCard as TaskCardT } from "../../../api/tasks";
 import { completeTask, logProgress, snoozeTask, SnoozeDays } from "../../../api/mutations";
@@ -365,7 +367,8 @@ export function MyWorkList() {
   const { show } = useToast();
   const { increment, ready } = useCompleteCounter();
   const [logTask, setLogTask] = useState<TaskCardT | null>(null);
-  const offline = typeof navigator !== "undefined" && !navigator.onLine;
+  const online = useOnline();
+  const offline = !online;
   const isDesktop = useMediaQuery(768);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -422,7 +425,11 @@ export function MyWorkList() {
 
   function handleComplete(task: TaskCardT) {
     if (offline) {
-      show(t("actions.offline"));
+      // Queue the mutation; it replays via the outbox runner on reconnect.
+      void enqueue("complete", { task_id: task.id });
+      logEvent("outbox_enqueue", { kind: "complete" });
+      removeFromCache(task.id);
+      show(t("actions.queued"));
       return;
     }
     const prev = removeFromCache(task.id);
@@ -440,7 +447,9 @@ export function MyWorkList() {
   async function handleLog(task: TaskCardT, hours: number, note: string) {
     setLogTask(null);
     if (offline) {
-      show(t("actions.offline"));
+      await enqueue("log_progress", { task_id: task.id, hours, note });
+      logEvent("outbox_enqueue", { kind: "log_progress" });
+      show(t("actions.queued"));
       return;
     }
     try {
@@ -454,7 +463,9 @@ export function MyWorkList() {
 
   async function handleSnooze(task: TaskCardT, days: SnoozeDays) {
     if (offline) {
-      show(t("actions.offline"));
+      await enqueue("snooze", { task_id: task.id, days });
+      logEvent("outbox_enqueue", { kind: "snooze" });
+      show(t("actions.queued"));
       return;
     }
     try {
@@ -553,7 +564,7 @@ export function MyWorkList() {
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
                     onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
-                    disabled={offline}
+                    disabled={false}
                   />
                 )}
               />
@@ -569,7 +580,7 @@ export function MyWorkList() {
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
                     onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
-                    disabled={offline}
+                    disabled={false}
                   />
                 )}
               />
@@ -585,7 +596,7 @@ export function MyWorkList() {
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
                     onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
-                    disabled={offline}
+                    disabled={false}
                   />
                 )}
               />
@@ -621,7 +632,7 @@ export function MyWorkList() {
                     onLog={() => setLogTask(task)}
                     onSnooze={() => handleSnooze(task, 1)}
                     onSelect={isDesktop ? () => setSelectedId(task.id) : undefined}
-                    disabled={offline}
+                    disabled={false}
                   />
                 </div>
               ))}

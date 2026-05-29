@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { createTask } from "../mobile/pages/Project/api";
+import { enqueue } from "../cache/outbox";
+import { useOnline } from "../hooks/useOnline";
 import { logEvent } from "../telemetry";
 import { Modal } from "./ui/Modal";
 
@@ -15,13 +17,21 @@ export function QuickAddTaskModal({ projects, onClose, onCreated }: Props) {
   const [project, setProject] = useState(projects[0]?.name ?? "");
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
+  const online = useOnline();
 
   async function handleSubmit() {
     if (!project || !title.trim()) return;
     setSaving(true);
     try {
-      await createTask({ project, title: title.trim() });
-      logEvent("quick_add_task_submit", { project });
+      const payload = { project, title: title.trim() };
+      if (!online) {
+        // Offline: queue the create; the outbox runner replays it on reconnect.
+        await enqueue("create_task", payload);
+        logEvent("outbox_enqueue", { kind: "create_task" });
+      } else {
+        await createTask(payload);
+        logEvent("quick_add_task_submit", { project });
+      }
       onCreated();
     } finally { setSaving(false); }
   }

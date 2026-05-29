@@ -26,7 +26,12 @@ describe("components", () => {
 
   it("OfflineBanner shows when offline", () => {
     Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
-    render(<OfflineBanner />);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <OfflineBanner />
+      </QueryClientProvider>,
+    );
     act(() => {
       window.dispatchEvent(new Event("offline"));
     });
