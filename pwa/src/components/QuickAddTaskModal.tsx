@@ -28,7 +28,7 @@ export function QuickAddTaskModal({ projects, onClose, onCreated }: Props) {
   return (
     <>
       <div
-        onClick={onClose}
+        onClick={() => { if (!saving) onClose(); }}
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 60 }}
       />
       <div style={{

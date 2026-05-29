@@ -23,7 +23,7 @@ export function ProjectFormModal({ mode, initial, onSave, onCancel }: ProjectFor
   return (
     <>
       <div
-        onClick={onCancel}
+        onClick={() => { if (!saving) onCancel(); }}
         style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 60 }}
       />
       <div style={{
