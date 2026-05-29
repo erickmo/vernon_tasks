@@ -62,7 +62,7 @@ describe("ProjectSidebar", () => {
 
   it("shows create CTA in empty state when canWrite, opening the modal", async () => {
     const { useProjects } = await import("../../../portal/projects/hooks/useProjects");
-    vi.mocked(useProjects).mockReturnValue({ data: [], isLoading: false } as ReturnType<typeof useProjects>);
+    vi.mocked(useProjects).mockReturnValue({ data: [] as ProjectRow[], isLoading: false } as ReturnType<typeof useProjects>);
     wrap(<ProjectSidebar selectedId={null} onSelect={vi.fn()} />);
     const cta = await screen.findByRole("button", { name: /buat proyek pertama/i });
     fireEvent.click(cta);
