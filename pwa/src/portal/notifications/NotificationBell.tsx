@@ -1,21 +1,25 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 
 const PANEL_Z_INDEX = 9999;
 import { createPortal } from "react-dom";
 import { useNotificationCount } from "./hooks/useNotificationCount";
 import { NotificationPanel } from "./NotificationPanel";
+import { Badge } from "../../components/ui/Badge";
+import { useDismiss } from "../../hooks/useDismiss";
 import * as telemetry from "../../telemetry";
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [panelPos, setPanelPos] = useState({ top: 0, right: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const openedAt = useRef<number>(0);
   const { data: unreadCount = 0 } = useNotificationCount();
 
-  const badgeLabel = unreadCount >= 100 ? "99+" : String(unreadCount);
   const ariaLabel =
     unreadCount > 0 ? `Notifications — ${unreadCount} unread` : "Notifications";
+
+  useDismiss(panelRef, handleClose, isOpen);
 
   function handleClick() {
     if (!isOpen) {
@@ -39,18 +43,6 @@ export function NotificationBell() {
     telemetry.trackNotifPanelClose(Date.now() - openedAt.current);
     setIsOpen(false);
   }
-
-  // Close on Escape
-  useEffect(() => {
-    if (!isOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        handleClose();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen]);
 
   return (
     <>
@@ -79,15 +71,18 @@ export function NotificationBell() {
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
         {unreadCount > 0 && (
-          <span className="notif-bell__badge" aria-hidden="true">
-            {badgeLabel}
-          </span>
+          <Badge
+            variant="count"
+            count={unreadCount}
+            ariaLabel={`${unreadCount} unread`}
+          />
         )}
       </button>
 
       {isOpen &&
         createPortal(
           <div
+            ref={panelRef}
             className="notif-bell__panel-wrapper"
             style={{
               position: "fixed",
