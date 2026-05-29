@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createTask } from "../mobile/pages/Project/api";
 import { logEvent } from "../telemetry";
+import { Modal } from "./ui/Modal";
 
 export interface QuickAddProject { name: string; title: string; }
 
@@ -26,17 +27,9 @@ export function QuickAddTaskModal({ projects, onClose, onCreated }: Props) {
   }
 
   return (
-    <>
-      <div
-        onClick={() => { if (!saving) onClose(); }}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 60 }}
-      />
-      <div style={{
-        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-        background: "#fff", borderRadius: 12, padding: 24, width: 320, maxWidth: "90vw",
-        zIndex: 61, boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
-      }}>
-        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Tugas Baru</h3>
+    <Modal open onClose={onClose} variant="center" busy={saving} labelledBy="qat-title">
+      <div style={{ padding: 24, width: 320, maxWidth: "90vw" }}>
+        <h3 id="qat-title" style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Tugas Baru</h3>
         {projects.length === 0 ? (
           <div style={{ fontSize: 13, color: "#64748b" }}>
             Buat proyek dulu sebelum menambahkan tugas.
@@ -80,6 +73,6 @@ export function QuickAddTaskModal({ projects, onClose, onCreated }: Props) {
           </>
         )}
       </div>
-    </>
+    </Modal>
   );
 }
