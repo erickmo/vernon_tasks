@@ -103,7 +103,8 @@ export type TelemetryEvent =
   | "dashboard_tab_view"
   | "dashboard_project_filter"
   | "dashboard_agenda_chip_tap"
-  | "dashboard_next_action_tap";
+  | "dashboard_next_action_tap"
+  | "quick_add_task_submit";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
