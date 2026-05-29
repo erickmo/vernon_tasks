@@ -105,7 +105,10 @@ export type TelemetryEvent =
   | "dashboard_agenda_chip_tap"
   | "dashboard_next_action_tap"
   | "quick_add_task_submit"
-  | "quick_add_task_open";
+  | "quick_add_task_open"
+  | "sprint_board_open"
+  | "sprint_task_move"
+  | "sprint_axis_toggle";
 
 export function logEvent(event: TelemetryEvent, props: Record<string, unknown> = {}): void {
   api
@@ -273,4 +276,30 @@ export function trackReportsOverdueViewToggle(view: "member" | "project") {
 }
 export function trackReportsPermissionDenied(tab: string) {
   self.logEvent("reports.permission_denied", { tab });
+}
+
+/**
+ * Log opening the mobile sprint board.
+ * @param sprint - sprint name/id being opened
+ */
+export function trackSprintBoardOpen(sprint: string) {
+  self.logEvent("sprint_board_open", { sprint });
+}
+
+/**
+ * Log a drag-to-move on the mobile sprint board.
+ * @param from - source column value
+ * @param to - destination column value
+ * @param axis - active board axis (kanban_status | pdca_phase)
+ */
+export function trackSprintTaskMoveMobile(from: string, to: string, axis: "kanban_status" | "pdca_phase") {
+  self.logEvent("sprint_task_move", { from, to, axis });
+}
+
+/**
+ * Log toggling the mobile sprint board axis.
+ * @param axis - newly selected axis
+ */
+export function trackSprintAxisToggle(axis: "kanban_status" | "pdca_phase") {
+  self.logEvent("sprint_axis_toggle", { axis });
 }
