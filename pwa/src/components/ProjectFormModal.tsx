@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Modal } from "./ui/Modal";
 
 const PROJECT_STATUSES = ["Open", "On Track", "At Risk", "Closed"] as const;
 
@@ -21,19 +22,9 @@ export function ProjectFormModal({ mode, initial, onSave, onCancel }: ProjectFor
   }
 
   return (
-    <>
-      <div
-        onClick={() => { if (!saving) onCancel(); }}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 60 }}
-      />
-      <div style={{
-        position: "fixed", top: "50%", left: "50%",
-        transform: "translate(-50%,-50%)",
-        background: "#fff", borderRadius: 12, padding: 24,
-        width: 320, maxWidth: "90vw", zIndex: 61,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.16)",
-      }}>
-        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
+    <Modal open onClose={onCancel} variant="center" busy={saving} labelledBy="pfm-title">
+      <div style={{ padding: 24, width: 320, maxWidth: "90vw" }}>
+        <h3 id="pfm-title" style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
           {mode === "create" ? "Buat Proyek" : "Edit Proyek"}
         </h3>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 12 }}>
@@ -71,6 +62,6 @@ export function ProjectFormModal({ mode, initial, onSave, onCancel }: ProjectFor
           </button>
         </div>
       </div>
-    </>
+    </Modal>
   );
 }
