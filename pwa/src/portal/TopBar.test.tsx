@@ -7,6 +7,13 @@ import * as permsHook from "../auth/usePermissions";
 import * as telemetry from "../telemetry";
 import * as vtSettingsHook from "../hooks/useVtSettings";
 
+vi.mock("./notifications/hooks/useNotificationCount", () => ({
+  useNotificationCount: vi.fn(),
+}));
+
+import { useNotificationCount } from "./notifications/hooks/useNotificationCount";
+const mockNotifCount = vi.mocked(useNotificationCount);
+
 function mockVtSettings(enabled = false) {
   vi.spyOn(vtSettingsHook, "useVtSettings").mockReturnValue({
     isLoading: false,
@@ -38,6 +45,7 @@ function renderTopBar() {
 
 describe("TopBar", () => {
   it("filters nav items by permission", () => {
+    mockNotifCount.mockReturnValue({ data: 0 } as ReturnType<typeof useNotificationCount>);
     mockPerms(["project.read"]);
     mockVtSettings(false);
     renderTopBar();
@@ -49,11 +57,20 @@ describe("TopBar", () => {
   });
 
   it("emits nav_click telemetry on link click", () => {
+    mockNotifCount.mockReturnValue({ data: 0 } as ReturnType<typeof useNotificationCount>);
     mockPerms(["okr.read"]);
     mockVtSettings(false);
     const spy = vi.spyOn(telemetry, "trackPortalNavClick");
     renderTopBar();
     fireEvent.click(screen.getByRole("link", { name: "OKR" }));
     expect(spy).toHaveBeenCalledWith("okr", "/portal/okr");
+  });
+
+  it("renders shared Badge count in nav when notifications enabled and count > 0", () => {
+    mockNotifCount.mockReturnValue({ data: 3 } as ReturnType<typeof useNotificationCount>);
+    mockPerms(["notifications.read"]);
+    mockVtSettings(true);
+    renderTopBar();
+    expect(screen.getByLabelText("3 unread notifications")).toBeInTheDocument();
   });
 });
