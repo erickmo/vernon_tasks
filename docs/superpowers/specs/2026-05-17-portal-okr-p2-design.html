@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — PRD — Portal OKR Module (P2)</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<h1 id="prd-portal-okr-module-p2">PRD — Portal OKR Module (P2)</h1>
+<p><strong>Status:</strong> Implemented (P2)
+<strong>Date:</strong> 2026-05-17
+<strong>Owner:</strong> Vernon Tasks
+<strong>Parent:</strong> <a href="2026-05-17-desktop-portal-foundation-design.md">Desktop Portal Foundation (Phase 1)</a>
+<strong>Scope:</strong> Desktop portal OKR domain — list, detail, filters, inline KR autosave, create/edit Objective, bulk PDCA transition. Mounts at <code>/portal/okr/*</code> behind <code>okr.read</code> / <code>okr.write</code> permission gates.</p>
+<hr />
+<h2 id="1-background-goal">1. Background &amp; Goal</h2>
+<p>OKR backend (Objective, Key Result, KPI Definition, KPI Entry DocTypes) ships in <code>vernon_tasks/okr/</code>. Managers currently edit OKRs via Frappe Desk — slow for review cycles and weekly progress updates. The P1 portal foundation reserves <code>/portal/okr</code> as a permission-gated route, currently rendering a "coming soon" stub.</p>
+<p><strong>Goal:</strong> Ship a manager-grade desktop OKR view that supports the quarterly cycle end-to-end: review existing OKRs (filter by period/owner/status/PDCA), update KR progress inline, create/edit Objectives, and advance multiple Objectives through PDCA in one action.</p>
+<p><strong>Non-goals (P2):</strong>
+- Charts/visualizations
+- KPI Entry / KPI Definition UI
+- Cross-objective alignment tree
+- Comments / discussion threads
+- CSV/PDF export</p>
+<hr />
+<h2 id="2-users-personas">2. Users &amp; Personas</h2>
+<table>
+<thead>
+<tr>
+<th>Persona</th>
+<th>Primary jobs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OKR Owner (manager/leader)</td>
+<td>Review own + team OKRs, update KR progress weekly, advance PDCA phase</td>
+</tr>
+<tr>
+<td>PMO / Admin</td>
+<td>Create Objectives at the start of cycle, run bulk PDCA transitions, audit progress</td>
+</tr>
+<tr>
+<td>Worker (transient)</td>
+<td>Read-only access if granted <code>okr.read</code>; cannot edit</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-architecture">3. Architecture</h2>
+<h3 id="31-routes">3.1 Routes</h3>
+<pre><code>/portal/okr            → &lt;OKRList&gt;         (master-detail)
+/portal/okr/new        → &lt;ObjectiveEditor&gt; (create)
+/portal/okr/:id/edit   → &lt;ObjectiveEditor&gt; (edit)
+</code></pre>
+<p>Selection state in <code>?obj=&lt;name&gt;</code> search param (bookmarkable).</p>
+<h3 id="32-folder-layout-additive">3.2 Folder Layout (additive)</h3>
+<pre><code>pwa/src/portal/okr/
+├── OKRRoutes.tsx
+├── OKRList.tsx
+├── ObjectiveTable.tsx
+├── ObjectiveDetail.tsx
+├── ObjectiveEditor.tsx
+├── KRRow.tsx
+├── FiltersBar.tsx
+├── BulkActions.tsx
+├── api/
+│   ├── objectives.ts
+│   ├── keyResults.ts
+│   └── bulk.ts
+├── hooks/
+│   ├── useObjectives.ts
+│   ├── useObjective.ts
+│   └── usePdcaTransition.ts
+└── lib/
+    ├── periodParser.ts
+    └── pdcaSequence.ts
+</code></pre>
+<h3 id="33-backend">3.3 Backend</h3>
+<ul>
+<li><strong>Schema migration:</strong> extend <code>Objective</code> DocType with <code>period_start</code> (Date, nullable) and <code>period_end</code> (Date, nullable). One-shot patch <code>vernon_tasks/patches/v1_x/add_objective_period_dates.py</code> backfills from <code>period</code> string via parser; unknown patterns left NULL with log entry.</li>
+<li><strong>API (<code>vernon_tasks/api/okr.py</code>, whitelisted):</strong></li>
+<li><code>list_objectives(filters: dict) -&gt; list[dict]</code> — date-range overlap on period_start/period_end + owner/status/pdca filters; returns objectives + avg KR progress per row.</li>
+<li><code>get_objective_with_krs(name: str) -&gt; dict</code> — single fetch (objective + KRs) to avoid waterfall.</li>
+<li><code>bulk_advance_pdca(names: list[str]) -&gt; {advanced: list, skipped: list}</code> — forward-only PLAN→DO→CHECK→ACT→CLOSED; skips already-CLOSED; permission-filtered; transactional rollback on error.</li>
+<li><strong>Individual CRUD</strong> uses Frappe REST (<code>/api/resource/Objective</code>, <code>/api/resource/Key Result</code>).</li>
+</ul>
+<hr />
+<h2 id="4-ux-components">4. UX &amp; Components</h2>
+<h3 id="41-okrlist">4.1 <code>&lt;OKRList&gt;</code></h3>
+<ul>
+<li>Grid: top <code>&lt;FiltersBar&gt;</code>, left <code>&lt;ObjectiveTable&gt;</code> (~60%), right <code>&lt;ObjectiveDetail&gt;</code> (~40%, sticky).</li>
+<li>Top-right action: "+ New Objective" → <code>/portal/okr/new</code>.</li>
+<li>Empty: <code>&lt;EmptyState&gt;</code> w/ "Create Objective" CTA.</li>
+</ul>
+<h3 id="42-filtersbar">4.2 <code>&lt;FiltersBar&gt;</code></h3>
+<ul>
+<li><code>period_start</code> + <code>period_end</code> date inputs (native Phase 1).</li>
+<li><code>owner</code> Frappe User picker.</li>
+<li><code>status</code> multi-chip (Open / On Track / At Risk / Closed).</li>
+<li><code>pdca_phase</code> chip (PLAN / DO / CHECK / ACT / CLOSED).</li>
+<li>"Clear filters" link.</li>
+<li>State synced to URL search params (shareable).</li>
+</ul>
+<h3 id="43-objectivetable">4.3 <code>&lt;ObjectiveTable&gt;</code></h3>
+<ul>
+<li>Cols: checkbox, Title, Period, Owner, Status, PDCA, Progress (avg KR %), Updated.</li>
+<li>Sort by Period DESC default; click header to toggle.</li>
+<li>Bulk-select via checkbox; row click selects detail (checkbox click stops propagation).</li>
+</ul>
+<h3 id="44-bulkactions">4.4 <code>&lt;BulkActions&gt;</code></h3>
+<ul>
+<li>Visible when ≥1 row selected.</li>
+<li>Single button: "Advance PDCA →" + count badge.</li>
+<li>Confirm dialog shows preview (current → next per selected).</li>
+<li>Submit → mutation → toast + invalidate list cache.</li>
+</ul>
+<h3 id="45-objectivedetail">4.5 <code>&lt;ObjectiveDetail&gt;</code></h3>
+<ul>
+<li>Header: title, period, owner, status badge, PDCA badge. Edit icon → <code>/portal/okr/:id/edit</code>.</li>
+<li>Body: description (collapsible).</li>
+<li>"Key Results" section: list of <code>&lt;KRRow&gt;</code> + "+ Add KR" inline form.</li>
+</ul>
+<h3 id="46-krrow">4.6 <code>&lt;KRRow&gt;</code></h3>
+<ul>
+<li>Display: metric label, target, editable <code>current_value</code> input, unit, progress bar.</li>
+<li>Debounced 800ms autosave via PUT KR; visual states (idle / saving spinner / saved check / error red + retry).</li>
+<li>Delete icon with confirm dialog.</li>
+</ul>
+<h3 id="47-objectiveeditor-route-page-not-modal">4.7 <code>&lt;ObjectiveEditor&gt;</code> (route page, not modal)</h3>
+<ul>
+<li>react-hook-form + zod.</li>
+<li>Fields: title, description, period (string), period_start, period_end (auto-fill from period parser on blur), owner, status, pdca_phase (default PLAN on create).</li>
+<li>Submit → POST/PUT → redirect <code>/portal/okr?obj=&lt;new_id&gt;</code>.</li>
+<li>Cancel → back.</li>
+</ul>
+<hr />
+<h2 id="5-data-flow-cache">5. Data Flow &amp; Cache</h2>
+<h3 id="51-react-query-keys">5.1 react-query keys</h3>
+<pre><code class="language-ts">['okr', 'list', filters]
+['okr', 'detail', name]
+['okr', 'kr', name]
+</code></pre>
+<h3 id="52-invalidation">5.2 Invalidation</h3>
+<ul>
+<li>KR update (autosave) → invalidate <code>['okr', 'detail', objName]</code> + <code>['okr', 'list']</code> (progress affects list aggregate).</li>
+<li>Objective create/edit → invalidate <code>['okr', 'list']</code>; navigate to detail.</li>
+<li>Bulk PDCA → invalidate <code>['okr', 'list']</code> + each affected <code>['okr', 'detail', name]</code>.</li>
+</ul>
+<h3 id="53-optimistic-updates">5.3 Optimistic Updates</h3>
+<p>KR <code>current_value</code> autosave only: apply local update immediately, rollback on error.</p>
+<h3 id="54-period-parser">5.4 Period Parser</h3>
+<p><code>pwa/src/portal/okr/lib/periodParser.ts</code>:</p>
+<pre><code class="language-ts">parsePeriod(&quot;2026-Q2&quot;)  → {start: &quot;2026-04-01&quot;, end: &quot;2026-06-30&quot;}
+parsePeriod(&quot;2026-H1&quot;)  → {start: &quot;2026-01-01&quot;, end: &quot;2026-06-30&quot;}
+parsePeriod(&quot;2026&quot;)     → {start: &quot;2026-01-01&quot;, end: &quot;2026-12-31&quot;}
+parsePeriod(unknown)    → null
+</code></pre>
+<h3 id="55-permission-gate">5.5 Permission Gate</h3>
+<ul>
+<li>Read endpoints require <code>okr.read</code>.</li>
+<li>Write endpoints (create/update/bulk PDCA) require <code>okr.write</code>.</li>
+<li>Frontend hides edit/delete/create buttons via <code>hasPermission('okr.write')</code>.</li>
+<li>Backend re-checks via <code>frappe.has_permission</code> per call (defense in depth).</li>
+</ul>
+<h3 id="56-telemetry">5.6 Telemetry</h3>
+<p>Extend <code>pwa/src/telemetry.ts</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Payload</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okr.list_view</code></td>
+<td><code>{ filters_count }</code></td>
+</tr>
+<tr>
+<td><code>okr.detail_view</code></td>
+<td><code>{ name }</code></td>
+</tr>
+<tr>
+<td><code>okr.kr_update</code></td>
+<td><code>{ kr_name, delta }</code></td>
+</tr>
+<tr>
+<td><code>okr.objective_create</code></td>
+<td><code>{ name }</code></td>
+</tr>
+<tr>
+<td><code>okr.objective_edit</code></td>
+<td><code>{ name }</code></td>
+</tr>
+<tr>
+<td><code>okr.bulk_pdca_advance</code></td>
+<td><code>{ count, from_to_pairs }</code></td>
+</tr>
+<tr>
+<td><code>okr.permission_denied</code></td>
+<td><code>{ path, action }</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-error-handling">6. Error Handling</h2>
+<h3 id="61-form-validation-zod">6.1 Form Validation (zod)</h3>
+<ul>
+<li>Objective: <code>title</code> non-empty ≤140 chars, <code>period</code> non-empty, <code>period_start ≤ period_end</code>, <code>owner</code> valid User, <code>status</code>/<code>pdca_phase</code> enum.</li>
+<li>KR: <code>metric</code> non-empty, <code>target_value</code> numeric (allow 0), <code>current_value</code> numeric, <code>unit</code> ≤32 chars.</li>
+<li>Inline error messages; submit disabled until valid.</li>
+</ul>
+<h3 id="62-api-errors">6.2 API Errors</h3>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>401</td>
+<td>Redirect <code>/login</code> (already wired in foundation)</td>
+</tr>
+<tr>
+<td>403</td>
+<td>Toast "Permission denied" + <code>okr.permission_denied</code> telemetry</td>
+</tr>
+<tr>
+<td>404 (detail)</td>
+<td><code>&lt;NotFound&gt;</code> in detail panel only, not whole page</td>
+</tr>
+<tr>
+<td>409 / 417</td>
+<td>Inline field error from response body</td>
+</tr>
+<tr>
+<td>5xx</td>
+<td>Toast + retry button; KR autosave shows red w/ retry</td>
+</tr>
+</tbody>
+</table>
+<h3 id="63-kr-autosave-concurrency">6.3 KR Autosave Concurrency</h3>
+<ul>
+<li>Send <code>_modified</code> timestamp as optimistic-concurrency token w/ PUT.</li>
+<li>409 conflict → toast "KR updated by another user, refreshing" → invalidate + refetch.</li>
+</ul>
+<h3 id="64-bulk-pdca-edge-cases">6.4 Bulk PDCA Edge Cases</h3>
+<ul>
+<li>Already-CLOSED objectives → server skips, response splits <code>{advanced, skipped}</code>. Toast: "N advanced, M skipped (already CLOSED)".</li>
+<li>Permission missing on some objectives → backend filters, returns <code>skipped</code> w/ reason <code>no_permission</code>. Toast lists count.</li>
+<li>Transaction failure → all rollback, error toast w/ details.</li>
+</ul>
+<h3 id="65-period-parser-fallback">6.5 Period Parser Fallback</h3>
+<ul>
+<li>Unknown pattern → editor leaves dates empty, surfaces inline note "Pattern not recognized — set start/end manually." Validation blocks submit until set.</li>
+</ul>
+<h3 id="66-empty-loading">6.6 Empty / Loading</h3>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>UI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>List loading</td>
+<td><code>&lt;PageSkeleton&gt;</code></td>
+</tr>
+<tr>
+<td>List empty (filter)</td>
+<td><code>&lt;EmptyState&gt;</code> + "Clear filters" CTA</td>
+</tr>
+<tr>
+<td>List empty (none)</td>
+<td><code>&lt;EmptyState&gt;</code> + "+ Create first Objective"</td>
+</tr>
+<tr>
+<td>Detail panel idle</td>
+<td>Placeholder "Select an Objective to view details"</td>
+</tr>
+<tr>
+<td>KR list empty</td>
+<td>"No Key Results yet. Add one."</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-testing">7. Testing</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Coverage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unit (vitest)</td>
+<td><code>periodParser</code> (all patterns + unknown), <code>pdcaSequence.next()</code> (5 phases + CLOSED noop), KRRow autosave debounce + optimistic + rollback, FiltersBar URL-sync, ObjectiveEditor zod validation</td>
+</tr>
+<tr>
+<td>Component</td>
+<td>ObjectiveTable sort/bulk-select; BulkActions confirm-dialog flow; ObjectiveDetail renders mocked query</td>
+</tr>
+<tr>
+<td>Integration (MSW)</td>
+<td>list w/ filters → table; bulk_advance_pdca w/ partial skip → split toast; KR autosave 409 → refetch path</td>
+</tr>
+<tr>
+<td>Backend (Frappe tests)</td>
+<td><code>list_objectives</code> date-range overlap; <code>bulk_advance_pdca</code> forward-only + permission filter + transaction rollback; permission gate (okr.read vs okr.write)</td>
+</tr>
+<tr>
+<td>E2E (playwright)</td>
+<td>filter → select → inline KR edit → create objective → bulk advance</td>
+</tr>
+<tr>
+<td>Coverage gate</td>
+<td><code>pwa/src/portal/okr/</code> ≥80% lines</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-build-bundle">8. Build &amp; Bundle</h2>
+<ul>
+<li>Add <code>pwa/src/portal/okr/</code> to vite <code>manualChunks</code> → <code>okr</code> chunk lazy-loaded only when route hit.</li>
+<li>Budget: okr chunk ≤120KB gzip Phase 1.</li>
+</ul>
+<hr />
+<h2 id="9-rollout">9. Rollout</h2>
+<h3 id="91-feature-flag">9.1 Feature Flag</h3>
+<p>New VT Settings field <code>portal_okr_enabled</code> (Check, default <code>0</code>), independent of <code>portal_enabled</code>.
+- OFF: <code>/portal/okr</code> renders <code>&lt;ComingSoon domain="OKR" /&gt;</code> (current).
+- ON: renders <code>&lt;OKRRoutes /&gt;</code>.
+- Lets ops ship code dark, flip per-site.</p>
+<h3 id="92-phases">9.2 Phases</h3>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P2.1</td>
+<td>Backend (schema patch, API endpoints, tests) + flag field. Ship dark.</td>
+</tr>
+<tr>
+<td>P2.2</td>
+<td>Frontend read-only list + detail + filters. Flip flag in staging.</td>
+</tr>
+<tr>
+<td>P2.3</td>
+<td>Inline KR autosave + bulk PDCA.</td>
+</tr>
+<tr>
+<td>P2.4</td>
+<td>Create/edit Objective form. UAT 1 week → GA.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="10-success-metrics">10. Success Metrics</h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Time-to-first-KR-update (median manager session)</td>
+<td>&lt;30s after entering <code>/portal/okr</code></td>
+</tr>
+<tr>
+<td>Bulk PDCA adoption</td>
+<td>≥50% managers in first quarterly cycle</td>
+</tr>
+<tr>
+<td>Unhandled errors in telemetry (7d post-GA)</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Coverage <code>okr/</code> lines</td>
+<td>≥80%</td>
+</tr>
+<tr>
+<td>Bundle (okr chunk, gz)</td>
+<td>≤120KB</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="11-open-questions">11. Open Questions</h2>
+<ul>
+<li>Should KR autosave trigger on blur OR debounce-only? (Default: debounce 800ms + save on blur as safety net.)</li>
+<li>Bulk PDCA confirm dialog — show full preview list or just count? (Default: preview list, capped to first 10 + "and N more".)</li>
+<li>Owner picker — restrict to active Users only, or include disabled? (Default: active only.)</li>
+</ul>
+<hr />
+<h2 id="12-out-of-scope-future-prds">12. Out of Scope (Future PRDs)</h2>
+<ul>
+<li>KPI Entry / KPI Definition portal UI (KPI sub-PRD).</li>
+<li>OKR alignment tree (parent/child Objective relations — requires schema work).</li>
+<li>Charts and progress visualizations.</li>
+<li>CSV/PDF export.</li>
+<li>Comments / discussion threads on Objectives.</li>
+<li>Mobile-portal handoff (continue editing on mobile).</li>
+</ul>
+</body>
+</html>

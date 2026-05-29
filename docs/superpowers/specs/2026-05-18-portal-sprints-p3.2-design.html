@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Portal Sprints P3.2 — Design Spec</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<h1 id="portal-sprints-p32-design-spec">Portal Sprints P3.2 — Design Spec</h1>
+<p><strong>Date:</strong> 2026-05-18
+<strong>Parent PRD:</strong> <code>docs/superpowers/specs/2026-05-17-portal-projects-p3-design.html</code>
+<strong>Status:</strong> Draft — pending review
+<strong>Owner:</strong> Erick Mo</p>
+<h2 id="1-scope">1. Scope</h2>
+<p>Desktop portal Sprint domain — sprint board (project-level), sprint detail with task board (sprint-level), task drag/reorder, sprint create/edit, burndown chart. Mounts at <code>/portal/projects/:projectId/sprints/*</code> behind <code>portal_sprints_enabled</code> flag. Replaces ad-hoc sprint management in Frappe desk for portal users.</p>
+<p><strong>In scope (P3.2):</strong>
+- Sprint board: 4 columns (Planning / Active / Review / Closed), sprint cards, drag sprint → status change.
+- Sprint CRUD: create, edit (title, project locked, dates, goal, status). No delete in portal (use desk).
+- Task board (per-sprint): toggle between <code>kanban_status</code> (default, 7 cols) and <code>pdca_phase</code> (6 cols) groupings. Drag task → column change + reorder within column.
+- Burndown chart: estimated_hours-based, daily series, ideal vs actual line.
+- Permission model: Manager/Leader full edit; Member moves only own (<code>assigned_to=session.user</code>) tasks.</p>
+<p><strong>Non-goals (P3.2, deferred):</strong>
+- Task CRUD inside board — move only. Create/edit tasks still via Frappe desk (P3.3 handles).
+- Cross-sprint task drag.
+- Sprint delete from portal.
+- Sprint templates / recurring sprints.
+- Velocity history chart (P3.3).
+- Sprint Task child table cleanup — soft-deprecated here, removed in P3.3 after observation window.</p>
+<h2 id="2-architecture">2. Architecture</h2>
+<h3 id="21-backend-module-vernon_tasksapisprintspy">2.1 Backend module — <code>vernon_tasks/api/sprints.py</code></h3>
+<p>Sibling to <code>vernon_tasks/api/projects.py</code> (matches existing portal-backend convention). Whitelisted RPC endpoints (exposed as <code>vernon_tasks.api.sprints.*</code>):</p>
+<ul>
+<li><code>list_sprints(project, filters)</code> — filter by status (IN), date-range overlap on start_date/end_date; aggregates <code>{task_count, open_hours, completed_hours}</code> per sprint; ORDER BY start_date DESC; LIMIT 200.</li>
+<li><code>get_sprint_with_relations(name)</code> — returns <code>{sprint, project_summary, tasks}</code>. <code>tasks</code> is the full task list for the board: <code>{name, title, assigned_to, kanban_status, pdca_phase, kanban_rank, estimated_hours, weight, priority}</code>.</li>
+<li><code>create_sprint(payload)</code> — <code>{sprint_title, project, start_date, end_date, goal, status}</code>. Validates date sequence and project permission.</li>
+<li><code>update_sprint(name, payload)</code> — same fields, project not mutable. Permission per Frappe doc perm.</li>
+<li><code>bulk_update_sprints(names, payload)</code> — <code>status</code> batch only; transactional; returns <code>{updated, skipped}</code> with reasons.</li>
+<li><code>move_task(task, kanban_status?, pdca_phase?, kanban_rank?, sprint?)</code> — single atomic write. Server-side perm: Manager/Leader any task; Member only when <code>task.assigned_to == frappe.session.user</code>. Returns updated task. Invalidates burndown cache for the affected sprint.</li>
+<li><code>get_sprint_burndown(sprint)</code> — see §5.</li>
+<li><code>rebalance_column(sprint, axis, column_value)</code> — recompute ranks for the given column; sets <code>kanban_rank = (index+1) * 1000</code> ordered by current rank ASC; transactional.</li>
+</ul>
+<p>Reuse <code>vernon_tasks/okr/pdca.py</code> for PDCA transitions; do not copy.</p>
+<h3 id="22-schema-delta">2.2 Schema delta</h3>
+<ul>
+<li>Add field <code>kanban_rank</code> (Float, no default, no required) to <code>VT Task</code> via patch.</li>
+<li>Lazy populate: on first call to <code>get_sprint_with_relations</code>, any task with <code>kanban_rank IS NULL</code> gets <code>rank = creation_unix_ts * 1000</code> written back in a single batch. Idempotent.</li>
+<li><code>Sprint Task</code> child table: leave intact, stop writing. P3.3 removes after 2 sprints of zero new writes (telemetry tracked).</li>
+</ul>
+<h3 id="23-feature-flag">2.3 Feature flag</h3>
+<ul>
+<li><code>portal_sprints_enabled</code> (Check, default <code>0</code>) added to <code>VT Settings</code>. Gates route registration + nav link visibility. Server endpoints still callable (validate flag at endpoint entry; raise <code>frappe.PermissionError</code> if off).</li>
+</ul>
+<h3 id="24-frontend-module-pwasrcportalsprints">2.4 Frontend module — <code>pwa/src/portal/sprints/</code></h3>
+<p>Mirrors <code>portal/projects/</code> layout:</p>
+<pre><code>SprintRoutes.tsx          // nested under :projectId/sprints/*
+SprintsFeatureGate.tsx    // reads portal_sprints_enabled
+SprintBoard.tsx           // 4-col board, sprint cards, dnd-kit
+SprintCard.tsx
+SprintEditor.tsx          // modal: create/edit
+SprintDetail.tsx          // header + tabs: Board | Burndown
+TaskBoard.tsx             // toggle kanban_status / pdca_phase
+TaskCard.tsx
+BurndownChart.tsx         // inline SVG
+api/sprints.ts            // RPC wrappers
+hooks/useSprintBoard.ts
+hooks/useTaskBoard.ts
+hooks/useBurndown.ts
+lib/rank.ts               // fractional indexing
+</code></pre>
+<p>Mounted from <code>ProjectRoutes.tsx</code>:</p>
+<pre><code class="language-tsx">&lt;Route path=&quot;:projectId/sprints/*&quot; element={
+  &lt;SprintsFeatureGate&gt;&lt;SprintRoutes/&gt;&lt;/SprintsFeatureGate&gt;
+} /&gt;
+</code></pre>
+<p><code>ProjectDetail.tsx</code> gains a "Sprints" link that navigates to the nested board.</p>
+<h2 id="3-drag-drop-semantics">3. Drag-drop semantics</h2>
+<h3 id="31-dnd-kit-configuration">3.1 dnd-kit configuration</h3>
+<ul>
+<li>One <code>DndContext</code> per board. <code>SortableContext</code> per column with <code>verticalListSortingStrategy</code>.</li>
+<li>Sensors: <code>PointerSensor</code> (activation distance 5px) + <code>KeyboardSensor</code> (a11y — Space picks up, arrows move, Enter drops).</li>
+<li><code>DragOverlay</code> for visual lift; original card grays.</li>
+<li>Member-disallowed cards: <code>disabled</code> prop on <code>useSortable</code>; visually muted.</li>
+</ul>
+<h3 id="32-fractional-rank-librankts">3.2 Fractional rank — <code>lib/rank.ts</code></h3>
+<ul>
+<li>Insert between A (rank=1000) and B (rank=2000) → midpoint 1500.</li>
+<li>Top of column (no prev) → <code>next_rank - 1000</code>.</li>
+<li>Bottom (no next) → <code>prev_rank + 1000</code>.</li>
+<li>Collision: when <code>|new_rank - neighbor_rank| &lt; 0.0001</code>, request server rebalance for the entire column (<code>POST portal.sprints.rebalance_column</code>, scope=<code>{sprint, kanban_status_or_pdca_phase}</code>, sets ranks = (index+1) * 1000).</li>
+</ul>
+<h3 id="33-optimistic-flow">3.3 Optimistic flow</h3>
+<ol>
+<li>On drop, mutate local React Query cache: card removed from source column, inserted at target index, <code>kanban_status</code>/<code>kanban_rank</code> updated.</li>
+<li>POST <code>move_task</code> with new field values.</li>
+<li>Success → reconcile server response into cache (server is authoritative on final rank).</li>
+<li>Failure → rollback to pre-drag cache snapshot, show error toast quoting server message.</li>
+<li>Concurrent moves: last-write-wins on rank. Server returns the resulting rank; client diffs and re-renders.</li>
+</ol>
+<h3 id="34-cross-column-side-effects">3.4 Cross-column side-effects</h3>
+<ul>
+<li>Moving to <code>kanban_status=Done</code> column → server sets <code>completion_date = today</code> if null.</li>
+<li>Moving to <code>pdca_phase=DONE</code> column (PDCA view) → server runs existing PDCA hooks (scoring, points, etc.).</li>
+<li>The two fields are independent: switching the view toggle does not auto-sync the unselected field. Moving in PDCA view does not change kanban_status, and vice versa. This is intentional — they represent different lifecycle axes.</li>
+</ul>
+<h2 id="4-permissions">4. Permissions</h2>
+<p>Enforced server-side in <code>move_task</code>, <code>create_sprint</code>, <code>update_sprint</code>, <code>bulk_update_sprints</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Manager</th>
+<th>Leader</th>
+<th>Member</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>View sprint board / task board</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes (where project visible)</td>
+</tr>
+<tr>
+<td>Create / edit sprint</td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Bulk update sprint status</td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Move sprint card (drag)</td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Move any task</td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Move own task (<code>assigned_to=self</code>)</td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>Rebalance column</td>
+<td>yes</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>Client hides/disables disallowed affordances; server is authoritative — UI hint only.</p>
+<h2 id="5-burndown-calculation">5. Burndown calculation</h2>
+<h3 id="51-series">5.1 Series</h3>
+<ul>
+<li>x-axis: each day from <code>sprint.start_date</code> to <code>min(today, sprint.end_date)</code>.</li>
+<li><code>remaining_hours[d]</code> = Σ <code>estimated_hours</code> of tasks WHERE <code>task.sprint = :sprint</code> AND task was not in a Done state by EOD of <code>d</code>.</li>
+<li>"Done by EOD <code>d</code>" source priority:</li>
+<li>Most recent <code>tabVersion</code> row for that task with <code>data</code> containing <code>kanban_status: Done</code> and <code>creation &lt;= EOD(d)</code>.</li>
+<li>Fallback: <code>completion_date &lt;= d</code> if no version log.</li>
+<li><code>ideal_hours[d]</code> = <code>total_hours_at_sprint_start * (1 - (d - start) / (end - start))</code>. Clamped ≥ 0.</li>
+<li><code>total_hours_at_sprint_start</code> is the snapshot at start; later scope additions appear as upward bumps in <code>remaining</code> line.</li>
+</ul>
+<h3 id="52-api">5.2 API</h3>
+<pre><code>GET vernon_tasks.api.sprints.get_sprint_burndown?sprint=SP-2026-00001
+→ {
+    &quot;sprint&quot;: &quot;SP-2026-00001&quot;,
+    &quot;start_date&quot;: &quot;2026-05-18&quot;,
+    &quot;end_date&quot;: &quot;2026-05-31&quot;,
+    &quot;total_hours&quot;: 120,
+    &quot;series&quot;: [
+      {&quot;date&quot;: &quot;2026-05-18&quot;, &quot;remaining&quot;: 120, &quot;ideal&quot;: 120.0},
+      {&quot;date&quot;: &quot;2026-05-19&quot;, &quot;remaining&quot;: 118, &quot;ideal&quot;: 111.4},
+      ...
+    ]
+  }
+</code></pre>
+<h3 id="53-caching">5.3 Caching</h3>
+<ul>
+<li><code>frappe.cache().set_value(f"burndown:{sprint}", payload, expires_in_sec=300)</code>.</li>
+<li>Invalidated in <code>move_task</code> when affected task's sprint is set.</li>
+<li>Invalidated in <code>update_sprint</code> when dates change.</li>
+</ul>
+<h3 id="54-render">5.4 Render</h3>
+<ul>
+<li>Inline SVG, no chart library. ~80 LOC component.</li>
+<li>Two <code>&lt;path&gt;</code> elements (ideal, actual), x-axis tick per day or per week (per sprint length).</li>
+<li>Tooltip on hover shows <code>{date, remaining, ideal}</code>.</li>
+</ul>
+<h2 id="6-testing">6. Testing</h2>
+<h3 id="61-backend-testsportaltest_sprintspy">6.1 Backend — <code>tests/portal/test_sprints.py</code></h3>
+<ul>
+<li><code>list_sprints</code> filter matrix: status, date range, project scoping.</li>
+<li><code>move_task</code> permission matrix: Manager/Leader/Member × own/other task × move type.</li>
+<li><code>move_task</code> rank semantics: midpoint, top, bottom, collision → rebalance.</li>
+<li><code>get_sprint_burndown</code> math: empty sprint, mid-sprint snapshot, fully done, scope creep mid-sprint.</li>
+<li><code>create_sprint</code> / <code>update_sprint</code> validation: date sequence, project perm.</li>
+<li><code>bulk_update_sprints</code> partial-skip cases.</li>
+</ul>
+<h3 id="62-frontend-vitest-rtl">6.2 Frontend — Vitest + RTL</h3>
+<ul>
+<li>Per-component <code>.test.tsx</code> for SprintBoard, SprintCard, SprintEditor, TaskBoard, TaskCard, BurndownChart.</li>
+<li>Drag tests via <code>@dnd-kit/test</code> keyboard sensor — deterministic.</li>
+<li><code>__integration.test.tsx</code> over <code>SprintRoutes</code> mirroring P3.1 pattern.</li>
+<li>BurndownChart snapshot test with fixed-fixture series.</li>
+<li>Optimistic rollback test: mock <code>move_task</code> reject → assert cache reverted + toast shown.</li>
+</ul>
+<h2 id="7-telemetry">7. Telemetry</h2>
+<p>Events emitted via existing portal telemetry sink:</p>
+<ul>
+<li><code>sprint_board_view</code> <code>{project, sprint_count}</code></li>
+<li><code>sprint_move</code> <code>{sprint, from_status, to_status}</code></li>
+<li><code>sprint_created</code> <code>{sprint, project}</code></li>
+<li><code>sprint_updated</code> <code>{sprint, changed_fields}</code></li>
+<li><code>task_move</code> <code>{task, sprint, axis: "kanban"|"pdca", from, to}</code></li>
+<li><code>task_rank_change</code> <code>{task, sprint}</code></li>
+<li><code>task_board_axis_toggle</code> <code>{sprint, axis}</code></li>
+<li><code>burndown_view</code> <code>{sprint}</code></li>
+<li><code>rank_rebalance</code> <code>{sprint, axis, column}</code></li>
+</ul>
+<h2 id="8-rollout">8. Rollout</h2>
+<ol>
+<li>Schema patch — add <code>VT Task.kanban_rank</code> Float; no backfill.</li>
+<li>Backend deploy behind <code>portal_sprints_enabled=0</code>. Verify endpoints reject when flag off.</li>
+<li>Pilot org flips flag → smoke 1 sprint cycle: create sprint → assign tasks (via desk) → run board through Planning → Active → Review → Closed → review burndown.</li>
+<li>Enable globally.</li>
+<li>After 2 closed sprints with zero <code>Sprint Task</code> writes (telemetry): schedule P3.3 cleanup to drop child table.</li>
+</ol>
+<h2 id="9-open-questions-risks">9. Open questions / risks</h2>
+<ul>
+<li><strong>Sprint Task child table soft-deprecation</strong> — existing Frappe desk forms may still write to it via form scripts; need to scan and disable.</li>
+<li><strong>Rebalance under load</strong> — if multiple users drag simultaneously in same column, repeated rebalances could thrash. Mitigation: rebalance threshold conservative (collision floor 0.0001 is generous); rebalance is transactional.</li>
+<li><strong>Burndown version-log dependency</strong> — relies on Frappe <code>tabVersion</code> capturing <code>kanban_status</code> changes. Verify <code>track_changes=1</code> on VT Task (it is, per schema) and that the field is in tracked set.</li>
+</ul>
+<h2 id="10-sub-prd-chain">10. Sub-PRD chain</h2>
+<ul>
+<li>Parent: <code>2026-05-17-portal-projects-p3-design.md</code></li>
+<li>Predecessor: P3.1 (Implemented).</li>
+<li>Successors: P3.3 (VT Task CRUD + dependencies in portal), P3.4 (Milestones + Documentation), P3.5 (Team Member capacity).</li>
+</ul>
+</body>
+</html>

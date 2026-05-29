@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — PRD — Desktop Portal Foundation (Phase 1)</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<h1 id="prd-desktop-portal-foundation-phase-1">PRD — Desktop Portal Foundation (Phase 1)</h1>
+<p><strong>Status:</strong> Implemented (Phase 1)
+<strong>Date:</strong> 2026-05-17
+<strong>Owner:</strong> Vernon Tasks
+<strong>Scope:</strong> Umbrella PRD — portal shell, routing, auth, permissions, design system wiring. Domain features (OKR, Projects, Workforce, Reports) are out of scope and will follow as sub-PRDs.</p>
+<hr />
+<h2 id="1-background-goal">1. Background &amp; Goal</h2>
+<p>Vernon Tasks today ships a mobile-first PWA mounted at <code>/m/*</code> (React + Vite, in <code>pwa/</code>), targeting worker-level task execution. Managers, admins, and PMOs need a desktop-class interface for strategic, multi-domain work (OKR overview, project planning, workforce analytics, reporting) that mobile UI cannot serve well.</p>
+<p><strong>Goal:</strong> Establish a desktop portal at <code>/portal/*</code> inside the existing <code>pwa/</code> codebase — sharing auth, API, cache, i18n, telemetry, and component primitives with the mobile PWA — while providing a separate layout shell, navigation, and permission model tailored to manager/admin workflows. This PRD covers the foundation; each domain (OKR, Projects, Workforce, Reports) will be specced and implemented as a separate sub-PRD.</p>
+<p><strong>Non-goals (Phase 1):</strong>
+- Domain content (OKR/Projects/Workforce/Reports pages — stubs only)
+- Real command palette (placeholder dialog only)
+- Mobile↔portal state handoff
+- Multi-tenant theming
+- Sidebar layout (topbar-only Phase 1; sidebar may come later if nav grows)</p>
+<hr />
+<h2 id="2-users-personas">2. Users &amp; Personas</h2>
+<table>
+<thead>
+<tr>
+<th>Persona</th>
+<th>Primary jobs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Manager</td>
+<td>Review OKR progress, monitor team workload, approve project plans</td>
+</tr>
+<tr>
+<td>Admin / PMO</td>
+<td>Configure projects, manage roles, run cross-domain reports</td>
+</tr>
+<tr>
+<td>Worker (transient)</td>
+<td>May land on <code>/portal/*</code> from a link — gracefully redirected to <code>/m/*</code></td>
+</tr>
+</tbody>
+</table>
+<p>Access is permission-gated, not role-gated: any user with a matching permission key sees the corresponding nav item and route.</p>
+<hr />
+<h2 id="3-architecture">3. Architecture</h2>
+<h3 id="31-approach-approach-a-single-spa-multi-shell-routing">3.1 Approach (Approach A — Single SPA, multi-shell routing)</h3>
+<p>Single Vite entry (<code>pwa/src/main.tsx</code>) and single bundle. The top-level router branches by URL prefix to a mobile shell or a portal shell, each shell lazily code-split.</p>
+<p><strong>Top-level routes:</strong></p>
+<pre><code>/m/*    → &lt;MobileShell&gt;   (existing)
+/portal/*  → &lt;PortalShell&gt;   (new, React.lazy)
+/       → redirect by viewport + role hint
+</code></pre>
+<p><strong>Code-split:</strong> <code>React.lazy(() =&gt; import('./portal/PortalShell'))</code> keeps the portal chunk out of the mobile bundle path.</p>
+<h3 id="32-folder-layout">3.2 Folder Layout</h3>
+<pre><code>pwa/src/
+├── components/      shared atoms (Button, Input, Badge, Table, Form, EmptyState, ...)
+├── api/ auth/ cache/ hooks/ theme/ i18n.ts telemetry.ts   (shared)
+├── mobile/          (current pages/ moved under mobile/)
+│   └── pages/
+└── portal/
+    ├── PortalShell.tsx       desktop guard + layout grid
+    ├── TopBar.tsx            horizontal nav + search + bell + profile
+    ├── routes.tsx            portal sub-router
+    ├── nav.ts                nav registry (key, label, path, icon, permission)
+    ├── guards/
+    │   ├── PortalGuard.tsx   auth + viewport guard for /portal/*
+    │   └── RequirePermission.tsx
+    ├── layouts/              PageLayout, SplitLayout, FullBleed
+    └── pages/
+        ├── Dashboard.tsx
+        ├── PermissionDenied.tsx
+        ├── NotFound.tsx
+        └── ErrorPage.tsx
+</code></pre>
+<p>Existing <code>pwa/src/pages/</code> are moved under <code>pwa/src/mobile/pages/</code> as part of P1.</p>
+<h3 id="33-backend-wiring">3.3 Backend Wiring</h3>
+<ul>
+<li><code>vernon_tasks/hooks.py</code>: extend <code>website_route_rules</code> with <code>/portal/&lt;path:portal_path&gt;</code> → <code>vernon_tasks.www.portal</code> (mirror of <code>m.py</code>).</li>
+<li>New files:</li>
+<li><code>vernon_tasks/www/portal.py (sibling of www/m.py)</code></li>
+<li><code>vernon_tasks/www/portal.py</code> (serves the same <code>pwa/dist/index.html</code>)</li>
+<li><code>vernon_tasks/www/portal.html</code></li>
+<li>Nginx static asset symlink: <code>sites/{site}/public/portal</code> → <code>pwa/dist/</code> (same pattern as <code>/m/</code>, per memory <code>project_frappe_pwa_nginx</code>).</li>
+<li>Feature flag: <code>portal_enabled</code> in VT Settings; when off, <code>/portal/*</code> returns 404 (or redirects to <code>/m/</code>).</li>
+</ul>
+<hr />
+<h2 id="4-shell-components-navigation">4. Shell Components &amp; Navigation</h2>
+<h3 id="41-portalshell">4.1 <code>&lt;PortalShell&gt;</code></h3>
+<ul>
+<li>Desktop-only: <code>useMediaQuery('(min-width: 1024px)')</code>. On viewport &lt;1024 → redirect <code>/m/</code>.</li>
+<li>Layout grid: topbar 56px high, main fills remaining viewport.</li>
+<li>Renders <code>&lt;TopBar /&gt;</code> + <code>&lt;Outlet /&gt;</code> for sub-routes.</li>
+</ul>
+<h3 id="42-topbar-left-right">4.2 <code>&lt;TopBar&gt;</code> (left → right)</h3>
+<ul>
+<li><code>Logo</code> — click navigates to <code>/portal/</code>.</li>
+<li><code>PrimaryNav</code> — horizontal items from <code>portal/nav.ts</code>, filtered by permission.</li>
+<li>Spacer.</li>
+<li><code>&lt;GlobalSearch&gt;</code> — <code>cmd+k</code> opens dialog. Phase 1: stub dialog with "coming soon".</li>
+<li><code>&lt;NotificationBell&gt;</code> — reuses existing PWA notification API.</li>
+<li><code>&lt;ProfileMenu&gt;</code> — avatar dropdown: profile, settings, switch to mobile, logout.</li>
+</ul>
+<h3 id="43-nav-registry-phase-1">4.3 Nav Registry (Phase 1)</h3>
+<pre><code class="language-ts">export const portalNav: NavItem[] = [
+  { key: 'dashboard', label: 'Dashboard', path: '/portal',          permission: null },
+  { key: 'okr',       label: 'OKR',       path: '/portal/okr',      permission: 'okr.read' },
+  { key: 'projects',  label: 'Projects',  path: '/portal/projects', permission: 'project.read' },
+  { key: 'workforce', label: 'Workforce', path: '/portal/workforce',permission: 'workforce.read' },
+  { key: 'reports',   label: 'Reports',   path: '/portal/reports',  permission: 'report.read' },
+];
+</code></pre>
+<p>Domain routes render "coming soon" stubs in Phase 1.</p>
+<h3 id="44-pagelayout-wrapper">4.4 <code>&lt;PageLayout&gt;</code> Wrapper</h3>
+<p>Standard page wrapper used by every domain page: title, breadcrumb, actions slot, body slot.</p>
+<h3 id="45-guards">4.5 Guards</h3>
+<ul>
+<li><code>&lt;PortalGuard&gt;</code> at root of <code>/portal/*</code>: unauthenticated → <code>/login?next=...</code>; viewport &lt;1024 → <code>/m/</code>.</li>
+<li><code>&lt;RequirePermission perm="..."&gt;</code> per route: missing permission → <code>&lt;PermissionDenied&gt;</code> page.</li>
+</ul>
+<hr />
+<h2 id="5-data-flow-permissions">5. Data Flow &amp; Permissions</h2>
+<h3 id="51-api">5.1 API</h3>
+<p>Reuses existing <code>pwa/src/api/</code> (frappe-fetch wrapper). New endpoint:</p>
+<pre><code>GET /api/method/vernon_tasks.api.auth.get_user_permissions
+  → { permissions: string[], roles: string[] }
+</code></pre>
+<p>Cached via existing react-query setup (<code>pwa/src/cache/</code>). Invalidated on login/logout.</p>
+<h3 id="52-permission-helper">5.2 Permission Helper</h3>
+<p><code>pwa/src/auth/usePermissions.ts</code>:
+- <code>hasPermission(perm: string): boolean</code>
+- <code>hasAnyPermission(perms: string[]): boolean</code>
+- <code>hasRole(role: string): boolean</code></p>
+<p>Consumed by <code>&lt;PortalGuard&gt;</code>, <code>&lt;TopBar&gt;</code> nav filter, and <code>&lt;RequirePermission&gt;</code>.</p>
+<h3 id="53-permission-keys">5.3 Permission Keys</h3>
+<p>Convention: <code>&lt;domain&gt;.&lt;action&gt;</code>. Phase 1 registry:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>okr.read</code></td>
+<td>View OKR data</td>
+</tr>
+<tr>
+<td><code>okr.write</code></td>
+<td>Edit OKR data</td>
+</tr>
+<tr>
+<td><code>project.read</code></td>
+<td>View projects</td>
+</tr>
+<tr>
+<td><code>project.write</code></td>
+<td>Edit projects</td>
+</tr>
+<tr>
+<td><code>workforce.read</code></td>
+<td>View workforce data</td>
+</tr>
+<tr>
+<td><code>report.read</code></td>
+<td>View reports</td>
+</tr>
+</tbody>
+</table>
+<p>Backend mapping (Phase 1): Frappe Role → permission keys, hard-coded in <code>vernon_tasks/api/auth.py</code>. Granular per-record permission DocType is a follow-up, out of scope.</p>
+<h3 id="54-state-boundaries">5.4 State Boundaries</h3>
+<ul>
+<li>Server state → react-query (per-domain key namespace: <code>['okr', ...]</code>, <code>['project', ...]</code>).</li>
+<li>Client UI state → component-local; Zustand store only for cross-route UI (theme already lives in <code>pwa/src/theme/</code>).</li>
+<li>No global Redux. Prop drilling capped at 2 levels.</li>
+</ul>
+<h3 id="55-telemetry">5.5 Telemetry</h3>
+<p>Extend <code>pwa/src/telemetry.ts</code> with:
+- <code>portal.page_view</code> — payload: <code>{ path }</code>
+- <code>portal.nav_click</code> — payload: <code>{ key, path }</code>
+- <code>portal.permission_denied</code> — payload: <code>{ path, required_perm }</code>
+- <code>portal.error</code> — payload: <code>{ path, message }</code></p>
+<hr />
+<h2 id="6-error-handling-loading-empty-states">6. Error Handling, Loading, Empty States</h2>
+<h3 id="61-error-boundaries">6.1 Error Boundaries</h3>
+<p>Two layers:
+- <strong>Shell-level</strong> <code>&lt;PortalErrorBoundary&gt;</code> wraps <code>&lt;PortalShell&gt;</code> children — catches catastrophic render errors → <code>&lt;ErrorPage&gt;</code> (retry, report-bug link, <code>telemetry('portal.error', ...)</code>).
+- <strong>Page-level</strong> boundary inside each route for recoverable errors.</p>
+<p>Domain components must not swallow errors silently.</p>
+<h3 id="62-api-error-contract-global-react-query-onerror">6.2 API Error Contract (global react-query <code>onError</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>401</td>
+<td>Redirect <code>/login</code></td>
+</tr>
+<tr>
+<td>403</td>
+<td>Render <code>&lt;PermissionDenied&gt;</code> (shows required permission + "request access" button stub)</td>
+</tr>
+<tr>
+<td>404</td>
+<td>Render <code>&lt;NotFound&gt;</code> (links back to portal home)</td>
+</tr>
+<tr>
+<td>5xx</td>
+<td>Toast + retry button; log to telemetry</td>
+</tr>
+<tr>
+<td>network/offline</td>
+<td>Banner "Connection lost"; retry queue</td>
+</tr>
+</tbody>
+</table>
+<h3 id="63-loading">6.3 Loading</h3>
+<ul>
+<li>Page-level: <code>&lt;PageSkeleton&gt;</code> (topbar persists, body skeleton). No blank flash.</li>
+<li>Inline: <code>&lt;Spinner&gt;</code> on action buttons; optimistic updates where safe.</li>
+<li>Suspense boundary per route (paired with <code>React.lazy</code>).</li>
+</ul>
+<h3 id="64-empty-states">6.4 Empty States</h3>
+<p>Shared <code>&lt;EmptyState icon title description action /&gt;</code> in <code>components/</code>. All domain pages must use it — no blank tables.</p>
+<hr />
+<h2 id="7-testing">7. Testing</h2>
+<h3 id="71-unit-vitest-existing-harness">7.1 Unit (vitest, existing harness)</h3>
+<ul>
+<li><code>portal/**/*.test.tsx</code> covers: TopBar nav filter by permission, PortalGuard redirect rules, RequirePermission gating, PageLayout slot rendering.</li>
+</ul>
+<h3 id="72-integration">7.2 Integration</h3>
+<ul>
+<li>react-query + MSW mock of <code>get_user_permissions</code>.</li>
+<li>Scenarios:</li>
+<li>No permissions → nav menu empty, all domain routes blocked.</li>
+<li>Partial permissions → only matching menu items + routes accessible.</li>
+<li>All permissions → full menu.</li>
+</ul>
+<h3 id="73-e2e-playwright-existing-pwae2e">7.3 E2E (playwright, existing <code>pwa/e2e/</code>)</h3>
+<ul>
+<li><code>portal-shell.spec.ts</code>: login → land <code>/portal</code> → nav click → URL update → permission-denied flow → switch-to-mobile flow.</li>
+</ul>
+<h3 id="74-backend">7.4 Backend</h3>
+<ul>
+<li><code>vernon_tasks/api/test_auth.py</code> — <code>get_user_permissions</code> returns correct keys per Frappe role.</li>
+</ul>
+<h3 id="75-coverage-gate">7.5 Coverage Gate</h3>
+<ul>
+<li><code>portal/</code> ≥80% lines.</li>
+</ul>
+<hr />
+<h2 id="8-build-bundle">8. Build &amp; Bundle</h2>
+<ul>
+<li>Vite config: add <code>manualChunks</code> to isolate <code>portal</code> chunk from <code>mobile</code>.</li>
+<li><code>pwa/build-pwa.sh</code> unchanged (single build outputs both shells).</li>
+<li>Bundle budget: portal chunk ≤200KB gzip Phase 1 (shell only). CI check.</li>
+</ul>
+<hr />
+<h2 id="9-rollout">9. Rollout</h2>
+<h3 id="phases">Phases</h3>
+<ol>
+<li><strong>P1 — Foundation (this PRD):</strong> route mount, shell, topbar, auth/permission, error boundaries, dashboard stub with "coming soon" cards per domain. Ship behind <code>portal_enabled</code> feature flag in VT Settings.</li>
+<li><strong>P2 — OKR sub-PRD</strong> (<a href="2026-05-17-portal-okr-p2-design.md">spec</a>).</li>
+<li><strong>P3 — Projects sub-PRD</strong> (<a href="2026-05-17-portal-projects-p3-design.md">spec</a>).</li>
+<li><strong>P4 — Workforce sub-PRD.</strong></li>
+<li><strong>P5 — Reports sub-PRD.</strong></li>
+</ol>
+<h3 id="ga-gate">GA Gate</h3>
+<ul>
+<li>All domain MVPs done.</li>
+<li>2-week UAT with managers.</li>
+<li>Telemetry shows zero unhandled errors over a 7-day window.</li>
+</ul>
+<hr />
+<h2 id="10-success-metrics">10. Success Metrics</h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shell LCP (p75)</td>
+<td>&lt;1.5s</td>
+</tr>
+<tr>
+<td>Portal bundle (gz, Phase 1)</td>
+<td>≤200KB</td>
+</tr>
+<tr>
+<td>Permission check correctness</td>
+<td>100% (verified by tests)</td>
+</tr>
+<tr>
+<td>Unhandled errors in telemetry (7d post-deploy)</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="11-open-questions">11. Open Questions</h2>
+<ul>
+<li>Are permission keys versioned alongside the backend, or shipped as a separate config? (Default: collocated with <code>vernon_tasks/api/auth.py</code>.)</li>
+<li>Should <code>/</code> root redirect prefer viewport (desktop → <code>/portal</code>, mobile → <code>/m</code>) or role (manager → <code>/portal</code>, worker → <code>/m</code>)? (Default: viewport-first, role as tiebreaker.)</li>
+<li>Notification bell content for portal — same feed as mobile or filtered to manager-relevant events? (Default: same feed Phase 1; filter in P2+.)</li>
+</ul>
+<hr />
+<h2 id="12-out-of-scope-tracked-for-future-prds">12. Out of Scope (Tracked for Future PRDs)</h2>
+<ul>
+<li>Domain pages (OKR, Projects, Workforce, Reports) — each gets its own sub-PRD.</li>
+<li>Real <code>cmd+k</code> command palette (Phase 1 ships stub dialog).</li>
+<li>Sidebar/collapsible nav (only if nav count grows past topbar comfort).</li>
+<li>Mobile↔portal in-session state handoff.</li>
+<li>Multi-tenant theme overrides.</li>
+<li>Granular per-record permission DocType.</li>
+</ul>
+</body>
+</html>
