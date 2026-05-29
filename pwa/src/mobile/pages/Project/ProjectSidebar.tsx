@@ -130,8 +130,22 @@ export function ProjectSidebar({ selectedId, onSelect }: Props) {
           <div style={{ padding: 12, fontSize: 12, color: "#94a3b8" }}>Memuat...</div>
         )}
         {!isLoading && filtered.length === 0 && (
-          <div style={{ padding: 12, fontSize: 12, color: "#94a3b8", textAlign: "center" as const }}>
-            Tidak ada proyek
+          <div style={{ padding: 16, textAlign: "center" as const }}>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: canWrite ? 12 : 0 }}>
+              Tidak ada proyek
+            </div>
+            {canWrite && (
+              <button
+                onClick={() => setFormMode("create")}
+                style={{
+                  background: "#7c4dab", color: "#fff", border: "none",
+                  borderRadius: 8, padding: "8px 14px", fontSize: 12,
+                  fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                + Buat proyek pertama
+              </button>
+            )}
           </div>
         )}
         {filtered.map(p => (
