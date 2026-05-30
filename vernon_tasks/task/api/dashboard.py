@@ -442,6 +442,109 @@ def my_projects(filter: str = "all") -> dict[str, Any]:
     return {"is_admin": is_admin, "led": led_cards, "member": member_rows}
 
 
+# ── 2b. project_detail ───────────────────────────────────────────────────────
+
+DETAIL_TASK_LIMIT = 200
+CLOSED_STATUSES = ("Done", "Cancelled")
+
+
+def _assert_project_access(project_id: str, user: str) -> None:
+    if _is_admin():
+        return
+    led, member = _user_project_ids(user)
+    if project_id not in led and project_id not in member:
+        raise frappe.PermissionError(f"No access to project {project_id}")
+
+
+def _detail_header(project_id: str, card: dict, ref: datetime.date) -> dict:
+    proj = frappe.get_value(
+        PROJECT_DOCTYPE,
+        project_id,
+        ["title", "status", "pdca_phase", "percent_done",
+         "project_leader", "start_date", "end_date"],
+        as_dict=True,
+    ) or {}
+    return {
+        "id": project_id,
+        "title": proj.get("title") or project_id,
+        "status": proj.get("status"),
+        "pdca_phase": proj.get("pdca_phase"),
+        "percent_done": card.get("pct_done", 0),
+        "risk": card.get("risk", "on_track"),
+        "leader": proj.get("project_leader"),
+        "start_date": str(proj["start_date"]) if proj.get("start_date") else None,
+        "end_date": str(proj["end_date"]) if proj.get("end_date") else None,
+        "sprint": card.get("sprint"),
+    }
+
+
+def _detail_open_tasks(project_id: str) -> list[dict]:
+    rows = frappe.get_all(
+        TASK_DOCTYPE,
+        filters=[
+            ["project", "=", project_id],
+            ["kanban_status", "not in", CLOSED_STATUSES],
+        ],
+        fields=["name", "title", "kanban_status", "priority", "deadline", "risk_flag"],
+        order_by="deadline asc",
+        limit_page_length=DETAIL_TASK_LIMIT,
+    )
+    return [
+        {
+            "id": r["name"],
+            "title": r.get("title"),
+            "kanban_status": r.get("kanban_status"),
+            "priority": r.get("priority"),
+            "deadline": str(r["deadline"]) if r.get("deadline") else None,
+            "risk_flag": bool(r.get("risk_flag")),
+        }
+        for r in rows
+    ]
+
+
+def _detail_team(doc) -> list[dict]:
+    return [
+        {"user": getattr(m, "user", None), "role": getattr(m, "role", None)}
+        for m in (getattr(doc, "team_members", None) or [])
+    ]
+
+
+def _detail_milestones(doc) -> list[dict]:
+    out = []
+    for m in (getattr(doc, "milestones", None) or []):
+        due = getattr(m, "due_date", None)
+        out.append({
+            "title": getattr(m, "milestone_title", None),
+            "due_date": str(due) if due else None,
+            "status": getattr(m, "status", None),
+        })
+    return out
+
+
+@frappe.whitelist()
+def project_detail(project_id: str) -> dict[str, Any]:
+    """Read-only detail dashboard for one project.
+
+    Access: admin, the project_leader, or a team member only.
+    Reuses _project_card for risk/percent/sprint; reads child tables directly.
+    """
+    require_login()
+    user = frappe.session.user
+    ref = getdate(today())
+    _assert_project_access(project_id, user)
+
+    card = _project_card(project_id, ref)
+    open_tasks = _detail_open_tasks(project_id)
+    doc = frappe.get_doc(PROJECT_DOCTYPE, project_id)
+    return {
+        "header": _detail_header(project_id, card, ref),
+        "open_tasks": open_tasks,
+        "team_members": _detail_team(doc),
+        "milestones": _detail_milestones(doc),
+        "blockers": card.get("blockers", 0),
+    }
+
+
 # ── 3. schedule_agenda ───────────────────────────────────────────────────────
 
 
@@ -465,7 +568,7 @@ def _task_agenda_items(user: str, start: datetime.date, end: datetime.date) -> l
             "date": str(r["deadline"]),
             "time": None,
             "priority": r.get("priority"),
-            "route": f"/m/work/{r['name']}",
+            "route": f"/app/vt-task/{r['name']}",
         }
         for r in rows
     ]
@@ -502,7 +605,7 @@ def _sprint_agenda_items(user: str, start: datetime.date, end: datetime.date) ->
                 "date": str(sd),
                 "time": None,
                 "priority": None,
-                "route": f"/m/project/{s.get('project') or ''}",
+                "route": f"/app/vt-project/{s.get('project') or ''}",
             })
         if start <= ed <= end:
             items.append({
@@ -513,7 +616,7 @@ def _sprint_agenda_items(user: str, start: datetime.date, end: datetime.date) ->
                 "date": str(ed),
                 "time": None,
                 "priority": None,
-                "route": f"/m/project/{s.get('project') or ''}",
+                "route": f"/app/vt-project/{s.get('project') or ''}",
             })
     return items
 
@@ -541,7 +644,7 @@ def _meeting_agenda_items(user: str, start: datetime.date, end: datetime.date) -
             "date": str(r["meeting_date"]),
             "time": str(r["meeting_time"]) if r.get("meeting_time") else None,
             "priority": None,
-            "route": f"/m/meeting/{r['name']}",
+            "route": f"/app/vernon-meeting/{r['name']}",
         }
         for r in rows
     ]

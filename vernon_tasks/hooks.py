@@ -67,6 +67,8 @@ fixtures = [
     {"dt": "Workspace", "filters": [["name", "in", ["My Tasks", "My Projects", "Overview"]]]},
     {"dt": "Page", "filters": [["name", "=", "vt-home"]]},
     {"dt": "Page", "filters": [["name", "=", "vt-projects"]]},
+    {"dt": "Page", "filters": [["name", "=", "vt-project"]]},
+    {"dt": "Page", "filters": [["name", "=", "vt-settings"]]},
     # Website brand & content
     {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},
