@@ -1,4 +1,3 @@
-import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AuthGuard } from "./auth/guard";
 import { LoginPage } from "./auth/login";
@@ -14,7 +13,6 @@ import { ScheduleTab } from "./mobile/pages/Dashboard/ScheduleTab";
 import { LeaderPage } from "./mobile/pages/Leader";
 import { SprintBoardMobile } from "./mobile/pages/Sprint/SprintBoardMobile";
 import { PushPrefsPage } from "./mobile/pages/PushPrefs";
-import { PageSkeleton } from "./components/PageSkeleton";
 import { Landing as ReportsLanding } from "./mobile/pages/Reports/Landing";
 import { MyReports } from "./mobile/pages/Reports/MyReports";
 import { ProjectsList } from "./mobile/pages/Reports/ProjectsList";
@@ -22,22 +20,9 @@ import { ProjectDetail } from "./mobile/pages/Reports/ProjectDetail";
 import { TeamReport } from "./mobile/pages/Reports/TeamReport";
 import { ReportsFeatureGate } from "./mobile/pages/Reports/ReportsFeatureGate";
 
-const PortalShell = lazy(() => import("./portal/PortalShell"));
-
-function LazyPortalShell() {
-  return (
-    <Suspense fallback={<PageSkeleton />}>
-      <PortalShell />
-    </Suspense>
-  );
-}
-
 function RootRedirect() {
-  const isDesktop =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(min-width: 1024px)").matches;
-  return <Navigate to={isDesktop ? "/portal" : "/m/dashboard"} replace />;
+  // Portal (desktop) disabled — always route to the mobile app.
+  return <Navigate to="/m/dashboard" replace />;
 }
 
 function OnboardingGate() {
@@ -51,7 +36,6 @@ export const router = createBrowserRouter([
   { path: "/", element: <RootRedirect /> },
   { path: "/m/login", element: <LoginPage /> },
   { path: "/m/onboarding", element: <OnboardingGate /> },
-  { path: "/portal/*", element: <LazyPortalShell /> },
   {
     element: <AuthGuard />,
     children: [
