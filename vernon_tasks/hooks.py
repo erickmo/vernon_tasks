@@ -8,8 +8,12 @@ app_email = "dev@vernoncorp.com"
 app_license = "mit"
 app_version = app_version
 
-app_include_js = ["/assets/vernon_tasks/js/page_nav.js"]
+app_include_js = [
+    "/assets/vernon_tasks/js/page_nav.js",
+    "/assets/vernon_tasks/js/vt_navbar.js",
+]
 app_include_css = ["/assets/vernon_tasks/css/vt_home.css"]
+extend_bootinfo = "vernon_tasks.boot.extend_bootinfo"
 
 required_apps = []
 
@@ -74,6 +78,7 @@ fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
     {"dt": "Workspace", "filters": [["name", "in", ["My Tasks", "My Projects", "Overview"]]]},
     {"dt": "Page", "filters": [["name", "=", "vt-home"]]},
+    {"dt": "Page", "filters": [["name", "=", "vt-projects"]]},
     # Website brand & content
     {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},

@@ -66,7 +66,7 @@
 .vt-home .vh-stat .vh-num {
   font-family: 'DM Serif Display', Georgia, serif; font-size: 32px; color: #0f172a;
 }
-.vt-home .vh-stat .vh-lbl {
+.vt-home .vh-lbl {
   font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
   text-transform: uppercase; color: var(--vh-text-2); margin-top: 4px;
 }
@@ -122,3 +122,26 @@
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── navbar2 (global desk sub-nav) ── */
+.vt-navbar2 {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 6px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.vt-navbar2 .vt-nav-item {
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .15s, color .15s;
+}
+.vt-navbar2 .vt-nav-item:hover { background: #f1f5f9; color: #0f172a; }
+.vt-navbar2 .vt-nav-item.active { background: rgba(37,99,235,0.10); color: #2563eb; }

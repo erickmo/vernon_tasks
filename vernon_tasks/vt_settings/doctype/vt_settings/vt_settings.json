@@ -28,7 +28,9 @@
     "portal_notifications_enabled",
     "portal_reports_enabled",
     "mobile_reports_enabled",
-    "portal_dashboard_v2_enabled"
+    "portal_dashboard_v2_enabled",
+    "navbar_section",
+    "navbar_items"
   ],
   "fields": [
     {
@@ -182,6 +184,18 @@
       "fieldname": "portal_dashboard_v2_enabled",
       "fieldtype": "Check",
       "label": "Enable Portal Dashboard V2"
+    },
+    {
+      "fieldname": "navbar_section",
+      "fieldtype": "Section Break",
+      "label": "Navbar Menu"
+    },
+    {
+      "fieldname": "navbar_items",
+      "fieldtype": "Table",
+      "label": "Navbar Items",
+      "options": "VT Navbar Item",
+      "description": "Menu links shown in the global navbar2 across desk pages. Empty = default (Home, Project)."
     }
   ],
   "issingle": 1,

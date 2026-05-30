@@ -1,0 +1,23 @@
+{
+ "actions": [],
+ "creation": "2026-05-30 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": ["label", "route", "icon", "enabled"],
+ "fields": [
+  {"fieldname": "label", "fieldtype": "Data", "label": "Label", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "route", "fieldtype": "Data", "label": "Route", "reqd": 1, "in_list_view": 1, "description": "Desk route, e.g. /app/vt-home"},
+  {"fieldname": "icon", "fieldtype": "Data", "label": "Icon", "in_list_view": 1, "description": "Frappe icon name (optional), e.g. home"},
+  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1", "in_list_view": 1}
+ ],
+ "istable": 1,
+ "modified": "2026-05-30 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Vt Settings",
+ "name": "VT Navbar Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

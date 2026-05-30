@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Editable Global Navbar + Projects Cards Page</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Editable Global Navbar + Projects Cards Page</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-30-vt-navbar-projects-design.md</span>
+  </div>
+</header>
+
+<h1 id="navbar-projects">Editable Global Navbar + Projects Cards Page</h1>
+<p><strong>Date:</strong> 2026-05-30<br />
+<strong>Task size:</strong> L (new child doctype + boot hook + new desk Page + global nav script + css + hooks)<br />
+<strong>App ownership:</strong> 100% <code>vernon_tasks</code> — no Frappe core files touched<br />
+<strong>Scope:</strong> A second navigation bar shown on every desk page, with menu items editable from VT Settings; plus a new <code>vt-projects</code> desk Page that lists projects as cards.</p>
+<hr />
+
+<h2 id="1-goal">1. Goal</h2>
+<p>Add a global "navbar2" under the desk navbar with menu links (default: Home &rarr; <code>/app/vt-home</code>, Project &rarr; <code>/app/vt-projects</code>). The menu must be editable by an admin without code, via a child table on VT Settings. Also add the <code>vt-projects</code> page that renders the user's projects as cards.</p>
+
+<h2 id="2-decisions">2. Design Decisions</h2>
+<table>
+  <tr><th>Decision</th><th>Choice</th><th>Why</th></tr>
+  <tr><td>Where menu items are stored</td><td>Child table <code>navbar_items</code> on the existing single doctype <strong>VT Settings</strong>, rows of new child doctype <strong>VT Navbar Item</strong></td><td>Native low-code config; single source; admin (VT Manager) edits in the VT Settings form. No code change to add/reorder links.</td></tr>
+  <tr><td>How items reach the browser</td><td>Frappe <code>extend_bootinfo</code> hook injects <code>bootinfo.vt_navbar_items</code></td><td>Native boot mechanism; no extra HTTP round-trip; available synchronously to desk JS.</td></tr>
+  <tr><td>Out-of-box behaviour</td><td>Boot function returns a hardcoded default (Home, Project) when the table is empty</td><td>Works immediately on a fresh install; still fully overridable by editing the table.</td></tr>
+  <tr><td>Rendering</td><td><code>public/js/vt_navbar.js</code> via <code>app_include_js</code>; styles <code>.vt-navbar2</code> appended to <code>vt_home.css</code> (already global)</td><td>One global include; reuses the existing app_include_css file.</td></tr>
+  <tr><td>Projects page data</td><td>New Page <code>vt-projects</code> reusing <code>dashboard.my_projects</code></td><td>API already returns card-ready data (name, status, pct_done, open_tasks, blockers, risk). No new business logic.</td></tr>
+</table>
+
+<h2 id="3-files">3. Files</h2>
+<h3 id="new">New</h3>
+<ul>
+<li><code>vernon_tasks/vt_settings/doctype/vt_navbar_item/__init__.py</code></li>
+<li><code>vernon_tasks/vt_settings/doctype/vt_navbar_item/vt_navbar_item.json</code> — child doctype (istable)</li>
+<li><code>vernon_tasks/vt_settings/doctype/vt_navbar_item/vt_navbar_item.py</code> — empty Document controller</li>
+<li><code>vernon_tasks/boot.py</code> — <code>extend_bootinfo(bootinfo)</code> reads VT Settings &rarr; <code>bootinfo.vt_navbar_items</code> (defaults if empty)</li>
+<li><code>vernon_tasks/public/js/vt_navbar.js</code> — global navbar2 renderer</li>
+<li><code>vernon_tasks/task/page/vt_projects/__init__.py</code></li>
+<li><code>vernon_tasks/task/page/vt_projects/vt_projects.json</code> — Page def + roles</li>
+<li><code>vernon_tasks/task/page/vt_projects/vt_projects.js</code> — project cards renderer</li>
+<li><code>vernon_tasks/task/page/vt_projects/test_vt_projects.py</code> — page exists/route/roles test</li>
+</ul>
+<h3 id="modified">Modified</h3>
+<ul>
+<li><code>vernon_tasks/vt_settings/doctype/vt_settings/vt_settings.json</code> — add Section Break "Navbar Menu" + Table field <code>navbar_items</code></li>
+<li><code>vernon_tasks/public/css/vt_home.css</code> — append <code>.vt-navbar2</code> styles</li>
+<li><code>vernon_tasks/hooks.py</code> — <code>extend_bootinfo</code>, append vt_navbar.js to <code>app_include_js</code>, fixtures for the new Page + child doctype</li>
+</ul>
+
+<h2 id="4-data-model">4. Data Model — VT Navbar Item (child)</h2>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
+  <tr><td>label</td><td>Data</td><td>reqd; display text</td></tr>
+  <tr><td>route</td><td>Data</td><td>reqd; desk route, e.g. <code>/app/vt-home</code></td></tr>
+  <tr><td>icon</td><td>Data</td><td>optional; Frappe icon name (e.g. <code>home</code>)</td></tr>
+  <tr><td>enabled</td><td>Check</td><td>default 1; only enabled rows render</td></tr>
+</table>
+<p>VT Settings gets a Table field <code>navbar_items</code> (options = "VT Navbar Item") under a new "Navbar Menu" section. Row order (idx) drives display order.</p>
+
+<h2 id="5-boot">5. Boot Injection</h2>
+<p><code>hooks.py</code>: <code>extend_bootinfo = "vernon_tasks.boot.extend_bootinfo"</code>.</p>
+<pre><code>DEFAULT_NAVBAR = [
+    {"label": "Home", "route": "/app/vt-home", "icon": "home"},
+    {"label": "Project", "route": "/app/vt-projects", "icon": "folder-normal"},
+]
+
+def extend_bootinfo(bootinfo):
+    # Inject the editable navbar2 menu so desk JS can read frappe.boot.vt_navbar_items.
+    rows = frappe.get_all(
+        "VT Navbar Item",
+        filters={"parent": "VT Settings", "enabled": 1},
+        fields=["label", "route", "icon"],
+        order_by="idx asc",
+    )
+    bootinfo.vt_navbar_items = rows or DEFAULT_NAVBAR</code></pre>
+
+<h2 id="6-render">6. Global Renderer (vt_navbar.js)</h2>
+<ul>
+<li>Reads <code>frappe.boot.vt_navbar_items</code> (fallback to an inline default mirroring DEFAULT_NAVBAR if the boot key is absent).</li>
+<li>Builds a single <code>.vt-navbar2</code> bar inserted once after the desk navbar (guard via a DOM id check to avoid duplicates on route changes).</li>
+<li>Highlights the active item by comparing <code>frappe.get_route_str()</code> / <code>window.location.pathname</code> against each item route prefix.</li>
+<li>Re-evaluates active state on <code>frappe.router.on("change", ...)</code>.</li>
+<li>Click navigates via <code>frappe.set_route(route)</code> (handles <code>/app/...</code> absolute paths in v15). All labels escaped with <code>frappe.utils.escape_html</code>.</li>
+</ul>
+
+<h2 id="7-projects-page">7. Projects Cards Page (vt-projects)</h2>
+<ul>
+<li>Page <code>vt-projects</code>, title "Proyek", roles VT Member/Leader/Manager.</li>
+<li>JS calls <code>vernon_tasks.task.api.dashboard.my_projects</code>; renders led projects + member projects as <code>.vh-card</code> grid (reuses vt_home.css classes — already global via app_include_css).</li>
+<li>Each card: title, status, percent-done bar, open_tasks, blockers, risk chip; click &rarr; <code>frappe.set_route("vt-project", id)</code>.</li>
+<li>Empty state when no projects.</li>
+</ul>
+
+<h2 id="8-quality">8. Layer &amp; Quality</h2>
+<ul>
+<li><code>boot.py</code> is a framework-event hook (Priority 3) — reads config only, no mutation.</li>
+<li>JS = presentation only; named constants for defaults/colors; functions &le; 40 lines; labels escaped.</li>
+<li>No new whitelisted methods (reuse my_projects). No Frappe core edits.</li>
+</ul>
+
+<h2 id="9-testing">9. Testing</h2>
+<ul>
+<li>[ ] VT Navbar Item child doctype installs; VT Settings shows the navbar_items table.</li>
+<li>[ ] <code>extend_bootinfo</code>: empty table &rarr; bootinfo has the 2 defaults; with rows &rarr; returns enabled rows in idx order. (Python unit test.)</li>
+<li>[ ] <code>/app/vt-projects</code> reachable for VT Member; role gating enforced. (Page test.)</li>
+<li>[ ] navbar2 renders on desk pages with Home + Project; active highlight tracks route; no duplicate bars on navigation.</li>
+<li>[ ] Editing/adding a row in VT Settings changes the menu after reload.</li>
+<li>[ ] Projects page renders cards from my_projects; empty state clean.</li>
+</ul>
+
+<h2 id="10-deploy">10. Deploy</h2>
+<p>Add fixtures in hooks.py: Page <code>vt-projects</code>. After implementation: <code>docker exec frappe-backend-1 bench --site task.localhost migrate</code> (installs child doctype + Page + VT Settings field), <code>bench build --app vernon_tasks</code>, then <strong><code>docker restart frappe-backend-1</code></strong> (hooks.py changes — app_include_js + extend_bootinfo — require a worker restart, not just clear-cache/build).</p>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-05-30-vt-navbar-projects-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>
