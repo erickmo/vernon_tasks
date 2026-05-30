@@ -66,7 +66,7 @@
 .vt-home .vh-stat .vh-num {
   font-family: 'DM Serif Display', Georgia, serif; font-size: 32px; color: #0f172a;
 }
-.vt-home .vh-stat .vh-lbl {
+.vt-home .vh-lbl {
   font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
   text-transform: uppercase; color: var(--vh-text-2); margin-top: 4px;
 }
