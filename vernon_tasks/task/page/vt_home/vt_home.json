@@ -4,11 +4,10 @@
  "module": "Task",
  "name": "vt-home",
  "page_name": "vt-home",
- "standard": "Yes",
- "title": "Beranda",
  "roles": [
   {"role": "VT Member"},
   {"role": "VT Leader"},
   {"role": "VT Manager"}
- ]
+ ],
+ "title": "Beranda"
 }

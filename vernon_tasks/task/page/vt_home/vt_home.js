@@ -1,7 +1,7 @@
 frappe.pages["vt-home"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({
         parent: wrapper,
-        title: __("Beranda"),
+        title: "Beranda",
         single_column: true,
     });
 
