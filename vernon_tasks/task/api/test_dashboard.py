@@ -5,6 +5,7 @@ from vernon_tasks.task.api.dashboard import (
     _calc_risk,
     me_progress,
     my_projects,
+    project_detail,
     schedule_agenda,
 )
 
@@ -118,6 +119,25 @@ class TestDashboard(FrappeTestCase):
         frappe.set_user(self.user_a)
         result = my_projects(filter="led")
         self.assertEqual(result["member"], [])
+
+    # ── project_detail ──
+    def test_project_detail_shape(self):
+        frappe.set_user("Administrator")
+        self._make_task(self.user_a, frappe.utils.today(), title="open task")
+        frappe.set_user(self.user_a)
+        result = project_detail(self.project)
+        for key in ("header", "open_tasks", "team_members", "milestones", "blockers"):
+            self.assertIn(key, result)
+        self.assertEqual(result["header"]["id"], self.project)
+        self.assertIsInstance(result["open_tasks"], list)
+        self.assertGreaterEqual(len(result["open_tasks"]), 1)
+
+    def test_project_detail_forbidden(self):
+        # A user with no access to the project must be rejected.
+        outsider = _ensure_user("outsider-dash@test.local")
+        frappe.set_user(outsider)
+        with self.assertRaises(frappe.PermissionError):
+            project_detail(self.project)
 
     # ── schedule_agenda ──
     def test_schedule_agenda_shape(self):

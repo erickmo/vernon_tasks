@@ -3,6 +3,7 @@ import frappe
 import unittest
 
 PAGE_NAME = "vt-projects"
+PROJECT_DOCTYPE = "VT Project"
 EXPECTED_ROLES = {"VT Member", "VT Leader", "VT Manager"}
 
 
@@ -18,3 +19,9 @@ class TestVtProjectsPage(unittest.TestCase):
         page = frappe.get_doc("Page", PAGE_NAME)
         roles = {r.role for r in page.roles}
         self.assertEqual(roles, EXPECTED_ROLES)
+
+    # The "Buat Proyek" quick-create dialog is client-side (vt_projects.js);
+    # its UI behavior is not testable server-side. We only assert the target
+    # doctype it inserts into exists, so the dialog has something to create.
+    def test_create_dialog_doctype_exists(self):
+        self.assertTrue(frappe.db.exists("DocType", PROJECT_DOCTYPE))

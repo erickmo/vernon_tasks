@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — VT Settings Hub, Project Detail, Quick-Create Project</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>VT Settings Hub + Project Detail + Quick-Create Project</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-31-vt-settings-project-detail-create-design.html</span>
+  </div>
+</header>
+
+<h1 id="overview">VT Settings Hub + Project Detail + Quick-Create Project</h1>
+<p><strong>Date:</strong> 2026-05-31<br />
+<strong>Task size:</strong> L (2 new desk Pages + new API module + vt-projects update + fixtures + tests; &gt;10 files)<br />
+<strong>App ownership:</strong> 100% <code>vernon_tasks</code> — no Frappe core files touched<br />
+<strong>Scope:</strong> (A) add a "Buat Proyek" quick-create dialog to <code>vt-projects</code>; (B) new <code>vt-project</code> detail page; (C) new <code>vt-settings</code> hub page that edits navbar2 + login branding + scoring with a friendly UX. All pages reuse the <code>vt-home</code> <code>.vh-*</code> style.</p>
+<hr />
+
+<h2 id="1-goal">1. Goal</h2>
+<p>Give VT users a desk-native, vt-home-styled flow to: create a project without leaving the projects list, open a project's detail dashboard, and let VT Managers edit VT Settings (navbar2 menu, login branding, scoring) from a friendly page instead of the raw <code>/app</code> form. No Frappe core files touched; native Frappe infrastructure only.</p>
+
+<h2 id="2-decisions">2. Design Decisions</h2>
+<table>
+  <tr><th>Decision</th><th>Choice</th><th>Why</th></tr>
+  <tr><td>Create-project UX</td><td><code>frappe.ui.Dialog</code> quick-create (title, project_leader, start_date, end_date, status) &rarr; native <code>frappe.db.insert("VT Project", …)</code> &rarr; route to detail</td><td>Stays in the page, fast; Frappe enforces create perms natively — no custom API.</td></tr>
+  <tr><td>Project detail data source</td><td>New read aggregation <code>dashboard.project_detail(project_id)</code> reusing existing <code>_project_card</code> / <code>_project_active_sprint</code> helpers</td><td>Read aggregation belongs in the existing dashboard read API; no new business logic, no duplication.</td></tr>
+  <tr><td>Detail edit action</td><td>Secondary "Edit" button &rarr; <code>frappe.set_route("Form", "VT Project", id)</code></td><td>Native form for full editing; detail page stays read-only/presentation.</td></tr>
+  <tr><td>vt-settings scope</td><td>Hub with 3 sections: navbar2, login branding, scoring</td><td>User chose general settings hub; single VT Manager landing for config.</td></tr>
+  <tr><td>vt-settings read/write</td><td>New module <code>task/api/settings.py</code>: <code>get_settings()</code> + <code>save_settings(...)</code>, both guarded to VT Manager</td><td>Settings concern separate from dashboard reads; whitelisted entry delegates to <code>frappe.get_doc("VT Settings")</code> — native single-doctype save, child table replaced in-place.</td></tr>
+  <tr><td>navbar2 storage</td><td>Unchanged: child table <code>navbar_items</code> (VT Navbar Item) on VT Settings; rendered by existing <code>boot.py</code> + <code>vt_navbar.js</code></td><td>vt-settings is just a friendlier editor over the same source of truth. DEFAULT_NAVBAR untouched.</td></tr>
+  <tr><td>Styling</td><td>Reuse <code>.vh-*</code>; append a few scoped classes (toggle row, reorder btn, settings field) to <code>vt_home.css</code></td><td>One global css already included; visual consistency with vt-home.</td></tr>
+</table>
+
+<h2 id="3-files">3. Files</h2>
+<h3 id="new">New</h3>
+<ul>
+<li><code>vernon_tasks/task/page/vt_project/__init__.py</code></li>
+<li><code>vernon_tasks/task/page/vt_project/vt_project.json</code> — Page def (roles VT Member/Leader/Manager, title "Proyek")</li>
+<li><code>vernon_tasks/task/page/vt_project/vt_project.js</code> — detail renderer (presentation only)</li>
+<li><code>vernon_tasks/task/page/vt_project/test_vt_project.py</code> — page exists/route/roles</li>
+<li><code>vernon_tasks/task/page/vt_settings/__init__.py</code></li>
+<li><code>vernon_tasks/task/page/vt_settings/vt_settings.json</code> — Page def (role VT Manager only, title "Pengaturan")</li>
+<li><code>vernon_tasks/task/page/vt_settings/vt_settings.js</code> — hub renderer (navbar/branding/scoring)</li>
+<li><code>vernon_tasks/task/page/vt_settings/test_vt_settings.py</code> — page exists/route/roles</li>
+<li><code>vernon_tasks/task/api/settings.py</code> — <code>get_settings()</code> + <code>save_settings(...)</code> (VT Manager guarded)</li>
+<li><code>vernon_tasks/task/api/test_settings.py</code> — get/save + permission-denied tests</li>
+</ul>
+<h3 id="modified">Modified</h3>
+<ul>
+<li><code>vernon_tasks/task/page/vt_projects/vt_projects.js</code> — add "Buat Proyek" primary button + quick-create dialog</li>
+<li><code>vernon_tasks/task/api/dashboard.py</code> — add <code>project_detail(project_id)</code> read aggregation</li>
+<li><code>vernon_tasks/task/api/test_dashboard.py</code> (or new test) — <code>project_detail</code> happy-path + bad id</li>
+<li><code>vernon_tasks/public/css/vt_home.css</code> — append settings/detail helper classes</li>
+<li><code>vernon_tasks/hooks.py</code> — fixtures: add Page <code>vt-project</code> + <code>vt-settings</code></li>
+</ul>
+
+<h2 id="4-api">4. API Contracts</h2>
+<h3 id="project-detail">dashboard.project_detail(project_id)</h3>
+<p>Read-only. <code>require_login()</code>; user must lead or be a member of the project (or admin) — else <code>frappe.PermissionError</code>. Returns:</p>
+<pre><code>{
+  "header": {"id","title","status","pdca_phase","percent_done","risk",
+             "leader","start_date","end_date","sprint": {...}|null},
+  "open_tasks": [{"id","title","kanban_status","priority","deadline","risk_flag"}],
+  "team_members": [{"user","role"}],
+  "milestones": [{"title","due_date","status"}],
+  "blockers": int
+}</code></pre>
+
+<h3 id="settings-api">settings.get_settings() / save_settings(payload)</h3>
+<p>Both guard: caller must have role <strong>VT Manager</strong> (else <code>frappe.PermissionError</code>).</p>
+<ul>
+<li><code>get_settings()</code> &rarr; <code>{navbar_items:[{label,route,icon,enabled,idx}], branding:{login_headline,login_subtext}, scoring:{weight_multiplier,early_bonus_rate,late_penalty_rate,revision_deduct_rate,default_daily_target_hours}}</code></li>
+<li><code>save_settings(navbar_items, branding, scoring)</code> &rarr; loads single <code>VT Settings</code> doc, sets branding + scoring fields, replaces <code>navbar_items</code> child rows (order = list index), <code>.save()</code>. Returns <code>{ok: true}</code>.</li>
+</ul>
+<p>Quick-create uses native <code>frappe.db.insert</code> from JS — no custom endpoint.</p>
+
+<h2 id="5-pages">5. Page Layouts (.vh-* reuse)</h2>
+<h3>vt-project</h3>
+<p>Hero header card: title, status chip, risk chip, progress bar (<code>vh-bar</code>), leader + dates + pdca_phase meta. Then sections: <strong>Task Terbuka</strong> (<code>vh-item</code> list), <strong>Tim</strong> (member list), <strong>Milestone</strong> (list with due/status). Buttons: Refresh, Edit (native form).</p>
+<h3>vt-settings</h3>
+<p>3 <code>vh-section</code>: <strong>Navbar</strong> (row per item: label/route/icon inputs, enabled toggle, ↑↓ reorder, delete; "+ Tambah" adds row), <strong>Branding Login</strong> (login_headline, login_subtext), <strong>Scoring</strong> (5 number fields). Single "Simpan" button &rarr; <code>save_settings</code>.</p>
+
+<h2 id="6-tests">6. Tests</h2>
+<ul>
+<li>Each page: exists / page_name / role gating (pattern of <code>test_vt_projects.py</code>).</li>
+<li><code>project_detail</code>: happy-path returns sections; bad/forbidden id raises.</li>
+<li><code>settings</code>: get returns shape; save persists; non-manager raises PermissionError.</li>
+</ul>
+
+<h2 id="7-nonscope">7. Out of Scope</h2>
+<ul>
+<li>No change to DEFAULT_NAVBAR or vt_navbar.js rendering.</li>
+<li>No new project fields; quick-create uses existing fields only.</li>
+<li>No edits to native VT Settings form layout (the doctype form still works as-is).</li>
+</ul>
+
+</div>
+</body>
+</html>

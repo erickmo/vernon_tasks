@@ -1,0 +1,13 @@
+{
+ "creation": "2026-05-31 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Task",
+ "name": "vt-settings",
+ "page_name": "vt-settings",
+ "roles": [
+  {"role": "VT Manager"}
+ ],
+ "standard": "Yes",
+ "system_page": 1,
+ "title": "Pengaturan"
+}
