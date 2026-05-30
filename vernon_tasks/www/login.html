@@ -522,7 +522,7 @@ body {
   var form  = document.getElementById("vl-form");
   var btn   = document.getElementById("vl-btn");
   var errEl = document.getElementById("vl-error");
-  var redirect = {{ (redirect_to or "/m/dashboard") | tojson }};
+  var redirect = {{ (redirect_to or "/app/vt-home") | tojson }};
 
   document.querySelectorAll(".vl-dev-pill").forEach(function (pill) {
     pill.addEventListener("click", function () {
