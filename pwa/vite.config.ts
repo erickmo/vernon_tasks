@@ -69,6 +69,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes("/node_modules/")) return "vendor";
           if (id.includes("/pwa/src/portal/okr/")) return "okr";
           if (id.includes("/pwa/src/portal/projects/")) return "projects";
           if (id.includes("/pwa/src/portal/")) return "portal";
