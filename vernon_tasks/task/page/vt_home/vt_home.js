@@ -93,7 +93,7 @@ function render_next_actions(sec, actions) {
     card.append('<div class="vh-lbl" style="margin-bottom:8px;">Aksi Berikutnya</div>');
     if (!actions.length) { card.append('<div class="vh-empty">Tidak ada task aktif.</div>'); }
     actions.slice(0, NEXT_ACTIONS_SHOWN).forEach((a) => {
-        const due = a.deadline ? frappe.datetime.str_to_user(a.deadline) : "—";
+        const due = a.deadline ? frappe.utils.escape_html(frappe.datetime.str_to_user(a.deadline)) : "—";
         const item = $(`<div class="vh-item"><span class="vh-item-title">
             ${frappe.utils.escape_html(a.title || a.id)}</span>
             <span class="vh-item-meta">${due}</span></div>`);
