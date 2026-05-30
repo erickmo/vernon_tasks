@@ -9,6 +9,7 @@ app_license = "mit"
 app_version = app_version
 
 app_include_js = ["/assets/vernon_tasks/js/page_nav.js"]
+app_include_css = ["/assets/vernon_tasks/css/vt_home.css"]
 
 required_apps = []
 
