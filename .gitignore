@@ -21,3 +21,6 @@ vernon_tasks/public/public
 # OpenWolf local state
 .wolf/
 
+
+# Claude Code harness artifacts
+.claude/
