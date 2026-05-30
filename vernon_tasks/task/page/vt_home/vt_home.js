@@ -55,18 +55,22 @@ function render_progress(c, data) {
         `<div class="vh-card vh-stat"><div class="vh-num">${num}</div>
          <div class="vh-lbl">${lbl}</div></div>`));
 
+    // Append to the DOM BEFORE rendering the chart: frappe.Chart measures the
+    // container width on construction, and a detached node yields width NaN.
     const sec = $('<div class="vh-section"><div class="vh-section-title">Progres Saya</div></div>');
+    c.append(sec);
     render_velocity(sec, data.velocity || []);
     render_sprint(sec, data.sprint);
     render_next_actions(sec, data.next_actions || []);
-    c.append(sec);
 }
 
 function render_velocity(sec, weeks) {
     const card = $('<div class="vh-card" style="margin-bottom:16px;"></div>');
-    const chartEl = $('<div></div>');
-    card.append('<div class="vh-lbl" style="margin-bottom:8px;">Velocity 8 minggu</div>').append(chartEl);
+    card.append('<div class="vh-lbl" style="margin-bottom:8px;">Velocity 8 minggu</div>');
     sec.append(card);
+    if (!weeks.length) { card.append('<div class="vh-empty">Belum ada data velocity.</div>'); return; }
+    const chartEl = $('<div></div>');
+    card.append(chartEl);
     new frappe.Chart(chartEl[0], {
         type: "bar", height: VELOCITY_CHART_HEIGHT, colors: [BRAND_BLUE],
         data: {
