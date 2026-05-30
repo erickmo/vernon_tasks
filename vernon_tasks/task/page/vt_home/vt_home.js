@@ -5,6 +5,8 @@
 const API = "vernon_tasks.task.api.dashboard";
 const RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
 const NEXT_ACTIONS_SHOWN = 5;
+const VELOCITY_CHART_HEIGHT = 180;
+const BRAND_BLUE = "#2563eb";
 const QUICK_LINKS = [
     { label: "Task Saya", route: "List/VT Task" },
     { label: "Task Baru", route: "vt-task/new" },
@@ -66,7 +68,7 @@ function render_velocity(sec, weeks) {
     card.append('<div class="vh-lbl" style="margin-bottom:8px;">Velocity 8 minggu</div>').append(chartEl);
     sec.append(card);
     new frappe.Chart(chartEl[0], {
-        type: "bar", height: 180, colors: ["#2563eb"],
+        type: "bar", height: VELOCITY_CHART_HEIGHT, colors: [BRAND_BLUE],
         data: {
             labels: weeks.map((x) => x.week.replace(/^\d+-/, "")),
             datasets: [{ name: "Selesai", values: weeks.map((x) => x.done) }],
