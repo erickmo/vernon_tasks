@@ -1,0 +1,13 @@
+{
+ "creation": "2026-05-30 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Task",
+ "name": "vt-projects",
+ "page_name": "vt-projects",
+ "roles": [
+  {"role": "VT Member"},
+  {"role": "VT Leader"},
+  {"role": "VT Manager"}
+ ],
+ "title": "Proyek"
+}

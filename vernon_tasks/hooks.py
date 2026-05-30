@@ -78,6 +78,7 @@ fixtures = [
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
     {"dt": "Workspace", "filters": [["name", "in", ["My Tasks", "My Projects", "Overview"]]]},
     {"dt": "Page", "filters": [["name", "=", "vt-home"]]},
+    {"dt": "Page", "filters": [["name", "=", "vt-projects"]]},
     # Website brand & content
     {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},
