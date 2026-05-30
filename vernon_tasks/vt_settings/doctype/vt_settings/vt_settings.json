@@ -4,6 +4,7 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "field_order": [
+    "scoring_tab",
     "point_calculation_section",
     "weight_multiplier",
     "early_bonus_rate",
@@ -15,24 +16,24 @@
     "default_blocked_days_threshold",
     "default_slip_pct_threshold",
     "default_capacity_pct_threshold",
+    "notifications_tab",
     "push_section",
     "push_vapid_public_key",
     "push_vapid_private_key",
+    "portal_branding_tab",
     "login_branding_section",
     "login_headline",
     "login_subtext",
-    "portal_enabled",
-    "portal_okr_enabled",
-    "portal_projects_enabled",
-    "portal_sprints_enabled",
-    "portal_notifications_enabled",
-    "portal_reports_enabled",
-    "mobile_reports_enabled",
-    "portal_dashboard_v2_enabled",
+    "navbar_tab",
     "navbar_section",
     "navbar_items"
   ],
   "fields": [
+    {
+      "fieldname": "scoring_tab",
+      "fieldtype": "Tab Break",
+      "label": "Scoring & Analytics"
+    },
     {
       "fieldname": "point_calculation_section",
       "fieldtype": "Section Break",
@@ -98,6 +99,11 @@
       "label": "Default Capacity % Threshold"
     },
     {
+      "fieldname": "notifications_tab",
+      "fieldtype": "Tab Break",
+      "label": "Notifications"
+    },
+    {
       "fieldname": "push_section",
       "fieldtype": "Section Break",
       "label": "Push Notifications"
@@ -113,6 +119,11 @@
       "fieldtype": "Password",
       "label": "VAPID Private Key",
       "description": "Server-only. Never exposed to client."
+    },
+    {
+      "fieldname": "portal_branding_tab",
+      "fieldtype": "Tab Break",
+      "label": "Branding"
     },
     {
       "fieldname": "login_branding_section",
@@ -134,56 +145,9 @@
       "default": "Sprint, kanban, dan analitik dalam satu tempat — dirancang untuk tim yang bergerak cepat."
     },
     {
-      "fieldname": "portal_enabled",
-      "label": "Enable Desktop Portal (/app)",
-      "fieldtype": "Check",
-      "default": "0",
-      "description": "When enabled, /app/* serves the desktop portal. When disabled, requests to /app/* redirect to /m/."
-    },
-    {
-      "fieldname": "portal_okr_enabled",
-      "label": "Enable Portal OKR (/portal/okr)",
-      "fieldtype": "Check",
-      "default": "0",
-      "description": "When enabled, /portal/okr serves the OKR module. When disabled, renders Coming Soon stub."
-    },
-    {
-      "fieldname": "portal_projects_enabled",
-      "label": "Enable Portal Projects (/portal/projects)",
-      "fieldtype": "Check",
-      "default": "0",
-      "description": "When enabled, /portal/projects serves the Projects module. When disabled, renders Coming Soon stub."
-    },
-    {
-      "default": "0",
-      "fieldname": "portal_sprints_enabled",
-      "fieldtype": "Check",
-      "label": "Enable Portal Sprints (P3.2)"
-    },
-    {
-      "default": "0",
-      "fieldname": "portal_notifications_enabled",
-      "fieldtype": "Check",
-      "label": "Portal Notifications Enabled"
-    },
-    {
-      "default": "0",
-      "fieldname": "portal_reports_enabled",
-      "fieldtype": "Check",
-      "label": "Enable Portal Reports (P5)"
-    },
-    {
-      "fieldname": "mobile_reports_enabled",
-      "fieldtype": "Check",
-      "label": "Enable Mobile Reports",
-      "default": "0",
-      "description": "Toggles the /m/reports mobile hub."
-    },
-    {
-      "default": "0",
-      "fieldname": "portal_dashboard_v2_enabled",
-      "fieldtype": "Check",
-      "label": "Enable Portal Dashboard V2"
+      "fieldname": "navbar_tab",
+      "fieldtype": "Tab Break",
+      "label": "Navbar"
     },
     {
       "fieldname": "navbar_section",
