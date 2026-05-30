@@ -9,6 +9,17 @@ from vernon_tasks.task.api.dashboard import (
 )
 
 _FIXTURE_PROJECT = "TEST-DASHBOARD-PROJ"
+_FIXTURE_BRAND = "TEST-DASHBOARD-BRAND"
+
+
+def _ensure_brand():
+    # VT Project.brand is mandatory; create a dedicated test brand once.
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 def _ensure_user(email):
@@ -29,6 +40,7 @@ def _ensure_project(owner):
             "doctype": "VT Project",
             "name": _FIXTURE_PROJECT,
             "title": "Test Dashboard Project",
+            "brand": _ensure_brand(),
             "project_owner": owner,
             "project_leader": owner,
             "start_date": "2025-01-01",

@@ -1,0 +1,13 @@
+{
+ "creation": "2026-05-30 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Task",
+ "name": "vt-home",
+ "page_name": "vt-home",
+ "roles": [
+  {"role": "VT Member"},
+  {"role": "VT Leader"},
+  {"role": "VT Manager"}
+ ],
+ "title": "Beranda"
+}

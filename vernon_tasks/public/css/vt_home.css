@@ -1,0 +1,124 @@
+/* vt_home.css — dashboard styling, ported from www/login.html convention.
+   All rules scoped under .vt-home so desk UI is untouched. */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap');
+
+.vt-home {
+  --vh-navy: #0b0f1a;
+  --vh-navy-2: #111827;
+  --vh-blue: #2563eb;
+  --vh-blue-dk: #1d4ed8;
+  --vh-text-2: #64748b;
+  --vh-text-3: #94a3b8;
+  --vh-border: #e2e8f0;
+  --vh-green: #22c55e;
+  --vh-amber: #f59e0b;
+  --vh-red: #dc2626;
+  padding: 0 20px 48px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* ── Hero band ── */
+.vt-home .vh-hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--vh-navy);
+  border-radius: 12px;
+  padding: 32px 36px;
+  margin: 20px 0 28px;
+  animation: vhFadeUp 0.6s cubic-bezier(0.22,1,0.36,1) both;
+}
+.vt-home .vh-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(37,99,235,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37,99,235,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+.vt-home .vh-hero::after {
+  content: '';
+  position: absolute; bottom: -120px; right: -80px;
+  width: 420px; height: 420px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(37,99,235,0.16) 0%, transparent 65%);
+  pointer-events: none;
+}
+.vt-home .vh-eyebrow {
+  position: relative; z-index: 1;
+  font-size: 10px; font-weight: 600; letter-spacing: 3px;
+  text-transform: uppercase; color: var(--vh-blue); margin-bottom: 12px;
+}
+.vt-home .vh-greeting {
+  position: relative; z-index: 1;
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-weight: 400; font-size: clamp(26px, 2.6vw, 38px);
+  line-height: 1.15; color: #f1f5f9; letter-spacing: -0.5px;
+}
+.vt-home .vh-greeting span { font-style: italic; color: rgba(241,245,249,0.55); }
+
+/* ── Cards ── */
+.vt-home .vh-row { display: flex; gap: 16px; flex-wrap: wrap; }
+.vt-home .vh-card {
+  background: #fff; border: 1px solid var(--vh-border); border-radius: 8px;
+  padding: 18px 20px; animation: vhFadeUp 0.6s 0.1s cubic-bezier(0.22,1,0.36,1) both;
+}
+.vt-home .vh-stat { flex: 1 1 160px; }
+.vt-home .vh-stat .vh-num {
+  font-family: 'DM Serif Display', Georgia, serif; font-size: 32px; color: #0f172a;
+}
+.vt-home .vh-stat .vh-lbl {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+  text-transform: uppercase; color: var(--vh-text-2); margin-top: 4px;
+}
+
+/* ── Section headers ── */
+.vt-home .vh-section { margin-top: 32px; }
+.vt-home .vh-section-title {
+  font-family: 'DM Serif Display', Georgia, serif; font-size: 20px;
+  color: #0f172a; margin-bottom: 14px; letter-spacing: -0.2px;
+}
+
+/* ── Chips ── */
+.vt-home .vh-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600; border-radius: 999px; padding: 3px 10px;
+}
+.vt-home .vh-chip-on_track { background: rgba(34,197,94,0.12); color: #15803d; }
+.vt-home .vh-chip-at_risk  { background: rgba(245,158,11,0.14); color: #b45309; }
+.vt-home .vh-chip-behind   { background: rgba(220,38,38,0.12); color: #b91c1c; }
+
+/* ── Lists / agenda ── */
+.vt-home .vh-item {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--vh-border);
+}
+.vt-home .vh-item:last-child { border-bottom: none; }
+.vt-home .vh-item-title { font-size: 13px; color: #0f172a; }
+.vt-home .vh-item-meta { font-size: 12px; color: var(--vh-text-3); }
+.vt-home .vh-day-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+  text-transform: uppercase; color: var(--vh-blue); margin: 16px 0 4px;
+}
+
+/* ── Progress bar ── */
+.vt-home .vh-bar { height: 8px; border-radius: 4px; background: var(--vh-border); overflow: hidden; }
+.vt-home .vh-bar > span { display: block; height: 100%; background: var(--vh-blue); }
+
+/* ── Quick links ── */
+.vt-home .vh-quick { display: flex; gap: 8px; flex-wrap: wrap; }
+.vt-home .vh-quick button {
+  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500;
+  color: #334155; background: #fff; border: 1px solid var(--vh-border);
+  border-radius: 6px; padding: 7px 14px; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.vt-home .vh-quick button:hover {
+  border-color: var(--vh-blue); box-shadow: 0 0 0 3px rgba(37,99,235,0.08);
+}
+
+.vt-home .vh-empty { font-size: 13px; color: var(--vh-text-3); padding: 8px 0; }
+
+@keyframes vhFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
