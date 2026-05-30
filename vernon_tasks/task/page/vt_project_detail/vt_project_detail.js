@@ -1,11 +1,11 @@
 /* vt_project.js — desk page: single project detail dashboard.
    Reuses vernon_tasks.task.api.dashboard.project_detail. Presentation only.
-   Route shape: ["vt-project", <project_id>]. */
+   Route shape: ["vt-project-detail", <project_id>]. */
 
 const DETAIL_API = "vernon_tasks.task.api.dashboard.project_detail";
 const PROJ_RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
 
-frappe.pages["vt-project"].on_page_load = function (wrapper) {
+frappe.pages["vt-project-detail"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({
         parent: wrapper,
         title: "Proyek",

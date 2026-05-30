@@ -1,8 +1,8 @@
-# Tests for vt-project desk Page (project detail dashboard).
+# Tests for vt-project-detail desk Page (project detail dashboard).
 import frappe
 import unittest
 
-PAGE_NAME = "vt-project"
+PAGE_NAME = "vt-project-detail"
 EXPECTED_ROLES = {"VT Member", "VT Leader", "VT Manager"}
 
 

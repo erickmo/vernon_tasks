@@ -47,7 +47,7 @@ function submit_create_dialog(d, values) {
     frappe.db.insert(doc).then((saved) => {
         d.hide();
         frappe.show_alert({ message: __("Proyek dibuat"), indicator: "green" });
-        frappe.set_route("vt-project", saved.name);
+        frappe.set_route("vt-project-detail", saved.name);
     }).catch(() => {
         // Surface insert failure (perm/validation) instead of silently leaving the dialog open.
         frappe.show_alert({ message: __("Gagal membuat proyek"), indicator: "red" });
@@ -82,7 +82,7 @@ function project_card(p) {
             <strong>${frappe.utils.escape_html(p.name)}</strong>${chip}</div>
         <div class="vh-bar" style="margin:10px 0 6px;"><span style="width:${p.pct_done}%"></span></div>
         <div class="vh-item-meta">${frappe.utils.escape_html(p.status || "")} · ${p.open_tasks} task terbuka · ${p.blockers} blocker</div></div>`);
-    card.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project", p.id));
+    card.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project-detail", p.id));
     return card;
 }
 
@@ -93,7 +93,7 @@ function paint_member(sec, member) {
         const item = $(`<div class="vh-item"><span class="vh-item-title">
             ${frappe.utils.escape_html(p.name)}</span>
             <span class="vh-item-meta">${p.pct_done}% · ${p.my_open_tasks} task saya</span></div>`);
-        item.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project", p.id));
+        item.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project-detail", p.id));
         card.append(item);
     });
     sec.append(card);

@@ -2,8 +2,8 @@
  "creation": "2026-05-31 00:00:00.000000",
  "doctype": "Page",
  "module": "Task",
- "name": "vt-project",
- "page_name": "vt-project",
+ "name": "vt-project-detail",
+ "page_name": "vt-project-detail",
  "standard": "Yes",
  "system_page": 1,
  "roles": [
