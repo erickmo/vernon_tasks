@@ -8,7 +8,10 @@ app_email = "dev@vernoncorp.com"
 app_license = "mit"
 app_version = app_version
 
-app_include_js = ["/assets/vernon_tasks/js/page_nav.js"]
+app_include_js = [
+    "/assets/vernon_tasks/js/page_nav.js",
+    "/assets/vernon_tasks/js/vt_navbar.js",
+]
 app_include_css = ["/assets/vernon_tasks/css/vt_home.css"]
 extend_bootinfo = "vernon_tasks.boot.extend_bootinfo"
 
