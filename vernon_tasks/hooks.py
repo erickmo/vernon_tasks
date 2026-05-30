@@ -1,29 +1,4 @@
 from . import __version__ as app_version
-import frappe
-
-_PWA_SECURITY_HEADERS = {
-    "X-Frame-Options": "DENY",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "strict-origin-when-cross-origin",
-    "Permissions-Policy": "push=(self), notifications=(self)",
-    "Content-Security-Policy": (
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "connect-src 'self'; "
-        "worker-src 'self';"
-    ),
-}
-
-
-def add_pwa_security_headers(response):
-    path = getattr(getattr(frappe, "local", None), "request", None)
-    path = getattr(path, "path", "") if path else ""
-    if path == "/m" or path.startswith("/m/"):
-        for key, val in _PWA_SECURITY_HEADERS.items():
-            response.headers.setdefault(key, val)
-    return response
-
 
 app_name = "vernon_tasks"
 app_title = "Vernon Tasks"
@@ -84,23 +59,12 @@ scheduler_events = {
     ],
 }
 
-website_route_rules = [
-    {"from_route": "/m/login", "to_route": "m"},
-    {"from_route": "/m/onboarding", "to_route": "m"},
-    {"from_route": "/m/project", "to_route": "m"},
-    {"from_route": "/m/work", "to_route": "m"},
-    {"from_route": "/m/work/<path:id>", "to_route": "m"},
-    {"from_route": "/m/dashboard", "to_route": "m"},
-    {"from_route": "/m/analytics", "to_route": "m"},
-    {"from_route": "/m/me", "to_route": "m"},
-    {"from_route": "/m/me/notifications", "to_route": "m"},
-    {"from_route": "/m/me/notifications/settings", "to_route": "m"},
-    {"from_route": "/m/leader", "to_route": "m"},
-    {"from_route": "/portal/<path:portal_path>", "to_route": "portal"},
-    {"from_route": "/portal", "to_route": "portal"},
+website_redirects = [
+    # Root -> desk. /app shows login if not authenticated, desk if logged in.
+    # 302 (not 301) so browsers don't cache the redirect permanently.
+    {"source": r"/$", "target": "/app", "redirect_http_status": 302},
+    {"source": r"/index", "target": "/app", "redirect_http_status": 302},
 ]
-
-after_request = ["vernon_tasks.hooks.add_pwa_security_headers"]
 
 before_tests = "vernon_tasks.test_setup.before_tests"
 
@@ -108,6 +72,7 @@ fixtures = [
     # Roles & Workspace
     {"dt": "Role", "filters": [["name", "in", ["VT Manager", "VT Leader", "VT Member"]]]},
     {"dt": "Workspace", "filters": [["name", "in", ["My Tasks", "My Projects", "Overview"]]]},
+    {"dt": "Page", "filters": [["name", "=", "vt-home"]]},
     # Website brand & content
     {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},
@@ -116,7 +81,7 @@ fixtures = [
     # Frappe slugifies Web Form title: "Hubungi Kami" → "hubungi-kami"
     {"dt": "Web Form", "filters": [["name", "=", "hubungi-kami"]]},
     # Frappe v15: Website Route Meta name IS the route (no separate route column)
-    {"dt": "Website Route Meta", "filters": [["name", "in", ["/", "/portal", "/tentang", "/kontak"]]]},
+    {"dt": "Website Route Meta", "filters": [["name", "in", ["/", "/tentang", "/kontak"]]]},
     # Home page = login, hide footer signup
     {"dt": "Website Settings"},
 ]
