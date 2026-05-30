@@ -23,7 +23,6 @@ doc_events = {
         "on_update": [
             "vernon_tasks.task.services.scheduling_engine.on_task_update",
             "vernon_tasks.task.api.analytics.invalidate_project_cache",
-            "vernon_tasks.api.portal_notifications.on_vt_task_update",
         ],
         "validate": "vernon_tasks.task.doctype.vt_task.vt_task.validate_permissions",
     },
@@ -33,18 +32,7 @@ doc_events = {
     "VT Sprint": {
         "on_update": [
             "vernon_tasks.task.api.analytics.invalidate_project_cache",
-            "vernon_tasks.api.portal_notifications.on_vt_sprint_update",
         ],
-    },
-    "Comment": {
-        "after_insert": "vernon_tasks.api.portal_notifications.on_comment_insert",
-    },
-    "VT KPI Snapshot": {
-        "on_update": "vernon_tasks.api.portal_reports.invalidate_okr_cache",
-        "after_insert": "vernon_tasks.api.portal_reports.invalidate_okr_cache",
-    },
-    "VT OKR Period": {
-        "on_update": "vernon_tasks.api.portal_reports.invalidate_okr_cache",
     },
     "Notification Log": {
         "after_insert": "vernon_tasks.task.services.push_sender.send_push_for_notification",
