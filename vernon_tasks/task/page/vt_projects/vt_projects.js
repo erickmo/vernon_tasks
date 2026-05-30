@@ -35,7 +35,8 @@ function paint_projects(c, data) {
 }
 
 function project_card(p) {
-    const chip = `<span class="vh-chip vh-chip-${p.risk}">${PROJ_RISK_LABELS[p.risk] || p.risk}</span>`;
+    const risk_label = frappe.utils.escape_html(PROJ_RISK_LABELS[p.risk] || p.risk || "");
+    const chip = `<span class="vh-chip vh-chip-${p.risk}">${risk_label}</span>`;
     const card = $(`<div class="vh-card" style="flex:1 1 240px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <strong>${frappe.utils.escape_html(p.name)}</strong>${chip}</div>
