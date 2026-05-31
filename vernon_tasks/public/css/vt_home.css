@@ -13,8 +13,18 @@
   --vh-green: #22c55e;
   --vh-amber: #f59e0b;
   --vh-red: #dc2626;
+  --vh-page-bg: #f4f5f7;
   padding: 0 20px 48px;
   font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* Gray page background for desk pages that host .vt-home (vt-home, vt-projects,
+   vt-project-detail). Scoped via :has() so other desk pages keep their default
+   white background. Targets the desk page container + body wrappers. */
+.page-body:has(.vt-home),
+.layout-main-section-wrapper:has(.vt-home),
+.layout-main-section:has(> .vt-home) {
+  background-color: var(--vh-page-bg);
 }
 
 /* ── Hero band ── */
