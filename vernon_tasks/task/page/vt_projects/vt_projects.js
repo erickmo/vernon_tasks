@@ -3,7 +3,6 @@
 
 const PROJ_API = "vernon_tasks.task.api.dashboard.my_projects";
 const PROJECT_DOCTYPE = "VT Project";
-const PROJECT_STATUS_OPTIONS = "Open\nOn Track\nAt Risk\nClosed";
 const PROJ_RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
 
 frappe.pages["vt-projects"].on_page_load = function (wrapper) {
@@ -12,47 +11,11 @@ frappe.pages["vt-projects"].on_page_load = function (wrapper) {
         title: "Proyek",
         single_column: true,
     });
-    page.set_primary_action(__("Buat Proyek"), () => open_create_dialog(page), "add");
+    // Buat Proyek opens the original VT Project form instead of a quick-create dialog.
+    page.set_primary_action(__("Buat Proyek"), () => frappe.new_doc(PROJECT_DOCTYPE), "add");
     page.add_button(__("Refresh"), () => render_projects(page), { icon: "refresh" });
     render_projects(page);
 };
-
-/* open_create_dialog — quick-create dialog for a VT Project; refreshes & routes on save. */
-function open_create_dialog(page) {
-    const d = new frappe.ui.Dialog({
-        title: __("Buat Proyek"),
-        fields: [
-            { fieldname: "title", label: __("Judul"), fieldtype: "Data", reqd: 1 },
-            { fieldname: "project_leader", label: __("Project Leader"), fieldtype: "Link", options: "User" },
-            { fieldname: "start_date", label: __("Mulai"), fieldtype: "Date" },
-            { fieldname: "end_date", label: __("Selesai"), fieldtype: "Date" },
-            { fieldname: "status", label: __("Status"), fieldtype: "Select", options: PROJECT_STATUS_OPTIONS },
-        ],
-        primary_action_label: __("Simpan"),
-        primary_action: (values) => submit_create_dialog(d, values),
-    });
-    d.show();
-}
-
-/* submit_create_dialog — validate, insert VT Project, then hide/alert/route. */
-function submit_create_dialog(d, values) {
-    if (!values.title) {
-        frappe.msgprint(__("Judul wajib diisi."));
-        return;
-    }
-    const doc = { doctype: PROJECT_DOCTYPE, title: values.title };
-    ["project_leader", "start_date", "end_date", "status"].forEach((f) => {
-        if (values[f]) doc[f] = values[f];
-    });
-    frappe.db.insert(doc).then((saved) => {
-        d.hide();
-        frappe.show_alert({ message: __("Proyek dibuat"), indicator: "green" });
-        frappe.set_route("vt-project-detail", saved.name);
-    }).catch(() => {
-        // Surface insert failure (perm/validation) instead of silently leaving the dialog open.
-        frappe.show_alert({ message: __("Gagal membuat proyek"), indicator: "red" });
-    });
-}
 
 function render_projects(page) {
     const c = $('<div class="vt-home"></div>');
