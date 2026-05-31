@@ -15,7 +15,7 @@ Source of truth: docs/superpowers/specs/2026-05-31-project-detail-kanban-design.
 import frappe
 from frappe.utils import today
 
-from vernon_tasks.task.api.dashboard import _assert_project_access
+from vernon_tasks.task.api.dashboard import _assert_project_access, _is_admin
 from vernon_tasks.task.api.security import max_str, rate_limit
 from vernon_tasks.task.doctype.vt_task.vt_task import (
     BOARD_COLUMNS,
@@ -32,11 +32,37 @@ TASK_TITLE_MAX_LEN = 200
 # Inline-edit allow-list — guards against mass-assignment via patch_task.
 PATCHABLE_FIELDS = ("priority", "assigned_to", "deadline")
 
-# Modal-edit allow-list — superset of PATCHABLE_FIELDS used by the create/edit
+# Modal-edit allow-list — the full editable field set surfaced by the create/edit
 # form dialogs. Deliberately EXCLUDES pdca_phase / kanban_status / project so the
 # PDCA state machine stays reachable only through move_task, and project/phase
-# can't be smuggled in via a values payload.
-EDITABLE_FIELDS = ("title", "priority", "assigned_to", "deadline", "start_date")
+# can't be smuggled in via a values payload. Also excludes server-computed
+# read-only fields (kanban_rank, completion_date, actual_minutes, *_points,
+# revision_count, next_occurrence, parent_task, risk_flag) — those are never
+# client-set. risk_flag is surfaced by risk_evaluator and is read-only.
+EDITABLE_FIELDS = (
+    "title", "priority", "assigned_to", "start_date", "deadline",
+    "sprint",
+    "estimated_minutes", "review_estimated_minutes", "review_scheduled_date",
+    "weight", "leader_override_points", "override_reason",
+    "is_recurring", "recurring_rule",
+    "dependencies", "schedule_entries",
+)
+
+# Child-table fields — applied as a row list (not a scalar set/null).
+TABLE_FIELDS = ("dependencies", "schedule_entries")
+
+# Governance fields — only the project leader or an admin may set them, mirroring
+# the scoring policy (a points override is an auditable leader action).
+LEADER_ONLY_FIELDS = ("leader_override_points", "override_reason")
+
+# Fields whose doctype default must survive an empty payload value. weight has a
+# default of 1 and the controller enforces weight > 0, so an empty weight from
+# the modal means "leave as-is", never "null it".
+SKIP_IF_EMPTY_FIELDS = ("weight",)
+
+# Editable scalar set returned by get_task to hydrate the edit modal (tables are
+# appended separately as row lists).
+GET_TASK_SCALAR_FIELDS = tuple(f for f in EDITABLE_FIELDS if f not in TABLE_FIELDS)
 
 # Quick-add is offered only on PDCA columns; Blocked is a flag, Done is terminal.
 DONE_COLUMN = PDCA_KANBAN_MAP["DONE"]
@@ -75,6 +101,17 @@ def _assert_team_member(project_id: str, user: str) -> None:
     )
     if not is_member:
         frappe.throw(f"{user} bukan anggota tim proyek", frappe.ValidationError)
+
+
+def _is_project_leader(project_id: str, user: str) -> bool:
+    """True when the user is an admin or the project's leader.
+
+    Gate for LEADER_ONLY_FIELDS — a plain team member must not set governance
+    fields (points override) even though they can edit other task fields.
+    """
+    if _is_admin():
+        return True
+    return user == frappe.db.get_value(PROJECT_DOCTYPE, project_id, "project_leader")
 
 
 def _apply_move(doc, to_column: str) -> None:
@@ -121,19 +158,35 @@ def _parse_values(values) -> dict:
 def _apply_editable(doc, values: dict) -> None:
     """Map an allow-listed values payload onto a board task.
 
-    Field-application + per-field guards only; all state-machine and date-order
-    rules stay in the VT Task controller's ``validate()`` (runs on the caller's
-    ``save()``/``insert()``). Rejects any key outside EDITABLE_FIELDS to block
-    mass-assignment, and re-checks team membership when (re)assigning.
+    Field-application + per-field guards only; all state-machine, date-order,
+    number, recurring and dependency rules stay in the VT Task controller's
+    ``validate()`` (runs on the caller's ``save()``/``insert()``). Guards here:
+      - reject any key outside EDITABLE_FIELDS (block mass-assignment),
+      - gate LEADER_ONLY_FIELDS to admin / project leader,
+      - re-check team membership when (re)assigning,
+      - cap title length,
+      - apply child tables as row lists,
+      - skip SKIP_IF_EMPTY_FIELDS when empty so doctype defaults survive.
     """
     for field, val in values.items():
         if field not in EDITABLE_FIELDS:
             frappe.throw(f"Field tidak boleh diubah: {field}", frappe.ValidationError)
+        if field in LEADER_ONLY_FIELDS and val not in (None, "", 0):
+            if not _is_project_leader(doc.project, frappe.session.user):
+                frappe.throw(
+                    f"Hanya leader proyek yang boleh mengubah: {field}",
+                    frappe.ValidationError,
+                )
+        if field in TABLE_FIELDS:
+            doc.set(field, val or [])
+            continue
+        if field in SKIP_IF_EMPTY_FIELDS and val in (None, ""):
+            continue  # preserve doctype default (e.g. weight=1)
         if field == "assigned_to" and val:
             _assert_team_member(doc.project, val)
         if field == "title" and val:
             val = max_str(val, TASK_TITLE_MAX_LEN)
-        doc.set(field, val or None)
+        doc.set(field, val if val not in (None, "") else None)
 
 
 @frappe.whitelist()
@@ -159,6 +212,29 @@ def create_task(project_id: str, title: str, column: str, values=None) -> dict:
     _apply_editable(doc, extra)
     doc.insert(ignore_permissions=True)
     return {"ok": True, "task_id": doc.name, "kanban_status": doc.kanban_status}
+
+
+def _serialize_table(rows) -> list[dict]:
+    """Flatten child rows to plain dicts (drop Frappe metadata) for the modal."""
+    return [
+        {k: v for k, v in row.as_dict().items() if not k.startswith("__")}
+        for row in (rows or [])
+    ]
+
+
+@frappe.whitelist()
+def get_task(task_id: str) -> dict:
+    """Return the full editable field set + child tables to hydrate the edit modal.
+
+    The board card carries only display fields; opening the edit form needs every
+    EDITABLE_FIELD plus the dependency / schedule rows. Guarded by the same
+    project-level access check as every other board mutation.
+    """
+    doc = _get_board_task(task_id)
+    data = {field: doc.get(field) for field in GET_TASK_SCALAR_FIELDS}
+    for field in TABLE_FIELDS:
+        data[field] = _serialize_table(doc.get(field))
+    return data
 
 
 @frappe.whitelist()

@@ -77,16 +77,16 @@ def get_hours_summary() -> dict:
 
     row = frappe.db.sql("""
         SELECT
-            COALESCE(SUM(actual_hours), 0) AS actual_hours,
-            COALESCE(SUM(estimated_hours), 0) AS estimated_hours
+            COALESCE(SUM(actual_minutes), 0) AS actual_minutes,
+            COALESCE(SUM(estimated_minutes), 0) AS estimated_minutes
         FROM `tabVT Task`
         WHERE assigned_to = %(user)s
           AND pdca_phase NOT IN ('DONE', 'ACT')
     """, {"user": user}, as_dict=True)
 
     return {
-        "actual_hours": float(row[0]["actual_hours"]),
-        "estimated_hours": float(row[0]["estimated_hours"]),
+        "actual_minutes": float(row[0]["actual_minutes"]),
+        "estimated_minutes": float(row[0]["estimated_minutes"]),
     }
 
 

@@ -10,7 +10,7 @@ _DEFAULT_SPRINT_DAYS = 14
 
 def _remaining_hours(project: str) -> float:
     row = frappe.db.sql("""
-        SELECT COALESCE(SUM(GREATEST(estimated_hours - actual_hours, 0)), 0) AS hrs
+        SELECT COALESCE(SUM(GREATEST(estimated_minutes - actual_minutes, 0)), 0) AS hrs
         FROM `tabVT Task`
         WHERE project = %(project)s
           AND pdca_phase != 'DONE'

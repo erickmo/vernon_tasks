@@ -44,7 +44,7 @@ class TestHealthScore(FrappeTestCase):
         frappe.get_doc({
             "doctype": "VT Task", "title": "T1",
             "project": p.name,
-            "estimated_hours": 1, "actual_hours": 1,
+            "estimated_minutes": 1, "actual_minutes": 1,
             "pdca_phase": "DONE", "kanban_status": "Done",
             "deadline": add_days(today(), -5),
             "completion_date": add_days(today(), -6),
@@ -53,7 +53,7 @@ class TestHealthScore(FrappeTestCase):
         frappe.get_doc({
             "doctype": "VT Task", "title": "T2",
             "project": p.name,
-            "estimated_hours": 1, "actual_hours": 1,
+            "estimated_minutes": 1, "actual_minutes": 1,
             "pdca_phase": "DONE", "kanban_status": "Done",
             "deadline": add_days(today(), -10),
             "completion_date": add_days(today(), -5),

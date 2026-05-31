@@ -20,7 +20,7 @@ def execute(filters=None):
     for u in users:
         target = u.daily_target_hours or default_target
         scheduled = frappe.db.sql("""
-            SELECT COALESCE(SUM(se.allocated_hours), 0)
+            SELECT COALESCE(SUM(se.allocated_minutes), 0)
             FROM `tabTask Schedule Entry` se
             INNER JOIN `tabVT Task` t ON t.name = se.parent
             WHERE t.assigned_to = %(user)s AND se.date = %(date)s AND t.docstatus < 2

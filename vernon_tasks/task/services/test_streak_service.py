@@ -33,7 +33,7 @@ class TestStreak(FrappeTestCase):
                     "doctype": "VT Task", "title": "T",
                     "project": self.project.name, "sprint": s.name,
                     "assigned_to": "sk-me@x.com",
-                    "estimated_hours": user_hrs, "actual_hours": user_hrs,
+                    "estimated_minutes": user_hrs, "actual_minutes": user_hrs,
                     "pdca_phase": "DONE", "kanban_status": "Done",
                     "completion_date": add_days(today(), off + 2),
                 }).insert(ignore_permissions=True)

@@ -6,7 +6,7 @@ _CLOSED_STATUS = "Closed"
 
 def get_sprint_velocity(sprint: str) -> float:
     row = frappe.db.sql("""
-        SELECT COALESCE(SUM(actual_hours), 0) AS hours
+        SELECT COALESCE(SUM(actual_minutes), 0) AS hours
         FROM `tabVT Task`
         WHERE sprint = %(sprint)s
           AND pdca_phase = %(done)s

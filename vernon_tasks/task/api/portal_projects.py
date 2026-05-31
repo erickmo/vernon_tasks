@@ -530,7 +530,7 @@ def get_project_members(project_id: str) -> list[dict]:
     Schema:
     - `tabProject Team Member` (child of VT Project, parentfield=team_members)
       with cols: user, role, is_also_leader.
-    - Assigned hours: sum of `Task Schedule Entry.allocated_hours` for the
+    - Assigned minutes: sum of `Task Schedule Entry.allocated_minutes` for the
       last 7 days, joined to parent VT Task by `assigned_to = pm.user` and
       `project = pm.parent`. Schedule Entry is a child table; owner is
       derived from its parent VT Task.
@@ -544,14 +544,14 @@ def get_project_members(project_id: str) -> list[dict]:
         SELECT pm.user,
                u.full_name,
                pm.role,
-               (SELECT COALESCE(SUM(se.allocated_hours), 0)
+               (SELECT COALESCE(SUM(se.allocated_minutes), 0)
                   FROM `tabTask Schedule Entry` se
                   JOIN `tabVT Task` st
                     ON st.name = se.parent
                    AND se.parenttype = 'VT Task'
                  WHERE st.assigned_to = pm.user
                    AND st.project = pm.parent
-                   AND se.date >= CURDATE() - INTERVAL 7 DAY) AS assigned_hours,
+                   AND se.date >= CURDATE() - INTERVAL 7 DAY) AS assigned_minutes,
                %(default_capacity)s AS capacity_hours,
                (SELECT COUNT(*) FROM `tabVT Task` t
                  WHERE t.project = pm.parent
@@ -570,7 +570,7 @@ def get_project_members(project_id: str) -> list[dict]:
             "user": r.user,
             "full_name": r.full_name,
             "role": r.role,
-            "assigned_hours": float(r.assigned_hours or 0),
+            "assigned_minutes": float(r.assigned_minutes or 0),
             "capacity_hours": float(r.capacity_hours or DEFAULT_CAPACITY_HOURS),
             "active_task_count": int(r.active_task_count or 0),
         }

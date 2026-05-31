@@ -41,7 +41,7 @@ class _SchedBase(FrappeTestCase):
 
 	def _append(self, **fields):
 		"""Append a schedule_entries row with sane defaults overridable by `fields`."""
-		row = {"date": "2026-05-15", "allocated_hours": 4.0, "hour_start": 9, "hours_planned": 4.0}
+		row = {"date": "2026-05-15", "allocated_minutes": 4.0, "hour_start": 9, "minutes_planned": 4.0}
 		row.update(fields)
 		self.task.append("schedule_entries", row)
 		return self.task
@@ -51,7 +51,7 @@ class TestScheduleEntryCRUD(_SchedBase):
 	def test_create_entry(self):
 		self._append().save()
 		self.assertEqual(len(self.task.schedule_entries), 1)
-		self.assertEqual(self.task.schedule_entries[0].allocated_hours, 4.0)
+		self.assertEqual(self.task.schedule_entries[0].allocated_minutes, 4.0)
 
 	def test_delete_entry(self):
 		self._append().save()
@@ -61,18 +61,18 @@ class TestScheduleEntryCRUD(_SchedBase):
 
 
 class TestScheduleEntryValidations(_SchedBase):
-	def test_allocated_hours_zero_rejected(self):
-		self._append(allocated_hours=0)
+	def test_allocated_minutes_zero_rejected(self):
+		self._append(allocated_minutes=0)
 		with self.assertRaises(frappe.ValidationError):
 			self.task.save()
 
-	def test_allocated_hours_negative_rejected(self):
-		self._append(allocated_hours=-1)
+	def test_allocated_minutes_negative_rejected(self):
+		self._append(allocated_minutes=-1)
 		with self.assertRaises(frappe.ValidationError):
 			self.task.save()
 
-	def test_allocated_hours_above_24_rejected(self):
-		self._append(allocated_hours=25)
+	def test_allocated_minutes_above_1440_rejected(self):
+		self._append(allocated_minutes=1441)
 		with self.assertRaises(frappe.ValidationError):
 			self.task.save()
 

@@ -19,6 +19,7 @@ _USER_TABLE = "tabUser"
 _LEADER_ROLES = ("Vernon Leader", "Vernon PM")
 _DEFAULT_HOUR_START = 8
 _DEFAULT_HOURS_PLANNED = 1.0
+_DEFAULT_MINUTES_PLANNED = 60.0
 _MIN_HOUR = 0
 _MAX_HOUR = 23
 _MAX_HOURS_PER_SLOT = 24.0
@@ -50,8 +51,8 @@ def schedule_task(
     task = frappe.get_doc(_TASK_DOCTYPE, task_id)
     entry = task.append("schedule_entries", {
         "date": parsed_date,
-        "allocated_hours": float(hours),
-        "hours_planned": float(hours),
+        "allocated_minutes": float(hours),
+        "minutes_planned": float(hours),
         "hour_start": int(hour_start),
         "owner_user": user,
         "is_override": 0,
@@ -84,8 +85,8 @@ def update_entry(
         target.hour_start = int(hour_start)
     if hours is not None:
         _validate_hours(float(hours))
-        target.hours_planned = float(hours)
-        target.allocated_hours = float(hours)
+        target.minutes_planned = float(hours)
+        target.allocated_minutes = float(hours)
 
     task.save(ignore_permissions=False)
     return {"entry_id": entry_id, "task_id": parent_task}
@@ -119,7 +120,7 @@ def bulk_carry_over(week_start: str) -> dict:
         rows = frappe.db.sql(
             f"""
             SELECT se.name, se.parent AS task_id, se.date,
-                   COALESCE(se.hours_planned, se.allocated_hours, %(default_hours)s) AS hours,
+                   COALESCE(se.minutes_planned, se.allocated_minutes, %(default_minutes)s) AS minutes,
                    COALESCE(se.hour_start, %(default_hour)s) AS hour_start
               FROM `{_SCHEDULE_ENTRY_TABLE}` se
               JOIN `{_TASK_TABLE}` t ON t.name = se.parent
@@ -133,7 +134,7 @@ def bulk_carry_over(week_start: str) -> dict:
                 "s": prev_start,
                 "e": prev_end,
                 "open_phases": _OPEN_PHASES,
-                "default_hours": _DEFAULT_HOURS_PLANNED,
+                "default_minutes": _DEFAULT_MINUTES_PLANNED,
                 "default_hour": _DEFAULT_HOUR_START,
             },
             as_dict=True,
@@ -147,8 +148,8 @@ def bulk_carry_over(week_start: str) -> dict:
             task = frappe.get_doc(_TASK_DOCTYPE, r.task_id)
             task.append("schedule_entries", {
                 "date": r.date + timedelta(days=_DAYS_IN_WEEK),
-                "allocated_hours": float(r.hours),
-                "hours_planned": float(r.hours),
+                "allocated_minutes": float(r.minutes),
+                "minutes_planned": float(r.minutes),
                 "hour_start": int(r.hour_start),
                 "owner_user": user,
                 "is_override": 0,
@@ -215,7 +216,7 @@ def get_team_worksheet(week_start: str) -> list[dict]:
             SELECT COALESCE(se.owner_user, t.assigned_to) AS user,
                    u.full_name,
                    se.date,
-                   SUM(COALESCE(se.hours_planned, se.allocated_hours)) AS hours,
+                   SUM(COALESCE(se.minutes_planned, se.allocated_minutes)) AS minutes,
                    COUNT(*) AS task_count
               FROM `{_SCHEDULE_ENTRY_TABLE}` se
               JOIN `{_TASK_TABLE}` t ON t.name = se.parent
@@ -237,12 +238,12 @@ def get_team_worksheet(week_start: str) -> list[dict]:
             "user": r.user,
             "full_name": r.full_name,
             "days": {
-                str(start + timedelta(days=i)): {"hours": 0, "task_count": 0}
+                str(start + timedelta(days=i)): {"minutes": 0, "task_count": 0}
                 for i in range(_DAYS_IN_WEEK)
             },
         })
         u["days"][str(r.date)] = {
-            "hours": float(r.hours or 0),
+            "minutes": float(r.minutes or 0),
             "task_count": int(r.task_count or 0),
         }
     return list(by_user.values())

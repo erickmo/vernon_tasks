@@ -3,3 +3,4 @@ vernon_tasks.patches.v1_x.add_vt_task_kanban_rank
 vernon_tasks.patches.v1_x.add_brand_to_vt_project
 vernon_tasks.patches.v1_x.add_brand_to_objective
 vernon_tasks.patches.v1_x.add_brand_to_kpi_definition
+vernon_tasks.patches.v1_x.rename_task_minutes

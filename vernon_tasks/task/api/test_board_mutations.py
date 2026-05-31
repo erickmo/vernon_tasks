@@ -10,6 +10,7 @@ from frappe.utils import add_days, today
 
 from vernon_tasks.task.api.board_mutations import (
     create_task,
+    get_task,
     move_task,
     patch_task,
     update_task,
@@ -184,6 +185,90 @@ class TestBoardMutations(FrappeTestCase):
         self.assertEqual(row.priority, "Critical")
         self.assertEqual(str(row.deadline), add_days(today(), 3))
         self.assertEqual(row.pdca_phase, "BACKLOG")
+
+    # ── update_task: full editable field set ─────────────────────────
+    def test_update_extended_scalar_fields(self):
+        """The modal now saves the full editable scalar set in one call."""
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        update_task(t.name, {
+            "risk_flag": "late",
+            "estimated_minutes": 8,
+            "review_estimated_minutes": 2,
+            "review_scheduled_date": add_days(today(), 4),
+            "weight": 3,
+        })
+        row = frappe.db.get_value(
+            "VT Task", t.name,
+            ["risk_flag", "estimated_minutes", "review_estimated_minutes",
+             "review_scheduled_date", "weight"],
+            as_dict=True)
+        self.assertEqual(row.risk_flag, "late")
+        self.assertEqual(row.estimated_minutes, 8)
+        self.assertEqual(row.review_estimated_minutes, 2)
+        self.assertEqual(str(row.review_scheduled_date), add_days(today(), 4))
+        self.assertEqual(row.weight, 3)
+
+    def test_empty_weight_preserves_default(self):
+        """An empty weight in the payload must not null the doctype default (1)."""
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        update_task(t.name, {"priority": "High", "weight": ""})
+        self.assertEqual(frappe.db.get_value("VT Task", t.name, "weight"), 1)
+
+    def test_override_fields_leader_only(self):
+        """leader_override_points/override_reason are governance fields.
+
+        A plain team member may not set them; the project leader may.
+        """
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        frappe.set_user(self.member)
+        with self.assertRaises(frappe.ValidationError):
+            update_task(t.name, {"leader_override_points": 5,
+                                 "override_reason": "bonus"})
+        frappe.set_user(self.leader)
+        update_task(t.name, {"leader_override_points": 5,
+                             "override_reason": "bonus"})
+        self.assertEqual(
+            frappe.db.get_value("VT Task", t.name, "leader_override_points"), 5)
+
+    def test_update_recurring_without_rule_rejected(self):
+        """is_recurring passes the allow-list; controller still demands a rule."""
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        with self.assertRaises(frappe.ValidationError):
+            update_task(t.name, {"is_recurring": 1})
+
+    def test_update_dependencies_table(self):
+        """Child-table fields (dependencies) are settable from the modal."""
+        frappe.set_user(self.leader)
+        blocker = self._make_task("Blocker")
+        t = self._make_task("Dependent")
+        update_task(t.name, {"dependencies": [
+            {"blocked_by": blocker.name, "dependency_type": "Finish-to-Start"}]})
+        doc = frappe.get_doc("VT Task", t.name)
+        self.assertEqual(len(doc.dependencies), 1)
+        self.assertEqual(doc.dependencies[0].blocked_by, blocker.name)
+
+    # ── get_task (edit-modal hydration) ──────────────────────────────
+    def test_get_task_returns_full_field_set(self):
+        frappe.set_user(self.leader)
+        t = self._make_task("Hydrate")
+        update_task(t.name, {"risk_flag": "blocked", "estimated_minutes": 4})
+        data = get_task(t.name)
+        self.assertEqual(data["title"], "Hydrate")
+        self.assertEqual(data["risk_flag"], "blocked")
+        self.assertEqual(data["estimated_minutes"], 4)
+        self.assertIn("dependencies", data)
+        self.assertIn("schedule_entries", data)
+
+    def test_get_task_denied_for_outsider(self):
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        frappe.set_user(self.outsider)
+        with self.assertRaises(frappe.PermissionError):
+            get_task(t.name)
 
     # ── board read ───────────────────────────────────────────────────
     def _columns(self, board):

@@ -31,7 +31,7 @@ def make_task():
         "project": proj.name, "assigned_to": MEMBER,
         "priority": "Medium", "pdca_phase": "DO",
         "kanban_status": "In Progress",
-        "weight": 5.0, "estimated_hours": 8.0,
+        "weight": 5.0, "estimated_minutes": 8.0,
         "start_date": "2026-05-10", "deadline": "2026-05-20",
         "revision_count": 0,
     })
@@ -44,10 +44,10 @@ class TestPointCalculator(FrappeTestCase):
         from vernon_tasks.task.services.point_calculator import compute_points
         result = compute_points(weight=5.0, deadline="2026-05-20", completion_date="2026-05-20", revision_count=0)
         settings = frappe.get_single("VT Settings")
-        expected_base = 5.0 * (settings.weight_multiplier or 10)
+        expected_base = int(round(5.0 * (settings.weight_multiplier or 10)))
         self.assertEqual(result["base"], expected_base)
-        self.assertEqual(result["early_bonus"], 0.0)
-        self.assertEqual(result["late_penalty"], 0.0)
+        self.assertEqual(result["early_bonus"], 0)
+        self.assertEqual(result["late_penalty"], 0)
         self.assertEqual(result["earned"], expected_base)
 
     def test_early_bonus_applied(self):
@@ -70,17 +70,17 @@ class TestPointCalculator(FrappeTestCase):
     def test_override_points_creates_log(self):
         from vernon_tasks.task.services.point_calculator import override_points
         task, proj = make_task()
-        frappe.db.set_value("VT Task", task.name, "earned_points", 50.0)
-        override_points(task.name, new_points=80.0, reason="Excellent work", overridden_by=LEADER)
+        frappe.db.set_value("VT Task", task.name, "earned_points", 50)
+        override_points(task.name, new_points=80, reason="Excellent work", overridden_by=LEADER)
         task_doc = frappe.get_doc("VT Task", task.name)
-        self.assertEqual(task_doc.leader_override_points, 80.0)
+        self.assertEqual(task_doc.leader_override_points, 80)
         log = frappe.get_all(
             "Task Point Log",
             filters={"task": task.name, "transaction_type": "leader_override"},
             fields=["amount", "original_amount"]
         )
         self.assertEqual(len(log), 1)
-        self.assertEqual(log[0].original_amount, 50.0)
+        self.assertEqual(log[0].original_amount, 50)
         frappe.db.delete("Task Point Log", {"task": task.name})
         task.delete()
         proj.delete()

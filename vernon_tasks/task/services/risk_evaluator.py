@@ -73,7 +73,7 @@ def _slip_risk(project, threshold_pct):
 def _overcap_risks(project, threshold_pct):
     rows = frappe.db.sql("""
         SELECT assigned_to,
-               COALESCE(SUM(GREATEST(estimated_hours - actual_hours, 0)), 0) AS hrs
+               COALESCE(SUM(GREATEST(estimated_minutes - actual_minutes, 0)), 0) AS hrs
         FROM `tabVT Task`
         WHERE project = %(project)s
           AND pdca_phase != %(done)s

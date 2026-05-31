@@ -33,8 +33,8 @@ class TestRiskEvaluator(FrappeTestCase):
             "doctype": "VT Task",
             "title": "Stuck",
             "project": p.name,
-            "estimated_hours": 4,
-            "actual_hours": 0,
+            "estimated_minutes": 4,
+            "actual_minutes": 0,
             "kanban_status": "Blocked",
             "pdca_phase": "DO",
         }).insert(ignore_permissions=True)
@@ -51,8 +51,8 @@ class TestRiskEvaluator(FrappeTestCase):
             "doctype": "VT Task",
             "title": "Fresh",
             "project": p.name,
-            "estimated_hours": 4,
-            "actual_hours": 0,
+            "estimated_minutes": 4,
+            "actual_minutes": 0,
             "kanban_status": "Blocked",
             "pdca_phase": "DO",
         }).insert(ignore_permissions=True)
@@ -66,8 +66,8 @@ class TestRiskEvaluator(FrappeTestCase):
             "doctype": "VT Task",
             "title": "Stuck",
             "project": p.name,
-            "estimated_hours": 4,
-            "actual_hours": 0,
+            "estimated_minutes": 4,
+            "actual_minutes": 0,
             "kanban_status": "Blocked",
             "pdca_phase": "DO",
         }).insert(ignore_permissions=True)

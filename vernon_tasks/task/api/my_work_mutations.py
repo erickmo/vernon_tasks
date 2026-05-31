@@ -4,7 +4,7 @@ from vernon_tasks.task.api.security import rate_limit, max_str
 
 TASK_DOCTYPE = "VT Task"
 ALLOWED_SNOOZE_DAYS = (1, 3, 7)
-MAX_LOG_HOURS = 24
+MAX_LOG_MINUTES = 1440
 
 
 def _check_access(task_id: str):
@@ -34,16 +34,16 @@ def complete(task_id: str) -> dict:
 
 
 @frappe.whitelist()
-def log_progress(task_id: str, hours, note: str = "") -> dict:
+def log_progress(task_id: str, minutes, note: str = "") -> dict:
     rate_limit("log_progress", 20)
-    hours_f = float(hours)
-    if hours_f <= 0 or hours_f > MAX_LOG_HOURS:
-        frappe.throw(f"Hours must be in (0, {MAX_LOG_HOURS}]")
+    minutes_i = int(round(float(minutes)))
+    if minutes_i <= 0 or minutes_i > MAX_LOG_MINUTES:
+        frappe.throw(f"Minutes must be in (0, {MAX_LOG_MINUTES}]")
     note = max_str(note, 1000)
     doc = _check_access(task_id)
-    doc.actual_hours = (doc.actual_hours or 0) + hours_f
+    doc.actual_minutes = (doc.actual_minutes or 0) + minutes_i
     doc.save()
-    content = f"[Log {hours_f}h] {note}" if note else f"[Log {hours_f}h]"
+    content = f"[Log {minutes_i}m] {note}" if note else f"[Log {minutes_i}m]"
     frappe.get_doc({
         "doctype": "Comment",
         "comment_type": "Comment" if note else "Info",
@@ -51,7 +51,7 @@ def log_progress(task_id: str, hours, note: str = "") -> dict:
         "reference_name": task_id,
         "content": content,
     }).insert(ignore_permissions=True)
-    return {"ok": True, "actual_hours": doc.actual_hours}
+    return {"ok": True, "actual_minutes": doc.actual_minutes}
 
 
 @frappe.whitelist()

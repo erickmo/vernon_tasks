@@ -15,7 +15,7 @@ def get_streak(user: str, project: str) -> dict:
     streak = 0
     for s in sprints:
         row = frappe.db.sql("""
-            SELECT COALESCE(SUM(actual_hours), 0) AS hrs
+            SELECT COALESCE(SUM(actual_minutes), 0) AS hrs
             FROM `tabVT Task`
             WHERE sprint = %(sprint)s
               AND assigned_to = %(user)s

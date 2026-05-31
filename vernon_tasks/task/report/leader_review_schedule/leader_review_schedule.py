@@ -45,8 +45,8 @@ def _get_columns():
             "width": 120,
         },
         {
-            "fieldname": "review_estimated_hours",
-            "label": "Review Est. (hrs)",
+            "fieldname": "review_estimated_minutes",
+            "label": "Review Est. (min)",
             "fieldtype": "Float",
             "width": 130,
         },
@@ -74,7 +74,7 @@ def _get_data(filters):
     rows = frappe.db.sql(
         f"""
         SELECT name, title, project, assigned_to,
-               review_scheduled_date, review_estimated_hours, deadline
+               review_scheduled_date, review_estimated_minutes, deadline
         FROM `tabVT Task`
         {conditions}
         ORDER BY review_scheduled_date ASC
@@ -86,10 +86,10 @@ def _get_data(filters):
     if not rows:
         return []
 
-    total_hours = sum(r.get("review_estimated_hours") or 0 for r in rows)
+    total_minutes = sum(r.get("review_estimated_minutes") or 0 for r in rows)
     rows.append({
-        "title": "Total Review Hours",
-        "review_estimated_hours": total_hours,
+        "title": "Total Review Minutes",
+        "review_estimated_minutes": total_minutes,
         "is_grand_total": True,
     })
 

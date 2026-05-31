@@ -37,7 +37,7 @@ def _get_project_name():
 
 
 def _make_task(suffix, assigned_to, pdca_phase="PLAN", kanban_status="Scheduled",
-               estimated_hours=4.0, actual_hours=0.0, earned_points=0.0,
+               estimated_minutes=4.0, actual_minutes=0.0, earned_points=0,
                completion_date=None, deadline_offset=5):
     doc = frappe.get_doc({
         "doctype": "VT Task",
@@ -50,8 +50,8 @@ def _make_task(suffix, assigned_to, pdca_phase="PLAN", kanban_status="Scheduled"
         "deadline": add_days(today(), deadline_offset),
         "weight": 3.0,
         "priority": "Medium",
-        "estimated_hours": estimated_hours,
-        "actual_hours": actual_hours,
+        "estimated_minutes": estimated_minutes,
+        "actual_minutes": actual_minutes,
         "earned_points": earned_points,
     }).insert(ignore_permissions=True)
     if completion_date:
@@ -103,7 +103,7 @@ class TestEmployeeDashboardAPI(unittest.TestCase):
     def test_done_today_counts_task_completed_today(self):
         self._track(_make_task("done-today", "Administrator",
                                pdca_phase="DONE", kanban_status="Done",
-                               completion_date=today(), earned_points=5.0))
+                               completion_date=today(), earned_points=5))
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_employee_stats
         result = get_employee_stats()
         self.assertGreaterEqual(result["done_today"], 1)
@@ -111,7 +111,7 @@ class TestEmployeeDashboardAPI(unittest.TestCase):
     def test_done_week_counts_task_completed_this_week(self):
         self._track(_make_task("done-week", "Administrator",
                                pdca_phase="DONE", kanban_status="Done",
-                               completion_date=today(), earned_points=3.0))
+                               completion_date=today(), earned_points=3))
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_employee_stats
         result = get_employee_stats()
         self.assertGreaterEqual(result["done_week"], 1)
@@ -131,10 +131,10 @@ class TestEmployeeDashboardAPI(unittest.TestCase):
     def test_points_month_sums_earned_points_this_month(self):
         self._track(_make_task("points-task", "Administrator",
                                pdca_phase="DONE", kanban_status="Done",
-                               completion_date=today(), earned_points=10.0))
+                               completion_date=today(), earned_points=10))
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_employee_stats
         result = get_employee_stats()
-        self.assertGreaterEqual(result["points_month"], 10.0)
+        self.assertGreaterEqual(result["points_month"], 10)
 
     def test_blocked_counts_tasks_with_active_blockers(self):
         blocker = self._track(_make_task("blocker", "Administrator",
@@ -165,7 +165,7 @@ class TestEmployeeDashboardAPI(unittest.TestCase):
     def test_get_daily_completions_counts_todays_completions(self):
         self._track(_make_task("daily-done", "Administrator",
                                pdca_phase="DONE", kanban_status="Done",
-                               completion_date=today(), earned_points=3.0))
+                               completion_date=today(), earned_points=3))
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_daily_completions
         result = get_daily_completions()
         today_row = next((r for r in result if r["date"] == today()), None)
@@ -177,28 +177,28 @@ class TestEmployeeDashboardAPI(unittest.TestCase):
     def test_get_hours_summary_returns_actual_and_estimated(self):
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_hours_summary
         result = get_hours_summary()
-        self.assertIn("actual_hours", result)
-        self.assertIn("estimated_hours", result)
+        self.assertIn("actual_minutes", result)
+        self.assertIn("estimated_minutes", result)
 
     def test_get_hours_summary_sums_active_tasks(self):
         self._track(_make_task("hours-active", "Administrator",
                                pdca_phase="DO", kanban_status="In Progress",
-                               estimated_hours=8.0, actual_hours=3.0))
+                               estimated_minutes=8.0, actual_minutes=3.0))
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_hours_summary
         result = get_hours_summary()
-        self.assertGreaterEqual(result["actual_hours"], 3.0)
-        self.assertGreaterEqual(result["estimated_hours"], 8.0)
+        self.assertGreaterEqual(result["actual_minutes"], 3.0)
+        self.assertGreaterEqual(result["estimated_minutes"], 8.0)
 
     def test_get_hours_summary_excludes_done_tasks(self):
         before = self._get_hours_summary_actual()
         self._track(_make_task("hours-done", "Administrator",
                                pdca_phase="DONE", kanban_status="Done",
-                               estimated_hours=8.0, actual_hours=8.0,
+                               estimated_minutes=8.0, actual_minutes=8.0,
                                completion_date=today()))
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_hours_summary
         result = get_hours_summary()
-        self.assertEqual(result["actual_hours"], before)
+        self.assertEqual(result["actual_minutes"], before)
 
     def _get_hours_summary_actual(self):
         from vernon_tasks.task.page.my_dashboard.my_dashboard import get_hours_summary
-        return get_hours_summary()["actual_hours"]
+        return get_hours_summary()["actual_minutes"]

@@ -49,11 +49,11 @@ def _make_task(proj, review_date, review_hours, phase="CHECK"):
         "priority": "Medium",
         "pdca_phase": phase,
         "kanban_status": "In Progress",
-        "estimated_hours": 4.0,
+        "estimated_minutes": 4.0,
         "start_date": "2026-05-01",
         "deadline": "2026-05-31",
         "review_scheduled_date": review_date,
-        "review_estimated_hours": review_hours,
+        "review_estimated_minutes": review_hours,
     })
     task.insert(ignore_permissions=True)
     return task
@@ -91,8 +91,8 @@ class TestLeaderReviewSchedule(FrappeTestCase):
 
         total_row = next((r for r in data if r.get("is_grand_total")), None)
         self.assertIsNotNone(total_row)
-        self.assertEqual(total_row["title"], "Total Review Hours")
-        self.assertAlmostEqual(total_row["review_estimated_hours"], 3.5)
+        self.assertEqual(total_row["title"], "Total Review Minutes")
+        self.assertAlmostEqual(total_row["review_estimated_minutes"], 3.5)
 
     def test_project_filter(self):
         other_proj = _make_project()

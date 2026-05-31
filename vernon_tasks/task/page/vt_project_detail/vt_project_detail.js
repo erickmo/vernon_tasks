@@ -12,6 +12,26 @@ const BOARD_API = "vernon_tasks.task.api.dashboard.project_board";
 const MOVE_API = "vernon_tasks.task.api.board_mutations.move_task";
 const CREATE_API = "vernon_tasks.task.api.board_mutations.create_task";
 const UPDATE_API = "vernon_tasks.task.api.board_mutations.update_task";
+const GET_TASK_API = "vernon_tasks.task.api.board_mutations.get_task";
+
+// Roles allowed to set governance fields (points override), mirroring the
+// backend LEADER_ONLY_FIELDS gate in board_mutations.py.
+const OVERRIDE_ROLES = ["System Manager", "Vernon Admin"];
+const RISK_FLAG_OPTIONS = "\nlate\nblocked\nscope-drift";
+
+// Child-table grid columns for the modal (subset shown in the in-dialog grid).
+const DEPENDENCY_GRID_FIELDS = [
+    { fieldname: "blocked_by", label: "Diblokir Oleh", fieldtype: "Link",
+      options: "VT Task", in_list_view: 1, reqd: 1 },
+    { fieldname: "dependency_type", label: "Tipe", fieldtype: "Select",
+      options: "Finish-to-Start\nStart-to-Start", in_list_view: 1 },
+];
+const SCHEDULE_GRID_FIELDS = [
+    { fieldname: "date", label: "Tanggal", fieldtype: "Date", in_list_view: 1, reqd: 1 },
+    { fieldname: "allocated_minutes", label: "Menit", fieldtype: "Float", in_list_view: 1, reqd: 1 },
+    { fieldname: "is_override", label: "Override", fieldtype: "Check", in_list_view: 1 },
+    { fieldname: "owner_user", label: "Pemilik", fieldtype: "Link", options: "User" },
+];
 
 const PROJ_RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
 const PRIORITY_COLORS = { Critical: "#ef4444", High: "#f59e0b", Medium: "#3b82f6", Low: "#94a3b8" };
@@ -160,33 +180,99 @@ function assignee_name(ctx, user) {
 
 // ── task create / edit dialog ───────────────────────────────────────────────
 
+// Whether the current user may edit governance (points override) fields.
+function can_override(ctx) {
+    const leader = (ctx.detail && ctx.detail.header && ctx.detail.header.leader) || null;
+    if (leader && leader === frappe.session.user) return true;
+    return OVERRIDE_ROLES.some((r) => frappe.user.has_role(r));
+}
+
+// Full editable field set, organised into sections. Mirrors the backend
+// EDITABLE_FIELDS allow-list; override fields are appended only for leaders.
 function dialog_fields(ctx) {
     const priorities = (ctx.board.priorities || []).join("\n");
-    return [
+    const fields = [
         { fieldname: "title", label: "Judul", fieldtype: "Data", reqd: 1 },
+
+        { fieldtype: "Section Break", label: "Klasifikasi" },
         { fieldname: "priority", label: "Prioritas", fieldtype: "Select", options: priorities },
+        // risk_flag is surfaced by risk_evaluator — read-only in the form.
+        { fieldname: "risk_flag", label: "Tanda Risiko", fieldtype: "Select",
+          options: RISK_FLAG_OPTIONS, read_only: 1 },
+        { fieldtype: "Column Break" },
+        { fieldname: "sprint", label: "Sprint", fieldtype: "Link", options: "VT Sprint" },
+
+        { fieldtype: "Section Break", label: "Penugasan & Jadwal" },
         { fieldname: "assigned_to", label: "Assignee", fieldtype: "Link", options: "User",
           description: "Harus anggota tim proyek." },
         { fieldname: "start_date", label: "Mulai", fieldtype: "Date" },
+        { fieldtype: "Column Break" },
         { fieldname: "deadline", label: "Deadline", fieldtype: "Date" },
+
+        { fieldtype: "Section Break", label: "Estimasi & Skor" },
+        // DO phase: task estimate in minutes. CHECK phase: review estimate +
+        // review date. Both phases keep Bobot. Fields toggle on pdca_phase.
+        { fieldname: "estimated_minutes", label: "Estimasi Menit", fieldtype: "Int",
+          depends_on: 'eval:doc.pdca_phase=="DO"' },
+        { fieldname: "review_estimated_minutes", label: "Estimasi Review (menit)", fieldtype: "Int",
+          depends_on: 'eval:doc.pdca_phase=="CHECK"' },
+        { fieldname: "review_scheduled_date", label: "Tanggal Review", fieldtype: "Date",
+          depends_on: 'eval:doc.pdca_phase=="CHECK"' },
+        { fieldtype: "Column Break" },
+        { fieldname: "weight", label: "Bobot", fieldtype: "Float", description: "Harus > 0." },
     ];
+
+    if (can_override(ctx)) {
+        fields.push(
+            { fieldtype: "Section Break", label: "Override Leader" },
+            { fieldname: "leader_override_points", label: "Override Poin", fieldtype: "Int" },
+            { fieldname: "override_reason", label: "Alasan Override", fieldtype: "Small Text",
+              description: "Wajib diisi jika override poin diatur." },
+        );
+    }
+
+    fields.push(
+        { fieldtype: "Section Break", label: "Recurring" },
+        { fieldname: "is_recurring", label: "Berulang", fieldtype: "Check" },
+        { fieldname: "recurring_rule", label: "Aturan Recurring", fieldtype: "Link",
+          options: "Recurring Rule", depends_on: "is_recurring",
+          description: "Wajib diisi jika berulang aktif." },
+
+        { fieldtype: "Section Break", label: "Dependencies" },
+        { fieldname: "dependencies", fieldtype: "Table", options: "Task Dependency",
+          fields: DEPENDENCY_GRID_FIELDS },
+
+        { fieldtype: "Section Break", label: "Jadwal Alokasi", collapsible: 1 },
+        { fieldname: "schedule_entries", fieldtype: "Table", options: "Task Schedule Entry",
+          fields: SCHEDULE_GRID_FIELDS },
+    );
+    return fields;
 }
 
 function open_task_dialog(ctx, { task, column }) {
     const editing = !!task;
     const d = new frappe.ui.Dialog({
         title: editing ? "Edit Task" : "Task Baru",
+        size: "large",
         fields: dialog_fields(ctx),
         primary_action_label: editing ? "Simpan" : "Buat",
         primary_action: (values) => submit_task_dialog(ctx, d, { task, column, values }),
     });
-    if (editing) {
-        d.set_values({
-            title: task.title, priority: task.priority, assigned_to: task.assigned_to,
-            start_date: task.start_date, deadline: task.deadline,
-        });
-    }
     d.show();
+    // Board card carries only display fields — hydrate the full form from get_task.
+    if (editing) hydrate_edit_dialog(d, task);
+}
+
+// Populate the edit dialog with the task's full editable field set (incl. child
+// tables) fetched from the backend; the card alone lacks most fields.
+function hydrate_edit_dialog(dialog, task) {
+    frappe.call(GET_TASK_API, { task_id: task.id }).then((r) => {
+        const data = (r && r.message) || {};
+        Object.keys(data).forEach((field) => {
+            const df = dialog.fields_dict[field];
+            if (df && data[field] != null) dialog.set_value(field, data[field]);
+        });
+    });
 }
 
 function submit_task_dialog(ctx, dialog, { task, column, values }) {

@@ -76,7 +76,7 @@ class _TaskBase(FrappeTestCase):
 			"pdca_phase": "BACKLOG",
 			"kanban_status": "Backlog",
 			"weight": 3.0,
-			"estimated_hours": 8.0,
+			"estimated_minutes": 8.0,
 			"start_date": "2026-05-10",
 			"deadline": "2026-05-20",
 		}
@@ -123,9 +123,9 @@ class TestVTTaskValidations(_TaskBase):
 		with self.assertRaises(frappe.ValidationError):
 			self._make(weight=0).insert(ignore_permissions=True)
 
-	def test_estimated_hours_negative_rejected(self):
+	def test_estimated_minutes_negative_rejected(self):
 		with self.assertRaises(frappe.ValidationError):
-			self._make(estimated_hours=-1).insert(ignore_permissions=True)
+			self._make(estimated_minutes=-1).insert(ignore_permissions=True)
 
 	def test_leader_override_without_reason_rejected(self):
 		with self.assertRaises(frappe.ValidationError):

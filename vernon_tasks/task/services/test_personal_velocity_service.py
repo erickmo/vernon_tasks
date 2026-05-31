@@ -36,7 +36,7 @@ class TestPersonalVelocity(FrappeTestCase):
                 "doctype": "VT Task", "title": "T",
                 "project": self.project.name, "sprint": sprint,
                 "assigned_to": user,
-                "estimated_hours": hrs, "actual_hours": hrs,
+                "estimated_minutes": hrs, "actual_minutes": hrs,
                 "pdca_phase": "DONE", "kanban_status": "Done",
                 "completion_date": add_days(today(), off + 2),
             }).insert(ignore_permissions=True)

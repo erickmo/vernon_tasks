@@ -27,7 +27,7 @@ class TestLeaderboard(FrappeTestCase):
             return frappe.get_doc({
                 "doctype": "VT Task", "title": "T",
                 "project": self.project, "assigned_to": user,
-                "estimated_hours": 1, "actual_hours": 1,
+                "estimated_minutes": 1, "actual_minutes": 1,
                 "earned_points": pts,
                 "pdca_phase": "DONE", "kanban_status": "Done",
                 "completion_date": add_days(today(), -days_ago),

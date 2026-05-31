@@ -56,7 +56,7 @@ def _make_schedule_entry(task_name, hours=2.0):
     task = frappe.get_doc("VT Task", task_name)
     task.append("schedule_entries", {
         "date": today(),
-        "allocated_hours": hours,
+        "allocated_minutes": hours,
         "is_override": False,
     })
     task.save(ignore_permissions=True)

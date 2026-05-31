@@ -32,7 +32,7 @@ def get_review_queue() -> list:
     return frappe.db.sql(f"""
         SELECT t.name, t.title, t.project, t.priority, t.deadline,
                t.assigned_to, t.pdca_phase, t.kanban_status,
-               t.estimated_hours, t.review_scheduled_date
+               t.estimated_minutes, t.review_scheduled_date
         FROM `tabVT Task` t
         WHERE t.pdca_phase = 'CHECK'
           AND t.project IN ({placeholders})
@@ -50,19 +50,19 @@ def get_team_workload() -> list:
         return []
     placeholders = ", ".join(["%s"] * len(projects))
     rows = frappe.db.sql(f"""
-        SELECT t.assigned_to, COALESCE(SUM(t.estimated_hours), 0) AS total_hours
+        SELECT t.assigned_to, COALESCE(SUM(t.estimated_minutes), 0) AS total_minutes
         FROM `tabVT Task` t
         WHERE t.pdca_phase NOT IN ('DONE', 'BACKLOG')
           AND t.project IN ({placeholders})
           AND t.assigned_to IS NOT NULL
           AND t.assigned_to != ''
         GROUP BY t.assigned_to
-        ORDER BY total_hours DESC
+        ORDER BY total_minutes DESC
     """, projects, as_dict=True)
     capacity = frappe.db.get_single_value("VT Settings", "default_daily_target_hours") or 8.0
     for r in rows:
         r["capacity"] = float(capacity)
-        r["overloaded"] = r["total_hours"] > float(capacity)
+        r["overloaded"] = r["total_minutes"] > float(capacity)
     return rows
 
 

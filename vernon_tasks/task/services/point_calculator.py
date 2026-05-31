@@ -36,13 +36,15 @@ def compute_points(weight: float, deadline: str, completion_date: str, revision_
     late_rate = settings.late_penalty_rate or 0.08
     revision_rate = settings.revision_deduct_rate or 0.10
 
-    base = weight * multiplier
+    # Points are whole numbers — round each component to the nearest int so
+    # base/earned/bonus/penalty stay integer end-to-end (Int doctype fields).
+    base = int(round(weight * multiplier))
     days_diff = (getdate(deadline) - getdate(completion_date)).days
 
-    early_bonus = round(base * early_rate * days_diff, 2) if days_diff > 0 else 0.0
-    late_penalty = round(base * late_rate * abs(days_diff), 2) if days_diff < 0 else 0.0
-    revision_deduction = round(revision_rate * base * revision_count, 2)
-    earned = round(base + early_bonus - late_penalty - revision_deduction, 2)
+    early_bonus = int(round(base * early_rate * days_diff)) if days_diff > 0 else 0
+    late_penalty = int(round(base * late_rate * abs(days_diff))) if days_diff < 0 else 0
+    revision_deduction = int(round(revision_rate * base * revision_count))
+    earned = base + early_bonus - late_penalty - revision_deduction
 
     return {"base": base, "early_bonus": early_bonus, "late_penalty": late_penalty,
             "revision_deduction": revision_deduction, "earned": earned}
@@ -93,7 +95,7 @@ def calculate_points(doc, method) -> None:
 def apply_revision_deduction(task_name: str) -> None:
     task = frappe.get_doc("VT Task", task_name)
     settings = _get_settings()
-    deduction = round((settings.revision_deduct_rate or 0.10) * (task.base_points or 0), 2)
+    deduction = int(round((settings.revision_deduct_rate or 0.10) * (task.base_points or 0)))
     new_count = (task.revision_count or 0) + 1
 
     # Use db_set to bypass PDCA transition validation (revision is an admin action)
@@ -115,8 +117,9 @@ def apply_revision_deduction(task_name: str) -> None:
 
 def override_points(task_name: str, new_points: float, reason: str, overridden_by: str) -> None:
     task = frappe.get_doc("VT Task", task_name)
-    original = task.earned_points or 0.0
-    delta = round(new_points - original, 2)
+    original = task.earned_points or 0
+    new_points = int(round(float(new_points)))
+    delta = new_points - original
 
     task.leader_override_points = new_points
     task.override_reason = reason

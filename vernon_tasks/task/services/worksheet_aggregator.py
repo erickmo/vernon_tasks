@@ -28,11 +28,14 @@ def build_worksheet(user: str, week_start: str) -> dict:
     for i in range(_DAYS_IN_WEEK):
         d = start + timedelta(days=i)
         day_entries = [_entry(e) for e in entries if e.date == d]
-        scheduled = sum(e["hours_planned"] for e in day_entries)
+        # Entries carry minutes_planned; capacity_hours is weekly hours, so
+        # convert the day's scheduled minutes to hours (÷60) to stay comparable.
+        MINUTES_PER_HOUR = 60
+        scheduled_minutes = sum(e["minutes_planned"] for e in day_entries)
         days.append({
             "date": str(d),
             "entries": sorted(day_entries, key=lambda e: e["hour_start"]),
-            "scheduled_hours": round(scheduled, 2),
+            "scheduled_hours": round(scheduled_minutes / MINUTES_PER_HOUR, 2),
         })
 
     scheduled_task_ids = {e.task_id for e in entries}
@@ -68,12 +71,12 @@ def _load_entries(user: str, start: date, end: date) -> list:
             SELECT se.name,
                    se.parent AS task_id,
                    se.date,
-                   COALESCE(se.hours_planned, se.allocated_hours) AS hours_planned,
+                   COALESCE(se.minutes_planned, se.allocated_minutes) AS minutes_planned,
                    COALESCE(se.hour_start, %(default_hour)s) AS hour_start,
                    t.title,
                    t.pdca_phase,
                    COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points,
-                   COALESCE(t.linked_kr, kr.name) AS linked_kr,
+                   kr.name AS linked_kr,
                    t.project
               FROM `{_SCHEDULE_ENTRY_TABLE}` se
               JOIN `{_TASK_TABLE}` t ON t.name = se.parent
@@ -125,7 +128,7 @@ def _entry(e: dict) -> dict:
         "linked_kr": e.linked_kr,
         "project": e.project,
         "hour_start": int(e.hour_start if e.hour_start is not None else _DEFAULT_HOUR_START),
-        "hours_planned": float(e.hours_planned or 1),
+        "minutes_planned": float(e.minutes_planned or 60),
     }
 
 

@@ -37,7 +37,7 @@ def _get_project_name():
 
 
 def _make_task(suffix, assigned_to, pdca_phase="PLAN", kanban_status="Scheduled",
-               earned_points=0.0, completion_date=None, revision_count=0,
+               earned_points=0, completion_date=None, revision_count=0,
                deadline_offset=5):
     # Ensure start_date < deadline: if deadline is in the past, push start_date further back
     start_offset = min(deadline_offset - 1, -1) if deadline_offset <= 0 else 0
@@ -123,10 +123,10 @@ class TestLeaderDashboardAPI(unittest.TestCase):
     def test_team_points_month_sums_all_members(self):
         self._track(_make_task("points-a", "Administrator",
                                pdca_phase="DONE", kanban_status="Done",
-                               earned_points=15.0, completion_date=today()))
+                               earned_points=15, completion_date=today()))
         from vernon_tasks.task.page.leader_dashboard.leader_dashboard import get_leader_stats
         result = get_leader_stats()
-        self.assertGreaterEqual(result["team_points_month"], 15.0)
+        self.assertGreaterEqual(result["team_points_month"], 15)
 
     def test_approval_rate_is_between_0_and_100(self):
         from vernon_tasks.task.page.leader_dashboard.leader_dashboard import get_leader_stats
@@ -171,7 +171,7 @@ class TestLeaderDashboardAPI(unittest.TestCase):
     def test_get_team_leaderboard_has_member_and_points(self):
         self._track(_make_task("lb-task", "Administrator",
                                pdca_phase="DONE", kanban_status="Done",
-                               earned_points=20.0, completion_date=today()))
+                               earned_points=20, completion_date=today()))
         from vernon_tasks.task.page.leader_dashboard.leader_dashboard import get_team_leaderboard
         result = get_team_leaderboard()
         self.assertGreaterEqual(len(result), 1)

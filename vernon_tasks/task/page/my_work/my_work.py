@@ -19,7 +19,7 @@ def get_my_day() -> list:
         SELECT
             t.name, t.title, t.project, t.priority,
             t.pdca_phase, t.kanban_status,
-            se.allocated_hours
+            se.allocated_minutes
         FROM `tabVT Task` t
         INNER JOIN `tabTask Schedule Entry` se ON se.parent = t.name
         WHERE t.assigned_to = %(user)s

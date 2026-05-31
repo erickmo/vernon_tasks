@@ -58,25 +58,25 @@ class TestMyWorkMutations(FrappeTestCase):
         r = complete(t.name)
         self.assertTrue(r.get("idempotent"))
 
-    def test_log_appends_hours_and_comment(self):
+    def test_log_appends_minutes_and_comment(self):
         frappe.set_user(self.user_a)
         t = self._make_task(self.user_a)
-        log_progress(t.name, hours=1.5, note="part one")
-        log_progress(t.name, hours=2.0, note="part two")
+        log_progress(t.name, minutes=1.5, note="part one")
+        log_progress(t.name, minutes=2.0, note="part two")
         doc = frappe.get_doc("VT Task", t.name)
-        self.assertEqual(doc.actual_hours, 3.5)
+        self.assertEqual(doc.actual_minutes, 4)
         comments = frappe.get_all(
             "Comment",
             filters={"reference_doctype": "VT Task", "reference_name": t.name},
         )
         self.assertEqual(len(comments), 2)
 
-    def test_log_rejects_invalid_hours(self):
+    def test_log_rejects_invalid_minutes(self):
         frappe.set_user(self.user_a)
         t = self._make_task(self.user_a)
-        for bad in (0, -1, 25):
+        for bad in (0, -1, 1441):
             with self.assertRaises(frappe.ValidationError):
-                log_progress(t.name, hours=bad)
+                log_progress(t.name, minutes=bad)
 
     def test_snooze_shifts_deadline(self):
         frappe.set_user(self.user_a)
@@ -100,6 +100,6 @@ class TestMyWorkMutations(FrappeTestCase):
         with self.assertRaises(frappe.PermissionError):
             complete(t.name)
         with self.assertRaises(frappe.PermissionError):
-            log_progress(t.name, hours=1)
+            log_progress(t.name, minutes=1)
         with self.assertRaises(frappe.PermissionError):
             snooze(t.name, days=1)

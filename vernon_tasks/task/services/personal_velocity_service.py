@@ -7,7 +7,7 @@ _CLOSED_STATUS = "Closed"
 def _hours_in_sprint(sprint: str, user: str | None) -> float:
     where_user = "AND assigned_to = %(user)s" if user else ""
     row = frappe.db.sql(f"""
-        SELECT COALESCE(SUM(actual_hours), 0) AS hrs
+        SELECT COALESCE(SUM(actual_minutes), 0) AS hrs
         FROM `tabVT Task`
         WHERE sprint = %(sprint)s
           AND pdca_phase = %(done)s

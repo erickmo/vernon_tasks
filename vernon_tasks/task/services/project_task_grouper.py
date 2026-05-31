@@ -1,8 +1,9 @@
 """Pre-group VT Tasks for a project by KR / PDCA / Sprint / Assignee / Due-date.
 
 Schema notes:
-- VT Task.linked_kr (Link → Key Result) and VT Task.risk_flag (Select) are
-  read directly. Tasks without linked_kr land in the "Unlinked" bucket.
+- VT Task.risk_flag (Select) is read directly. The task→KR link was removed
+  (KRs link at the Project level only), so the "kr" grouping now places every
+  task in a single "Unlinked" bucket.
 - Field aliases: assigned_to AS assignee, deadline AS due_date,
   kanban_status AS status, title AS subject. Points coalesces leader override,
   earned, base.
@@ -46,7 +47,6 @@ def _load_tasks(project_id: str) -> list[dict]:
                t.deadline                                                   AS due_date,
                COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points,
                t.kanban_status                                              AS status,
-               t.linked_kr                                                  AS linked_kr,
                t.sprint,
                t.risk_flag                                                  AS risk_flag
           FROM `tabVT Task` t
@@ -66,7 +66,6 @@ def _task_row(t: dict) -> dict:
         "due_date": str(t.due_date) if t.due_date else None,
         "points": int(t.points or 0),
         "status": t.status,
-        "linked_kr": t.linked_kr,
         "sprint": t.sprint,
         "risk_flag": t.risk_flag,
     }
@@ -76,7 +75,9 @@ def _group_by_kr(project_id: str, tasks: list[dict]) -> list[dict]:
     kr_meta = _kr_meta_for_project(project_id)
     buckets: dict[str, dict] = {}
     for t in tasks:
-        key = t.linked_kr or "__unlinked__"
+        # Task→KR link removed; KRs live at the Project level, so every task
+        # is unlinked at the task granularity.
+        key = "__unlinked__"
         bucket = buckets.setdefault(key, {
             "key": key,
             "label": kr_meta.get(key, {}).get("label", "Unlinked"),

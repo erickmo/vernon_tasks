@@ -111,16 +111,16 @@ class VTTask(Document):
 				)
 
 	def _validate_numbers(self) -> None:
-		"""weight > 0; estimated/actual hours >= 0; review_estimated_hours >= 0."""
+		"""weight > 0; estimated/actual minutes >= 0; review_estimated_minutes >= 0."""
 		if (self.weight or 0) <= 0:
 			frappe.throw(
 				"Weight harus lebih besar dari 0",
 				frappe.ValidationError,
 			)
 		for fieldname, label in (
-			("estimated_hours", "Estimated Hours"),
-			("actual_hours", "Actual Hours"),
-			("review_estimated_hours", "Review Estimate"),
+			("estimated_minutes", "Estimated Minutes"),
+			("actual_minutes", "Actual Minutes"),
+			("review_estimated_minutes", "Review Estimate"),
 		):
 			value = getattr(self, fieldname, None)
 			if value is not None and value < 0:
@@ -232,7 +232,7 @@ def get_tasks_for_user_today(user: str) -> list:
 	"""
 	return frappe.db.sql("""
 		SELECT t.name, t.title, t.project, t.priority, t.deadline,
-			   t.pdca_phase, t.kanban_status, se.allocated_hours
+			   t.pdca_phase, t.kanban_status, se.allocated_minutes
 		FROM `tabVT Task` t
 		INNER JOIN `tabTask Schedule Entry` se ON se.parent = t.name
 		WHERE t.assigned_to = %(user)s

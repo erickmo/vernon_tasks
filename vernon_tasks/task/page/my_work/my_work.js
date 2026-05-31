@@ -85,7 +85,7 @@ frappe.pages["my-work"].on_page_load = function (wrapper) {
                     <tr>
                         <td>${task_link(t.name, t.title)}</td>
                         <td>${esc(t.project) || "—"}</td>
-                        <td>${t.allocated_hours ? t.allocated_hours + "h" : "—"}</td>
+                        <td>${t.allocated_minutes ? t.allocated_minutes + "m" : "—"}</td>
                         <td>${status_pill(t.kanban_status)}</td>
                         <td>${action_btn(t.name, t.kanban_status)}</td>
                     </tr>

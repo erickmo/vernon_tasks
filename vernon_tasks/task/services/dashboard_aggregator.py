@@ -428,7 +428,7 @@ def _capacity_used_pct(user: str) -> float:
     try:
         scheduled = frappe.db.sql(
             """
-            SELECT SUM(GREATEST(estimated_hours - actual_hours, 0)) AS h
+            SELECT SUM(GREATEST(estimated_minutes - actual_minutes, 0)) AS h
               FROM `tabVT Task`
              WHERE assigned_to = %(u)s
                AND pdca_phase != %(done)s

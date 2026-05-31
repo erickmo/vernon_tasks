@@ -11,13 +11,13 @@ def get_burndown(sprint: str) -> dict:
         return {"labels": [], "ideal": [], "remaining": [], "unestimated_count": 0}
 
     tasks = frappe.db.sql("""
-        SELECT estimated_hours, completion_date
+        SELECT estimated_minutes, completion_date
         FROM `tabVT Task`
         WHERE sprint = %(sprint)s
-          AND estimated_hours > 0
+          AND estimated_minutes > 0
     """, {"sprint": sprint}, as_dict=True)
 
-    total = sum(float(t["estimated_hours"]) for t in tasks)
+    total = sum(float(t["estimated_minutes"]) for t in tasks)
 
     labels, ideal, remaining = [], [], []
     for i in range(days):
@@ -26,7 +26,7 @@ def get_burndown(sprint: str) -> dict:
         labels.append(str(d_date))
         ideal.append(round(total * (1 - i / (days - 1)) if days > 1 else 0.0, 2))
         rem = sum(
-            float(t["estimated_hours"])
+            float(t["estimated_minutes"])
             for t in tasks
             if t["completion_date"] is None or getdate(t["completion_date"]) > d_date
         )
@@ -34,7 +34,7 @@ def get_burndown(sprint: str) -> dict:
 
     unestimated_count = frappe.db.count(
         "VT Task",
-        filters={"sprint": sprint, "estimated_hours": 0},
+        filters={"sprint": sprint, "estimated_minutes": 0},
     )
 
     return {

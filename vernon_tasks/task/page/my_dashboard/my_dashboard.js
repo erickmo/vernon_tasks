@@ -100,10 +100,10 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
         frappe.call({
             method: "vernon_tasks.task.page.my_dashboard.my_dashboard.get_hours_summary",
             callback(r) {
-                const d = r.message || { actual_hours: 0, estimated_hours: 0 };
-                const remaining = Math.max(0, d.estimated_hours - d.actual_hours);
+                const d = r.message || { actual_minutes: 0, estimated_minutes: 0 };
+                const remaining = Math.max(0, d.estimated_minutes - d.actual_minutes);
 
-                if (d.actual_hours === 0 && remaining === 0) {
+                if (d.actual_minutes === 0 && remaining === 0) {
                     donut_chart = null;
                     $("#md-donut-chart").html(
                         '<p class="text-muted" style="padding:12px 0;">No active tasks.</p>'
@@ -113,7 +113,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
 
                 const chart_data = {
                     labels: ["Logged", "Remaining"],
-                    datasets: [{ values: [d.actual_hours, remaining] }],
+                    datasets: [{ values: [d.actual_minutes, remaining] }],
                 };
 
                 if (donut_chart) {
@@ -124,7 +124,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
                         height: 180,
                         colors: ["#5e64ff", "#e0e0e0"],
                         data: chart_data,
-                        tooltipOptions: { formatTooltipY: d => d.toFixed(1) + "h" },
+                        tooltipOptions: { formatTooltipY: d => d.toFixed(1) + "m" },
                     });
                 }
             },

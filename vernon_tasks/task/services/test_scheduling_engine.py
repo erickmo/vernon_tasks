@@ -47,7 +47,7 @@ def make_task_and_project():
         "project": proj.name, "assigned_to": MEMBER,
         "priority": "Medium", "pdca_phase": "PLAN",
         "kanban_status": "Scheduled",
-        "weight": 3.0, "estimated_hours": 10.0,
+        "weight": 3.0, "estimated_minutes": 10.0,
         "start_date": "2026-05-11", "deadline": "2026-05-15",
     })
     task.insert(ignore_permissions=True)
@@ -68,7 +68,7 @@ class TestSchedulingEngine(FrappeTestCase):
         distribute_task_schedule(self.task.name)
         task = frappe.get_doc("VT Task", self.task.name)
         self.assertEqual(len(task.schedule_entries), 5)
-        total = sum(row.allocated_hours for row in task.schedule_entries)
+        total = sum(row.allocated_minutes for row in task.schedule_entries)
         self.assertAlmostEqual(total, 10.0, places=0)
 
     def test_distribute_no_conflict_for_low_load(self):
@@ -84,9 +84,9 @@ class TestSchedulingEngine(FrappeTestCase):
         task = frappe.get_doc("VT Task", self.task.name)
         overridden = [r for r in task.schedule_entries if r.is_override]
         self.assertEqual(len(overridden), 1)
-        self.assertEqual(overridden[0].allocated_hours, 5.0)
+        self.assertEqual(overridden[0].allocated_minutes, 5.0)
         non_overridden = [r for r in task.schedule_entries if not r.is_override]
-        total_remaining = sum(r.allocated_hours for r in non_overridden)
+        total_remaining = sum(r.allocated_minutes for r in non_overridden)
         self.assertAlmostEqual(total_remaining, 5.0, places=0)
 
     def tearDown(self):

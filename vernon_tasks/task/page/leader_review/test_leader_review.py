@@ -36,7 +36,7 @@ def _make_project(leader, members=None):
 
 
 def _make_task(name, assigned_to, project, pdca_phase="PLAN", kanban_status="Scheduled",
-               priority="Medium", estimated_hours=3.0, deadline_offset=5):
+               priority="Medium", estimated_minutes=3.0, deadline_offset=5):
     if frappe.db.exists("VT Task", name):
         frappe.delete_doc("VT Task", name, force=True)
     frappe.flags.in_import = True
@@ -50,7 +50,7 @@ def _make_task(name, assigned_to, project, pdca_phase="PLAN", kanban_status="Sch
             "pdca_phase": pdca_phase,
             "kanban_status": kanban_status,
             "priority": priority,
-            "estimated_hours": estimated_hours,
+            "estimated_minutes": estimated_minutes,
             "start_date": today(),
             "deadline": add_days(today(), deadline_offset),
             "weight": 3.0,
@@ -119,18 +119,18 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
 
     # --- get_team_workload ---
 
-    def test_get_team_workload_sums_estimated_hours_per_member(self):
-        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="DO", estimated_hours=4.0)
-        _make_task("LR-T2", MEMBER_USER, self.proj_name, pdca_phase="CHECK", estimated_hours=3.0)
+    def test_get_team_workload_sums_estimated_minutes_per_member(self):
+        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="DO", estimated_minutes=4.0)
+        _make_task("LR-T2", MEMBER_USER, self.proj_name, pdca_phase="CHECK", estimated_minutes=3.0)
 
         from vernon_tasks.task.page.leader_review.leader_review import get_team_workload
         result = get_team_workload()
         member_row = next((r for r in result if r["assigned_to"] == MEMBER_USER), None)
         self.assertIsNotNone(member_row)
-        self.assertAlmostEqual(member_row["total_hours"], 7.0, places=1)
+        self.assertAlmostEqual(member_row["total_minutes"], 7.0, places=1)
 
     def test_get_team_workload_excludes_done_and_backlog(self):
-        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="BACKLOG", estimated_hours=10.0)
+        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="BACKLOG", estimated_minutes=10.0)
 
         from vernon_tasks.task.page.leader_review.leader_review import get_team_workload
         result = get_team_workload()
@@ -152,7 +152,7 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
                 "pdca_phase": "PLAN",
                 "kanban_status": "Scheduled",
                 "priority": "High",
-                "estimated_hours": 2.0,
+                "estimated_minutes": 2.0,
                 "start_date": today(),
                 "deadline": add_days(today(), 3),
                 "weight": 2.0,
