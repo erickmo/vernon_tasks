@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Project Detail UI/UX + Embedded Kanban</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Project Detail UI/UX + Embedded Kanban</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-05-31-project-detail-kanban-design.html</span>
+  </div>
+</header>
+
+<h1 id="project-detail-kanban">Project Detail UI/UX + Embedded Kanban</h1>
+<p><strong>Date:</strong> 2026-05-31<br />
+<strong>Task size:</strong> M (new read + 3 mutation endpoints, page JS rewrite, new css; ~6 files)<br />
+<strong>App ownership:</strong> 100% <code>vernon_tasks</code> — no Frappe core files touched<br />
+<strong>Scope:</strong> Rewrite the <code>vt-project-detail</code> desk page into a hero + tabbed layout whose primary tab is an embedded, drag-driven Kanban board for managing the project's tasks.</p>
+<hr />
+
+<h2 id="1-goal">1. Goal</h2>
+<p>Turn the read-only project detail dashboard into a project <em>management</em> surface. The user manages tasks without leaving the page: drag a card to change its status, quick-add a task per column, click a card to open its form, and inline-edit priority / assignee / deadline from the card.</p>
+
+<h2 id="2-layout">2. Layout</h2>
+<ul>
+  <li><strong>Hero</strong> (kept): title, status chip, risk chip, progress bar, leader / dates / PDCA phase.</li>
+  <li><strong>Tabs</strong>: <code>Kanban</code> (default) · <code>Milestone</code> · <code>Tim</code> · <code>Ringkasan</code>. Non-kanban tabs reuse the existing section renderers.</li>
+</ul>
+
+<h2 id="3-domain-constraint">3. Domain constraint — PDCA state machine</h2>
+<p><code>kanban_status</code> is <strong>derived</strong> from <code>pdca_phase</code> via <code>PDCA_KANBAN_MAP</code> in the <code>VT Task</code> controller. <code>Blocked</code> is an orthogonal flag. Legal PDCA transitions (Deming cycle):</p>
+<pre><code>BACKLOG → PLAN → DO → CHECK → {ACT, DONE, DO}
+ACT → DO
+DONE = terminal
+Blocked = orthogonal (reachable from any state; un-block restores PDCA-derived status)</code></pre>
+<p>Therefore the board is <strong>not free drag-anywhere</strong>. Move mechanics (revised after review):</p>
+<ul>
+  <li>Drop on a PDCA column → clear Blocked flag first (unconditional — <code>_sync_kanban_status</code> is Blocked-sticky), set <code>pdca_phase</code> (reverse of <code>PDCA_KANBAN_MAP</code>), then <code>doc.save()</code> <strong>without</strong> <code>ignore_validate</code> so <code>_validate_pdca_transition</code> enforces legality. Illegal → throws → JS snaps the card back + toast.</li>
+  <li>Move into <strong>Done</strong> (legal only from In Review = CHECK): also stamp <code>completion_date = today()</code>. Required because VT Task is submittable and <code>on_submit</code> does NOT fire on a plain <code>save()</code> — mirrors <code>my_work_mutations.complete</code>, but keeps the transition guard.</li>
+  <li>Drop on <strong>Blocked</strong> → set <code>kanban_status = KANBAN_BLOCKED</code> directly (orthogonal flag), idempotent if already Blocked. <code>pdca_phase</code> untouched.</li>
+  <li>Drag out of Blocked → <strong>un-block is NOT a transition</strong>: restore <code>kanban_status = PDCA_KANBAN_MAP[pdca_phase]</code> (snap card to its real phase column) and ignore the dropped-on column.</li>
+  <li><strong>DONE is terminal</strong> → Done cards are locked (not draggable, <code>allowed_targets = []</code>). Re-opening is out of scope.</li>
+  <li><strong>Submitted tasks</strong> (<code>docstatus == 1</code>) → <code>save()</code> is blocked by Frappe; <code>move_task</code> detects and rejects with a friendly message (snap-back), never a 500. Stale-edit <code>TimestampMismatchError</code> → JS reverts + reloads the board.</li>
+  <li>On drag-start the board highlights legal target columns and grays illegal ones, using <code>allowed_targets</code> returned per task by the read API. Computed from the task's <em>real</em> <code>pdca_phase</code> via <code>VALID_PDCA_TRANSITIONS</code>; a Blocked card's only target is its real-phase column (un-block); every non-Done card also gets Blocked as a target.</li>
+</ul>
+
+<h2 id="4-api">4. API surface</h2>
+<h3>Read — <code>dashboard.project_board(project_id)</code></h3>
+<p>Whitelisted. Guarded by existing <code>_assert_project_access</code>. Returns all project tasks grouped into the 7 columns, plus the team roster for the assignee dropdown:</p>
+<pre><code>{
+  "columns": [
+    {"key": "Backlog", "label": "Backlog", "pdca_phase": "BACKLOG",
+     "tasks": [{"id","title","priority","deadline","assigned_to","risk_flag",
+                "kanban_status","allowed_targets": ["Scheduled","Blocked"]}]},
+    ... (Scheduled, In Progress, In Review, Revision, Done, Blocked)
+  ],
+  "team": [{"user": "...", "full_name": "..."}],
+  "priorities": ["Low","Medium","High","Critical"]
+}</code></pre>
+<p>Within a column, tasks are ordered by priority (Critical→Low) then deadline asc. <code>allowed_targets</code> computed per task from its real <code>pdca_phase</code> via imported <code>VALID_PDCA_TRANSITIONS</code> mapped to column labels (+ <code>Blocked</code> for non-Done cards; Blocked card → its real-phase column only; Done → empty). To avoid duplicating the <code>_detail_open_tasks</code> query, extract a shared <code>_project_tasks(project_id, *, include_closed)</code> fetcher + row mapper; both <code>_detail_open_tasks</code> and <code>project_board</code> call it. Tasks whose <code>kanban_status</code> is none of the 7 known columns (e.g. legacy Cancelled) are skipped defensively.</p>
+
+<h3>Mutations — new module <code>task/api/board_mutations.py</code></h3>
+<p>Three thin whitelist wrappers (≤10 lines each) that <strong>delegate to the <code>VT Task</code> controller</strong> via <code>doc.save()</code> / <code>doc.insert()</code> so the PDCA state machine does the enforcing. All call <code>rate_limit</code> first. <strong>Authz is project-level</strong>: each asserts caller has project access (admin / leader / member of the task's project) via <code>security.assert_project_access</code> (lifted out of <code>dashboard.py</code>), then saves with <code>ignore_permissions=True</code>. Constants (<code>PDCA_KANBAN_MAP</code>, <code>VALID_PDCA_TRANSITIONS</code>, <code>KANBAN_BLOCKED</code>, <code>BOARD_COLUMNS</code>) are imported from the controller — never re-declared.</p>
+<table>
+  <tr><th>Function</th><th>Behavior</th></tr>
+  <tr><td><code>move_task(task_id, to_column)</code></td><td><code>rate_limit("move_task", 60)</code>. Reject if <code>docstatus==1</code>. Blocked target → set kanban_status flag (idempotent). Un-block (Blocked→PDCA) → restore kanban_status from pdca_phase, no transition. PDCA target → clear Blocked, set pdca_phase from reverse map, stamp completion_date if Done, <code>save()</code> (no ignore_validate). Returns new kanban_status or throws.</td></tr>
+  <tr><td><code>create_task(project_id, title, column)</code></td><td><code>rate_limit("create_task", 30)</code>. Explicit fields only (no mass-assign): project, <code>max_str(title)</code>, pdca_phase from column. Quick-add allowed only on PDCA columns (not Blocked/Done). weight defaults to 1.</td></tr>
+  <tr><td><code>patch_task(task_id, field, value)</code></td><td><code>rate_limit("patch_task", 30)</code>. Allowed fields whitelist: <code>priority</code>, <code>assigned_to</code>, <code>deadline</code>. Reject anything else. <code>assigned_to</code> must be a project team member. Set + save.</td></tr>
+</table>
+
+<h2 id="5-frontend">5. Frontend</h2>
+<ul>
+  <li><code>vt_project_detail.js</code> rewritten: hero + tab bar + tab panels. Kanban panel built with <strong>Sortable.js</strong> (bundled with Frappe — verify <code>window.Sortable</code> at plan step).</li>
+  <li>Each column is a Sortable list (shared group). <code>onEnd</code> → call <code>move_task</code>; on error revert DOM + <code>frappe.show_alert</code>.</li>
+  <li>Card: title, priority chip, assignee, deadline, risk flag. Inline-edit popovers for priority (select), assignee (team select), deadline (date) → <code>patch_task</code>. Click card body → open <code>VT Task</code> form.</li>
+  <li>Quick-add: <code>+</code> button per column header → inline title input → <code>create_task</code> → re-render column.</li>
+</ul>
+
+<h2 id="6-styling">6. Styling</h2>
+<p>New file <code>public/css/vt_board.css</code>, registered in <code>hooks.py app_include_css</code>. Reuses existing <code>vh-*</code> tokens where possible (chips, cards). Adds board grid, column, card, drag-over highlight, and gray-disabled column states.</p>
+
+<h2 id="7-files">7. Files touched</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>task/doctype/vt_task/vt_task.py</code></td><td>Add exported <code>BOARD_COLUMNS</code> ordered tuple next to PDCA maps</td></tr>
+  <tr><td><code>task/api/security.py</code></td><td>Add <code>assert_project_access</code> (lifted from dashboard)</td></tr>
+  <tr><td><code>task/api/dashboard.py</code></td><td>Add <code>project_board</code> + <code>_project_tasks</code> shared helper; re-import access guard</td></tr>
+  <tr><td><code>task/api/board_mutations.py</code></td><td>NEW — move_task / create_task / patch_task</td></tr>
+  <tr><td><code>task/api/test_board_mutations.py</code></td><td>NEW — tests</td></tr>
+  <tr><td><code>task/page/vt_project_detail/vt_project_detail.js</code></td><td>Rewrite to hero + tabs + kanban</td></tr>
+  <tr><td><code>public/css/vt_board.css</code></td><td>NEW — board styles</td></tr>
+  <tr><td><code>hooks.py</code></td><td>Register board css</td></tr>
+</table>
+<p>After deploy: <code>docker restart frappe-backend-1</code> (new whitelisted methods 404 until worker reimport).</p>
+
+<h2 id="8-testing">8. Testing</h2>
+<ul>
+  <li><strong>move_task</strong>: legal transition succeeds; illegal transition throws; Blocked toggle on/off restores PDCA status.</li>
+  <li><strong>create_task</strong>: creates task in correct pdca_phase, defaults applied; access denied for non-member.</li>
+  <li><strong>patch_task</strong>: allowed field updates; disallowed field rejected; access enforced.</li>
+  <li><strong>project_board</strong>: grouping correct, allowed_targets matches transition table, access guard.</li>
+</ul>
+
+<h2 id="9-out-of-scope">9. Out of scope (YAGNI)</h2>
+<ul>
+  <li>Intra-column drag reorder / <code>kanban_rank</code> persistence — order is computed (priority→deadline).</li>
+  <li>Native Frappe Kanban Board doctype — rejected (route-coupled, no inline edit).</li>
+  <li>Re-opening a DONE task from the board (terminal phase; needs explicit reset op).</li>
+  <li>Legacy Cancelled tasks — skipped from the board, not shown.</li>
+  <li>Bulk actions, swimlanes, WIP limits.</li>
+</ul>
+
+</div>
+</body>
+</html>
