@@ -18,13 +18,22 @@
   font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-/* Gray page background for desk pages that host .vt-home (vt-home, vt-projects,
-   vt-project-detail). Scoped via :has() so other desk pages keep their default
-   white background. Targets the desk page container + body wrappers. */
-.page-body:has(.vt-home),
-.layout-main-section-wrapper:has(.vt-home),
-.layout-main-section:has(> .vt-home) {
+/* Gray page background for the vt-home, vt-projects and vt-project-detail desk
+   pages. Frappe wraps each desk page in `.page-container[data-page-route="..."]`
+   (see container.js add_page), so we scope by route — other desk pages keep
+   their default background. The inner `.layout-main-section` is made transparent
+   so the gray container shows through instead of its default white. */
+.page-container[data-page-route="vt-home"],
+.page-container[data-page-route="vt-projects"],
+.page-container[data-page-route="vt-project-detail"] {
   background-color: var(--vh-page-bg);
+}
+.page-container[data-page-route="vt-home"] .layout-main-section,
+.page-container[data-page-route="vt-projects"] .layout-main-section,
+.page-container[data-page-route="vt-project-detail"] .layout-main-section {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 /* ── Hero band ── */
