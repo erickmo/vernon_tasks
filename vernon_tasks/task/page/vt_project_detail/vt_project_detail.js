@@ -63,6 +63,8 @@ function require_lib(assets) {
 }
 
 frappe.pages["vt-project-detail"].on_page_load = function (wrapper) {
+    // Gray page background; styled via .vt-gray-bg in vt_home.css.
+    $(wrapper).addClass("vt-gray-bg");
     const page = frappe.ui.make_app_page({ parent: wrapper, title: "Proyek", single_column: true });
     const id = frappe.get_route()[1];
     if (!id) {

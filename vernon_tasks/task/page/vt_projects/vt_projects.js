@@ -6,6 +6,8 @@ const PROJECT_DOCTYPE = "VT Project";
 const PROJ_RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
 
 frappe.pages["vt-projects"].on_page_load = function (wrapper) {
+    // Gray page background; styled via .vt-gray-bg in vt_home.css.
+    $(wrapper).addClass("vt-gray-bg");
     const page = frappe.ui.make_app_page({
         parent: wrapper,
         title: "Proyek",

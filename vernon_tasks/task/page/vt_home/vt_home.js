@@ -15,6 +15,8 @@ const QUICK_LINKS = [
 ];
 
 frappe.pages["vt-home"].on_page_load = function (wrapper) {
+    // Gray page background; styled via .vt-gray-bg in vt_home.css.
+    $(wrapper).addClass("vt-gray-bg");
     const page = frappe.ui.make_app_page({
         parent: wrapper,
         title: "Beranda",
