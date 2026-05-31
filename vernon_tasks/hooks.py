@@ -12,7 +12,10 @@ app_include_js = [
     "/assets/vernon_tasks/js/page_nav.js",
     "/assets/vernon_tasks/js/vt_navbar.js",
 ]
-app_include_css = ["/assets/vernon_tasks/css/vt_home.css"]
+app_include_css = [
+    "/assets/vernon_tasks/css/vt_home.css",
+    "/assets/vernon_tasks/css/vt_board.css",
+]
 extend_bootinfo = "vernon_tasks.boot.extend_bootinfo"
 
 required_apps = []

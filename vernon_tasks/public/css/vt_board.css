@@ -1,0 +1,77 @@
+/* vt_board.css — project-detail kanban board styling.
+   Scoped under .vt-detail (a .vt-home child) so it inherits the --vh-* tokens
+   and never leaks into the rest of desk. Paired with vt_project_detail.js. */
+
+.vt-detail .vb-hero { margin: 20px 0 16px; }
+.vt-detail .vb-hero-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.vt-detail .vb-hero-chips { display: flex; gap: 6px; }
+.vt-detail .vb-hero-bar { margin: 10px 0 6px; }
+
+/* ── tabs ── */
+.vt-detail .vb-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--vh-border); margin-bottom: 16px; }
+.vt-detail .vb-tab {
+  border: 0; background: transparent; cursor: pointer;
+  padding: 8px 14px; font: inherit; font-weight: 500; color: var(--vh-text-2);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.vt-detail .vb-tab:hover { color: var(--vh-navy-2); }
+.vt-detail .vb-tab-active { color: var(--vh-blue); border-bottom-color: var(--vh-blue); }
+
+/* ── board grid ── */
+.vt-detail .vb-board {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(220px, 1fr);
+  gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: start;
+}
+.vt-detail .vb-col {
+  background: #f8fafc; border: 1px solid var(--vh-border); border-radius: 10px;
+  display: flex; flex-direction: column; min-height: 80px;
+  transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+}
+.vt-detail .vb-col-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 12px; border-bottom: 1px solid var(--vh-border);
+}
+.vt-detail .vb-col-title { font-weight: 600; font-size: 13px; color: var(--vh-navy-2); }
+.vt-detail .vb-col-count {
+  font-size: 11px; color: var(--vh-text-2); background: #eef2f7;
+  border-radius: 10px; padding: 1px 7px;
+}
+.vt-detail .vb-add {
+  margin-left: auto; border: 0; background: transparent; cursor: pointer;
+  font-size: 18px; line-height: 1; color: var(--vh-text-2); padding: 0 4px;
+}
+.vt-detail .vb-add:hover { color: var(--vh-blue); }
+.vt-detail .vb-col-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 24px; }
+
+/* ── quick add ── */
+.vt-detail .vb-quickadd { padding: 8px 10px 0; }
+.vt-detail .vb-quickadd-input {
+  width: 100%; border: 1px solid var(--vh-blue); border-radius: 6px;
+  padding: 6px 8px; font: inherit; font-size: 13px;
+}
+
+/* ── cards ── */
+.vt-detail .vb-card {
+  background: #fff; border: 1px solid var(--vh-border); border-radius: 8px;
+  padding: 10px; box-shadow: 0 1px 2px rgba(15,23,42,0.04); cursor: grab;
+}
+.vt-detail .vb-card:active { cursor: grabbing; }
+.vt-detail .vb-card.vb-locked { cursor: default; opacity: 0.85; }
+.vt-detail .vb-card-title {
+  font-size: 13px; font-weight: 500; color: var(--vh-navy-2);
+  cursor: pointer; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.vt-detail .vb-card-title:hover { color: var(--vh-blue); }
+.vt-detail .vb-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.vt-detail .vb-edit {
+  font: inherit; font-size: 11px; border: 1px solid var(--vh-border);
+  border-radius: 6px; padding: 2px 6px; background: #fff; color: var(--vh-text-2); max-width: 100%;
+}
+.vt-detail .vb-edit:focus { outline: none; border-color: var(--vh-blue); color: var(--vh-navy-2); }
+.vt-detail .vb-deadline { width: 130px; }
+
+/* ── drag affordance ── */
+.vt-detail .vb-col.vb-drop-ok { background: rgba(34,197,94,0.08); box-shadow: inset 0 0 0 1px var(--vh-green); }
+.vt-detail .vb-col.vb-drop-no { opacity: 0.45; }
+.vt-detail .sortable-ghost { opacity: 0.4; }
+.vt-detail .sortable-chosen { box-shadow: 0 4px 14px rgba(15,23,42,0.16); }

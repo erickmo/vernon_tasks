@@ -12,10 +12,27 @@ import frappe
 from frappe.utils import add_days, getdate, today
 
 from vernon_tasks.task.api.security import require_login
+from vernon_tasks.task.doctype.vt_task.vt_task import (
+    BOARD_COLUMNS,
+    KANBAN_BLOCKED,
+    KANBAN_PDCA_MAP,
+    PDCA_KANBAN_MAP,
+    VALID_PDCA_TRANSITIONS,
+)
 
 TASK_DOCTYPE = "VT Task"
 PROJECT_DOCTYPE = "VT Project"
 SPRINT_DOCTYPE = "VT Sprint"
+
+# Card field set shared by the detail open-task list and the project board.
+_BOARD_TASK_FIELDS = (
+    "name", "title", "kanban_status", "pdca_phase",
+    "priority", "deadline", "risk_flag", "assigned_to",
+)
+# Priority sort weight (Critical first) for in-column ordering.
+_PRIORITY_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+# Priority options (low→high) for the inline-edit dropdown.
+PRIORITY_OPTIONS = ("Low", "Medium", "High", "Critical")
 
 VELOCITY_WEEKS = 8
 NEXT_ACTIONS_LIMIT = 5
@@ -478,28 +495,41 @@ def _detail_header(project_id: str, card: dict, ref: datetime.date) -> dict:
     }
 
 
-def _detail_open_tasks(project_id: str) -> list[dict]:
+def _map_task_row(r: dict) -> dict:
+    """Map a raw VT Task row to the card dict used by the detail list + board."""
+    return {
+        "id": r["name"],
+        "title": r.get("title"),
+        "kanban_status": r.get("kanban_status"),
+        "pdca_phase": r.get("pdca_phase"),
+        "priority": r.get("priority"),
+        "deadline": str(r["deadline"]) if r.get("deadline") else None,
+        "risk_flag": bool(r.get("risk_flag")),
+        "assigned_to": r.get("assigned_to"),
+    }
+
+
+def _project_tasks(project_id: str, *, include_closed: bool) -> list[dict]:
+    """Fetch a project's task cards. Excludes closed statuses unless requested.
+
+    Shared by `_detail_open_tasks` (open only) and `project_board` (all tasks)
+    so the card shape and query stay in one place.
+    """
+    filters = [["project", "=", project_id]]
+    if not include_closed:
+        filters.append(["kanban_status", "not in", CLOSED_STATUSES])
     rows = frappe.get_all(
         TASK_DOCTYPE,
-        filters=[
-            ["project", "=", project_id],
-            ["kanban_status", "not in", CLOSED_STATUSES],
-        ],
-        fields=["name", "title", "kanban_status", "priority", "deadline", "risk_flag"],
+        filters=filters,
+        fields=list(_BOARD_TASK_FIELDS),
         order_by="deadline asc",
         limit_page_length=DETAIL_TASK_LIMIT,
     )
-    return [
-        {
-            "id": r["name"],
-            "title": r.get("title"),
-            "kanban_status": r.get("kanban_status"),
-            "priority": r.get("priority"),
-            "deadline": str(r["deadline"]) if r.get("deadline") else None,
-            "risk_flag": bool(r.get("risk_flag")),
-        }
-        for r in rows
-    ]
+    return [_map_task_row(r) for r in rows]
+
+
+def _detail_open_tasks(project_id: str) -> list[dict]:
+    return _project_tasks(project_id, include_closed=False)
 
 
 def _detail_team(doc) -> list[dict]:
@@ -542,6 +572,85 @@ def project_detail(project_id: str) -> dict[str, Any]:
         "team_members": _detail_team(doc),
         "milestones": _detail_milestones(doc),
         "blockers": card.get("blockers", 0),
+    }
+
+
+# ── 2b. project_board (kanban) ───────────────────────────────────────────────
+
+
+def _card_sort_key(t: dict):
+    """In-column ordering: priority (Critical first), then earliest deadline."""
+    return (_PRIORITY_RANK.get(t.get("priority"), 9), t.get("deadline") or "9999-12-31")
+
+
+def _allowed_targets(task: dict) -> list[str]:
+    """Board columns this card may legally move to (drives UI drag highlighting).
+
+    - Blocked card → only its real-phase column (un-block; drop target ignored).
+    - DONE phase   → none (terminal — card is locked).
+    - otherwise    → legal PDCA transitions mapped to columns, plus Blocked.
+    The server still re-validates every move; this is a UX hint only.
+    """
+    phase = task.get("pdca_phase")
+    if task.get("kanban_status") == KANBAN_BLOCKED:
+        return [PDCA_KANBAN_MAP[phase]] if phase in PDCA_KANBAN_MAP else []
+    targets = [PDCA_KANBAN_MAP[nxt] for nxt in VALID_PDCA_TRANSITIONS.get(phase, [])]
+    if targets:  # any non-terminal card can also be flagged Blocked
+        targets.append(KANBAN_BLOCKED)
+    return targets
+
+
+def _group_board_columns(tasks: list[dict]) -> list[dict]:
+    """Group cards into ordered board columns, sorted within each column.
+
+    Cards whose kanban_status is not a known board column (e.g. legacy
+    Cancelled) are skipped defensively so they never silently disappear into a
+    wrong column.
+    """
+    buckets: dict[str, list[dict]] = {col: [] for col in BOARD_COLUMNS}
+    for t in tasks:
+        col = t.get("kanban_status")
+        if col in buckets:
+            t["allowed_targets"] = _allowed_targets(t)
+            buckets[col].append(t)
+    for col_tasks in buckets.values():
+        col_tasks.sort(key=_card_sort_key)
+    return [
+        {"key": col, "label": col, "pdca_phase": KANBAN_PDCA_MAP.get(col),
+         "tasks": buckets[col]}
+        for col in BOARD_COLUMNS
+    ]
+
+
+def _board_team(doc) -> list[dict]:
+    """Project roster (+leader) for the assignee inline-edit dropdown."""
+    users = {m.user for m in (doc.team_members or []) if getattr(m, "user", None)}
+    if doc.project_leader:
+        users.add(doc.project_leader)
+    if not users:
+        return []
+    rows = frappe.get_all(
+        "User", filters=[["name", "in", list(users)]],
+        fields=["name", "full_name"], limit_page_length=0,
+    )
+    return [{"user": r["name"], "full_name": r.get("full_name") or r["name"]} for r in rows]
+
+
+@frappe.whitelist()
+def project_board(project_id: str) -> dict:
+    """Read-only kanban board for one project: all tasks grouped by column.
+
+    Access mirrors project_detail (admin / leader / member). Reuses the shared
+    `_project_tasks` fetcher so column cards match the detail list's shape.
+    """
+    require_login()
+    _assert_project_access(project_id, frappe.session.user)
+    tasks = _project_tasks(project_id, include_closed=True)
+    doc = frappe.get_doc(PROJECT_DOCTYPE, project_id)
+    return {
+        "columns": _group_board_columns(tasks),
+        "team": _board_team(doc),
+        "priorities": list(PRIORITY_OPTIONS),
     }
 
 

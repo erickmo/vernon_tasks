@@ -39,6 +39,14 @@ VALID_PDCA_TRANSITIONS = {
 
 KANBAN_BLOCKED = "Blocked"
 
+# Reverse of PDCA_KANBAN_MAP — column label → PDCA phase. Derived (never
+# hand-edited) so a phase rename propagates to the board automatically.
+KANBAN_PDCA_MAP = {v: k for k, v in PDCA_KANBAN_MAP.items()}
+
+# Ordered board columns: the six PDCA-derived columns plus the orthogonal
+# Blocked column. Single source of truth for the project board layout.
+BOARD_COLUMNS = tuple(PDCA_KANBAN_MAP.values()) + (KANBAN_BLOCKED,)
+
 # --- Validation caps ------------------------------------------------------
 TASK_TITLE_MAX_LEN = 200
 _WHITESPACE_RUN = re.compile(r"\s+")

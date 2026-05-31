@@ -1,0 +1,136 @@
+"""VT Task project-board mutations — drag / quick-add / inline-edit endpoints.
+
+Layer: HTTP entrypoints (Layer 2, Priority 5 per vernon-dev Frappe Hooks-First
+rule). Each whitelist is a thin wrapper that delegates all state-machine
+enforcement to the VT Task controller via ``doc.save()`` / ``doc.insert()`` —
+the controller's ``validate()`` owns PDCA↔Kanban sync and transition legality.
+
+Authz is project-level (admin / leader / member of the task's project), reusing
+the dashboard access guard; we then save with ``ignore_permissions`` because the
+project-membership check IS the board's authorization contract (a project member
+may lack a raw write permission on VT Task).
+
+Source of truth: docs/superpowers/specs/2026-05-31-project-detail-kanban-design.html.
+"""
+import frappe
+from frappe.utils import today
+
+from vernon_tasks.task.api.dashboard import _assert_project_access
+from vernon_tasks.task.api.security import max_str, rate_limit
+from vernon_tasks.task.doctype.vt_task.vt_task import (
+    BOARD_COLUMNS,
+    KANBAN_BLOCKED,
+    KANBAN_PDCA_MAP,
+    PDCA_KANBAN_MAP,
+)
+
+TASK_DOCTYPE = "VT Task"
+PROJECT_DOCTYPE = "VT Project"
+TEAM_MEMBER_DOCTYPE = "Project Team Member"
+TASK_TITLE_MAX_LEN = 200
+
+# Inline-edit allow-list — guards against mass-assignment via patch_task.
+PATCHABLE_FIELDS = ("priority", "assigned_to", "deadline")
+
+# Quick-add is offered only on PDCA columns; Blocked is a flag, Done is terminal.
+DONE_COLUMN = PDCA_KANBAN_MAP["DONE"]
+QUICK_ADD_COLUMNS = tuple(
+    col for col in PDCA_KANBAN_MAP.values() if col != DONE_COLUMN
+)
+
+
+def _get_board_task(task_id: str):
+    """Load a task after asserting project-level board access; reject submitted.
+
+    Returns the VT Task document. Raises PermissionError when the caller has no
+    access to the task's project, or ValidationError when the doc is submitted
+    (Frappe forbids editing a docstatus==1 document — surface it cleanly).
+    """
+    if not frappe.db.exists(TASK_DOCTYPE, task_id):
+        frappe.throw("Task tidak ditemukan", frappe.DoesNotExistError)
+    doc = frappe.get_doc(TASK_DOCTYPE, task_id)
+    _assert_project_access(doc.project, frappe.session.user)
+    if doc.docstatus == 1:
+        frappe.throw(
+            "Task sudah disubmit, tidak bisa diubah dari papan",
+            frappe.ValidationError,
+        )
+    return doc
+
+
+def _assert_team_member(project_id: str, user: str) -> None:
+    """assigned_to must be the leader or a team member of the project."""
+    leader = frappe.db.get_value(PROJECT_DOCTYPE, project_id, "project_leader")
+    if user == leader:
+        return
+    is_member = frappe.db.exists(
+        TEAM_MEMBER_DOCTYPE,
+        {"parent": project_id, "parenttype": PROJECT_DOCTYPE, "user": user},
+    )
+    if not is_member:
+        frappe.throw(f"{user} bukan anggota tim proyek", frappe.ValidationError)
+
+
+def _apply_move(doc, to_column: str) -> None:
+    """Translate a board drop into field changes; legality is enforced later.
+
+    Decides WHICH field moves; the controller's validate() enforces whether the
+    move is legal. Three cases:
+      - Blocked column → set the orthogonal Blocked flag (idempotent).
+      - Blocked → PDCA → un-block: restore status from the real phase, NOT a
+        transition; the dropped-on column is ignored (card snaps to its phase).
+      - PDCA → PDCA → set pdca_phase from the reverse map; stamp completion_date
+        when entering Done (on_submit does not fire on a plain save()).
+    """
+    if to_column == KANBAN_BLOCKED:
+        doc.kanban_status = KANBAN_BLOCKED
+        return
+    if doc.kanban_status == KANBAN_BLOCKED:
+        doc.kanban_status = PDCA_KANBAN_MAP[doc.pdca_phase]
+        return
+    doc.pdca_phase = KANBAN_PDCA_MAP[to_column]
+    if to_column == DONE_COLUMN:
+        doc.completion_date = today()
+
+
+@frappe.whitelist()
+def move_task(task_id: str, to_column: str) -> dict:
+    """Move a task to a board column. Controller enforces PDCA legality."""
+    rate_limit("move_task", 60)
+    if to_column not in BOARD_COLUMNS:
+        frappe.throw(f"Kolom tidak valid: {to_column}", frappe.ValidationError)
+    doc = _get_board_task(task_id)
+    _apply_move(doc, to_column)
+    doc.save(ignore_permissions=True)
+    return {"ok": True, "task_id": doc.name, "kanban_status": doc.kanban_status}
+
+
+@frappe.whitelist()
+def create_task(project_id: str, title: str, column: str) -> dict:
+    """Quick-add a task into a board column (PDCA columns only)."""
+    rate_limit("create_task", 30)
+    if column not in QUICK_ADD_COLUMNS:
+        frappe.throw(f"Tidak bisa quick-add ke kolom {column}", frappe.ValidationError)
+    _assert_project_access(project_id, frappe.session.user)
+    doc = frappe.get_doc({
+        "doctype": TASK_DOCTYPE,
+        "project": project_id,
+        "title": max_str(title, TASK_TITLE_MAX_LEN),
+        "pdca_phase": KANBAN_PDCA_MAP[column],
+    })
+    doc.insert(ignore_permissions=True)
+    return {"ok": True, "task_id": doc.name, "kanban_status": doc.kanban_status}
+
+
+@frappe.whitelist()
+def patch_task(task_id: str, field: str, value=None) -> dict:
+    """Inline-edit one allowed card field (priority / assigned_to / deadline)."""
+    rate_limit("patch_task", 30)
+    if field not in PATCHABLE_FIELDS:
+        frappe.throw(f"Field tidak boleh diubah: {field}", frappe.ValidationError)
+    doc = _get_board_task(task_id)
+    if field == "assigned_to" and value:
+        _assert_team_member(doc.project, value)
+    doc.set(field, value or None)
+    doc.save(ignore_permissions=True)
+    return {"ok": True}
