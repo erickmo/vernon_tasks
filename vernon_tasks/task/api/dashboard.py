@@ -27,7 +27,7 @@ SPRINT_DOCTYPE = "VT Sprint"
 # Card field set shared by the detail open-task list and the project board.
 _BOARD_TASK_FIELDS = (
     "name", "title", "kanban_status", "pdca_phase",
-    "priority", "deadline", "risk_flag", "assigned_to",
+    "priority", "start_date", "deadline", "risk_flag", "assigned_to",
 )
 # Priority sort weight (Critical first) for in-column ordering.
 _PRIORITY_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
@@ -463,6 +463,7 @@ def my_projects(filter: str = "all") -> dict[str, Any]:
 
 DETAIL_TASK_LIMIT = 200
 CLOSED_STATUSES = ("Done", "Cancelled")
+DONE_STATUS = "Done"
 
 
 def _assert_project_access(project_id: str, user: str) -> None:
@@ -503,6 +504,7 @@ def _map_task_row(r: dict) -> dict:
         "kanban_status": r.get("kanban_status"),
         "pdca_phase": r.get("pdca_phase"),
         "priority": r.get("priority"),
+        "start_date": str(r["start_date"]) if r.get("start_date") else None,
         "deadline": str(r["deadline"]) if r.get("deadline") else None,
         "risk_flag": bool(r.get("risk_flag")),
         "assigned_to": r.get("assigned_to"),
@@ -530,6 +532,23 @@ def _project_tasks(project_id: str, *, include_closed: bool) -> list[dict]:
 
 def _detail_open_tasks(project_id: str) -> list[dict]:
     return _project_tasks(project_id, include_closed=False)
+
+
+def _detail_counts(project_id: str) -> dict[str, int]:
+    """Authoritative (uncapped) task tallies for the hero meta row.
+
+    Uses ``frappe.db.count`` rather than the ``DETAIL_TASK_LIMIT``-capped open
+    list so the numbers stay honest on projects with >200 tasks. ``open`` mirrors
+    the board's CLOSED_STATUSES contract, so ``open + done`` may be < ``total``
+    when there are Cancelled tasks (the remainder is intentionally not shown).
+    """
+    base = {"project": project_id}
+    total = frappe.db.count(TASK_DOCTYPE, base)
+    done = frappe.db.count(TASK_DOCTYPE, {**base, "kanban_status": DONE_STATUS})
+    open_count = frappe.db.count(
+        TASK_DOCTYPE, [["project", "=", project_id],
+                       ["kanban_status", "not in", CLOSED_STATUSES]])
+    return {"total": total, "open": open_count, "done": done}
 
 
 def _detail_team(doc) -> list[dict]:
@@ -568,6 +587,7 @@ def project_detail(project_id: str) -> dict[str, Any]:
     doc = frappe.get_doc(PROJECT_DOCTYPE, project_id)
     return {
         "header": _detail_header(project_id, card, ref),
+        "counts": _detail_counts(project_id),
         "open_tasks": open_tasks,
         "team_members": _detail_team(doc),
         "milestones": _detail_milestones(doc),

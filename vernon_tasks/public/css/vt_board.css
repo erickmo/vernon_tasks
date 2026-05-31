@@ -7,6 +7,14 @@
 .vt-detail .vb-hero-chips { display: flex; gap: 6px; }
 .vt-detail .vb-hero-bar { margin: 10px 0 6px; }
 
+/* ── hero meta row (between title and progress) ── */
+.vt-detail .vb-hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.vt-detail .vb-meta-chip {
+  font-size: 12px; color: var(--vh-text-2); background: #f1f5f9;
+  border-radius: 12px; padding: 3px 10px; line-height: 1.4;
+}
+.vt-detail .vb-meta-chip.vb-meta-warn { background: rgba(239,68,68,0.10); color: #b91c1c; }
+
 /* ── tabs ── */
 .vt-detail .vb-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--vh-border); margin-bottom: 16px; }
 .vt-detail .vb-tab {
@@ -63,12 +71,21 @@
 }
 .vt-detail .vb-card-title:hover { color: var(--vh-blue); }
 .vt-detail .vb-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.vt-detail .vb-edit {
-  font: inherit; font-size: 11px; border: 1px solid var(--vh-border);
-  border-radius: 6px; padding: 2px 6px; background: #fff; color: var(--vh-text-2); max-width: 100%;
+
+/* ── card meta chips (read-only; edits happen in the dialog) ── */
+.vt-detail .vb-chip {
+  font-size: 11px; color: var(--vh-text-2); background: #eef2f7;
+  border-radius: 6px; padding: 2px 7px; line-height: 1.5;
 }
-.vt-detail .vb-edit:focus { outline: none; border-color: var(--vh-blue); color: var(--vh-navy-2); }
-.vt-detail .vb-deadline { width: 130px; }
+.vt-detail .vb-chip.vb-prio-Critical { background: rgba(239,68,68,0.12); color: #b91c1c; }
+.vt-detail .vb-chip.vb-prio-High { background: rgba(245,158,11,0.14); color: #b45309; }
+.vt-detail .vb-chip.vb-prio-Medium { background: rgba(59,130,246,0.12); color: #1d4ed8; }
+.vt-detail .vb-chip.vb-prio-Low { background: #eef2f7; color: var(--vh-text-2); }
+
+/* ── calendar + gantt panels ── */
+.vt-detail .vb-calendar { min-height: 480px; }
+.vt-detail .vb-gantt-wrap { overflow-x: auto; padding-bottom: 8px; }
+.vt-detail .vb-gantt { width: 100%; min-height: 320px; }
 
 /* ── drag affordance ── */
 .vt-detail .vb-col.vb-drop-ok { background: rgba(34,197,94,0.08); box-shadow: inset 0 0 0 1px var(--vh-green); }

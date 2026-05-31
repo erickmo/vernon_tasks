@@ -32,6 +32,12 @@ TASK_TITLE_MAX_LEN = 200
 # Inline-edit allow-list — guards against mass-assignment via patch_task.
 PATCHABLE_FIELDS = ("priority", "assigned_to", "deadline")
 
+# Modal-edit allow-list — superset of PATCHABLE_FIELDS used by the create/edit
+# form dialogs. Deliberately EXCLUDES pdca_phase / kanban_status / project so the
+# PDCA state machine stays reachable only through move_task, and project/phase
+# can't be smuggled in via a values payload.
+EDITABLE_FIELDS = ("title", "priority", "assigned_to", "deadline", "start_date")
+
 # Quick-add is offered only on PDCA columns; Blocked is a flag, Done is terminal.
 DONE_COLUMN = PDCA_KANBAN_MAP["DONE"]
 QUICK_ADD_COLUMNS = tuple(
@@ -105,9 +111,39 @@ def move_task(task_id: str, to_column: str) -> dict:
     return {"ok": True, "task_id": doc.name, "kanban_status": doc.kanban_status}
 
 
+def _parse_values(values) -> dict:
+    """Coerce a dialog payload (JSON string from the browser, or dict) to a dict."""
+    if isinstance(values, str):
+        return frappe.parse_json(values) or {}
+    return values or {}
+
+
+def _apply_editable(doc, values: dict) -> None:
+    """Map an allow-listed values payload onto a board task.
+
+    Field-application + per-field guards only; all state-machine and date-order
+    rules stay in the VT Task controller's ``validate()`` (runs on the caller's
+    ``save()``/``insert()``). Rejects any key outside EDITABLE_FIELDS to block
+    mass-assignment, and re-checks team membership when (re)assigning.
+    """
+    for field, val in values.items():
+        if field not in EDITABLE_FIELDS:
+            frappe.throw(f"Field tidak boleh diubah: {field}", frappe.ValidationError)
+        if field == "assigned_to" and val:
+            _assert_team_member(doc.project, val)
+        if field == "title" and val:
+            val = max_str(val, TASK_TITLE_MAX_LEN)
+        doc.set(field, val or None)
+
+
 @frappe.whitelist()
-def create_task(project_id: str, title: str, column: str) -> dict:
-    """Quick-add a task into a board column (PDCA columns only)."""
+def create_task(project_id: str, title: str, column: str, values=None) -> dict:
+    """Create a task in a board column (PDCA columns only).
+
+    ``values`` is an optional dialog payload of EDITABLE_FIELDS (priority,
+    assignee, dates). ``title`` is taken from the positional arg only — any
+    ``title`` inside ``values`` is ignored to keep a single source of truth.
+    """
     rate_limit("create_task", 30)
     if column not in QUICK_ADD_COLUMNS:
         frappe.throw(f"Tidak bisa quick-add ke kolom {column}", frappe.ValidationError)
@@ -118,7 +154,24 @@ def create_task(project_id: str, title: str, column: str) -> dict:
         "title": max_str(title, TASK_TITLE_MAX_LEN),
         "pdca_phase": KANBAN_PDCA_MAP[column],
     })
+    extra = _parse_values(values)
+    extra.pop("title", None)  # title is positional-only; ignore any in payload
+    _apply_editable(doc, extra)
     doc.insert(ignore_permissions=True)
+    return {"ok": True, "task_id": doc.name, "kanban_status": doc.kanban_status}
+
+
+@frappe.whitelist()
+def update_task(task_id: str, values) -> dict:
+    """Save several allow-listed fields at once from the edit modal.
+
+    Thin entry: delegates field-order/PDCA/date validation to the controller via
+    ``doc.save()``. ``values`` is a JSON string or dict of EDITABLE_FIELDS.
+    """
+    rate_limit("update_task", 30)
+    doc = _get_board_task(task_id)
+    _apply_editable(doc, _parse_values(values))
+    doc.save(ignore_permissions=True)
     return {"ok": True, "task_id": doc.name, "kanban_status": doc.kanban_status}
 
 

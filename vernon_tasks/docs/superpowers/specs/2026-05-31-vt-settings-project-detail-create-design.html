@@ -103,6 +103,28 @@
 <li>No edits to native VT Settings form layout (the doctype form still works as-is).</li>
 </ul>
 
+<h2 id="8-detail-enhancements">8. Project Detail Enhancements (2026-05-31)</h2>
+<ul>
+<li><strong>Hero meta row</strong> — between title and progress bar: leader, date range,
+PDCA phase, sprint, done/total + open counts, and a blocker warning chip. Backed by a
+new <code>counts</code> block (<code>total/open/done</code>) on <code>project_detail</code>,
+computed via uncapped <code>frappe.db.count</code> reusing <code>CLOSED_STATUSES</code>.</li>
+<li><strong>Form-modal task create/edit</strong> — inline card selects and inline quick-add
+removed. Card click and the column <code>+</code> open a <code>frappe.ui.Dialog</code>
+(title, priority, assignee Link→User, start_date, deadline). Saves via new thin whitelist
+<code>update_task(task_id, values)</code> and extended <code>create_task(..., values)</code>,
+both delegating to <code>_apply_editable</code> (EDITABLE_FIELDS allow-list excludes
+pdca_phase/kanban_status/project; assignee re-checked against team). State-machine + date
+order stay controller-owned; client guards start_date &lt; deadline for UX.</li>
+<li><strong>Kalender tab</strong> — Frappe-bundled FullCalendar v3 (lazy-loaded via
+<code>frappe.require</code>), one event per task on its deadline (start_date fallback;
+undated tasks omitted), colored by priority, click → task form.</li>
+<li><strong>Gantt tab</strong> — frappe-gantt (lazy-loaded), bar = start_date→deadline
+(single-day when one is missing; skipped when both absent), click → task form.</li>
+<li><strong>start_date</strong> added to <code>_BOARD_TASK_FIELDS</code> / card payload so
+calendar + gantt have schedule data. Both views read the full board set (incl. closed).</li>
+</ul>
+
 </div>
 </body>
 </html>

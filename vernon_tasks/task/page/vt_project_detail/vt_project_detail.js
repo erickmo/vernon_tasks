@@ -1,7 +1,9 @@
 /* vt_project_detail.js — desk page: single project management surface.
-   Hero + tabs (Kanban | Milestone | Tim | Ringkasan). The Kanban tab is a
-   drag-driven board over vernon_tasks.task.api.board_mutations; reads come from
-   dashboard.project_detail (hero/milestone/team) + dashboard.project_board.
+   Hero (title + meta + progress) + tabs (Kanban | Kalender | Gantt | Milestone |
+   Tim | Ringkasan). Kanban is a drag-driven board over board_mutations; task
+   create/edit happen in a frappe.ui.Dialog (no inline editing). Kalender uses
+   Frappe's bundled FullCalendar v3; Gantt uses frappe-gantt — both lazy-loaded
+   via frappe.require and rendered from the same board task set.
    Presentation only — all state-machine rules live in the VT Task controller.
    Route shape: ["vt-project-detail", <project_id>]. */
 
@@ -9,11 +11,36 @@ const DETAIL_API = "vernon_tasks.task.api.dashboard.project_detail";
 const BOARD_API = "vernon_tasks.task.api.dashboard.project_board";
 const MOVE_API = "vernon_tasks.task.api.board_mutations.move_task";
 const CREATE_API = "vernon_tasks.task.api.board_mutations.create_task";
-const PATCH_API = "vernon_tasks.task.api.board_mutations.patch_task";
+const UPDATE_API = "vernon_tasks.task.api.board_mutations.update_task";
 
 const PROJ_RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
+const PRIORITY_COLORS = { Critical: "#ef4444", High: "#f59e0b", Medium: "#3b82f6", Low: "#94a3b8" };
 const SORTABLE_GROUP = "vt-board";
+const TASK_DOCTYPE = "VT Task";
+
+// Tabs that render a heavy view lazily on first open (libs loaded on demand).
+const LAZY_TABS = { calendar: render_calendar, gantt: render_gantt };
+const FULLCALENDAR_ASSETS = [
+    "assets/frappe/js/lib/fullcalendar/fullcalendar.min.css",
+    "assets/frappe/js/lib/fullcalendar/fullcalendar.min.js",
+];
+const GANTT_ASSETS = [
+    "assets/frappe/node_modules/frappe-gantt/dist/frappe-gantt.css",
+    "assets/frappe/node_modules/frappe-gantt/dist/frappe-gantt.min.js",
+];
+
 const esc = (s) => frappe.utils.escape_html(s == null ? "" : String(s));
+
+// Memoised lib loaders — one promise per asset bundle guards against double
+// loads when the user toggles lazy tabs quickly.
+const _lib_cache = {};
+function require_lib(assets) {
+    const key = assets.join("|");
+    if (!_lib_cache[key]) {
+        _lib_cache[key] = new Promise((resolve) => frappe.require(assets, resolve));
+    }
+    return _lib_cache[key];
+}
 
 frappe.pages["vt-project-detail"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({ parent: wrapper, title: "Proyek", single_column: true });
@@ -31,7 +58,6 @@ function load_page(page, id) {
     const root = $('<div class="vt-home vt-detail"></div>');
     page.main.empty().append(root);
     const ctx = { project_id: id, root };
-    bind_card_events(ctx);
     Promise.all([
         frappe.call(DETAIL_API, { project_id: id }),
         frappe.call(BOARD_API, { project_id: id }),
@@ -46,34 +72,41 @@ function load_page(page, id) {
 
 function render_page(ctx) {
     ctx.root.empty();
-    ctx.root.append(hero_card(ctx.detail.header || {}));
-    ctx.root.append(tabs_bar());
+    ctx.root.append(hero_card(ctx.detail));
+    ctx.root.append(tabs_bar(ctx));
     const panels = $('<div class="vb-panels"></div>');
     panels.append($('<div class="vb-panel" data-panel="kanban"></div>').append(kanban_body(ctx)));
+    panels.append($('<div class="vb-panel" data-panel="calendar" hidden><div class="vb-calendar"></div></div>'));
+    panels.append($('<div class="vb-panel" data-panel="gantt" hidden><div class="vb-gantt-wrap"><svg class="vb-gantt"></svg></div></div>'));
     panels.append($('<div class="vb-panel" data-panel="milestone" hidden></div>').append(milestones_section(ctx.detail.milestones || [])));
     panels.append($('<div class="vb-panel" data-panel="tim" hidden></div>').append(team_section(ctx.detail.team_members || [])));
     panels.append($('<div class="vb-panel" data-panel="ringkasan" hidden></div>').append(open_tasks_section(ctx.detail.open_tasks || [])));
     ctx.root.append(panels);
 }
 
-const TABS = [["kanban", "Kanban"], ["milestone", "Milestone"], ["tim", "Tim"], ["ringkasan", "Ringkasan"]];
+const TABS = [
+    ["kanban", "Kanban"], ["calendar", "Kalender"], ["gantt", "Gantt"],
+    ["milestone", "Milestone"], ["tim", "Tim"], ["ringkasan", "Ringkasan"],
+];
 
-function tabs_bar() {
+function tabs_bar(ctx) {
     const bar = $('<div class="vb-tabs"></div>');
     TABS.forEach(([key, label], i) => {
         const t = $(`<button class="vb-tab${i === 0 ? " vb-tab-active" : ""}" data-tab="${key}">${label}</button>`);
-        t.on("click", () => switch_tab(bar, key));
+        t.on("click", () => switch_tab(ctx, key));
         bar.append(t);
     });
     return bar;
 }
 
-function switch_tab(bar, key) {
-    bar.find(".vb-tab").removeClass("vb-tab-active");
-    bar.find(`[data-tab="${key}"]`).addClass("vb-tab-active");
-    const root = bar.closest(".vt-detail");
+function switch_tab(ctx, key) {
+    const root = ctx.root;
+    root.find(".vb-tab").removeClass("vb-tab-active");
+    root.find(`.vb-tab[data-tab="${key}"]`).addClass("vb-tab-active");
     root.find(".vb-panel").attr("hidden", true);
     root.find(`[data-panel="${key}"]`).removeAttr("hidden");
+    // Heavy views render on open (need a visible, sized container).
+    if (LAZY_TABS[key]) LAZY_TABS[key](ctx);
 }
 
 // ── kanban board ───────────────────────────────────────────────────────────
@@ -92,11 +125,10 @@ function column_el(col, ctx) {
             <span class="vb-col-count">${(col.tasks || []).length}</span>
             ${can_add ? '<button class="vb-add" title="Tambah task">+</button>' : ""}
         </div>
-        <div class="vb-quickadd" hidden><input class="vb-quickadd-input" type="text" placeholder="Judul task, Enter…" /></div>
         <div class="vb-col-body"></div></div>`);
     const body = el.find(".vb-col-body");
     (col.tasks || []).forEach((t) => body.append(card_el(t, ctx)));
-    if (can_add) wire_quickadd(el, col.key, ctx);
+    if (can_add) el.find(".vb-add").on("click", () => open_task_dialog(ctx, { column: col.key }));
     init_sortable(body.get(0), ctx);
     return el;
 }
@@ -107,37 +139,77 @@ function card_el(task, ctx) {
         data-allowed='${JSON.stringify(task.allowed_targets || [])}'>
         <div class="vb-card-title">${esc(task.title || task.id)}
             ${task.risk_flag ? '<span class="vh-chip vh-chip-behind">Risiko</span>' : ""}</div>
-        <div class="vb-card-meta"></div></div>`);
-    card.find(".vb-card-meta").append(priority_select(task, ctx), assignee_select(task, ctx), deadline_input(task));
+        <div class="vb-card-meta">${card_meta_html(task, ctx)}</div></div>`);
+    card.data("task", task);
+    card.on("click", () => open_task_dialog(ctx, { task }));
     return card;
 }
 
-function priority_select(task, ctx) {
-    const sel = $('<select class="vb-edit vb-prio" data-field="priority"></select>');
-    (ctx.board.priorities || []).forEach((p) => sel.append(`<option value="${esc(p)}"${p === task.priority ? " selected" : ""}>${esc(p)}</option>`));
-    return sel;
+function card_meta_html(task, ctx) {
+    const chips = [];
+    if (task.priority) chips.push(`<span class="vb-chip vb-prio-${esc(task.priority)}">${esc(task.priority)}</span>`);
+    if (task.assigned_to) chips.push(`<span class="vb-chip">${esc(assignee_name(ctx, task.assigned_to))}</span>`);
+    if (task.deadline) chips.push(`<span class="vb-chip">${esc(task.deadline)}</span>`);
+    return chips.join("");
 }
 
-function assignee_select(task, ctx) {
-    const sel = $('<select class="vb-edit vb-assignee" data-field="assigned_to"></select>');
-    sel.append('<option value="">— assignee —</option>');
-    (ctx.board.team || []).forEach((m) => sel.append(`<option value="${esc(m.user)}"${m.user === task.assigned_to ? " selected" : ""}>${esc(m.full_name)}</option>`));
-    return sel;
+function assignee_name(ctx, user) {
+    const m = (ctx.board.team || []).find((x) => x.user === user);
+    return m ? m.full_name : user;
 }
 
-function deadline_input(task) {
-    return $(`<input class="vb-edit vb-deadline" type="date" data-field="deadline" value="${esc(task.deadline || "")}" />`);
+// ── task create / edit dialog ───────────────────────────────────────────────
+
+function dialog_fields(ctx) {
+    const priorities = (ctx.board.priorities || []).join("\n");
+    return [
+        { fieldname: "title", label: "Judul", fieldtype: "Data", reqd: 1 },
+        { fieldname: "priority", label: "Prioritas", fieldtype: "Select", options: priorities },
+        { fieldname: "assigned_to", label: "Assignee", fieldtype: "Link", options: "User",
+          description: "Harus anggota tim proyek." },
+        { fieldname: "start_date", label: "Mulai", fieldtype: "Date" },
+        { fieldname: "deadline", label: "Deadline", fieldtype: "Date" },
+    ];
 }
 
-// ── interactions ───────────────────────────────────────────────────────────
+function open_task_dialog(ctx, { task, column }) {
+    const editing = !!task;
+    const d = new frappe.ui.Dialog({
+        title: editing ? "Edit Task" : "Task Baru",
+        fields: dialog_fields(ctx),
+        primary_action_label: editing ? "Simpan" : "Buat",
+        primary_action: (values) => submit_task_dialog(ctx, d, { task, column, values }),
+    });
+    if (editing) {
+        d.set_values({
+            title: task.title, priority: task.priority, assigned_to: task.assigned_to,
+            start_date: task.start_date, deadline: task.deadline,
+        });
+    }
+    d.show();
+}
+
+function submit_task_dialog(ctx, dialog, { task, column, values }) {
+    if (values.start_date && values.deadline && values.start_date >= values.deadline) {
+        frappe.msgprint(__("Tanggal mulai harus sebelum deadline."));
+        return;
+    }
+    const done = () => { dialog.hide(); reload_board(ctx); };
+    if (task) {
+        frappe.call(UPDATE_API, { task_id: task.id, values }).then(done);
+    } else {
+        frappe.call(CREATE_API, { project_id: ctx.project_id, title: values.title, column, values })
+            .then(done);
+    }
+}
+
+// ── drag interactions ───────────────────────────────────────────────────────
 
 function init_sortable(body_el, ctx) {
     if (!window.Sortable || !body_el) return;
     new Sortable(body_el, {
         group: SORTABLE_GROUP,
         draggable: ".vb-card:not(.vb-locked)",
-        filter: ".vb-edit",
-        preventOnFilter: false,
         animation: 120,
         onStart: (evt) => highlight_targets(ctx, evt),
         onMove: (evt) => can_drop(evt),
@@ -178,59 +250,100 @@ function on_card_drop(evt, ctx) {
         .catch(() => reload_board(ctx)); // server rejected → revert DOM
 }
 
-function wire_quickadd(col_el, col_key, ctx) {
-    const wrap = col_el.find(".vb-quickadd");
-    const input = wrap.find(".vb-quickadd-input");
-    col_el.find(".vb-add").on("click", () => { wrap.removeAttr("hidden"); input.focus(); });
-    input.on("keydown", (e) => {
-        if (e.key === "Escape") return wrap.attr("hidden", true);
-        if (e.key !== "Enter" || !input.val().trim()) return;
-        frappe.call(CREATE_API, { project_id: ctx.project_id, title: input.val().trim(), column: col_key })
-            .then(() => reload_board(ctx));
-    });
-}
-
-function bind_card_events(ctx) {
-    ctx.root.on("change", ".vb-edit", function () {
-        const card = this.closest(".vb-card");
-        frappe.call(PATCH_API, { task_id: card.dataset.id, field: this.dataset.field, value: this.value })
-            .then(() => reload_board(ctx))
-            .catch(() => reload_board(ctx));
-    });
-    ctx.root.on("click", ".vb-card-title", function () {
-        frappe.set_route("Form", "VT Task", this.closest(".vb-card").dataset.id);
-    });
-}
-
 function reload_board(ctx) {
     frappe.call(BOARD_API, { project_id: ctx.project_id }).then((r) => {
         ctx.board = (r && r.message) || { columns: [], team: [], priorities: [] };
         ctx.root.find('[data-panel="kanban"]').empty().append(kanban_body(ctx));
+        // Lazy views hold a stale snapshot — re-render the one currently open.
+        const active = ctx.root.find(".vb-tab-active").data("tab");
+        if (LAZY_TABS[active]) LAZY_TABS[active](ctx);
     });
 }
 
-// ── hero + non-kanban sections (reused) ─────────────────────────────────────
+// ── calendar + gantt (lazy) ─────────────────────────────────────────────────
+
+function all_board_tasks(ctx) {
+    return (ctx.board.columns || []).flatMap((c) => c.tasks || []);
+}
+
+function render_calendar(ctx) {
+    const el = ctx.root.find(".vb-calendar");
+    require_lib(FULLCALENDAR_ASSETS).then(() => {
+        const events = calendar_events(all_board_tasks(ctx));
+        el.empty().fullCalendar({
+            header: { left: "prev,next today", center: "title", right: "month,agendaWeek" },
+            height: "auto",
+            events,
+            eventClick: (ev) => { frappe.set_route("Form", TASK_DOCTYPE, ev.id); return false; },
+        });
+    });
+}
+
+function calendar_events(tasks) {
+    // A task lands on its deadline (or start_date as fallback); undated tasks
+    // have no calendar slot and are intentionally omitted.
+    return tasks
+        .filter((t) => t.deadline || t.start_date)
+        .map((t) => ({
+            id: t.id, title: t.title || t.id,
+            start: t.deadline || t.start_date,
+            color: PRIORITY_COLORS[t.priority] || PRIORITY_COLORS.Low,
+        }));
+}
+
+function render_gantt(ctx) {
+    const el = ctx.root.find(".vb-gantt").get(0);
+    require_lib(GANTT_ASSETS).then(() => {
+        const rows = gantt_tasks(all_board_tasks(ctx));
+        $(el).empty();
+        if (!rows.length) return;
+        new Gantt(el, rows, {
+            view_mode: "Week", date_format: "YYYY-MM-DD",
+            on_click: (t) => frappe.set_route("Form", TASK_DOCTYPE, t.id),
+        });
+    });
+}
+
+function gantt_tasks(tasks) {
+    // frappe-gantt needs both start and end; collapse to a single-day bar when
+    // only one date exists, and skip tasks with neither (controller guarantees
+    // start_date < deadline when both are set).
+    return tasks
+        .filter((t) => t.deadline || t.start_date)
+        .map((t) => {
+            const start = t.start_date || t.deadline;
+            const end = t.deadline || t.start_date;
+            return { id: t.id, name: t.title || t.id, start, end, progress: 0 };
+        });
+}
+
+// ── hero + non-kanban sections ──────────────────────────────────────────────
 
 function risk_chip(risk) {
     return `<span class="vh-chip vh-chip-${risk}">${esc(PROJ_RISK_LABELS[risk] || risk)}</span>`;
 }
 
-function hero_meta(h) {
-    const parts = [];
-    if (h.leader) parts.push(esc(h.leader));
-    if (h.start_date || h.end_date) parts.push(`${h.start_date || "?"}–${h.end_date || "?"}`);
-    if (h.pdca_phase) parts.push(esc(h.pdca_phase));
-    return parts.join(" · ");
+function hero_meta_row(h, counts, blockers) {
+    const chips = [];
+    if (h.leader) chips.push(`<span class="vb-meta-chip">👤 ${esc(h.leader)}</span>`);
+    if (h.start_date || h.end_date) chips.push(`<span class="vb-meta-chip">📅 ${esc(h.start_date || "?")} – ${esc(h.end_date || "?")}</span>`);
+    if (h.pdca_phase) chips.push(`<span class="vb-meta-chip">🔄 ${esc(h.pdca_phase)}</span>`);
+    if (h.sprint) chips.push(`<span class="vb-meta-chip">🏃 ${esc(h.sprint)}</span>`);
+    chips.push(`<span class="vb-meta-chip">✅ ${counts.done || 0}/${counts.total || 0} · ${counts.open || 0} terbuka</span>`);
+    if (blockers) chips.push(`<span class="vb-meta-chip vb-meta-warn">⛔ ${blockers} blocker</span>`);
+    return `<div class="vb-hero-meta">${chips.join("")}</div>`;
 }
 
-function hero_card(h) {
+function hero_card(detail) {
+    const h = detail.header || {};
+    const counts = detail.counts || {};
     const pct = h.percent_done || 0;
     return $(`<div class="vh-card vb-hero">
         <div class="vb-hero-top">
             <strong>${esc(h.title || h.id)}</strong>
             <span class="vb-hero-chips"><span class="vh-chip">${esc(h.status)}</span>${risk_chip(h.risk)}</span></div>
-        <div class="vh-bar vb-hero-bar"><span style="width:${pct}%"></span></div>
-        <div class="vh-item-meta">${hero_meta(h)}</div></div>`);
+        ${hero_meta_row(h, counts, detail.blockers || 0)}
+        <div class="vh-bar vb-hero-bar"><span style="width:${pct}%"></span></div></div>`);
 }
 
 function section_shell(title) {

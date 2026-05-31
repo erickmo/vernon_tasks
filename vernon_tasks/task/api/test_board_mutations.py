@@ -12,6 +12,7 @@ from vernon_tasks.task.api.board_mutations import (
     create_task,
     move_task,
     patch_task,
+    update_task,
 )
 from vernon_tasks.task.api.dashboard import project_board
 
@@ -141,6 +142,48 @@ class TestBoardMutations(FrappeTestCase):
         self.assertEqual(frappe.db.get_value("VT Task", t.name, "assigned_to"), self.member)
         with self.assertRaises(frappe.ValidationError):
             patch_task(t.name, "assigned_to", self.outsider)
+
+    # ── update_task (multi-field modal save) ─────────────────────────
+    def test_update_multiple_fields(self):
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        update_task(t.name, {"title": "Renamed", "priority": "High",
+                             "deadline": add_days(today(), 5)})
+        row = frappe.db.get_value(
+            "VT Task", t.name, ["title", "priority", "deadline"], as_dict=True)
+        self.assertEqual(row.title, "Renamed")
+        self.assertEqual(row.priority, "High")
+        self.assertEqual(str(row.deadline), add_days(today(), 5))
+
+    def test_update_accepts_json_string(self):
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        update_task(t.name, '{"priority": "Low"}')  # frontend sends JSON string
+        self.assertEqual(frappe.db.get_value("VT Task", t.name, "priority"), "Low")
+
+    def test_update_assignee_must_be_team_member(self):
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        with self.assertRaises(frappe.ValidationError):
+            update_task(t.name, {"assigned_to": self.outsider})
+
+    def test_update_rejects_mass_assignment(self):
+        frappe.set_user(self.leader)
+        t = self._make_task()
+        for field in ("kanban_status", "pdca_phase", "project"):
+            with self.assertRaises(frappe.ValidationError):
+                update_task(t.name, {field: "X"})
+
+    # ── create with prefilled fields (create modal) ──────────────────
+    def test_create_with_values(self):
+        frappe.set_user(self.leader)
+        r = create_task(PROJ, "Detailed item", "Backlog",
+                        {"priority": "Critical", "deadline": add_days(today(), 3)})
+        row = frappe.db.get_value(
+            "VT Task", r["task_id"], ["priority", "deadline", "pdca_phase"], as_dict=True)
+        self.assertEqual(row.priority, "Critical")
+        self.assertEqual(str(row.deadline), add_days(today(), 3))
+        self.assertEqual(row.pdca_phase, "BACKLOG")
 
     # ── board read ───────────────────────────────────────────────────
     def _columns(self, board):

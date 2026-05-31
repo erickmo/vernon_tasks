@@ -132,6 +132,30 @@ class TestDashboard(FrappeTestCase):
         self.assertIsInstance(result["open_tasks"], list)
         self.assertGreaterEqual(len(result["open_tasks"]), 1)
 
+    def test_project_detail_counts(self):
+        frappe.set_user("Administrator")
+        self._make_task(self.user_a, frappe.utils.today(), title="open")
+        done = self._make_task(self.user_a, frappe.utils.today(), title="done")
+        # kanban_status is controller-derived from pdca_phase; walk the legal
+        # PDCA chain to DONE (direct BACKLOG→DONE is rejected by the controller).
+        for phase in ("PLAN", "DO", "CHECK", "DONE"):
+            done.pdca_phase = phase
+            done.save(ignore_permissions=True)
+        frappe.set_user(self.user_a)
+        counts = project_detail(self.project)["counts"]
+        for key in ("total", "open", "done"):
+            self.assertIn(key, counts)
+        self.assertGreaterEqual(counts["total"], 2)
+        self.assertGreaterEqual(counts["done"], 1)
+        self.assertGreaterEqual(counts["open"], 1)
+
+    def test_project_detail_card_has_start_date(self):
+        frappe.set_user("Administrator")
+        self._make_task(self.user_a, frappe.utils.today(), title="dated")
+        frappe.set_user(self.user_a)
+        card = project_detail(self.project)["open_tasks"][0]
+        self.assertIn("start_date", card)
+
     def test_project_detail_forbidden(self):
         # A user with no access to the project must be rejected.
         outsider = _ensure_user("outsider-dash@test.local")
