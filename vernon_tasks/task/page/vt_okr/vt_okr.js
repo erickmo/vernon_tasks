@@ -52,13 +52,15 @@ frappe.pages["vt-okr"].on_page_load = function (wrapper) {
         return frappe.call({ method: OKR_API_LIST, args }).then((r) => r.message || []);
     }
 
-    function progress_bar_html(pct, color) {
+    function progress_bar_html(pct, color, bar_class, pct_class) {
         const safe_pct = Math.min(100, Math.max(0, pct || 0));
+        const bar_cls = bar_class || "";
+        const pct_cls = pct_class || "";
         return `
             <div style="background:var(--border-color);border-radius:4px;height:6px;width:100%;margin-top:4px;">
-                <div style="width:${safe_pct.toFixed(1)}%;height:6px;border-radius:4px;background:${color};"></div>
+                <div class="${bar_cls}" style="width:${safe_pct.toFixed(1)}%;height:6px;border-radius:4px;background:${color};"></div>
             </div>
-            <span style="font-size:11px;color:var(--text-muted);">${safe_pct.toFixed(1)}%</span>
+            <span class="${pct_cls}" style="font-size:11px;color:var(--text-muted);">${safe_pct.toFixed(1)}%</span>
         `;
     }
 
@@ -68,7 +70,7 @@ frappe.pages["vt-okr"].on_page_load = function (wrapper) {
                  padding:8px 12px;border-bottom:1px solid var(--border-color);font-size:13px;">
                 <div style="flex:2;">
                     <div style="font-weight:500;">${esc(kr.metric)}</div>
-                    ${progress_bar_html(kr.progress_percent, "var(--primary)")}
+                    ${progress_bar_html(kr.progress_percent, "var(--primary)", "okr-kr-bar", "okr-kr-pct")}
                 </div>
                 <div style="flex:1;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                     <input class="form-control form-control-sm okr-current-input"
@@ -93,9 +95,11 @@ frappe.pages["vt-okr"].on_page_load = function (wrapper) {
                 kr.current_value = updated.current_value;
                 kr.progress_percent = updated.progress_percent;
                 row.find(".okr-current-input").val(updated.current_value);
-                row.find("[style*='height:6px']").css("width", updated.progress_percent.toFixed(1) + "%");
-                row.find("span[style*='font-size:11px']").text(updated.progress_percent.toFixed(1) + "%");
+                row.find(".okr-kr-bar").css("width", updated.progress_percent.toFixed(1) + "%");
+                row.find(".okr-kr-pct").text(updated.progress_percent.toFixed(1) + "%");
                 frappe.show_alert({ message: __("KR diperbarui"), indicator: "green" });
+            }).catch(() => {
+                frappe.show_alert({ message: __("Gagal memperbarui KR"), indicator: "red" });
             });
         });
 

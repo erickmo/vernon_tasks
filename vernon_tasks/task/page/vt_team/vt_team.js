@@ -3,6 +3,7 @@
    API: task/page/vt_team/vt_team.py */
 
 const TEAM_API = "vernon_tasks.task.page.vt_team.vt_team.get_team_capacity";
+const WORKING_DAYS_PER_WEEK = 5;
 
 const esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
 
@@ -74,7 +75,7 @@ frappe.pages["vt-team"].on_page_load = function (wrapper) {
                     <div style="flex:0 0 160px;font-weight:600;font-size:14px;">${esc(member.full_name)}</div>
                     <div style="flex:1;">${build_utilization_bar(member.utilization_pct)}</div>
                     <div style="text-align:right;min-width:80px;font-size:12px;color:var(--text-muted);">
-                        ${member.total_estimated_hours}h / ${(member.daily_target_hours * 5).toFixed(0)}h<br>
+                        ${member.total_estimated_hours}h / ${(member.daily_target_hours * WORKING_DAYS_PER_WEEK).toFixed(0)}h<br>
                         ${member.active_tasks} tugas
                     </div>
                     <span class="team-toggle" style="font-size:16px;color:var(--text-muted);">▾</span>
@@ -142,6 +143,9 @@ frappe.pages["vt-team"].on_page_load = function (wrapper) {
             container.append(render_summary(members));
             container.append(`<div class="vh-section-title" style="margin-bottom:12px;">${__("Kapasitas per Anggota")}</div>`);
             members.forEach((m) => container.append(build_member_card(m)));
+        }).catch(() => {
+            container.empty();
+            container.append(`<div class="vh-empty">${__("Gagal memuat data tim.")}</div>`);
         });
     }
 

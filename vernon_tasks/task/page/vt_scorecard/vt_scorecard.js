@@ -41,7 +41,12 @@ frappe.pages["vt-scorecard"].on_page_load = function (wrapper) {
     const container = $('<div class="vt-home" style="padding:20px 20px 48px;"></div>').appendTo(page.main);
 
     function call(method, args) {
-        return frappe.call({ method, args }).then((r) => r.message || []);
+        return frappe.call({ method, args })
+            .then((r) => r.message || [])
+            .catch(() => {
+                frappe.show_alert({ message: __("Gagal memuat data"), indicator: "red" });
+                return [];
+            });
     }
 
     function render_summary() {
