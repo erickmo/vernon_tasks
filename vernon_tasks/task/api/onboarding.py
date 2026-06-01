@@ -36,10 +36,12 @@ def _is_complete(key, user, project_names):
     if key == "buat_proyek":
         return bool(project_names)
     if key == "tambah_tim":
-        return any(
-            frappe.db.count("Project Team Member", {"parent": p, "parenttype": "VT Project"}) >= 1
-            for p in project_names
-        )
+        if not project_names:
+            return False
+        return bool(frappe.db.exists(
+            "Project Team Member",
+            {"parent": ["in", list(project_names)], "parenttype": "VT Project"},
+        ))
     if key == "buat_task":
         return bool(
             frappe.db.exists("VT Task", {"assigned_to": user})
@@ -59,7 +61,7 @@ def get_onboarding_state():
     ]
     done = sum(1 for s in steps if s["is_complete"])
     dismissed = bool(frappe.defaults.get_user_default(_DISMISS_KEY))
-    has_demo = bool(frappe.db.get_single_value("VT Settings", "demo_data_refs"))
+    has_demo = demo_data.has_demo(user)
     return {
         "steps": steps,
         "progress": {"done": done, "total": len(steps)},
@@ -84,5 +86,5 @@ def load_demo():
 
 @frappe.whitelist()
 def clear_demo():
-    """Remove the demo data created by load_demo."""
-    return demo_data.clear()
+    """Remove the demo data created by load_demo for the current user."""
+    return demo_data.clear(frappe.session.user)

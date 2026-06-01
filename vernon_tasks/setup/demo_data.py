@@ -5,8 +5,9 @@ doctypes (VT Brand, VT Project, VT Sprint, VT Task) with no single owning
 lifecycle — justifying placement here rather than in a controller method.
 Compare: setup/roles.py which is similarly cross-doctype.
 
-Every created document is recorded in VT Settings.demo_data_refs (JSON list)
-so clear() can delete exactly what it made without touching unrelated data.
+Every created document is recorded in VT Settings.demo_data_refs (JSON object
+keyed by user) so clear() can delete exactly what it made without touching
+unrelated data. Per-user storage ensures multi-user isolation.
 """
 import json
 import frappe
@@ -30,20 +31,33 @@ _DEMO_TASKS = [
 
 # --- Internal helpers --------------------------------------------------------
 
-def _get_refs() -> list:
-    """Read demo_data_refs from VT Settings; return empty list if unset."""
+def _get_all_refs():
     raw = frappe.db.get_single_value("VT Settings", _REFS_FIELD)
     if not raw:
-        return []
+        return {}
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
     except (ValueError, TypeError):
-        return []
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
-def _set_refs(refs: list) -> None:
-    """Persist refs list to VT Settings.demo_data_refs as JSON."""
-    frappe.db.set_single_value("VT Settings", _REFS_FIELD, json.dumps(refs))
+def _get_refs(user):
+    return _get_all_refs().get(user, [])
+
+
+def _set_refs(user, refs):
+    data = _get_all_refs()
+    if refs:
+        data[user] = refs
+    else:
+        data.pop(user, None)
+    frappe.db.set_single_value("VT Settings", _REFS_FIELD, json.dumps(data))
+
+
+def has_demo(user):
+    """True if `user` currently has demo data loaded."""
+    return bool(_get_refs(user))
 
 
 # --- Public API --------------------------------------------------------------
@@ -66,8 +80,8 @@ def load(user: str | None = None) -> dict:
         Dict with counts: {"brand": 1, "project": 1, "sprint": 1, "tasks": N}
     """
     user = user or frappe.session.user
-    if _get_refs():
-        # Demo already loaded; no-op so a repeated call cannot duplicate records.
+    if _get_refs(user):
+        # Demo already loaded for this user; no-op so a repeated call cannot duplicate records.
         return {"brand": 0, "project": 0, "sprint": 0, "tasks": 0, "already_loaded": True}
     refs = []
 
@@ -124,7 +138,7 @@ def load(user: str | None = None) -> dict:
             refs.append({"doctype": "VT Task", "name": task.name})
             task_count += 1
 
-        _set_refs(refs)
+        _set_refs(user, refs)
         frappe.db.commit()
     except Exception:
         # Never leave half-created demo records behind.
@@ -133,23 +147,23 @@ def load(user: str | None = None) -> dict:
     return {"brand": 1, "project": 1, "sprint": 1, "tasks": task_count}
 
 
-def clear() -> dict:
-    """Delete exactly the documents recorded in demo_data_refs (reverse order).
+def clear(user=None) -> dict:
+    """Delete the demo docs recorded for `user` (reverse order).
 
     Reverse-order deletion prevents FK constraint failures: tasks and sprints
     reference the project, so they must be removed before the project.
 
+    Args:
+        user: Frappe User email. Falls back to frappe.session.user.
+
     Returns:
         Dict with count of removed documents: {"removed": N}
     """
-    refs = _get_refs()
+    user = user or frappe.session.user
+    refs = _get_refs(user)
     for ref in reversed(refs):
         if frappe.db.exists(ref["doctype"], ref["name"]):
-            frappe.delete_doc(
-                ref["doctype"], ref["name"],
-                force=True,
-                ignore_permissions=True,
-            )
-    _set_refs([])
+            frappe.delete_doc(ref["doctype"], ref["name"], force=True, ignore_permissions=True)
+    _set_refs(user, [])
     frappe.db.commit()
     return {"removed": len(refs)}

@@ -1,8 +1,7 @@
 # Tests for optional demo data load/clear.
-import json
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from vernon_tasks.setup.demo_data import load, clear
+from vernon_tasks.setup.demo_data import load, clear, _get_refs
 
 _USER = "demo_onboard@test.local"
 
@@ -19,29 +18,28 @@ def _ensure_user(email):
 class TestDemoData(FrappeTestCase):
     def setUp(self):
         self.user = _ensure_user(_USER)
-        clear()  # start clean
+        clear(self.user)  # start clean
 
     def tearDown(self):
-        clear()
+        clear(self.user)
         frappe.set_user("Administrator")
 
     def test_load_creates_refs_and_records(self):
         result = load(self.user)
-        refs = json.loads(frappe.db.get_single_value("VT Settings", "demo_data_refs") or "[]")
+        refs = _get_refs(self.user)
         self.assertGreaterEqual(len(refs), 5)  # brand + project + sprint + 3 tasks (team_members are child rows, not separate docs)
         self.assertEqual(result["tasks"], 3)
         self.assertTrue(frappe.db.exists("VT Project", {"project_owner": self.user}))
 
     def test_load_twice_is_noop(self):
         load(self.user)
-        first = json.loads(frappe.db.get_single_value("VT Settings", "demo_data_refs") or "[]")
+        first = _get_refs(self.user)
         load(self.user)
-        second = json.loads(frappe.db.get_single_value("VT Settings", "demo_data_refs") or "[]")
+        second = _get_refs(self.user)
         self.assertEqual(len(first), len(second))
 
     def test_clear_removes_everything(self):
         load(self.user)
-        clear()
-        refs = frappe.db.get_single_value("VT Settings", "demo_data_refs")
-        self.assertIn(refs, (None, "", "[]"))
+        clear(self.user)
+        self.assertEqual(_get_refs(self.user), [])
         self.assertFalse(frappe.db.exists("VT Task", {"assigned_to": self.user, "title": "Demo: Siapkan brief"}))
