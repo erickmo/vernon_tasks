@@ -3,13 +3,28 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
 from vernon_tasks.task.services.kpi_trend_service import get_kpi_trend, list_kpis
 
+_FIXTURE_BRAND = "TEST-KPI-TREND-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
+
 
 def _make_kpi(name, unit="%"):
     for n in frappe.get_all("KPI Definition", {"kpi_name": name}, ["name"]):
+        # Delete child KPI Entries first; on_trash blocks delete while entries exist.
+        for entry in frappe.get_all("KPI Entry", {"kpi_definition": n["name"]}, ["name"]):
+            frappe.delete_doc("KPI Entry", entry["name"], force=True)
         frappe.delete_doc("KPI Definition", n["name"], force=True)
     return frappe.get_doc({
         "doctype": "KPI Definition",
         "kpi_name": name,
+        "brand": _ensure_brand(),
         "frequency": "Monthly",
         "unit": unit,
     }).insert(ignore_permissions=True)

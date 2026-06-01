@@ -4,6 +4,16 @@ from frappe.tests.utils import FrappeTestCase
 OWNER = "test_pts_owner@example.com"
 LEADER = "test_pts_leader@example.com"
 MEMBER = "test_pts_member@example.com"
+_BRAND = "TEST-PTS-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _BRAND,
+        }).insert(ignore_permissions=True)
+    return _BRAND
 
 
 def setup_users():
@@ -20,6 +30,7 @@ def make_task():
     setup_users()
     proj = frappe.get_doc({
         "doctype": "VT Project", "title": "Points Test Project",
+        "brand": _ensure_brand(),
         "project_owner": OWNER, "project_leader": LEADER,
         "start_date": "2026-05-01", "end_date": "2026-05-31",
         "pdca_phase": "PLAN", "status": "Open",
@@ -34,6 +45,7 @@ def make_task():
         "weight": 5.0, "estimated_minutes": 8.0,
         "start_date": "2026-05-10", "deadline": "2026-05-20",
         "revision_count": 0,
+        "base_points": 50,
     })
     task.insert(ignore_permissions=True)
     return task, proj

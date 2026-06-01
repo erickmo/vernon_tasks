@@ -4,6 +4,16 @@ from frappe.utils import today, add_days
 
 LEADER_USER = "Administrator"
 MEMBER_USER = "test-member@example.com"
+_FIXTURE_BRAND = "TEST-LR-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 def _ensure_user(email):
@@ -22,6 +32,7 @@ def _make_project(leader, members=None):
     doc = frappe.get_doc({
         "doctype": "VT Project",
         "title": f"Test LR Project - {leader}",
+        "brand": _ensure_brand(),
         "project_owner": leader,
         "project_leader": leader,
         "start_date": today(),

@@ -3,6 +3,17 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today, getdate
 from vernon_tasks.task.services.burndown_service import get_burndown
 
+_FIXTURE_BRAND = "TEST-BURNDOWN-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
+
 
 class TestBurndownService(FrappeTestCase):
     def setUp(self):
@@ -11,7 +22,8 @@ class TestBurndownService(FrappeTestCase):
         self.project = frappe.get_doc({
             "doctype": "VT Project",
             "title": "BD-Proj",
-            "project_owner": frappe.session.user,
+            "brand": _ensure_brand(),
+            "project_owner": "Administrator",
             "start_date": add_days(today(), -10),
             "end_date": add_days(today(), 10),
             "status": "Open",

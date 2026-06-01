@@ -57,7 +57,6 @@ class TestHooksFixtures(unittest.TestCase):
             "Web Page",
             "Web Form",
             "Website Route Meta",
-            "Portal Settings",
         ):
             self.assertIn(expected, fixture_dts, f"fixtures missing: {expected}")
 

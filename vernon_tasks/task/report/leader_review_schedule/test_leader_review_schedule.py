@@ -5,6 +5,16 @@ from vernon_tasks.task.report.leader_review_schedule.leader_review_schedule impo
 OWNER = "test_lrs_owner@example.com"
 LEADER = "test_lrs_leader@example.com"
 MEMBER = "test_lrs_member@example.com"
+_FIXTURE_BRAND = "TEST-LRS-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 def _setup_users():
@@ -28,6 +38,7 @@ def _make_project():
     proj = frappe.get_doc({
         "doctype": "VT Project",
         "title": "LRS Test Project",
+        "brand": _ensure_brand(),
         "project_owner": OWNER,
         "project_leader": LEADER,
         "start_date": "2026-05-01",
@@ -64,10 +75,10 @@ class TestLeaderReviewSchedule(FrappeTestCase):
         frappe.set_user("Administrator")
         _setup_users()
         self.proj = _make_project()
-        self.task_a = _make_task(self.proj, "2026-05-12", 2.0)
-        self.task_b = _make_task(self.proj, "2026-05-14", 1.5)
-        self.task_out = _make_task(self.proj, "2026-05-20", 3.0)  # outside range
-        self.task_do = _make_task(self.proj, "2026-05-13", 1.0, phase="DO")  # wrong phase
+        self.task_a = _make_task(self.proj, "2026-05-12", 120)
+        self.task_b = _make_task(self.proj, "2026-05-14", 90)
+        self.task_out = _make_task(self.proj, "2026-05-20", 180)  # outside range
+        self.task_do = _make_task(self.proj, "2026-05-13", 60, phase="DO")  # wrong phase
 
     def tearDown(self):
         frappe.db.rollback()
@@ -92,11 +103,11 @@ class TestLeaderReviewSchedule(FrappeTestCase):
         total_row = next((r for r in data if r.get("is_grand_total")), None)
         self.assertIsNotNone(total_row)
         self.assertEqual(total_row["title"], "Total Review Minutes")
-        self.assertAlmostEqual(total_row["review_estimated_minutes"], 3.5)
+        self.assertEqual(total_row["review_estimated_minutes"], 210)
 
     def test_project_filter(self):
         other_proj = _make_project()
-        other_task = _make_task(other_proj, "2026-05-12", 5.0)
+        other_task = _make_task(other_proj, "2026-05-12", 300)
 
         columns, data = execute({
             "from_date": "2026-05-12",

@@ -3,6 +3,17 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import today, add_days
 from vernon_tasks.task.api.my_work_mutations import complete, log_progress, snooze
 
+_FIXTURE_BRAND = "TEST-P1A-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
+
 
 class TestMyWorkMutations(FrappeTestCase):
     @classmethod
@@ -21,9 +32,10 @@ class TestMyWorkMutations(FrappeTestCase):
                 "doctype": "VT Project",
                 "name": "TEST-P1A-PROJ",
                 "title": "P1a Test Project",
+                "brand": _ensure_brand(),
                 "project_owner": "Administrator",
-                "start_date": today(),
-                "end_date": add_days(today(), 30),
+                "start_date": "2026-01-01",
+                "end_date": "2026-12-31",
             })
             proj.flags.name_set = True
             proj.insert(ignore_permissions=True)

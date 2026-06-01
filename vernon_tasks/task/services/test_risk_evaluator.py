@@ -3,12 +3,24 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
 from vernon_tasks.task.services.risk_evaluator import evaluate_risks
 
+_FIXTURE_BRAND = "TEST-RISK-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
+
 
 def _make_project(title, end_offset=30):
     return frappe.get_doc({
         "doctype": "VT Project",
         "title": title,
-        "project_owner": frappe.session.user,
+        "brand": _ensure_brand(),
+        "project_owner": "Administrator",
         "start_date": add_days(today(), -30),
         "end_date": add_days(today(), end_offset),
         "status": "Open",
