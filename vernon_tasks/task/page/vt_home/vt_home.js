@@ -134,6 +134,8 @@ function vt_quick_create_project(on_done) {
                 frappe.show_alert({ message: "Proyek dibuat", indicator: "green" });
                 if (on_done) on_done(doc);
                 else frappe.set_route("vt-project-detail", doc.name);
+            }).catch(() => {
+                // Frappe already surfaces the validation error; keep the dialog open for retry.
             });
         },
     });
@@ -167,7 +169,7 @@ function render_onboarding(c, page) {
         }
         card.append(cta);
         sec.append(card);
-    });
+    }).catch(() => sec.remove());
 }
 
 function render_onb_step(s) {
