@@ -13,6 +13,8 @@ const QUICK_LINKS = [
     { label: "Proyek", route: "List/VT Project" },
     { label: "Sprint", route: "List/VT Sprint" },
 ];
+const PROJECT_DOCTYPE = "VT Project";
+const ONB_API = "vernon_tasks.task.api.onboarding";
 
 frappe.pages["vt-home"].on_page_load = function (wrapper) {
     // Gray page background; styled via .vt-gray-bg in vt_home.css.
@@ -23,6 +25,7 @@ frappe.pages["vt-home"].on_page_load = function (wrapper) {
         single_column: true,
     });
     page.add_button(__("Refresh"), () => render_all(page), { icon: "refresh" });
+    page.set_primary_action(__("Buat Proyek"), () => vt_quick_create_project(), "add");
     render_all(page);
 };
 
@@ -30,6 +33,7 @@ function render_all(page) {
     const c = $('<div class="vt-home"></div>');
     page.main.empty().append(c);
     render_hero(c);
+    render_onboarding(c, page);
     frappe.call(`${API}.me_progress`).then((r) => render_progress(c, r.message || {}));
     frappe.call(`${API}.my_projects`).then((r) => render_projects(c, r.message || {}));
     frappe.call(`${API}.schedule_agenda`).then((r) => render_schedule(c, r.message || {}));
@@ -111,10 +115,89 @@ function render_next_actions(sec, actions) {
     sec.append(card);
 }
 
+function vt_quick_create_project(on_done) {
+    const d = new frappe.ui.Dialog({
+        title: "Buat Proyek",
+        fields: [
+            { fieldname: "title", label: "Nama Proyek", fieldtype: "Data", reqd: 1 },
+            { fieldname: "brand", label: "Brand", fieldtype: "Link", options: "VT Brand", reqd: 1 },
+        ],
+        primary_action_label: "Buat",
+        primary_action: (v) => {
+            frappe.db.insert({
+                doctype: PROJECT_DOCTYPE, title: v.title, brand: v.brand,
+                project_owner: frappe.session.user, project_leader: frappe.session.user,
+                start_date: frappe.datetime.get_today(),
+                end_date: frappe.datetime.add_days(frappe.datetime.get_today(), 30),
+            }).then((doc) => {
+                d.hide();
+                frappe.show_alert({ message: "Proyek dibuat", indicator: "green" });
+                if (on_done) on_done(doc);
+                else frappe.set_route("vt-project-detail", doc.name);
+            });
+        },
+    });
+    d.show();
+}
+
+function render_onboarding(c, page) {
+    const sec = $('<div class="vh-section" data-block="onboarding"></div>');
+    c.append(sec);
+    frappe.call(`${ONB_API}.get_onboarding_state`).then((r) => {
+        const st = r.message || {};
+        if (!st.show) { sec.remove(); return; }
+        const card = $('<div class="vh-card vh-onboarding"></div>');
+        const head = $('<div class="vh-onb-head"></div>');
+        head.append('<span class="vh-section-title">Mulai di sini</span>');
+        head.append(`<span class="vh-onb-progress">${st.progress.done}/${st.progress.total}</span>`);
+        const dismiss = $('<button class="vh-onb-dismiss btn btn-xs">Sembunyikan</button>');
+        dismiss.on("click", () => frappe.call(`${ONB_API}.dismiss_onboarding`).then(() => sec.remove()));
+        head.append(dismiss);
+        card.append(head);
+        (st.steps || []).forEach((s) => card.append(render_onb_step(s)));
+        const cta = $('<div class="vh-onb-cta"></div>');
+        if (st.has_demo) {
+            $('<button class="btn btn-default btn-sm">Hapus data contoh</button>')
+                .on("click", () => frappe.call(`${ONB_API}.clear_demo`).then(() => render_all(page)))
+                .appendTo(cta);
+        } else {
+            $('<button class="btn btn-default btn-sm">Muat data contoh</button>')
+                .on("click", () => frappe.call(`${ONB_API}.load_demo`).then(() => render_all(page)))
+                .appendTo(cta);
+        }
+        card.append(cta);
+        sec.append(card);
+    });
+}
+
+function render_onb_step(s) {
+    const mark = s.is_complete ? "✓" : "○";
+    const row = $(`<div class="vh-onb-step ${s.is_complete ? "done" : ""}">
+        <span class="vh-onb-mark">${mark}</span>
+        <span class="vh-onb-title">${frappe.utils.escape_html(s.title)}</span></div>`);
+    if (!s.is_complete) {
+        row.css("cursor", "pointer").on("click", () => onb_route(s));
+    }
+    return row;
+}
+
+function onb_route(s) {
+    if (s.route_kind === "page") frappe.set_route(s.route_target);
+    else if (s.route_kind === "new_doc") frappe.new_doc(s.route_target);
+    else if (s.route_kind === "quick_create_project") vt_quick_create_project();
+}
+
 function render_projects(c, data) {
     const sec = $('<div class="vh-section"><div class="vh-section-title">Proyek Saya</div></div>');
     const led = data.led || [], member = data.member || [];
-    if (!led.length && !member.length) { sec.append('<div class="vh-empty">Belum ada proyek.</div>'); }
+    if (!led.length && !member.length) {
+        sec.append(vt_render_empty_state({
+            title: "Belum ada proyek",
+            message: "Buat proyek pertama untuk mulai bekerja, atau muat data contoh dari kartu di atas.",
+            cta_label: "Buat Proyek",
+            on_cta: () => vt_quick_create_project(),
+        }));
+    }
     const row = $('<div class="vh-row"></div>');
     led.forEach((p) => {
         const chip = `<span class="vh-chip vh-chip-${p.risk}">${RISK_LABELS[p.risk] || p.risk}</span>`;

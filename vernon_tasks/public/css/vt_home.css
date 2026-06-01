@@ -227,3 +227,14 @@ input, textarea, select, button {
     background: var(--subtle-bg, #f4f5f7);
     color: var(--primary, #6366f1);
 }
+
+/* ── Onboarding card ── */
+.vt-home .vh-onboarding { padding: 16px; }
+.vt-home .vh-onb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.vt-home .vh-onb-progress { font-size: 12px; color: #64748b; font-weight: 600; }
+.vt-home .vh-onb-dismiss { margin-left: auto; }
+.vt-home .vh-onb-step { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-top: 1px solid #f1f5f9; }
+.vt-home .vh-onb-step.done { color: #94a3b8; }
+.vt-home .vh-onb-step.done .vh-onb-mark { color: #16a34a; }
+.vt-home .vh-onb-mark { width: 16px; text-align: center; font-weight: 700; }
+.vt-home .vh-onb-cta { margin-top: 12px; display: flex; gap: 8px; }
