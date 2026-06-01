@@ -22,4 +22,8 @@ def grant_default_role(login_manager):
         return
     if set(_VT_ROLES) & set(frappe.get_roles(user)):
         return
-    frappe.get_doc("User", user).add_roles(DEFAULT_ROLE)
+    try:
+        frappe.get_doc("User", user).add_roles(DEFAULT_ROLE)
+    except Exception:
+        # An optional default-role grant must never break the login flow.
+        frappe.log_error(title="grant_default_role failed")
