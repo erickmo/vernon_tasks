@@ -20,6 +20,8 @@ app_include_css = [
 ]
 extend_bootinfo = "vernon_tasks.boot.extend_bootinfo"
 on_session_creation = ["vernon_tasks.setup.roles.grant_default_role"]
+after_install = ["vernon_tasks.setup_website.ensure_navbar_seeded"]
+after_migrate = ["vernon_tasks.setup_website.ensure_navbar_seeded"]
 
 required_apps = []
 
