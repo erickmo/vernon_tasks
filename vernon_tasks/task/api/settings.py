@@ -20,7 +20,7 @@ SCORING_FIELDS = (
     "revision_deduct_rate",
     "default_daily_target_hours",
 )
-NAVBAR_FIELDS = ("label", "route", "icon", "enabled")
+NAVBAR_FIELDS = ("label", "route", "icon", "enabled", "is_group", "parent_group", "role_restriction")
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -51,6 +51,9 @@ def _read_navbar(doc: Any) -> list[dict]:
             "route": row.route,
             "icon": row.icon,
             "enabled": row.enabled,
+            "is_group": row.is_group or 0,
+            "parent_group": row.parent_group or "",
+            "role_restriction": row.role_restriction or "",
             "idx": row.idx,
         }
         for row in (doc.navbar_items or [])

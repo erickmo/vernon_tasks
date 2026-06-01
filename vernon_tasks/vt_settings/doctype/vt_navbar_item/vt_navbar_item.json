@@ -4,12 +4,15 @@
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
- "field_order": ["label", "route", "icon", "enabled"],
+ "field_order": ["label", "route", "icon", "enabled", "is_group", "parent_group", "role_restriction"],
  "fields": [
   {"fieldname": "label", "fieldtype": "Data", "label": "Label", "reqd": 1, "in_list_view": 1},
   {"fieldname": "route", "fieldtype": "Data", "label": "Route", "reqd": 1, "in_list_view": 1, "description": "Desk route, e.g. /app/vt-home"},
   {"fieldname": "icon", "fieldtype": "Data", "label": "Icon", "in_list_view": 1, "description": "Frappe icon name (optional), e.g. home"},
-  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1", "in_list_view": 1}
+  {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1", "in_list_view": 1},
+  {"fieldname": "is_group", "fieldtype": "Check", "label": "Is Dropdown Group", "default": "0"},
+  {"fieldname": "parent_group", "fieldtype": "Data", "label": "Parent Group Label"},
+  {"fieldname": "role_restriction", "fieldtype": "Data", "label": "Role Restriction (blank = all roles)"}
  ],
  "istable": 1,
  "modified": "2026-05-30 00:00:00.000000",
