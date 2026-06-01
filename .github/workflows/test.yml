@@ -64,7 +64,11 @@ jobs:
           bench --site test.localhost install-app vernon_tasks
 
       - name: Install coverage tooling
-        run: pip install pytest-cov coverage
+        run: |
+          # Install into bench's own virtualenv — `bench run-tests --coverage`
+          # runs inside frappe-bench/env, not the runner's system python.
+          cd frappe-bench
+          ./env/bin/pip install coverage
 
       - name: Run backend tests with coverage
         run: |
