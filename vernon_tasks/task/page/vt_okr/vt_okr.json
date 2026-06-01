@@ -1,0 +1,20 @@
+{
+    "creation": "2026-06-01 00:00:00",
+    "docstatus": 0,
+    "doctype": "Page",
+    "idx": 0,
+    "modified": "2026-06-01 00:00:00",
+    "modified_by": "Administrator",
+    "module": "Task",
+    "name": "vt-okr",
+    "page_name": "vt-okr",
+    "roles": [
+        {"role": "VT Leader"},
+        {"role": "VT Manager"}
+    ],
+    "script": null,
+    "standard": "Yes",
+    "style": null,
+    "system_page": 1,
+    "title": "OKR"
+}
