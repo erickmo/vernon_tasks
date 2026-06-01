@@ -80,21 +80,21 @@ def setup_slideshow():
                 "image": "/assets/vernon_tasks/images/hero-okr.webp",
                 "heading": "Kelola OKR & Sprint dalam Satu Platform",
                 "description": "Hubungkan target organisasi ke task harian tim Anda",
-                "url": "/portal",
+                "url": "/app",
             },
             {
                 "doctype": "Website Slideshow Item",
                 "image": "/assets/vernon_tasks/images/hero-pdca.webp",
                 "heading": "PDCA Workflow yang Terstruktur",
                 "description": "Plan → Do → Check → Act dalam setiap task",
-                "url": "/portal",
+                "url": "/app",
             },
             {
                 "doctype": "Website Slideshow Item",
                 "image": "/assets/vernon_tasks/images/hero-team.webp",
                 "heading": "Visibilitas Penuh untuk Leader & Owner",
                 "description": "Dashboard real-time: siapa blocked, siapa on track",
-                "url": "/portal",
+                "url": "/app",
             },
         ],
     })
@@ -119,7 +119,7 @@ def setup_web_pages():
   </div>
   <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
     <a href="/login" class="btn btn-primary btn-lg">Mulai Sekarang</a>
-    <a href="/portal" class="btn btn-secondary btn-lg">Lihat Portal</a>
+    <a href="/app" class="btn btn-secondary btn-lg">Buka Aplikasi</a>
   </div>
 </section>""",
         },
@@ -210,12 +210,6 @@ def setup_route_meta():
             "og_image": "/assets/vernon_tasks/images/og-home.webp",
         },
         {
-            "name": "/portal",
-            "title": "Portal — Vernon Tasks",
-            "description": "Dashboard real-time untuk leader, owner, dan anggota tim",
-            "og_image": "/assets/vernon_tasks/images/og-portal.webp",
-        },
-        {
             "name": "/tentang",
             "title": "Tentang Vernon Tasks",
             "description": "Visi, misi, dan cerita di balik Vernon Tasks",
@@ -287,6 +281,54 @@ def _ensure_vt_contact_request_table():
         print("⚠ VT Contact Request table still missing — run bench migrate first")
 
 
+# Ordered navbar items for VT Settings.
+# is_group=1 items are dropdown group headers; route="#" is placeholder for non-navigable groups.
+# role_restriction: blank = all roles. Single role = only users with that role.
+_NAVBAR_ITEMS = [
+    # ── Standalone ────────────────────────────────────────────────────────
+    dict(label="Beranda",        route="/app/vt-home",        icon="home",          is_group=0, parent_group="",       role_restriction="",          enabled=1),
+    # ── Saya group (all roles) ────────────────────────────────────────────
+    dict(label="Saya",           route="#",                   icon="user",          is_group=1, parent_group="",       role_restriction="",          enabled=1),
+    dict(label="My Work",        route="/app/my-work",        icon="check-circle",  is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
+    dict(label="Dashboard",      route="/app/my-dashboard",   icon="bar-chart",     is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
+    dict(label="Analytics",      route="/app/my-analytics",   icon="trend",         is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
+    dict(label="Scorecard",      route="/app/vt-scorecard",   icon="star",          is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
+    # ── Proyek standalone ────────────────────────────────────────────────
+    dict(label="Proyek",         route="/app/vt-projects",    icon="folder-normal", is_group=0, parent_group="",       role_restriction="",          enabled=1),
+    # ── Leader group ─────────────────────────────────────────────────────
+    dict(label="Leader",         route="#",                   icon="users",         is_group=1, parent_group="",       role_restriction="VT Leader", enabled=1),
+    dict(label="Dashboard Tim",  route="/app/leader-dashboard",icon="dashboard",    is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
+    dict(label="Review",         route="/app/leader-review",  icon="tick",          is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
+    dict(label="Sprint Analytics",route="/app/leader-analytics",icon="chart",       is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
+    dict(label="OKR",            route="/app/vt-okr",         icon="target-doc",    is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
+    dict(label="Tim & Kapasitas",route="/app/vt-team",        icon="users",         is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
+    # ── Eksekutif standalone (Manager) ───────────────────────────────────
+    dict(label="Eksekutif",      route="/app/exec-analytics", icon="chart",         is_group=0, parent_group="",       role_restriction="VT Manager",enabled=1),
+    # ── Admin group (Manager) ─────────────────────────────────────────────
+    dict(label="Admin",          route="#",                   icon="setting",       is_group=1, parent_group="",       role_restriction="VT Manager",enabled=1),
+    dict(label="Pengaturan",     route="/app/vt-settings",    icon="setting",       is_group=0, parent_group="Admin",  role_restriction="VT Manager",enabled=1),
+    dict(label="Brand",          route="/app/vt-brands",      icon="badge",         is_group=0, parent_group="Admin",  role_restriction="VT Manager",enabled=1),
+]
+
+
+def setup_navbar_items():
+    """Seed VT Settings navbar_items with the full structured menu.
+
+    Safe to re-run: deletes old rows via DB then re-inserts via append.
+    """
+    # Delete existing navbar items from DB
+    frappe.db.delete("VT Navbar Item", {})
+    frappe.db.commit()
+
+    # Insert new items
+    doc = frappe.get_single("VT Settings")
+    for item in _NAVBAR_ITEMS:
+        doc.append("navbar_items", item)
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+    print(f"✓ Seeded {len(_NAVBAR_ITEMS)} navbar items into VT Settings")
+
+
 def execute():
     """Entry point for bench execute."""
     print("\n=== Vernon Tasks Website Setup ===\n")
@@ -297,6 +339,7 @@ def execute():
     setup_web_form()
     setup_route_meta()
     setup_portal_settings()
+    setup_navbar_items()
     frappe.db.commit()
     print("\n=== Setup complete! ===")
     print("\nNext steps:")
