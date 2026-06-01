@@ -1,7 +1,18 @@
 """Tests for vt-okr page API: list_objectives, update_key_result."""
 import frappe
 import unittest
-from frappe.utils import today, add_months
+
+_FIXTURE_BRAND = "TEST-OKR-BRAND"
+
+
+def _ensure_brand():
+    """Create a VT Brand fixture if it doesn't exist. Objective.brand is mandatory."""
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 class TestOkrAPI(unittest.TestCase):
@@ -11,6 +22,7 @@ class TestOkrAPI(unittest.TestCase):
         frappe.set_user("Administrator")
         cls._objectives = []
         cls._key_results = []
+        cls._brand = _ensure_brand()
 
     @classmethod
     def tearDownClass(cls):
@@ -23,12 +35,14 @@ class TestOkrAPI(unittest.TestCase):
         frappe.db.commit()
 
     def _make_objective(self, title="Test OKR Obj", period="2026-Q2"):
+        # Omit period_start/period_end — Objective controller auto-fills them
+        # from the period string (e.g. 2026-Q2 → 2026-04-01 .. 2026-06-30).
+        # Passing today() would fail when today() falls outside the quarter's range.
         doc = frappe.get_doc({
             "doctype": "Objective",
             "title": title,
+            "brand": self.__class__._brand,
             "period": period,
-            "period_start": today(),
-            "period_end": add_months(today(), 3),
             "objective_owner": "Administrator",
             "status": "Open",
             "pdca_phase": "DO",
