@@ -1,0 +1,21 @@
+{
+    "creation": "2026-06-01 00:00:00",
+    "docstatus": 0,
+    "doctype": "Page",
+    "idx": 0,
+    "modified": "2026-06-01 00:00:00",
+    "modified_by": "Administrator",
+    "module": "Task",
+    "name": "vt-scorecard",
+    "page_name": "vt-scorecard",
+    "roles": [
+        {"role": "VT Member"},
+        {"role": "VT Leader"},
+        {"role": "VT Manager"}
+    ],
+    "script": null,
+    "standard": "Yes",
+    "style": null,
+    "system_page": 1,
+    "title": "Scorecard & Poin"
+}
