@@ -2,8 +2,18 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from vernon_tasks.task.api.my_work import list as my_work_list, detail
 
-# VT Project requires: title, project_owner, start_date, end_date
+# VT Project requires: title, brand, project_owner, start_date, end_date
 _FIXTURE_PROJECT = "TEST-MY-WORK-PROJ"
+_FIXTURE_BRAND = "TEST-MY-WORK-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 def _ensure_project():
@@ -12,6 +22,7 @@ def _ensure_project():
             "doctype": "VT Project",
             "name": _FIXTURE_PROJECT,
             "title": "Test Project (my_work fixtures)",
+            "brand": _ensure_brand(),
             "project_owner": "Administrator",
             "start_date": "2025-01-01",
             "end_date": "2025-12-31",

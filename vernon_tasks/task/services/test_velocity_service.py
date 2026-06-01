@@ -7,13 +7,26 @@ from vernon_tasks.task.services.velocity_service import (
 )
 
 
+_FIXTURE_BRAND = "TEST-VEL-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
+
+
 def _make_project(name="Test-Proj-Vel"):
     if frappe.db.exists("VT Project", name):
         frappe.delete_doc("VT Project", name, force=True)
     return frappe.get_doc({
         "doctype": "VT Project",
         "title": name,
-        "project_owner": frappe.session.user,
+        "brand": _ensure_brand(),
+        "project_owner": "Administrator",
         "start_date": add_days(today(), -60),
         "end_date": add_days(today(), 60),
         "status": "Open",

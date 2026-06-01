@@ -191,8 +191,9 @@ class TestBoardMutations(FrappeTestCase):
         """The modal now saves the full editable scalar set in one call."""
         frappe.set_user(self.leader)
         t = self._make_task()
+        # risk_flag is server-computed (read_only, surfaced by risk_evaluator)
+        # and is intentionally excluded from EDITABLE_FIELDS — do not set it here.
         update_task(t.name, {
-            "risk_flag": "late",
             "estimated_minutes": 8,
             "review_estimated_minutes": 2,
             "review_scheduled_date": add_days(today(), 4),
@@ -200,10 +201,9 @@ class TestBoardMutations(FrappeTestCase):
         })
         row = frappe.db.get_value(
             "VT Task", t.name,
-            ["risk_flag", "estimated_minutes", "review_estimated_minutes",
+            ["estimated_minutes", "review_estimated_minutes",
              "review_scheduled_date", "weight"],
             as_dict=True)
-        self.assertEqual(row.risk_flag, "late")
         self.assertEqual(row.estimated_minutes, 8)
         self.assertEqual(row.review_estimated_minutes, 2)
         self.assertEqual(str(row.review_scheduled_date), add_days(today(), 4))
@@ -255,11 +255,14 @@ class TestBoardMutations(FrappeTestCase):
     def test_get_task_returns_full_field_set(self):
         frappe.set_user(self.leader)
         t = self._make_task("Hydrate")
-        update_task(t.name, {"risk_flag": "blocked", "estimated_minutes": 4})
+        # risk_flag is server-computed (read_only) — set only the editable fields.
+        update_task(t.name, {"estimated_minutes": 4})
         data = get_task(t.name)
         self.assertEqual(data["title"], "Hydrate")
-        self.assertEqual(data["risk_flag"], "blocked")
         self.assertEqual(data["estimated_minutes"], 4)
+        # risk_flag is read-only (surfaced by risk_evaluator); it is not part of
+        # GET_TASK_SCALAR_FIELDS so the edit modal does not include it.
+        self.assertNotIn("risk_flag", data)
         self.assertIn("dependencies", data)
         self.assertIn("schedule_entries", data)
 

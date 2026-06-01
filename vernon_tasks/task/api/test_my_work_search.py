@@ -4,6 +4,18 @@ from frappe.utils import today, add_days
 from vernon_tasks.task.api.my_work import search
 
 
+_FIXTURE_BRAND = "TEST-SEARCH-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
+
+
 class TestMyWorkSearch(FrappeTestCase):
     @classmethod
     def setUpClass(cls):
@@ -14,12 +26,14 @@ class TestMyWorkSearch(FrappeTestCase):
                 "doctype": "User", "email": cls.user, "first_name": cls.user,
                 "roles": [{"role": "VT Member"}],
             }).insert(ignore_permissions=True)
+        brand = _ensure_brand()
         for proj_name, proj_title in [("TEST-P1B-PROJ-A", "Search Test A"), ("TEST-P1B-PROJ-B", "Search Test B")]:
             if not frappe.db.exists("VT Project", proj_name):
                 p = frappe.get_doc({
                     "doctype": "VT Project",
                     "name": proj_name,
                     "title": proj_title,
+                    "brand": brand,
                     "project_owner": "Administrator",
                     "start_date": today(),
                     "end_date": add_days(today(), 30),

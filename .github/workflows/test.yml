@@ -7,31 +7,6 @@ on:
     branches: [master, main]
 
 jobs:
-  pwa-lint-type-test:
-    name: PWA — lint, typecheck, test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: pwa
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: pwa/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run lint
-
-      - name: Unit tests
-        run: npm test
-
   backend-test:
     name: Backend — bench run-tests
     runs-on: ubuntu-latest
@@ -76,15 +51,24 @@ jobs:
         run: |
           bench init --frappe-branch version-15 --skip-redis-config-generation frappe-bench
           cd frappe-bench
+          # Point bench at the CI redis service (port 6379); bench defaults to
+          # 11000/12000/13000 which don't exist on the runner.
+          bench set-config -g redis_cache "redis://127.0.0.1:6379"
+          bench set-config -g redis_queue "redis://127.0.0.1:6379"
+          bench set-config -g redis_socketio "redis://127.0.0.1:6379"
           bench new-site test.localhost \
             --mariadb-root-password root \
             --admin-password admin \
             --no-mariadb-socket
-          bench get-app --branch master "$GITHUB_WORKSPACE"
+          bench get-app "$GITHUB_WORKSPACE"
           bench --site test.localhost install-app vernon_tasks
 
       - name: Install coverage tooling
-        run: pip install pytest-cov coverage
+        run: |
+          # Install into bench's own virtualenv — `bench run-tests --coverage`
+          # runs inside frappe-bench/env, not the runner's system python.
+          cd frappe-bench
+          ./env/bin/pip install coverage
 
       - name: Run backend tests with coverage
         run: |

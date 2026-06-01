@@ -3,6 +3,17 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
 from vernon_tasks.task.services.personal_velocity_service import get_personal_velocity
 
+_FIXTURE_BRAND = "PV-Test-Brand"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
+
 
 class TestPersonalVelocity(FrappeTestCase):
     def setUp(self):
@@ -16,6 +27,7 @@ class TestPersonalVelocity(FrappeTestCase):
             frappe.delete_doc("VT Project", "PV-Proj", force=True)
         self.project = frappe.get_doc({
             "doctype": "VT Project", "title": "PV-Proj",
+            "brand": _ensure_brand(),
             "project_owner": frappe.session.user,
             "start_date": add_days(today(), -60),
             "end_date": add_days(today(), 30),
@@ -59,6 +71,7 @@ class TestPersonalVelocity(FrappeTestCase):
             frappe.delete_doc("VT Project", "PV-Empty", force=True)
         p = frappe.get_doc({
             "doctype": "VT Project", "title": "PV-Empty",
+            "brand": _ensure_brand(),
             "project_owner": frappe.session.user,
             "start_date": today(), "end_date": add_days(today(), 1),
             "status": "Open",

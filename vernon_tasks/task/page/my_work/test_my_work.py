@@ -5,6 +5,16 @@ from frappe.utils import today, add_days
 # Module-level variable to hold the actual project name (auto-generated)
 _PROJECT_NAME = None
 _PROJECT_TITLE = "Test My Work Project - MW"
+_FIXTURE_BRAND = "TEST-MY-WORK-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 def _make_project():
@@ -18,6 +28,7 @@ def _make_project():
     doc = frappe.get_doc({
         "doctype": "VT Project",
         "title": _PROJECT_TITLE,
+        "brand": _ensure_brand(),
         "project_owner": "Administrator",
         "start_date": today(),
         "end_date": add_days(today(), 30),

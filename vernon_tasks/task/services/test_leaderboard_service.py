@@ -1,7 +1,18 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import add_days, today
+from frappe.utils import add_days, get_first_day, getdate, today
 from vernon_tasks.task.services.leaderboard_service import get_leaderboard, period_window
+
+_FIXTURE_BRAND = "TEST-LEADERBOARD-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 class TestLeaderboard(FrappeTestCase):
@@ -16,26 +27,47 @@ class TestLeaderboard(FrappeTestCase):
             frappe.delete_doc("VT Project", "LB-Proj", force=True)
         p = frappe.get_doc({
             "doctype": "VT Project", "title": "LB-Proj",
-            "project_owner": frappe.session.user,
+            "brand": _ensure_brand(),
+            "project_owner": "Administrator",
             "start_date": add_days(today(), -30),
             "end_date": add_days(today(), 30),
             "status": "Open",
         }).insert(ignore_permissions=True)
         self.project = p.name
+        self._created_tasks = []
 
-        def _t(user, pts, days_ago):
-            return frappe.get_doc({
+        # Use dates anchored to the first day of the current month so the
+        # fixtures are always inside the "month" window regardless of which
+        # day of the month the tests run.  (add_days(today(), -N) can land in
+        # the previous month when today is within the first few days.)
+        month_start = get_first_day(getdate(today()))
+
+        def _t(user, pts, day_offset):
+            # completion_date and earned_points are read_only in the doctype,
+            # so Frappe strips them on insert().  Use db_set() after insert to
+            # write the values directly, mirroring what the controller does in
+            # on_submit().
+            doc = frappe.get_doc({
                 "doctype": "VT Task", "title": "T",
                 "project": self.project, "assigned_to": user,
-                "estimated_minutes": 1, "actual_minutes": 1,
-                "earned_points": pts,
+                "estimated_minutes": 1,
                 "pdca_phase": "DONE", "kanban_status": "Done",
-                "completion_date": add_days(today(), -days_ago),
             }).insert(ignore_permissions=True)
+            doc.db_set("earned_points", pts)
+            doc.db_set("completion_date", add_days(month_start, day_offset))
+            self._created_tasks.append(doc.name)
+            return doc
 
-        _t("lb-a@x.com", 30, 2)
+        _t("lb-a@x.com", 30, 0)
         _t("lb-b@x.com", 10, 1)
-        _t("lb-b@x.com", 10, 3)
+        _t("lb-b@x.com", 10, 2)
+
+    def tearDown(self):
+        for task_name in getattr(self, "_created_tasks", []):
+            if frappe.db.exists("VT Task", task_name):
+                frappe.delete_doc("VT Task", task_name, force=True)
+        if frappe.db.exists("VT Project", "LB-Proj"):
+            frappe.delete_doc("VT Project", "LB-Proj", force=True)
 
     def test_month_leaderboard_orders_by_points(self):
         result = get_leaderboard("month")

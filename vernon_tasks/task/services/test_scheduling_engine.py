@@ -5,6 +5,16 @@ from datetime import date
 OWNER = "test_sched_owner@example.com"
 LEADER = "test_sched_leader@example.com"
 MEMBER = "test_sched_member@example.com"
+_FIXTURE_BRAND = "TEST-SCHED-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FIXTURE_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FIXTURE_BRAND
 
 
 def setup():
@@ -36,6 +46,7 @@ def make_task_and_project():
     setup()
     proj = frappe.get_doc({
         "doctype": "VT Project", "title": "Sched Test Proj",
+        "brand": _ensure_brand(),
         "project_owner": OWNER, "project_leader": LEADER,
         "start_date": "2026-05-01", "end_date": "2026-05-31",
         "pdca_phase": "PLAN", "status": "Open",

@@ -3,6 +3,17 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
 from vernon_tasks.task.services.forecast_service import get_forecast
 
+_FORECAST_BRAND = "TEST-FORECAST-BRAND"
+
+
+def _ensure_brand():
+    if not frappe.db.exists("VT Brand", _FORECAST_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _FORECAST_BRAND,
+        }).insert(ignore_permissions=True)
+    return _FORECAST_BRAND
+
 
 def _setup_project(name, sprint_velocities, remaining_hours, sprint_len=14):
     if frappe.db.exists("VT Project", name):
@@ -10,7 +21,8 @@ def _setup_project(name, sprint_velocities, remaining_hours, sprint_len=14):
     project = frappe.get_doc({
         "doctype": "VT Project",
         "title": name,
-        "project_owner": frappe.session.user,
+        "brand": _ensure_brand(),
+        "project_owner": "Administrator",
         "start_date": add_days(today(), -180),
         "end_date": add_days(today(), 180),
         "status": "Open",

@@ -3,6 +3,17 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
 from vernon_tasks.task.services.streak_service import get_streak
 
+_STREAK_BRAND = "TEST-STREAK-BRAND"
+
+
+def _ensure_streak_brand():
+    if not frappe.db.exists("VT Brand", _STREAK_BRAND):
+        frappe.get_doc({
+            "doctype": "VT Brand",
+            "brand_name": _STREAK_BRAND,
+        }).insert(ignore_permissions=True)
+    return _STREAK_BRAND
+
 
 class TestStreak(FrappeTestCase):
     def setUp(self):
@@ -14,7 +25,8 @@ class TestStreak(FrappeTestCase):
             frappe.delete_doc("VT Project", "SK-Proj", force=True)
         self.project = frappe.get_doc({
             "doctype": "VT Project", "title": "SK-Proj",
-            "project_owner": frappe.session.user,
+            "brand": _ensure_streak_brand(),
+            "project_owner": "Administrator",
             "start_date": add_days(today(), -120),
             "end_date": add_days(today(), 30),
             "status": "Open",
@@ -54,7 +66,8 @@ class TestStreak(FrappeTestCase):
             frappe.delete_doc("VT Project", "SK-Empty", force=True)
         p = frappe.get_doc({
             "doctype": "VT Project", "title": "SK-Empty",
-            "project_owner": frappe.session.user,
+            "brand": _ensure_streak_brand(),
+            "project_owner": "Administrator",
             "start_date": today(), "end_date": add_days(today(), 1),
             "status": "Open",
         }).insert(ignore_permissions=True)

@@ -39,9 +39,10 @@ def _make_kr(objective, target, current):
 
 class TestOKRRollup(FrappeTestCase):
     def setUp(self):
-        # Clear any old test data
-        for title in ("OKR-A", "OKR-B", "OKR-Closed"):
+        # Clear any old test data — delete KRs first so on_trash guard doesn't block
+        for title in ("OKR-A", "OKR-B", "OKR-Closed", "OKR-NoKR"):
             for n in frappe.get_all("Objective", {"title": title}, ["name"]):
+                frappe.db.delete("Key Result", {"objective": n["name"]})
                 frappe.delete_doc("Objective", n["name"], force=True)
         self.obj_a = _make_objective("OKR-A", "2026-Q2")
         self.obj_b = _make_objective("OKR-B", "2026-Q2")
@@ -50,6 +51,13 @@ class TestOKRRollup(FrappeTestCase):
         _make_kr(self.obj_a.name, 100, 60)   # 60% → avg 70
         _make_kr(self.obj_b.name, 100, 30)   # 30%
         _make_kr(self.obj_closed.name, 100, 100)  # not included
+
+    def tearDown(self):
+        # Clean up all objectives created by setUp and individual tests
+        for title in ("OKR-A", "OKR-B", "OKR-Closed", "OKR-NoKR"):
+            for n in frappe.get_all("Objective", {"title": title}, ["name"]):
+                frappe.db.delete("Key Result", {"objective": n["name"]})
+                frappe.delete_doc("Objective", n["name"], force=True)
 
     def test_excludes_closed(self):
         rows = get_okr_rollup(period="2026-Q2")
