@@ -24,8 +24,8 @@ def _vapid() -> tuple[str, str, str]:
 
 def _target_url(doc) -> str:
     if doc.get("document_type") == "VT Task" and doc.get("document_name"):
-        return "/m/project"
-    return "/m/me/notifications"
+        return f"/app/vt-task/{doc.get('document_name')}"
+    return "/app/notification-log"
 
 
 def _user_pref(user: str) -> dict:

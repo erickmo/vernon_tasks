@@ -20,9 +20,9 @@ class TestTelemetry(FrappeTestCase):
 
     def test_log_event_rate_limit(self):
         for _ in range(60):
-            log_event(event="page_view", props={"route": "/m/work"})
+            log_event(event="page_view", props={"route": "/app/vt-task"})
         with self.assertRaises(frappe.ValidationError):
-            log_event(event="page_view", props={"route": "/m/work"})
+            log_event(event="page_view", props={"route": "/app/vt-task"})
 
     def test_purge_removes_old(self):
         doc = frappe.get_doc({

@@ -1,13 +1,28 @@
 {
- "creation": "2026-05-30 00:00:00.000000",
+ "content": null,
+ "creation": "2026-05-30 00:00:00",
+ "docstatus": 0,
  "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-05-30 23:21:33.902272",
+ "modified_by": "Administrator",
  "module": "Task",
  "name": "vt-home",
  "page_name": "vt-home",
  "roles": [
-  {"role": "VT Member"},
-  {"role": "VT Leader"},
-  {"role": "VT Manager"}
+  {
+   "role": "VT Member"
+  },
+  {
+   "role": "VT Leader"
+  },
+  {
+   "role": "VT Manager"
+  }
  ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 1,
  "title": "Beranda"
 }
