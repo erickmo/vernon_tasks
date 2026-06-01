@@ -33,6 +33,13 @@ def get_team_capacity(project: str | None = None) -> list[dict]:
         fields=["user", "daily_target_hours"],
     )
 
+    # Batch-fetch all full_names to avoid N+1 query
+    user_names = [p["user"] for p in profiles]
+    name_map = {
+        r["name"]: r["full_name"] or r["name"]
+        for r in frappe.get_all("User", filters={"name": ("in", user_names)}, fields=["name", "full_name"])
+    } if user_names else {}
+
     result: list[dict] = []
     for profile in profiles:
         user = profile["user"]
@@ -55,7 +62,7 @@ def get_team_capacity(project: str | None = None) -> list[dict]:
         capacity_hours = daily_target * _WORKING_DAYS_PER_WEEK
         utilization_pct = round((total_hours / capacity_hours) * 100, 1) if capacity_hours else 0.0
 
-        full_name = frappe.db.get_value("User", user, "full_name") or user
+        full_name = name_map.get(user, user)
 
         result.append({
             "user": user,

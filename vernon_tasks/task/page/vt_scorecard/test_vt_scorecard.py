@@ -93,6 +93,9 @@ class TestScorecardAPI(unittest.TestCase):
         from vernon_tasks.task.page.vt_scorecard.vt_scorecard import get_point_log
         result = get_point_log()
         self.assertTrue(any(r["amount"] == 50.0 for r in result))
+        # All returned logs must belong to the calling user (Administrator)
+        matched = [r for r in result if r["amount"] == 50.0]
+        self.assertGreater(len(matched), 0, "Expected at least one log with amount=50.0")
 
     def test_get_point_log_enriches_task_title(self):
         """Each log row includes task_title from the linked VT Task."""

@@ -105,8 +105,8 @@ class TestTeamCapacityAPI(unittest.TestCase):
         result = get_team_capacity()
         admin_row = next((r for r in result if r["user"] == "Administrator"), None)
         self.assertIsNotNone(admin_row)
-        self.assertGreater(admin_row["total_estimated_hours"], 0)
-        self.assertGreater(admin_row["utilization_pct"], 0)
+        self.assertAlmostEqual(admin_row["total_estimated_hours"], 4.0, places=1)
+        self.assertAlmostEqual(admin_row["utilization_pct"], 10.0, places=1)
 
     def test_get_team_capacity_sorts_by_utilization_desc(self):
         """Result is sorted highest utilization first."""
