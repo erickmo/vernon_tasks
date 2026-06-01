@@ -19,6 +19,7 @@ app_include_css = [
     "/assets/vernon_tasks/css/vt_board.css",
 ]
 extend_bootinfo = "vernon_tasks.boot.extend_bootinfo"
+on_session_creation = ["vernon_tasks.setup.roles.grant_default_role"]
 
 required_apps = []
 
