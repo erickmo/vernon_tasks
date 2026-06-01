@@ -1,6 +1,15 @@
-/* vt_home.css — dashboard styling, ported from www/login.html convention.
-   All rules scoped under .vt-home so desk UI is untouched. */
+/* vt_home.css — dashboard styling + global desk font/background overrides. */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Serif+Display:ital@0;1&display=swap');
+
+/* Apply DM Sans globally — covers all desk pages, forms, modals, lists. */
+body,
+.frappe-app,
+.page-container,
+.modal-content,
+.form-control,
+input, textarea, select, button {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
 
 .vt-home {
   --vh-navy: #0b0f1a;
@@ -18,15 +27,20 @@
   font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-/* Gray page background. The `vt-gray-bg` class is added in JS (on_page_load) to
-   the page-container element of vt-home / vt-projects / vt-project-detail, so the
-   selector is guaranteed to match the right element regardless of route naming.
-   #f4f5f7 mirrors --vh-page-bg (kept above for the .vt-home scope); literal here
-   because the var is defined on .vt-home, a descendant, not this ancestor. The
-   inner Frappe wrappers are transparent by default, so the gray shows through;
-   cards keep their own white background. */
-.page-container.vt-gray-bg {
+/* Global desk page styling: gray background for all pages, white page-head,
+   full-width layout. JS (vt_page_style.js) applies inline bg/transparent
+   styles on every route change (proven reliable); these CSS rules are the
+   structural complement — min-height + width constraints. */
+.page-container {
+  min-height: 100vh;
   background-color: #f4f5f7;
+}
+.page-head {
+  background-color: #fff !important;
+}
+.layout-main-section-wrapper,
+.layout-main-section {
+  max-width: 100% !important;
 }
 
 /* ── Hero band ── */
@@ -157,3 +171,59 @@
 }
 .vt-navbar2 .vt-nav-item:hover { background: #f1f5f9; color: #0f172a; }
 .vt-navbar2 .vt-nav-item.active { background: rgba(37,99,235,0.10); color: #2563eb; }
+
+/* ── vt-navbar2 dropdown ── */
+.vt-navbar2 {
+    position: relative;
+    z-index: 1000;
+}
+
+.vt-nav-group {
+    position: relative;
+    display: inline-block;
+}
+
+.vt-nav-group-trigger {
+    cursor: pointer;
+    user-select: none;
+}
+
+.vt-nav-caret {
+    font-size: 10px;
+    margin-left: 2px;
+    opacity: 0.7;
+}
+
+.vt-nav-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 180px;
+    background: #fff;
+    border: 1px solid var(--border-color, #e2e8f0);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+    padding: 4px 0;
+    z-index: 1100;
+}
+
+.vt-nav-dropdown.open {
+    display: block;
+}
+
+.vt-nav-dropdown-item {
+    display: block;
+    padding: 7px 16px;
+    font-size: 13px;
+    color: var(--text-color, #1e293b);
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.vt-nav-dropdown-item:hover,
+.vt-nav-dropdown-item.active {
+    background: var(--subtle-bg, #f4f5f7);
+    color: var(--primary, #6366f1);
+}
