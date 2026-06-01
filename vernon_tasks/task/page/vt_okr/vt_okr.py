@@ -40,13 +40,20 @@ def list_objectives(period: str | None = None, brand: str | None = None) -> list
         order_by="period desc, title asc",
     )
 
+    objective_names = [o["name"] for o in objectives]
+    all_krs = frappe.get_all(
+        _KR_DOCTYPE,
+        filters={"objective": ("in", objective_names)} if objective_names else {"objective": ""},
+        fields=["name", "objective", "metric", "target_value", "current_value",
+                "progress_percent", "confidence", "unit"],
+    ) if objective_names else []
+
+    krs_by_objective: dict[str, list] = {}
+    for kr in all_krs:
+        krs_by_objective.setdefault(kr["objective"], []).append(kr)
+
     for obj in objectives:
-        krs = frappe.get_all(
-            _KR_DOCTYPE,
-            filters={"objective": obj["name"]},
-            fields=["name", "metric", "target_value", "current_value",
-                    "progress_percent", "confidence", "unit"],
-        )
+        krs = krs_by_objective.get(obj["name"], [])
         obj["key_results"] = krs
         obj["kr_count"] = len(krs)
         obj["avg_progress"] = (
