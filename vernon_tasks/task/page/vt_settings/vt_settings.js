@@ -36,6 +36,12 @@ function load(page, state) {
         const d = r.message || {};
         state.navbar = (d.navbar_items || []).map((x) => ({
             label: x.label, route: x.route, icon: x.icon, enabled: x.enabled ? 1 : 0,
+            // Preserve the structural fields the editor doesn't expose, so a save
+            // round-trips them instead of nulling the role-gated menu (which would
+            // flatten the dropdown groups and leak Manager-only links to everyone).
+            is_group: x.is_group ? 1 : 0,
+            parent_group: x.parent_group || "",
+            role_restriction: x.role_restriction || "",
         }));
         state.branding = d.branding || {};
         state.scoring = d.scoring || {};
@@ -74,7 +80,10 @@ function navbar_section(page, state) {
     state.navbar.forEach((item, i) => sec.append(navbar_card(page, state, item, i)));
     const add = $(`<button class="btn btn-xs btn-default" style="margin-top:8px;">+ ${esc("Tambah Item")}</button>`);
     add.on("click", () => {
-        state.navbar.push({ label: "", route: "", icon: "", enabled: 1 });
+        state.navbar.push({
+            label: "", route: "", icon: "", enabled: 1,
+            is_group: 0, parent_group: "", role_restriction: "",
+        });
         render(page, state);
     });
     sec.append(add);
