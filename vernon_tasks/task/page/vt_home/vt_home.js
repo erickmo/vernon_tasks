@@ -123,7 +123,7 @@ function render_projects(c, data) {
                 <strong>${frappe.utils.escape_html(p.name)}</strong>${chip}</div>
             <div class="vh-bar" style="margin:10px 0 6px;"><span style="width:${p.pct_done}%"></span></div>
             <div class="vh-item-meta">${p.open_tasks} task terbuka · ${p.blockers} blocker</div></div>`);
-        card.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project", p.id));
+        card.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project-detail", p.id));
         row.append(card);
     });
     sec.append(row);
@@ -138,7 +138,7 @@ function render_member_projects(sec, member) {
         const item = $(`<div class="vh-item"><span class="vh-item-title">
             ${frappe.utils.escape_html(p.name)}</span>
             <span class="vh-item-meta">${p.pct_done}% · ${p.my_open_tasks} task saya</span></div>`);
-        item.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project", p.id));
+        item.css("cursor", "pointer").on("click", () => frappe.set_route("vt-project-detail", p.id));
         card.append(item);
     });
     sec.append(card);
