@@ -1,0 +1,35 @@
+{
+ "allow_roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "creation": "2026-06-01 15:33:05.190356",
+ "docstatus": 0,
+ "doctype": "Module Onboarding",
+ "documentation_url": "/app/vt-home",
+ "idx": 0,
+ "is_complete": 0,
+ "modified": "2026-06-01 15:33:05.190356",
+ "modified_by": "Administrator",
+ "module": "Task",
+ "name": "Vernon Tasks Onboarding",
+ "owner": "Administrator",
+ "steps": [
+  {
+   "step": "Buat brand"
+  },
+  {
+   "step": "Buat proyek pertama"
+  },
+  {
+   "step": "Tambah anggota tim"
+  },
+  {
+   "step": "Buat task pertama"
+  }
+ ],
+ "subtitle": "Empat langkah untuk menyiapkan ruang kerja Anda",
+ "success_message": "Ruang kerja Anda siap!",
+ "title": "Mulai dengan Vernon Tasks"
+}

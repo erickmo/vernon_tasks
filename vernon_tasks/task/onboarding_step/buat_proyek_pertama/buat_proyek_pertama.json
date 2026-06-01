@@ -1,0 +1,19 @@
+{
+ "action": "Create Entry",
+ "creation": "2026-06-01 15:33:05.150938",
+ "docstatus": 0,
+ "doctype": "Onboarding Step",
+ "idx": 0,
+ "is_complete": 0,
+ "is_single": 0,
+ "is_skipped": 0,
+ "modified": "2026-06-01 15:33:05.150938",
+ "modified_by": "Administrator",
+ "name": "Buat proyek pertama",
+ "owner": "Administrator",
+ "reference_document": "VT Project",
+ "show_form_tour": 0,
+ "show_full_form": 0,
+ "title": "Buat proyek pertama",
+ "validate_action": 1
+}

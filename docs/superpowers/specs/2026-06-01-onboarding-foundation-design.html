@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Onboarding Foundation — Design Spec — Vernon Tasks</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../../index.html">Docs</a> · <a href="index.html">Specs</a> · <strong>Onboarding Foundation</strong></div>
+
+<article class="spec">
+<h1 id="onboarding-foundation-design-spec">Onboarding Foundation — Design Spec</h1>
+<p><strong>Date:</strong> 2026-06-01 · <strong>Status:</strong> Approved (design) · <strong>Task size:</strong> L · <strong>Branch:</strong> <code>feat/onboarding-foundation</code></p>
+<p>Make Vernon Tasks usable from zero. A brand-new user must be able to self-start: get a role, see a navigable product, understand the first action, and reach a working board on the first click. This spec covers the <strong>onboarding foundation</strong> scope — the five highest-impact root causes plus an optional demo seed and a hybrid native onboarding checklist. Out-of-scope items are listed explicitly.</p>
+<p>Source of the problem set: full read-only UX/onboarding audit (7 agents, all 15 desk pages + flow), 2026-06-01.</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li>A new authenticated user holds a usable role and never hits a bare permission wall on the landing page.</li>
+<li>On a fresh deploy, the whole product is discoverable (navbar seeded), not two items behind typed URLs.</li>
+<li>The primary landing path (home → project board) works on the first click.</li>
+<li>Empty accounts present an inviting, action-oriented first-run experience with a clear "create your first X" call-to-action.</li>
+<li>A guided, self-completing onboarding checklist appears exactly where the user lands (<code>vt-home</code>), backed by native, low-code, fixture-defined steps.</li>
+<li>Users can optionally load and later remove demo data to see a live product without committing real data.</li>
+</ul>
+<h2 id="non-goals-deferred-backlog-tracked-from-the-audit-not-built-here">Non-Goals (deferred backlog — tracked from the audit, not built here)</h2>
+<ul>
+<li>VT Settings navbar-editor data-loss bug (audit #10).</li>
+<li>Full Indonesian translation of the leader/exec/personal clusters.</li>
+<li>Metric tooltips / jargon legends / kanban coachmarks (audit #6).</li>
+<li>Filter-gated analytics auto-selection and email→name resolution (audit #8).</li>
+<li>Shared card/layout standardization across exec/leader pages.</li>
+</ul>
+<h2 id="key-architectural-decision-derive-per-user-completion-do-not-trust-the-native-flag">Key Architectural Decision — derive per-user completion, do not trust the native flag</h2>
+<p>Frappe's native <code>Onboarding Step.is_complete</code> / <code>is_skipped</code> are <strong>single fields on the step document, shared across all users</strong> (set via <code>frappe.desk.desktop.update_onboarding_step</code> → <code>frappe.db.set_value("Onboarding Step", name, ...)</code>). Native Module Onboarding is designed for one-time, single-admin setup, not per-contributor onboarding. If we relied on it, the first user to finish "Buat proyek" would mark it done for everyone.</p>
+<p><strong>Decision:</strong> Native <code>Module Onboarding</code> + <code>Onboarding Step</code> records are the <strong>declarative step catalog</strong> (titles, descriptions, action type, route/target) — low-code, fixture-exportable, admin-editable. <strong>Per-user completion is derived from the user's actual data</strong> at read time (does a brand exist, does the user have a project, does that project have ≥2 members, does the user have a task). This is correct per-user, self-completing, and needs no extra write path.</p>
+<p>The native onboarding block still renders on the <strong>Vernon Tasks Workspace</strong> for the admin/native experience; the <code>vt-home</code> card is the per-user surface.</p>
+<h2 id="architecture-8-components">Architecture — 8 components</h2>
+<h3 id="1-auto-grant-vt-member-on-login">1. Auto-grant <code>VT Member</code> on login</h3>
+<ul>
+<li><strong>Layer:</strong> Frappe framework event — <code>on_session_creation</code> hook (Hooks-First Priority 3).</li>
+<li><strong>Files:</strong> <code>hooks.py</code> (register hook); <code>vernon_tasks/setup/roles.py</code> (new, single documented function).</li>
+<li><strong>Behavior:</strong> On each session creation, if <code>frappe.session.user</code> is not <code>Guest</code>/<code>Administrator</code> and holds none of <code>{VT Manager, VT Leader, VT Member}</code>, add <code>VT Member</code>. Idempotent (role check first), cheap, covers new users, pre-existing role-less users, and users whose roles were revoked.</li>
+<li><strong>Why a hook, not a controller:</strong> there is no VT-owned doctype lifecycle for "a user logged in"; granting an app role on session start is a framework-event concern.</li>
+</ul>
+<h3 id="2-auto-seed-navbar-on-install-and-migrate-seed-if-empty">2. Auto-seed navbar on install and migrate (seed-if-empty)</h3>
+<ul>
+<li><strong>Layer:</strong> Frappe framework events — <code>after_install</code> + <code>after_migrate</code> (Priority 3).</li>
+<li><strong>Files:</strong> <code>hooks.py</code> (register both); <code>setup_website.py</code> (new <code>ensure_navbar_seeded()</code>).</li>
+<li><strong>Behavior:</strong> If the <code>VT Navbar Item</code> child table is empty, run the existing seed; if it already has rows, do nothing (preserve admin customization). The existing <code>setup_navbar_items()</code> deletes-then-inserts and must NOT run unconditionally on migrate — <code>ensure_navbar_seeded()</code> wraps it behind the emptiness guard.</li>
+<li><strong>Result:</strong> a fresh deploy exposes all 14 seeded routes immediately instead of the <code>DEFAULT_NAVBAR</code> 2-item fallback.</li>
+</ul>
+<h3 id="3-fix-the-broken-landingdetail-route">3. Fix the broken landing→detail route</h3>
+<ul>
+<li><strong>Layer:</strong> Client Script.</li>
+<li><strong>Files:</strong> <code>task/page/vt_home/vt_home.js</code> lines 126 and 141.</li>
+<li><strong>Change:</strong> <code>frappe.set_route("vt-project", p.id)</code> → <code>frappe.set_route("vt-project-detail", p.id)</code>, matching <code>vt_projects.js:50</code>. Home project cards open the styled board, not the raw <code>VT Project</code> form (DocType slug collision).</li>
+</ul>
+<h3 id="4-shared-first-run-empty-state-component">4. Shared first-run empty-state component</h3>
+<ul>
+<li><strong>Layer:</strong> Client Script, shared asset (Priority 4).</li>
+<li><strong>Files:</strong> <code>public/js/vt_empty.js</code> (new); registered in <code>hooks.py</code> <code>app_include_js</code>.</li>
+<li><strong>API:</strong> <code>frappe.vt_ui.empty_state({ icon, title, message, cta_label, on_cta, secondary_label, on_secondary })</code> → returns a jQuery node rendering a dashed-border card (reusing the <code>.vb-empty</code> visual language) with an optional primary and secondary action.</li>
+<li><strong>Applied here:</strong> <code>vt-home</code> (single welcome card when led + member + next_actions are all empty) and <code>vt-projects</code> (<code>Buat Proyek pertama Anda</code>). One implementation, no duplication; reusable for the deferred pages later.</li>
+</ul>
+<h3 id="5-primary-buat-action-above-the-fold-on-vt-home">5. Primary "Buat" action above the fold on <code>vt-home</code></h3>
+<ul>
+<li><strong>Layer:</strong> Client Script.</li>
+<li><strong>Files:</strong> <code>vt_home.js</code>.</li>
+<li><strong>Change:</strong> <code>page.set_primary_action("Buat Proyek", ...)</code> opening a lightweight quick-create dialog (<code>Nama Proyek</code> + <code>Brand</code>; advanced fields deferred / progressively disclosed). Consistent with the <code>vt-projects</code> header action. Gives the landing page an obvious first action.</li>
+</ul>
+<h3 id="6-hybrid-onboarding-checklist-card-on-vt-home">6. Hybrid onboarding checklist card on <code>vt-home</code></h3>
+<ul>
+<li><strong>Layer:</strong> Priority 5 whitelisted API (≤10-line entry, delegates) + Client Script + CSS.</li>
+<li><strong>Files:</strong> <code>task/api/onboarding.py</code> (new); <code>vt_home.js</code> (render card); <code>vt_home.css</code> (card styles).</li>
+<li><strong>API:</strong> <code>get_onboarding_state()</code> → returns the step catalog read from the <code>Vernon Tasks Onboarding</code> Module Onboarding record, each annotated with a <strong>derived</strong> <code>is_complete</code> for the current user, plus an overall <code>dismissed</code> flag.</li>
+<li><strong>Per-user completion derivation:</strong></li>
+<li><code>buat_brand</code> — a <code>VT Brand</code> exists.</li>
+<li><code>buat_proyek</code> — the user leads or is a member of ≥1 <code>VT Project</code>.</li>
+<li><code>tambah_tim</code> — at least one of the user's projects has ≥2 team members.</li>
+<li><code>buat_task</code> — the user has ≥1 <code>VT Task</code>.</li>
+<li><strong>Card behavior:</strong> renders the checklist with progress (<code>n/4</code>), each row routes to the step's action (Go to Page / Create Entry). Hidden when all steps derive complete OR the user dismissed it. <strong>Dismiss</strong> persists per-user via <code>frappe.defaults.set_user_default("vt_onboarding_dismissed", 1)</code> and is read back in <code>get_onboarding_state()</code>.</li>
+<li><strong>No write path needed for completion</strong> — derived state means the card self-updates as the user creates data.</li>
+</ul>
+<h3 id="7-optional-demo-data-load-clear">7. Optional demo data (load + clear)</h3>
+<ul>
+<li><strong>Layer:</strong> Setup module + whitelisted API entries (≤10 lines each, delegate).</li>
+<li><strong>Files:</strong> <code>vernon_tasks/setup/demo_data.py</code> (new, documented setup module analogous to <code>setup_website.py</code>); thin <code>@frappe.whitelist()</code> wrappers in <code>task/api/onboarding.py</code>.</li>
+<li><strong><code>load_demo()</code>:</strong> creates 1 <code>VT Brand</code> (if none), 1 <code>VT Project</code>, 1 <code>VT Sprint</code>, and a few <code>VT Task</code>s, all owned by the current user. Every created document's <code>{doctype, name}</code> is recorded in <code>VT Settings.demo_data_refs</code> (new JSON <code>Small Text</code> field on the single).</li>
+<li><strong><code>clear_demo()</code>:</strong> deletes exactly the documents listed in <code>demo_data_refs</code>, then clears the field. Precise and reversible — never guesses by name.</li>
+<li><strong>Surface:</strong> a <code>Muat data contoh</code> secondary action inside the <code>vt-home</code> empty state / onboarding card; a <code>Hapus data contoh</code> action appears while demo refs exist.</li>
+<li><strong>Why a setup module, not a controller:</strong> demo seeding spans four doctypes and is a one-shot setup utility, not a single doctype's lifecycle — the same justification as the existing <code>setup_website.py</code>.</li>
+</ul>
+<h3 id="8-native-onboarding-fixtures-workspace-block">8. Native onboarding fixtures + workspace block</h3>
+<ul>
+<li><strong>Layer:</strong> Layer 1 native config, exported as fixtures.</li>
+<li><strong>Files:</strong> <code>hooks.py</code> <code>fixtures</code> (add <code>Module Onboarding</code>, <code>Onboarding Step</code>, <code>Onboarding Step Map</code> filtered to the Vernon Tasks records); <code>task/workspace/vernon_tasks/vernon_tasks.json</code> (prepend an <code>onboarding</code> content block referencing the Module Onboarding).</li>
+<li><strong>Records (all labels Bahasa Indonesia):</strong> <code>Module Onboarding</code> "Vernon Tasks Onboarding" with four <code>Onboarding Step</code>s (Buat brand, Buat proyek pertama, Tambah anggota tim, Buat task pertama), each with an <code>action</code> (<code>Create Entry</code> / <code>Go to Page</code>) and route/target. These are the declarative catalog the <code>vt-home</code> card reads.</li>
+</ul>
+<h2 id="onboarding-steps-catalog">Onboarding steps (catalog)</h2>
+<table>
+<thead>
+<tr>
+<th>Step key</th>
+<th>Label (ID)</th>
+<th>Action</th>
+<th>Target</th>
+<th>Derived "done" when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>buat_brand</code></td>
+<td>Buat brand</td>
+<td>Go to Page</td>
+<td><code>vt-brands</code></td>
+<td>a <code>VT Brand</code> exists</td>
+</tr>
+<tr>
+<td><code>buat_proyek</code></td>
+<td>Buat proyek pertama</td>
+<td>Create Entry</td>
+<td><code>VT Project</code></td>
+<td>user leads/member of ≥1 project</td>
+</tr>
+<tr>
+<td><code>tambah_tim</code></td>
+<td>Tambah anggota tim</td>
+<td>Go to Page</td>
+<td><code>vt-team</code></td>
+<td>a user project has ≥2 members</td>
+</tr>
+<tr>
+<td><code>buat_task</code></td>
+<td>Buat task pertama</td>
+<td>Create Entry</td>
+<td><code>VT Task</code></td>
+<td>user has ≥1 task</td>
+</tr>
+</tbody>
+</table>
+<h2 id="data-model-changes">Data model changes</h2>
+<ul>
+<li><code>VT Settings</code> (single): new field <code>demo_data_refs</code> (Small Text, JSON list of <code>{doctype, name}</code>). Holds the demo documents created for precise teardown.</li>
+<li>Per-user default <code>vt_onboarding_dismissed</code> (via <code>frappe.defaults</code>) — no schema change.</li>
+<li>New native config records (fixtures): one <code>Module Onboarding</code>, four <code>Onboarding Step</code>, four <code>Onboarding Step Map</code> rows.</li>
+</ul>
+<h2 id="api-surface-taskapionboardingpy">API surface (<code>task/api/onboarding.py</code>)</h2>
+<p>All <code>@frappe.whitelist()</code>, each ≤10 lines, delegating to <code>setup/</code> helpers or doing a single read:</p>
+<ul>
+<li><code>get_onboarding_state()</code> → <code>{ steps: [{key, label, action, target, is_complete}], progress, dismissed, has_demo }</code>.</li>
+<li><code>dismiss_onboarding()</code> → sets the per-user default; returns <code>{ ok: 1 }</code>.</li>
+<li><code>load_demo()</code> → delegates to <code>setup.demo_data.load</code>; returns created counts.</li>
+<li><code>clear_demo()</code> → delegates to <code>setup.demo_data.clear</code>; returns removed count.</li>
+</ul>
+<h2 id="error-handling">Error handling</h2>
+<ul>
+<li><code>load_demo()</code> / <code>clear_demo()</code> wrap mutations in a single transaction; on failure roll back and return a friendly message, never a partial seed.</li>
+<li><code>get_onboarding_state()</code> tolerates a missing Module Onboarding record (returns an empty catalog → card simply not shown) so a half-migrated site does not error the landing page.</li>
+<li>The <code>vt-home</code> card and empty-state render defensively: any API failure logs and falls back to the existing (fixed-routing) dashboard, never a blank page.</li>
+</ul>
+<h2 id="testing-plan-l-unit-integration-acceptance">Testing plan (L → unit + integration + acceptance)</h2>
+<ul>
+<li><strong>Unit:</strong> role-grant idempotency (no duplicate roles, skips Administrator/Guest); <code>ensure_navbar_seeded</code> is a no-op when rows exist and seeds when empty; each derived-completion predicate (brand/project/team/task) flips correctly; <code>demo_data_refs</code> round-trips and <code>clear</code> deletes exactly the recorded set.</li>
+<li><strong>Integration:</strong> <code>get_onboarding_state</code> returns correct per-user progress for a fresh user vs. a user with data; <code>load_demo</code> then <code>clear_demo</code> leaves the database in its prior state (no orphans).</li>
+<li><strong>Acceptance:</strong> brand-new user → login → lands on <code>vt-home</code> with <code>VT Member</code>, full navbar, onboarding card at <code>0/4</code>; clicking a project card opens <code>vt-project-detail</code>; "Muat data contoh" lights up the dashboard; "Hapus data contoh" restores the empty state.</li>
+<li>Test files tagged with the PRD/ADR IDs they cover; fixtures under <code>tests/testdata/onboarding/</code>.</li>
+</ul>
+<h2 id="rollout">Rollout</h2>
+<ol>
+<li>Ship behind no flag (foundation is strictly additive and safe-by-default).</li>
+<li>After merge, run <code>bench --site &lt;site&gt; migrate</code> (triggers <code>after_migrate</code> seed-if-empty) and <code>export-fixtures</code> to commit the native onboarding records.</li>
+<li>Verify the acceptance path on a fresh test user.</li>
+</ol>
+</article>
+
+<footer>Onboarding Foundation · design spec · Vernon Tasks.</footer>
+
+</div>
+</body>
+</html>

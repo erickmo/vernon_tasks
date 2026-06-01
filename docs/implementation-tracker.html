@@ -69,6 +69,15 @@
   </tbody>
 </table>
 
+<h2>PRD — Onboarding Foundation (2026-06-01)</h2>
+<table>
+  <thead><tr><th>ID</th><th>Feature</th><th>Status</th><th>Spec / Plan</th><th>Notes / Tests</th></tr></thead>
+  <tbody>
+    <tr><td class="id">PRD-025</td><td>Onboarding Foundation — auto-grant <code>VT Member</code> on login, navbar seed-if-empty on install/migrate, fix landing→detail route, shared empty-state helper + first-run CTAs, vt-home primary "Buat Proyek" + quick-create dialog, hybrid onboarding checklist card (native Module Onboarding catalog + per-user derived completion), optional demo data load/clear.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-06-01-onboarding-foundation-design.html">spec</a> · <a href="superpowers/plans/2026-06-01-onboarding-foundation.md">plan</a></td><td>Branch <code>feat/onboarding-foundation</code>. Backend: <code>setup/{roles,demo_data,onboarding_seed}.py</code>, <code>setup_website.ensure_navbar_seeded</code>, <code>task/api/onboarding.py</code>; native records <code>task/module_onboarding/</code> + <code>task/onboarding_step/</code>. Frontend: <code>public/js/vt_empty.js</code>, <code>task/page/vt_home/*</code>, <code>vt_projects.js</code>. Tests: <code>setup/test_roles.py</code> (3), <code>setup/test_demo_data.py</code> (3), <code>tests/test_navbar_seed.py</code> (2), <code>task/api/test_onboarding.py</code> (3).</td></tr>
+    <tr><td class="id">PRD-025-D</td><td>Deferred backlog (from UX audit, NOT in this scope): VT Settings navbar-editor data-loss bug, full ID translation of leader/exec/personal clusters, metric tooltips + kanban coachmarks, filter-gated analytics auto-select + email→name, exec/leader component standardization.</td><td><span class="badge superseded">deferred</span></td><td>—</td><td>Tracked from 2026-06-01 onboarding/UX audit.</td></tr>
+  </tbody>
+</table>
+
 <h2>Desktop Portal — Sub-PRDs</h2>
 <table>
   <thead><tr><th>ID</th><th>Module</th><th>Status</th><th>Spec</th><th>Notes</th></tr></thead>

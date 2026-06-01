@@ -10,6 +10,7 @@ app_version = app_version
 
 app_include_js = [
     "/assets/vernon_tasks/js/page_nav.js",
+    "/assets/vernon_tasks/js/vt_empty.js",
     "/assets/vernon_tasks/js/vt_navbar.js",
     "/assets/vernon_tasks/js/vt_project_redirect.js",
     "/assets/vernon_tasks/js/vt_page_style.js",
@@ -19,6 +20,12 @@ app_include_css = [
     "/assets/vernon_tasks/css/vt_board.css",
 ]
 extend_bootinfo = "vernon_tasks.boot.extend_bootinfo"
+on_session_creation = ["vernon_tasks.setup.roles.grant_default_role"]
+after_install = ["vernon_tasks.setup_website.ensure_navbar_seeded"]
+after_migrate = [
+    "vernon_tasks.setup_website.ensure_navbar_seeded",
+    "vernon_tasks.setup.onboarding_seed.ensure_onboarding_seeded",
+]
 
 required_apps = []
 

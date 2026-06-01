@@ -329,6 +329,17 @@ def setup_navbar_items():
     print(f"✓ Seeded {len(_NAVBAR_ITEMS)} navbar items into VT Settings")
 
 
+def ensure_navbar_seeded():
+    """Seed navbar items only if none exist (preserves admin customization).
+
+    Wired to after_install + after_migrate so a fresh deploy exposes the full
+    menu instead of the 2-item DEFAULT_NAVBAR fallback. Safe on every migrate.
+    """
+    if frappe.db.count("VT Navbar Item", {"parenttype": "VT Settings"}):
+        return
+    setup_navbar_items()
+
+
 def execute():
     """Entry point for bench execute."""
     print("\n=== Vernon Tasks Website Setup ===\n")

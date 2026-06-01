@@ -3,14 +3,27 @@
 ## Stack
 
 - **Backend**: Frappe Framework (Python)
-- **Frontend**: Frappe Web (Jinja templates + Frappe's asset pipeline)
-- **PWA**: React + Vite at `pwa/` — served under `/m/*` routes via Frappe's SPA hook
+- **Frontend**: Frappe Web (Jinja templates) + Frappe Desk (`/app`)
 
-## PWA Notes
+The mobile PWA (`pwa/`, served under `/m/*`) and the `/portal` route were removed.
+The app is now desk-only: `/` redirects to `/app` (or `/login` for guests).
 
-The PWA frontend (`pwa/`) is still a **Frappe web app**, not a standalone React app.
-Assets are built by Vite and served through Frappe's static file pipeline.
-Routes are registered via Frappe hooks — do NOT treat it as a standalone CRA/Vite project.
+## Onboarding & First-Run (PRD-025)
+
+- New users are auto-granted `VT Member` on login via the `on_session_creation`
+  hook (`setup/roles.py`); the role grant is wrapped so it can never break login.
+- The navbar is seeded on `after_install`/`after_migrate` only when empty
+  (`setup_website.ensure_navbar_seeded`) — admin edits are preserved.
+- The post-login landing (`task/page/vt_home`) shows an onboarding checklist card.
+  Step **completion is derived per-user from data** (`task/api/onboarding.py`),
+  NOT from the native `Onboarding Step.is_complete` flag (that flag is global).
+  The native `Module Onboarding` records (`task/module_onboarding/`,
+  `task/onboarding_step/`) are the declarative catalog + Workspace surface,
+  seeded idempotently by `setup/onboarding_seed.py`.
+- Optional demo data lives in `setup/demo_data.py` (per-user refs stored in
+  `VT Settings.demo_data_refs`); load/clear exposed via `task/api/onboarding.py`.
+- Shared first-run empty states use `public/js/vt_empty.js`
+  (`window.vt_render_empty_state`).
 
 ## Frappe Stack Skills
 

@@ -26,7 +26,8 @@
     "login_subtext",
     "navbar_tab",
     "navbar_section",
-    "navbar_items"
+    "navbar_items",
+    "demo_data_refs"
   ],
   "fields": [
     {
@@ -160,6 +161,14 @@
       "label": "Navbar Items",
       "options": "VT Navbar Item",
       "description": "Menu links shown in the global navbar2 across desk pages. Empty = default (Home, Project)."
+    },
+    {
+      "fieldname": "demo_data_refs",
+      "fieldtype": "Small Text",
+      "label": "Demo Data Refs",
+      "hidden": 1,
+      "read_only": 1,
+      "description": "JSON list of {doctype,name} created by load_demo, used for precise teardown. Managed by code."
     }
   ],
   "issingle": 1,

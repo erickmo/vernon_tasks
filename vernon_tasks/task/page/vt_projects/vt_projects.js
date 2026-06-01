@@ -30,7 +30,12 @@ function paint_projects(c, data) {
     const sec = $('<div class="vh-section"><div class="vh-section-title">Semua Proyek</div></div>');
     c.append(sec);
     if (!led.length && !member.length) {
-        sec.append('<div class="vh-empty">Belum ada proyek.</div>');
+        sec.append(vt_render_empty_state({
+            title: "Belum ada proyek",
+            message: "Mulai dengan membuat proyek pertama Anda.",
+            cta_label: "Buat Proyek pertama Anda",
+            on_cta: () => frappe.new_doc(PROJECT_DOCTYPE),
+        }));
         return;
     }
     const row = $('<div class="vh-row"></div>');
