@@ -6,6 +6,7 @@ from vernon_tasks.task.api.dashboard import (
     me_progress,
     my_projects,
     project_detail,
+    project_sprints,
     schedule_agenda,
 )
 
@@ -162,6 +163,46 @@ class TestDashboard(FrappeTestCase):
         frappe.set_user(outsider)
         with self.assertRaises(frappe.PermissionError):
             project_detail(self.project)
+
+    def _make_sprint(self, title):
+        doc = frappe.get_doc({
+            "doctype": "VT Sprint",
+            "sprint_title": title,
+            "project": self.project,
+            "start_date": "2025-01-01",
+            "end_date": "2025-01-14",
+            "status": "Active",
+        })
+        doc.flags.ignore_links = True
+        return doc.insert(ignore_permissions=True)
+
+    # ── project_sprints ──
+    def test_project_sprints_shape(self):
+        frappe.set_user(self.user_a)
+        result = project_sprints(self.project)
+        for key in ("sprints", "unassigned"):
+            self.assertIn(key, result)
+        self.assertIsInstance(result["sprints"], list)
+        self.assertIsInstance(result["unassigned"], list)
+
+    def test_project_sprints_buckets_tasks(self):
+        frappe.set_user("Administrator")
+        sprint = self._make_sprint("Sprint Bucket Test")
+        in_sprint = self._make_task(self.user_a, frappe.utils.today(), title="in sprint")
+        in_sprint.sprint = sprint.name
+        in_sprint.save(ignore_permissions=True)
+        self._make_task(self.user_a, frappe.utils.today(), title="no sprint")
+        frappe.set_user(self.user_a)
+        result = project_sprints(self.project)
+        bucket = next(s for s in result["sprints"] if s["id"] == sprint.name)
+        self.assertEqual([t["title"] for t in bucket["tasks"]], ["in sprint"])
+        self.assertIn("no sprint", [t["title"] for t in result["unassigned"]])
+
+    def test_project_sprints_forbidden(self):
+        outsider = _ensure_user("outsider-dash@test.local")
+        frappe.set_user(outsider)
+        with self.assertRaises(frappe.PermissionError):
+            project_sprints(self.project)
 
     # ── schedule_agenda ──
     def test_schedule_agenda_shape(self):

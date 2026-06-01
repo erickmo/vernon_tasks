@@ -674,6 +674,58 @@ def project_board(project_id: str) -> dict:
     }
 
 
+# ── 2c. project_sprints (sprint tab) ─────────────────────────────────────────
+
+
+# Sprint header fields surfaced on the project detail Sprint tab.
+_SPRINT_FIELDS = (
+    "name", "sprint_title", "start_date", "end_date",
+    "status", "percent_done", "goal",
+)
+
+
+def _map_sprint_row(r: dict) -> dict:
+    """Map a raw VT Sprint row to the sprint-card dict used by the Sprint tab."""
+    return {
+        "id": r["name"],
+        "title": r.get("sprint_title") or r["name"],
+        "start_date": str(r["start_date"]) if r.get("start_date") else None,
+        "end_date": str(r["end_date"]) if r.get("end_date") else None,
+        "status": r.get("status"),
+        "percent_done": r.get("percent_done") or 0,
+        "goal": r.get("goal"),
+        "tasks": [],
+    }
+
+
+@frappe.whitelist()
+def project_sprints(project_id: str) -> dict:
+    """Sprints of one project, each with its assigned task cards (Sprint tab).
+
+    Access mirrors project_board (admin / leader / member). Every project task is
+    bucketed onto its sprint; tasks with no sprint are returned under
+    ``unassigned`` so the tab can surface backlog-without-sprint in one call.
+    """
+    require_login()
+    _assert_project_access(project_id, frappe.session.user)
+    sprints = frappe.get_all(
+        SPRINT_DOCTYPE, filters={"project": project_id},
+        fields=list(_SPRINT_FIELDS), order_by="start_date desc",
+        limit_page_length=0,
+    )
+    by_id = {s["name"]: _map_sprint_row(s) for s in sprints}
+    rows = frappe.get_all(
+        TASK_DOCTYPE, filters=[["project", "=", project_id]],
+        fields=list(_BOARD_TASK_FIELDS) + ["sprint"],
+        order_by="deadline asc", limit_page_length=DETAIL_TASK_LIMIT,
+    )
+    unassigned: list[dict] = []
+    for r in rows:
+        bucket = by_id.get(r.get("sprint"))
+        (bucket["tasks"] if bucket else unassigned).append(_map_task_row(r))
+    return {"sprints": list(by_id.values()), "unassigned": unassigned}
+
+
 # ── 3. schedule_agenda ───────────────────────────────────────────────────────
 
 

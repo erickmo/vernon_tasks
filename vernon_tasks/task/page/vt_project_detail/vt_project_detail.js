@@ -9,6 +9,7 @@
 
 const DETAIL_API = "vernon_tasks.task.api.dashboard.project_detail";
 const BOARD_API = "vernon_tasks.task.api.dashboard.project_board";
+const SPRINTS_API = "vernon_tasks.task.api.dashboard.project_sprints";
 const MOVE_API = "vernon_tasks.task.api.board_mutations.move_task";
 const CREATE_API = "vernon_tasks.task.api.board_mutations.create_task";
 const UPDATE_API = "vernon_tasks.task.api.board_mutations.update_task";
@@ -38,8 +39,9 @@ const PRIORITY_COLORS = { Critical: "#ef4444", High: "#f59e0b", Medium: "#3b82f6
 const SORTABLE_GROUP = "vt-board";
 const TASK_DOCTYPE = "VT Task";
 
-// Tabs that render a heavy view lazily on first open (libs loaded on demand).
-const LAZY_TABS = { calendar: render_calendar, gantt: render_gantt };
+// Tabs that render a heavy view lazily on first open (libs/data loaded on
+// demand). Sprint pulls its own data; calendar/gantt also load their libs.
+const LAZY_TABS = { calendar: render_calendar, gantt: render_gantt, sprint: render_sprints };
 const FULLCALENDAR_ASSETS = [
     "assets/frappe/js/lib/fullcalendar/fullcalendar.min.css",
     "assets/frappe/js/lib/fullcalendar/fullcalendar.min.js",
@@ -100,6 +102,7 @@ function render_page(ctx) {
     panels.append($('<div class="vb-panel" data-panel="kanban"></div>').append(kanban_body(ctx)));
     panels.append($('<div class="vb-panel" data-panel="calendar" hidden><div class="vb-calendar"></div></div>'));
     panels.append($('<div class="vb-panel" data-panel="gantt" hidden><div class="vb-gantt-wrap"><svg class="vb-gantt"></svg></div></div>'));
+    panels.append($('<div class="vb-panel" data-panel="sprint" hidden></div>'));
     panels.append($('<div class="vb-panel" data-panel="milestone" hidden></div>').append(milestones_section(ctx.detail.milestones || [])));
     panels.append($('<div class="vb-panel" data-panel="tim" hidden></div>').append(team_section(ctx.detail.team_members || [])));
     panels.append($('<div class="vb-panel" data-panel="ringkasan" hidden></div>').append(open_tasks_section(ctx.detail.open_tasks || [])));
@@ -108,7 +111,8 @@ function render_page(ctx) {
 
 const TABS = [
     ["kanban", "Kanban"], ["calendar", "Kalender"], ["gantt", "Gantt"],
-    ["milestone", "Milestone"], ["tim", "Tim"], ["ringkasan", "Ringkasan"],
+    ["sprint", "Sprint"], ["milestone", "Milestone"], ["tim", "Tim"],
+    ["ringkasan", "Ringkasan"],
 ];
 
 function tabs_bar(ctx) {
@@ -189,9 +193,20 @@ function can_override(ctx) {
     return OVERRIDE_ROLES.some((r) => frappe.user.has_role(r));
 }
 
+// Board columns that accept a quick-add (PDCA columns except Done), mirroring
+// the backend QUICK_ADD_COLUMNS gate in board_mutations.py.
+function quick_add_columns(ctx) {
+    return (ctx.board.columns || [])
+        .filter((c) => c.pdca_phase && c.key !== "Done")
+        .map((c) => c.key);
+}
+
 // Full editable field set, organised into sections. Mirrors the backend
 // EDITABLE_FIELDS allow-list; override fields are appended only for leaders.
-function dialog_fields(ctx) {
+// On create (`editing` false) a column picker is prepended so the task can be
+// born into any board column — needed when creating from the calendar, which
+// (unlike the kanban "+") carries no implicit column.
+function dialog_fields(ctx, editing) {
     const priorities = (ctx.board.priorities || []).join("\n");
     const fields = [
         { fieldname: "title", label: "Judul", fieldtype: "Data", reqd: 1 },
@@ -239,6 +254,17 @@ function dialog_fields(ctx) {
         { fieldname: "recurring_rule", label: "Aturan Recurring", fieldtype: "Link",
           options: "Recurring Rule", depends_on: "is_recurring",
           description: "Wajib diisi jika berulang aktif." },
+    );
+
+    if (!editing) {
+        fields.unshift(
+            { fieldname: "column", label: "Kolom", fieldtype: "Select",
+              options: quick_add_columns(ctx).join("\n"), reqd: 1,
+              description: "Kolom papan tempat task dibuat." },
+        );
+    }
+
+    fields.push(
 
         { fieldtype: "Section Break", label: "Dependencies" },
         { fieldname: "dependencies", fieldtype: "Table", options: "Task Dependency",
@@ -251,18 +277,25 @@ function dialog_fields(ctx) {
     return fields;
 }
 
-function open_task_dialog(ctx, { task, column }) {
+// `prefill` seeds create-mode fields (e.g. calendar day-click sets deadline);
+// `column` preselects the column picker (kanban "+" passes its own column).
+function open_task_dialog(ctx, { task, column, prefill }) {
     const editing = !!task;
     const d = new frappe.ui.Dialog({
         title: editing ? "Edit Task" : "Task Baru",
         size: "large",
-        fields: dialog_fields(ctx),
+        fields: dialog_fields(ctx, editing),
         primary_action_label: editing ? "Simpan" : "Buat",
-        primary_action: (values) => submit_task_dialog(ctx, d, { task, column, values }),
+        primary_action: (values) => submit_task_dialog(ctx, d, { task, values }),
     });
     d.show();
-    // Board card carries only display fields — hydrate the full form from get_task.
-    if (editing) hydrate_edit_dialog(d, task);
+    if (editing) {
+        // Board card carries only display fields — hydrate from get_task.
+        hydrate_edit_dialog(d, task);
+        return;
+    }
+    if (column) d.set_value("column", column);
+    if (prefill) Object.keys(prefill).forEach((k) => d.set_value(k, prefill[k]));
 }
 
 // Populate the edit dialog with the task's full editable field set (incl. child
@@ -277,7 +310,7 @@ function hydrate_edit_dialog(dialog, task) {
     });
 }
 
-function submit_task_dialog(ctx, dialog, { task, column, values }) {
+function submit_task_dialog(ctx, dialog, { task, values }) {
     if (values.start_date && values.deadline && values.start_date >= values.deadline) {
         frappe.msgprint(__("Tanggal mulai harus sebelum deadline."));
         return;
@@ -285,10 +318,16 @@ function submit_task_dialog(ctx, dialog, { task, column, values }) {
     const done = () => { dialog.hide(); reload_board(ctx); };
     if (task) {
         frappe.call(UPDATE_API, { task_id: task.id, values }).then(done);
-    } else {
-        frappe.call(CREATE_API, { project_id: ctx.project_id, title: values.title, column, values })
-            .then(done);
+        return;
     }
+    // Create: column comes from the dialog picker (extra `values.column` is
+    // ignored by the backend EDITABLE_FIELDS allow-list).
+    if (!values.column) {
+        frappe.msgprint(__("Pilih kolom untuk task baru."));
+        return;
+    }
+    frappe.call(CREATE_API, { project_id: ctx.project_id, title: values.title, column: values.column, values })
+        .then(done);
 }
 
 // ── drag interactions ───────────────────────────────────────────────────────
@@ -362,8 +401,16 @@ function render_calendar(ctx) {
             header: { left: "prev,next today", center: "title", right: "month,agendaWeek" },
             height: "auto",
             events,
+            // Click an empty day → create a task with that day as deadline
+            // (calendar events are keyed on deadline). Column is chosen in dialog.
+            dayClick: (date) => open_task_dialog(ctx, { prefill: { deadline: date.format("YYYY-MM-DD") } }),
             eventClick: (ev) => { frappe.set_route("Form", TASK_DOCTYPE, ev.id); return false; },
         });
+        // Grid still renders when empty; hint that clicking a day creates a task.
+        el.find(".vb-empty").remove();
+        if (!events.length) {
+            el.prepend('<div class="vb-empty">Belum ada task bertanggal. Klik tanggal untuk membuat task.</div>');
+        }
     });
 }
 
@@ -380,16 +427,84 @@ function calendar_events(tasks) {
 }
 
 function render_gantt(ctx) {
+    const wrap = ctx.root.find(".vb-gantt-wrap");
     const el = ctx.root.find(".vb-gantt").get(0);
     require_lib(GANTT_ASSETS).then(() => {
         const rows = gantt_tasks(all_board_tasks(ctx));
         $(el).empty();
-        if (!rows.length) return;
+        wrap.find(".vb-empty").remove();
+        // frappe-gantt draws nothing without dated tasks — show why instead of
+        // leaving the panel blank.
+        if (!rows.length) {
+            wrap.append('<div class="vb-empty">Belum ada task bertanggal. Tetapkan tanggal mulai atau deadline pada task untuk melihat Gantt.</div>');
+            return;
+        }
         new Gantt(el, rows, {
             view_mode: "Week", date_format: "YYYY-MM-DD",
             on_click: (t) => frappe.set_route("Form", TASK_DOCTYPE, t.id),
         });
     });
+}
+
+// ── sprint tab (lazy) ────────────────────────────────────────────────────────
+
+function render_sprints(ctx) {
+    const panel = ctx.root.find('[data-panel="sprint"]');
+    panel.empty().append('<div class="vh-empty">Memuat sprint…</div>');
+    frappe.call(SPRINTS_API, { project_id: ctx.project_id }).then((r) => {
+        const data = (r && r.message) || { sprints: [], unassigned: [] };
+        panel.empty().append(sprints_view(ctx, data));
+    });
+}
+
+function sprints_view(ctx, data) {
+    const sec = section_shell("Sprint");
+    const sprints = data.sprints || [];
+    const unassigned = data.unassigned || [];
+    if (!sprints.length && !unassigned.length) {
+        return sec.append('<div class="vh-empty">Belum ada sprint untuk proyek ini.</div>');
+    }
+    sprints.forEach((s) => sec.append(sprint_card(ctx, s)));
+    if (unassigned.length) {
+        sec.append(sprint_card(ctx, {
+            id: "__unassigned__", title: "Tanpa Sprint", tasks: unassigned,
+        }));
+    }
+    return sec;
+}
+
+// One collapsible sprint: header (range/status/progress) + its task list.
+function sprint_card(ctx, s) {
+    const range = [s.start_date, s.end_date].filter(Boolean).map(esc).join(" – ");
+    const pct = s.percent_done || 0;
+    const meta = [range, s.status].filter(Boolean).map(esc).join(" · ");
+    const card = $(`<div class="vb-sprint">
+        <div class="vb-sprint-head">
+            <span class="vb-sprint-title">${esc(s.title)}</span>
+            <span class="vb-sprint-meta">${meta}${meta ? " · " : ""}${(s.tasks || []).length} task</span>
+        </div>
+        ${s.goal ? `<div class="vb-sprint-goal">${esc(s.goal)}</div>` : ""}
+        ${s.percent_done != null && s.id !== "__unassigned__"
+            ? `<div class="vh-bar"><span style="width:${pct}%"></span></div>` : ""}
+        <div class="vb-sprint-body"></div></div>`);
+    const body = card.find(".vb-sprint-body");
+    const tasks = s.tasks || [];
+    if (!tasks.length) {
+        body.append('<div class="vh-empty">Tidak ada task.</div>');
+    } else {
+        tasks.forEach((t) => body.append(sprint_task_row(ctx, t)));
+    }
+    return card;
+}
+
+function sprint_task_row(ctx, t) {
+    const meta = [t.kanban_status, t.priority, t.deadline].filter(Boolean).map(esc).join(" · ");
+    const flag = t.risk_flag ? '<span class="vh-chip vh-chip-behind">Berisiko</span>' : "";
+    const row = $(`<div class="vh-item vb-sprint-task"><span class="vh-item-title">${esc(t.title || t.id)}</span>
+        <span class="vh-item-meta">${meta}</span>${flag}</div>`);
+    // Reuse the board edit dialog so sprint tasks are editable in place.
+    row.on("click", () => open_task_dialog(ctx, { task: t }));
+    return row;
 }
 
 function gantt_tasks(tasks) {
