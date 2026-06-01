@@ -28,9 +28,16 @@ class TestDemoData(FrappeTestCase):
     def test_load_creates_refs_and_records(self):
         result = load(self.user)
         refs = json.loads(frappe.db.get_single_value("VT Settings", "demo_data_refs") or "[]")
-        self.assertGreaterEqual(len(refs), 5)  # brand + project + sprint + >=1 task + members
+        self.assertGreaterEqual(len(refs), 5)  # brand + project + sprint + 3 tasks (team_members are child rows, not separate docs)
         self.assertEqual(result["tasks"], 3)
         self.assertTrue(frappe.db.exists("VT Project", {"project_owner": self.user}))
+
+    def test_load_twice_is_noop(self):
+        load(self.user)
+        first = json.loads(frappe.db.get_single_value("VT Settings", "demo_data_refs") or "[]")
+        load(self.user)
+        second = json.loads(frappe.db.get_single_value("VT Settings", "demo_data_refs") or "[]")
+        self.assertEqual(len(first), len(second))
 
     def test_clear_removes_everything(self):
         load(self.user)

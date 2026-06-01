@@ -33,7 +33,12 @@ _DEMO_TASKS = [
 def _get_refs() -> list:
     """Read demo_data_refs from VT Settings; return empty list if unset."""
     raw = frappe.db.get_single_value("VT Settings", _REFS_FIELD)
-    return json.loads(raw) if raw else []
+    if not raw:
+        return []
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        return []
 
 
 def _set_refs(refs: list) -> None:
@@ -61,61 +66,70 @@ def load(user: str | None = None) -> dict:
         Dict with counts: {"brand": 1, "project": 1, "sprint": 1, "tasks": N}
     """
     user = user or frappe.session.user
-    refs = _get_refs()
-    today = frappe.utils.today()
+    if _get_refs():
+        # Demo already loaded; no-op so a repeated call cannot duplicate records.
+        return {"brand": 0, "project": 0, "sprint": 0, "tasks": 0, "already_loaded": True}
+    refs = []
 
-    # --- Brand ---------------------------------------------------------------
-    if not frappe.db.exists("VT Brand", _BRAND_NAME):
-        brand = frappe.get_doc({"doctype": "VT Brand", "brand_name": _BRAND_NAME})
-        brand.insert(ignore_permissions=True)
-        refs.append({"doctype": "VT Brand", "name": brand.name})
-    brand_name = _BRAND_NAME
+    try:
+        today = frappe.utils.today()
 
-    # --- Project -------------------------------------------------------------
-    # team_members is left empty: user is already project_owner + project_leader,
-    # and _validate_team_excludes_owner_leader would throw if they also appeared
-    # as a child row (VTProject controller, see vt_project.py line ~121).
-    project = frappe.get_doc({
-        "doctype": "VT Project",
-        "title": _PROJECT_TITLE,
-        "brand": brand_name,
-        "project_owner": user,
-        "project_leader": user,
-        "start_date": today,
-        "end_date": frappe.utils.add_days(today, _PROJECT_DURATION_DAYS),
-    })
-    project.insert(ignore_permissions=True)
-    refs.append({"doctype": "VT Project", "name": project.name})
+        # --- Brand ---------------------------------------------------------------
+        if not frappe.db.exists("VT Brand", _BRAND_NAME):
+            brand = frappe.get_doc({"doctype": "VT Brand", "brand_name": _BRAND_NAME})
+            brand.insert(ignore_permissions=True)
+            refs.append({"doctype": "VT Brand", "name": brand.name})
+        brand_name = _BRAND_NAME
 
-    # --- Sprint --------------------------------------------------------------
-    sprint = frappe.get_doc({
-        "doctype": "VT Sprint",
-        "sprint_title": _SPRINT_TITLE,
-        "project": project.name,
-        "start_date": today,
-        "end_date": frappe.utils.add_days(today, _SPRINT_DURATION_DAYS),
-    })
-    sprint.insert(ignore_permissions=True)
-    refs.append({"doctype": "VT Sprint", "name": sprint.name})
-
-    # --- Tasks ---------------------------------------------------------------
-    task_count = 0
-    for t in _DEMO_TASKS:
-        task = frappe.get_doc({
-            "doctype": "VT Task",
-            "title": t["title"],
-            "project": project.name,
-            "assigned_to": user,
-            "kanban_status": t["kanban_status"],
-            "base_points": t["base_points"],
-            "deadline": frappe.utils.add_days(today, _TASK_DEADLINE_DAYS),
+        # --- Project -------------------------------------------------------------
+        # team_members is left empty: user is already project_owner + project_leader,
+        # and _validate_team_excludes_owner_leader would throw if they also appeared
+        # as a child row (VTProject controller, see vt_project.py line ~121).
+        project = frappe.get_doc({
+            "doctype": "VT Project",
+            "title": _PROJECT_TITLE,
+            "brand": brand_name,
+            "project_owner": user,
+            "project_leader": user,
+            "start_date": today,
+            "end_date": frappe.utils.add_days(today, _PROJECT_DURATION_DAYS),
         })
-        task.insert(ignore_permissions=True)
-        refs.append({"doctype": "VT Task", "name": task.name})
-        task_count += 1
+        project.insert(ignore_permissions=True)
+        refs.append({"doctype": "VT Project", "name": project.name})
 
-    _set_refs(refs)
-    frappe.db.commit()
+        # --- Sprint --------------------------------------------------------------
+        sprint = frappe.get_doc({
+            "doctype": "VT Sprint",
+            "sprint_title": _SPRINT_TITLE,
+            "project": project.name,
+            "start_date": today,
+            "end_date": frappe.utils.add_days(today, _SPRINT_DURATION_DAYS),
+        })
+        sprint.insert(ignore_permissions=True)
+        refs.append({"doctype": "VT Sprint", "name": sprint.name})
+
+        # --- Tasks ---------------------------------------------------------------
+        task_count = 0
+        for t in _DEMO_TASKS:
+            task = frappe.get_doc({
+                "doctype": "VT Task",
+                "title": t["title"],
+                "project": project.name,
+                "assigned_to": user,
+                "kanban_status": t["kanban_status"],
+                "base_points": t["base_points"],
+                "deadline": frappe.utils.add_days(today, _TASK_DEADLINE_DAYS),
+            })
+            task.insert(ignore_permissions=True)
+            refs.append({"doctype": "VT Task", "name": task.name})
+            task_count += 1
+
+        _set_refs(refs)
+        frappe.db.commit()
+    except Exception:
+        # Never leave half-created demo records behind.
+        frappe.db.rollback()
+        raise
     return {"brand": 1, "project": 1, "sprint": 1, "tasks": task_count}
 
 
