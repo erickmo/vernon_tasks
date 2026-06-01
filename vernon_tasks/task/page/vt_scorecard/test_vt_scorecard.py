@@ -12,9 +12,16 @@ def _make_project():
     if existing:
         _PROJECT_NAME = existing
         return
+    brand = frappe.db.get_value("VT Brand", {}, "name")
+    if not brand:
+        brand = frappe.get_doc({
+            "doctype": "VT Brand",
+            "title": "Test Scorecard Brand",
+        }).insert(ignore_permissions=True).name
     doc = frappe.get_doc({
         "doctype": "VT Project",
         "title": "Test Scorecard Project",
+        "brand": brand,
         "project_owner": "Administrator",
         "start_date": today(),
         "end_date": add_months(today(), 1),

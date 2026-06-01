@@ -102,7 +102,8 @@ class TestTeamCapacityAPI(unittest.TestCase):
         # 240 min = 4 hours → utilization = 4 / (8 * 5) * 100 = 10%
         self._make_active_task("Administrator", estimated_minutes=240)
         from vernon_tasks.task.page.vt_team.vt_team import get_team_capacity
-        result = get_team_capacity()
+        # Scope to this test's project to avoid leakage from other test tasks
+        result = get_team_capacity(project=self._project_name)
         admin_row = next((r for r in result if r["user"] == "Administrator"), None)
         self.assertIsNotNone(admin_row)
         self.assertAlmostEqual(admin_row["total_estimated_hours"], 4.0, places=1)
