@@ -1,3 +1,10 @@
+/* IIFE wrapper: desk Page scripts are run via frappe.dom.eval as a <script>
+   injected into GLOBAL scope. Top-level const/let here would leak globally
+   and collide ("Identifier X has already been declared") when another VT
+   page declaring the same name was visited first, or on a re-eval — the whole
+   script then aborts and the page renders blank. Wrapping isolates every
+   declaration to function scope. */
+(function () {
 /* vt_okr.js — OKR management page for Leaders and Managers.
    Shows accordion list of Objectives with embedded Key Results.
    Inline confidence/current_value updates via update_key_result API.
@@ -168,3 +175,5 @@ frappe.pages["vt-okr"].on_page_load = function (wrapper) {
 
     render();
 };
+
+})();

@@ -1,3 +1,10 @@
+/* IIFE wrapper: desk Page scripts are run via frappe.dom.eval as a <script>
+   injected into GLOBAL scope. Top-level const/let here would leak globally
+   and collide ("Identifier X has already been declared") when another VT
+   page declaring the same name was visited first, or on a re-eval — the whole
+   script then aborts and the page renders blank. Wrapping isolates every
+   declaration to function scope. */
+(function () {
 /* vt_brands.js — desk page listing VT Brand records as cards.
    List-only: create/edit/delete all delegate to the native Frappe form.
    API: vernon_tasks.brand.api.portal_brands.list_brands */
@@ -17,7 +24,9 @@ frappe.pages["vt-brands"].on_page_load = function (wrapper) {
     });
 
     // "Buat Brand" only for roles that have create permission.
-    if (frappe.has_permission(BRAND_DOCTYPE, "create")) {
+    // Use frappe.model.can_create (client-side perm helper backed by
+    // frappe.boot.user.can_create); frappe.has_permission is server-only.
+    if (frappe.model.can_create(BRAND_DOCTYPE)) {
         page.set_primary_action(__("Buat Brand"), () => frappe.new_doc(BRAND_DOCTYPE), "add");
     }
 
@@ -94,3 +103,5 @@ function brand_card(b) {
     card.on("click", () => frappe.set_route("Form", BRAND_DOCTYPE, b.id));
     return card;
 }
+
+})();
