@@ -12,7 +12,7 @@ frappe.pages["my-dashboard"].on_page_load = function (wrapper) {
 
     page.add_button(__("Refresh"), () => render_all(), { icon: "refresh" });
 
-    const container = $('<div class="my-dashboard-container" style="padding: 0 20px 40px;"></div>')
+    const container = $('<div class="my-dashboard-container" style="padding: 0 20px 40px 0;"></div>')
         .appendTo(page.main);
 
     // ── Number cards ──────────────────────────────────────────────────────────
