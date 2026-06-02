@@ -38,7 +38,7 @@ frappe.pages["vt-scorecard"].on_page_load = function (wrapper) {
 
     page.add_button(__("Refresh"), () => { state.offset = 0; render_all(); }, { icon: "refresh" });
 
-    const container = $('<div class="vt-home" style="padding:20px 20px 48px;"></div>').appendTo(page.main);
+    const container = $('<div class="vt-home" style="padding:20px 20px 48px 0;"></div>').appendTo(page.main);
 
     function call(method, args) {
         return frappe.call({ method, args })

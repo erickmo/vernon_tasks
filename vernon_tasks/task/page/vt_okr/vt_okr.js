@@ -43,7 +43,7 @@ frappe.pages["vt-okr"].on_page_load = function (wrapper) {
     page.set_primary_action(__("Buat Objective"), () => frappe.new_doc(OKR_DOCTYPE), "add");
     page.add_button(__("Refresh"), render, { icon: "refresh" });
 
-    const container = $('<div class="vt-home" style="padding:20px 20px 48px;"></div>').appendTo(page.main);
+    const container = $('<div class="vt-home" style="padding:20px 20px 48px 0;"></div>').appendTo(page.main);
 
     function call_list() {
         const args = {};
