@@ -1,3 +1,10 @@
+/* IIFE wrapper: desk Page scripts are run via frappe.dom.eval as a <script>
+   injected into GLOBAL scope. Top-level const/let here would leak globally
+   and collide ("Identifier X has already been declared") when another VT
+   page declaring the same name was visited first, or on a re-eval — the whole
+   script then aborts and the page renders blank. Wrapping isolates every
+   declaration to function scope. */
+(function () {
 /* vt_team.js — Team Capacity page for Leaders and Managers.
    Shows per-member utilization bar, active task count, and expandable task list.
    API: task/page/vt_team/vt_team.py */
@@ -151,3 +158,5 @@ frappe.pages["vt-team"].on_page_load = function (wrapper) {
 
     render();
 };
+
+})();

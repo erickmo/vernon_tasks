@@ -1,3 +1,10 @@
+/* IIFE wrapper: desk Page scripts are run via frappe.dom.eval as a <script>
+   injected into GLOBAL scope. Top-level const/let here would leak globally
+   and collide ("Identifier X has already been declared") when another VT
+   page declaring the same name was visited first, or on a re-eval — the whole
+   script then aborts and the page renders blank. Wrapping isolates every
+   declaration to function scope. */
+(function () {
 /* vt_projects.js — desk page listing projects as cards.
    Reuses vernon_tasks.task.api.dashboard.my_projects. Presentation only. */
 
@@ -68,3 +75,5 @@ function paint_member(sec, member) {
     });
     sec.append(card);
 }
+
+})();
