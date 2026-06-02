@@ -151,13 +151,19 @@ input, textarea, select, button {
 
 /* ── navbar2 (global desk sub-nav) ── */
 .vt-navbar2 {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  padding: 6px 16px;
   background: #fff;
   border-bottom: 1px solid #e2e8f0;
   font-family: 'DM Sans', system-ui, sans-serif;
+  position: relative;
+  z-index: 1000;
+}
+/* Mirror the primary navbar's .container width + gutters (.navbar .container
+   uses padding: 0 1rem) so both bars share the same content edges. */
+.vt-navbar2 .container {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 6px 1rem;
 }
 .vt-navbar2 .vt-nav-item {
   font-size: 13px;
@@ -173,11 +179,6 @@ input, textarea, select, button {
 .vt-navbar2 .vt-nav-item.active { background: rgba(37,99,235,0.10); color: #2563eb; }
 
 /* ── vt-navbar2 dropdown ── */
-.vt-navbar2 {
-    position: relative;
-    z-index: 1000;
-}
-
 .vt-nav-group {
     position: relative;
     display: inline-block;
