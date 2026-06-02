@@ -154,21 +154,30 @@ function vt_navbar_align(tries) {
     if (tries > 0) setTimeout(() => vt_navbar_align(tries - 1), VT_NAV_POLL_MS);
 }
 
+/* A route is "under" a nav item when it equals it or is a sub-path of it,
+   so /app/my-work/123 still highlights the /app/my-work item. */
+function vt_navbar_route_matches(route, path) {
+    return !!route && (path === route || path.indexOf(route + "/") === 0);
+}
+
 function vt_navbar_update_active() {
     const path = window.location.pathname;
+    const $bar = $(`#${VT_NAVBAR_ID}`);
+    // Clear every active state first. Group triggers carry no data-route and are
+    // only ever switched ON below (when a child matches), so without this reset a
+    // group like "Saya" stays highlighted on every later route once one of its
+    // children was visited. Resetting all .vt-nav-item (triggers included) plus
+    // dropdown items makes the highlight reflect the current route only.
+    $bar.find(".vt-nav-item, .vt-nav-dropdown-item").removeClass("active");
+
     // Standalone links
-    $(`#${VT_NAVBAR_ID} .vt-nav-item:not(.vt-nav-group-trigger)`).each(function () {
-        const r = $(this).data("route");
-        const active = r && (path === r || path.indexOf(r + "/") === 0);
-        $(this).toggleClass("active", !!active);
+    $bar.find(".vt-nav-item:not(.vt-nav-group-trigger)").each(function () {
+        $(this).toggleClass("active", vt_navbar_route_matches($(this).data("route"), path));
     });
-    // Dropdown items + their group trigger
-    $(`#${VT_NAVBAR_ID} .vt-nav-dropdown-item`).each(function () {
-        const r = $(this).data("route");
-        const active = r && (path === r || path.indexOf(r + "/") === 0);
-        $(this).toggleClass("active", !!active);
-        if (active) {
-            $(this).closest(".vt-nav-group").find(".vt-nav-group-trigger").addClass("active");
-        }
+    // Dropdown items → mark the item and bubble active up to its group trigger
+    $bar.find(".vt-nav-dropdown-item").each(function () {
+        if (!vt_navbar_route_matches($(this).data("route"), path)) return;
+        $(this).addClass("active");
+        $(this).closest(".vt-nav-group").find(".vt-nav-group-trigger").addClass("active");
     });
 }
