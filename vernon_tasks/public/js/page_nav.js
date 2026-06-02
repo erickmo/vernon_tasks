@@ -10,7 +10,9 @@ window.vt_render_page_nav = function (page, links) {
         display: "flex",
         gap: "8px",
         alignItems: "center",
-        padding: "8px 20px",
+        // Left padding 0: tab row sits flush on the page content edge, same
+        // left line as the page title, navbar2 and page body.
+        padding: "8px 20px 8px 0",
         background: "var(--subtle-bg)",
         borderBottom: "1px solid var(--border-color)",
         marginBottom: "4px",
