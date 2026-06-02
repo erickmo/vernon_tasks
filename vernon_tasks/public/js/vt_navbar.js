@@ -76,6 +76,10 @@ function vt_navbar_render() {
 
     const items = vt_navbar_items();
     const bar = $(`<div id="${VT_NAVBAR_ID}" class="vt-navbar2"></div>`);
+    // Inner .container mirrors the primary navbar's .container so the VT
+    // sub-nav content aligns to the same width and gutters as the main navbar.
+    const inner = $(`<div class="container"></div>`);
+    bar.append(inner);
 
     const children = items.filter((it) => it.parent_group);
 
@@ -84,9 +88,9 @@ function vt_navbar_render() {
         if (it.is_group) {
             const kids = children.filter((c) => c.parent_group === it.label);
             if (kids.length === 0) return;
-            bar.append(_build_dropdown(it, kids));
+            inner.append(_build_dropdown(it, kids));
         } else {
-            bar.append(_build_link(it));
+            inner.append(_build_link(it));
         }
     });
 
