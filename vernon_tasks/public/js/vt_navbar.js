@@ -116,15 +116,26 @@ function vt_navbar_render() {
     vt_navbar_align(VT_NAV_POLL_TRIES);
 }
 
-/* Resolve the active desk page's content container (where the page title and
-   body sit). Falls back to a document-wide lookup if the route container
-   isn't tagged yet. */
+/* The currently visible desk page container. Frappe tracks it as
+   cur_page.page; data-page-route is NOT route[0] for list/form pages
+   (it's e.g. "List/VT Task"), so we use the tracked node instead of
+   rebuilding the key. Fallback: first page-container that is actually
+   rendered (hidden cached pages have offsetParent === null). */
+function vt_navbar_active_page() {
+    if (window.cur_page && window.cur_page.page) return window.cur_page.page;
+    const pages = document.querySelectorAll(".page-container");
+    for (let i = 0; i < pages.length; i++) {
+        if (pages[i].offsetParent !== null) return pages[i];
+    }
+    return null;
+}
+
+/* Resolve the active page's content container (where the page title and body
+   sit) so navbar2 can align to it — works for desk pages, list and form
+   views alike. */
 function vt_navbar_content_container() {
-    const route = frappe.get_route && frappe.get_route();
-    const key = route && route[0];
-    const pc = key && document.querySelector(`.page-container[data-page-route="${key}"]`);
-    const scope = pc || document;
-    return scope.querySelector(".container.page-body") || scope.querySelector(".page-head .container");
+    const scope = vt_navbar_active_page() || document;
+    return scope.querySelector(".page-head .container") || scope.querySelector(".container.page-body");
 }
 
 /* Match the sub-nav row's left edge to the active page's content column so
