@@ -159,19 +159,19 @@ input, textarea, select, button {
   position: relative;
   z-index: 1000;
 }
-/* Mirror the primary navbar's .container width + gutters (.navbar .container
-   uses padding: 0 1rem) so both bars share the same content edges. */
-.vt-navbar2 .container {
+/* Items row. Left padding is set inline by vt_navbar_align() (JS) to match
+   the active page's content column; the 16px here is a pre-JS fallback. */
+.vt-navbar2-inner {
   display: flex;
   gap: 4px;
   align-items: center;
-  padding: 6px 1rem;
+  padding: 11px 16px;
 }
 .vt-navbar2 .vt-nav-item {
   font-size: 13px;
   font-weight: 500;
   color: #475569;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
   text-decoration: none;

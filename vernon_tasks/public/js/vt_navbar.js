@@ -15,10 +15,19 @@ $(document).ready(function () {
 function vt_navbar_wait_for_desk(tries) {
     if ($(".navbar").length) {
         vt_navbar_render();
-        if (frappe.router && frappe.router.on) frappe.router.on("change", vt_navbar_update_active);
+        if (frappe.router && frappe.router.on) frappe.router.on("change", vt_navbar_on_route);
+        // The content column can change left offset on resize/sidebar toggle.
+        $(window).on("resize.vt_navbar", () => vt_navbar_align(2));
         return;
     }
     if (tries > 0) setTimeout(() => vt_navbar_wait_for_desk(tries - 1), VT_NAV_POLL_MS);
+}
+
+/* On every route change: refresh active state, then re-align to the new
+   page's content column (its left offset may differ per page). */
+function vt_navbar_on_route() {
+    vt_navbar_update_active();
+    vt_navbar_align(VT_NAV_POLL_TRIES);
 }
 
 function vt_navbar_items() {
@@ -71,14 +80,16 @@ function _build_dropdown(group_item, children) {
 function vt_navbar_render() {
     if (document.getElementById(VT_NAVBAR_ID)) {
         vt_navbar_update_active();
+        vt_navbar_align(VT_NAV_POLL_TRIES);
         return;
     }
 
     const items = vt_navbar_items();
     const bar = $(`<div id="${VT_NAVBAR_ID}" class="vt-navbar2"></div>`);
-    // Inner .container mirrors the primary navbar's .container so the VT
-    // sub-nav content aligns to the same width and gutters as the main navbar.
-    const inner = $(`<div class="container"></div>`);
+    // Inner row holds the items; its left padding is set at runtime by
+    // vt_navbar_align() to match the active page's content column, since the
+    // sub-nav lives in the top bar (a different layout column than the body).
+    const inner = $(`<div class="vt-navbar2-inner"></div>`);
     bar.append(inner);
 
     const children = items.filter((it) => it.parent_group);
@@ -102,6 +113,34 @@ function vt_navbar_render() {
     });
 
     vt_navbar_update_active();
+    vt_navbar_align(VT_NAV_POLL_TRIES);
+}
+
+/* Resolve the active desk page's content container (where the page title and
+   body sit). Falls back to a document-wide lookup if the route container
+   isn't tagged yet. */
+function vt_navbar_content_container() {
+    const route = frappe.get_route && frappe.get_route();
+    const key = route && route[0];
+    const pc = key && document.querySelector(`.page-container[data-page-route="${key}"]`);
+    const scope = pc || document;
+    return scope.querySelector(".container.page-body") || scope.querySelector(".page-head .container");
+}
+
+/* Match the sub-nav row's left edge to the active page's content column so
+   navbar2 lines up with the page title and body. The container can render a
+   tick after a route change, so poll briefly until it exists. */
+function vt_navbar_align(tries) {
+    const inner = document.querySelector(`#${VT_NAVBAR_ID} .vt-navbar2-inner`);
+    if (!inner) return;
+    const ref = vt_navbar_content_container();
+    if (ref) {
+        const pad = parseFloat(window.getComputedStyle(ref).paddingLeft) || 0;
+        const left = ref.getBoundingClientRect().left + pad;
+        inner.style.paddingLeft = Math.max(0, left) + "px";
+        return;
+    }
+    if (tries > 0) setTimeout(() => vt_navbar_align(tries - 1), VT_NAV_POLL_MS);
 }
 
 function vt_navbar_update_active() {
