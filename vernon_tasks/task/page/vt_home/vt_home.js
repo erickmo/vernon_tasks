@@ -88,11 +88,32 @@ function render_beranda(c, page) {
     render_hero(c);
     render_onboarding(c, page);
     frappe.call(`${API}.me_progress`).then((r) => render_progress(c, r.message || {}));
+    frappe.call(`${API}.personal_stats`).then((r) => render_personal_stats(c, r.message || {}));
     frappe.call(`${API}.my_projects`).then((r) => render_projects(c, r.message || {}));
     frappe.call(`${API}.daily_completions`).then((r) => render_completions(c, r.message || []));
     frappe.call(`${API}.hours_summary`).then((r) => render_hours(c, r.message || {}));
     frappe.call(`${API}.schedule_agenda`).then((r) => render_schedule(c, r.message || {}));
     render_quick_links(c);
+}
+
+// KPI summary cards for current user: done today/week, points this month, blocked.
+// Mirrors render_team_stats card style: .vh-section > .vh-row > .vh-card.vh-stat.
+function render_personal_stats(c, d) {
+    const sec = $('<div class="vh-section"><div class="vh-section-title">Ringkasan Saya</div></div>');
+    const row = $('<div class="vh-row"></div>');
+    const points = typeof d.points_month === "number" ? d.points_month.toFixed(1) : "0";
+    [
+        ["Selesai Hari Ini", d.done_today ?? 0],
+        ["Selesai Minggu Ini", d.done_week ?? 0],
+        ["Poin Bulan Ini", points],
+        ["Terblokir", d.blocked ?? 0],
+    ].forEach(([lbl, val]) => {
+        row.append(`<div class="vh-card vh-stat">
+            <div class="vh-num">${esc(val)}</div>
+            <div class="vh-lbl">${esc(lbl)}</div></div>`);
+    });
+    sec.append(row);
+    c.append(sec);
 }
 
 // Reveal the Tim tab button only when the caller is eligible (leads >=1 project,
