@@ -33,8 +33,9 @@ const QUICK_LINKS = [
 const PROJECT_DOCTYPE = "VT Project";
 const ONB_API = "vernon_tasks.task.api.onboarding";
 
-// Module-scoped lazy state for the Tim tab (reset on every Refresh).
+// Module-scoped lazy state for the lazy tabs (reset on every Refresh).
 let team_loaded = false;
+let focus_loaded = false;
 
 frappe.pages["vt-home"].on_page_load = function (wrapper) {
     // Gray page background; styled via .vt-gray-bg in vt_home.css.
@@ -57,9 +58,11 @@ function build_tabs(page) {
         <div>
             <div class="vh-tabs">
                 <button class="vh-tab active" data-tab="beranda">Beranda</button>
+                <button class="vh-tab" data-tab="tugas-saya">Tugas Saya</button>
                 <button class="vh-tab" data-tab="tim" style="display:none;">Tim</button>
             </div>
             <div class="vh-panel vt-home" data-panel="beranda"></div>
+            <div class="vh-panel vt-home" data-panel="tugas-saya" style="display:none;"></div>
             <div class="vh-panel vt-home" data-panel="tim" style="display:none;"></div>
         </div>
     `);
@@ -70,6 +73,7 @@ function build_tabs(page) {
         $(this).addClass("active");
         el.find(".vh-panel").hide();
         el.find(`.vh-panel[data-panel="${tab}"]`).show();
+        if (tab === "tugas-saya") render_focus_tab();
         if (tab === "tim") render_team_tab();
     });
     return el;
@@ -79,7 +83,21 @@ function render_all(page) {
     const tabs = build_tabs(page);
     render_beranda(tabs.find('.vh-panel[data-panel="beranda"]'), page);
     team_loaded = false;
+    focus_loaded = false;
     probe_team_tab(tabs);
+}
+
+// Lazy: render the Tugas Saya focus panel once per render_all cycle. The panel
+// markup lives in the shared vt_focus_panel.js asset (window.vt_render_focus_panel).
+function render_focus_tab() {
+    if (focus_loaded) return;
+    focus_loaded = true;
+    const panel = $('.vh-panel[data-panel="tugas-saya"]');
+    if (typeof window.vt_render_focus_panel === "function") {
+        window.vt_render_focus_panel(panel);
+    } else {
+        panel.html('<div class="vh-empty">Panel tidak tersedia.</div>');
+    }
 }
 
 // Personal POV — runs immediately into the Beranda panel.

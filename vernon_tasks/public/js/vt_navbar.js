@@ -155,7 +155,7 @@ function vt_navbar_align(tries) {
 }
 
 /* A route is "under" a nav item when it equals it or is a sub-path of it,
-   so /app/my-work/123 still highlights the /app/my-work item. */
+   so /app/vt-projects/123 still highlights the /app/vt-projects item. */
 function vt_navbar_route_matches(route, path) {
     return !!route && (path === route || path.indexOf(route + "/") === 0);
 }

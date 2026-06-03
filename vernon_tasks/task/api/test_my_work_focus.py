@@ -73,7 +73,7 @@ def _make_schedule_entry(task_name, hours=2.0):
     task.save(ignore_permissions=True)
 
 
-class TestMyWorkAPI(unittest.TestCase):
+class TestMyWorkFocus(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -113,7 +113,7 @@ class TestMyWorkAPI(unittest.TestCase):
         task = self._track(_make_task("day-1", "Administrator"))
         _make_schedule_entry(task.name, hours=2.0)
 
-        from vernon_tasks.task.page.my_work.my_work import get_my_day
+        from vernon_tasks.task.api.my_work import get_my_day
         result = get_my_day()
 
         names = [r["name"] for r in result]
@@ -123,7 +123,7 @@ class TestMyWorkAPI(unittest.TestCase):
         task = self._track(_make_task("day-done", "Administrator", pdca_phase="DONE", kanban_status="Done"))
         _make_schedule_entry(task.name)
 
-        from vernon_tasks.task.page.my_work.my_work import get_my_day
+        from vernon_tasks.task.api.my_work import get_my_day
         result = get_my_day()
 
         names = [r["name"] for r in result]
@@ -145,7 +145,7 @@ class TestMyWorkAPI(unittest.TestCase):
             "priority": "High",
         }).insert(ignore_permissions=True))
 
-        from vernon_tasks.task.page.my_work.my_work import get_what_to_do_today
+        from vernon_tasks.task.api.my_work import get_what_to_do_today
         result = get_what_to_do_today()
         names = [r["name"] for r in result]
         self.assertIn(task.name, names)
@@ -178,7 +178,7 @@ class TestMyWorkAPI(unittest.TestCase):
             "dependencies": [{"blocked_by": blocker.name, "dependency_type": "Finish-to-Start"}],
         }).insert(ignore_permissions=True))
 
-        from vernon_tasks.task.page.my_work.my_work import get_what_to_do_today
+        from vernon_tasks.task.api.my_work import get_what_to_do_today
         result = get_what_to_do_today()
         names = [r["name"] for r in result]
         self.assertNotIn(blocked.name, names)
@@ -213,7 +213,7 @@ class TestMyWorkAPI(unittest.TestCase):
             "dependencies": [{"blocked_by": blocker.name, "dependency_type": "Finish-to-Start"}],
         }).insert(ignore_permissions=True))
 
-        from vernon_tasks.task.page.my_work.my_work import get_my_blocked_tasks
+        from vernon_tasks.task.api.my_work import get_my_blocked_tasks
         result = get_my_blocked_tasks()
         names = [r["name"] for r in result]
         self.assertIn(blocked.name, names)
@@ -226,7 +226,7 @@ class TestMyWorkAPI(unittest.TestCase):
     def test_start_task_transitions_to_in_progress(self):
         task = self._track(_make_task("start-1", "Administrator", pdca_phase="PLAN", kanban_status="Scheduled"))
 
-        from vernon_tasks.task.page.my_work.my_work import start_task
+        from vernon_tasks.task.api.my_work import start_task
         result = start_task(task.name)
         self.assertEqual(result["status"], "ok")
 
@@ -238,7 +238,7 @@ class TestMyWorkAPI(unittest.TestCase):
     def test_start_task_rejected_on_wrong_status(self):
         task = self._track(_make_task("start-2", "Administrator", pdca_phase="CHECK", kanban_status="In Review"))
 
-        from vernon_tasks.task.page.my_work.my_work import start_task
+        from vernon_tasks.task.api.my_work import start_task
         with self.assertRaises(frappe.ValidationError):
             start_task(task.name)
 
@@ -270,7 +270,7 @@ class TestMyWorkAPI(unittest.TestCase):
             "dependencies": [{"blocked_by": blocker.name, "dependency_type": "Finish-to-Start"}],
         }).insert(ignore_permissions=True))
 
-        from vernon_tasks.task.page.my_work.my_work import start_task
+        from vernon_tasks.task.api.my_work import start_task
         with self.assertRaises(frappe.ValidationError):
             start_task(blocked.name)
 
@@ -279,7 +279,7 @@ class TestMyWorkAPI(unittest.TestCase):
     def test_submit_for_review_transitions_to_in_review(self):
         task = self._track(_make_task("sfr-1", "Administrator", pdca_phase="DO", kanban_status="In Progress"))
 
-        from vernon_tasks.task.page.my_work.my_work import submit_for_review
+        from vernon_tasks.task.api.my_work import submit_for_review
         result = submit_for_review(task.name)
         self.assertEqual(result["status"], "ok")
 
@@ -291,6 +291,6 @@ class TestMyWorkAPI(unittest.TestCase):
     def test_submit_for_review_rejected_on_wrong_status(self):
         task = self._track(_make_task("sfr-2", "Administrator", pdca_phase="PLAN", kanban_status="Scheduled"))
 
-        from vernon_tasks.task.page.my_work.my_work import submit_for_review
+        from vernon_tasks.task.api.my_work import submit_for_review
         with self.assertRaises(frappe.ValidationError):
             submit_for_review(task.name)

@@ -295,7 +295,6 @@ _NAVBAR_ITEMS = [
     # ── Standalone ────────────────────────────────────────────────────────
     dict(label="Beranda",        route="/app/vt-home",        icon="home",          is_group=0, parent_group="",       role_restriction="",          enabled=1),
     # ── Personal (ex-"Saya" group, now flat; all roles) ───────────────────
-    dict(label="My Work",        route="/app/my-work",        icon="check-circle",  is_group=0, parent_group="",       role_restriction="",          enabled=1),
     dict(label="Analytics",      route="/app/my-analytics",   icon="trend",         is_group=0, parent_group="",       role_restriction="",          enabled=1),
     dict(label="Scorecard",      route="/app/vt-scorecard",   icon="star",          is_group=0, parent_group="",       role_restriction="",          enabled=1),
     # ── Proyek standalone ────────────────────────────────────────────────

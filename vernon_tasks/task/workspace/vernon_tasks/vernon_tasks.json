@@ -256,17 +256,6 @@
   {
    "dependencies": "",
    "hidden": 0,
-   "is_query_report": 0,
-   "label": "My Work",
-   "link_count": 0,
-   "link_to": "my-work",
-   "link_type": "Page",
-   "onboard": 1,
-   "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
    "is_query_report": 1,
    "label": "My Points Progress",
    "link_count": 0,
