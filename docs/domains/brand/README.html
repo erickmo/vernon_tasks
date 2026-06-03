@@ -25,7 +25,8 @@
 <ul>
   <li><code>vernon_tasks/brand/doctype/vt_brand/</code> — controller, JSON schema, tests</li>
   <li><code>vernon_tasks/brand/api/brand_strategy.py</code> — whitelisted endpoints (delegates to controller)</li>
-  <li><code>www-react/src/features/brands/</code> — portal CRUD UI</li>
+  <li><code>vernon_tasks/brand/api/portal_brands.py</code> — whitelisted desk API (list/search/get/create/update/delete + permissions)</li>
+  <li><code>vernon_tasks/task/page/vt_brands/</code> — desk Brand management page (card grid, route <code>/app/vt-brands</code>)</li>
 </ul>
 
 <h2 id="fields">Fields</h2>
@@ -77,6 +78,32 @@ DESCRIPTION_MAX_LEN = 2000 # Small Text payload cap
     <tr><td>VT Manager</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
     <tr><td>VT Leader</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td></tr>
     <tr><td>VT Member</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td></tr>
+  </tbody>
+</table>
+
+<h2 id="vt-brands-page">Desk Page: <code>vt-brands</code></h2>
+<p>Desk Page <code>vt-brands</code> (route <code>/app/vt-brands</code>, module <code>Task</code>, title <code>Brand</code>) menampilkan VT Brand sebagai grid kartu yang dapat diklik di Frappe Desk. Halaman ini bersifat <strong>list/read-only</strong>: semua aksi create/edit/delete didelegasikan ke form VT Brand native — tidak ada UI edit/hapus di halaman itu sendiri.</p>
+<ul>
+  <li><strong>Kartu, bukan tabel</strong> — grid flex <code>.vh-row</code> berisi <code>.vh-card</code> (menggunakan ulang styling <code>vt-home</code>/<code>vh-*</code>). Empty state: <code>Belum ada brand.</code></li>
+  <li><strong>Klik kartu</strong> membuka form native: <code>frappe.set_route('Form', 'VT Brand', b.id)</code>.</li>
+  <li><strong>Field per kartu</strong>: <code>brand_name</code> (judul tebal, di-escape), <code>logo</code> (img 40×40, border-radius 8, object-fit cover; fallback ke badge inisial indigo <code>#6366f1</code> dari <code>brand_name[0]</code> bila kosong), dan <code>description</code> (di <code>.vh-item-meta</code>, dipotong pada <code>DESC_MAX = 80</code> char + elipsis). Semua teks di-escape via <code>frappe.utils.escape_html</code> (XSS-safe).</li>
+  <li><strong>Sumber data</strong>: <code>vernon_tasks.brand.api.portal_brands.list_brands</code> (konstanta <code>BRANDS_API</code>), dipanggil saat load dan tombol <code>Refresh</code>. Halaman memanggil tanpa argumen search (filter search tidak diwire di UI). list_brands mengembalikan <code>{id, brand_name, logo, description}</code> (id = <code>doc.name</code>), butuh login + <code>frappe.has_permission('VT Brand','read')</code>, urut <code>brand_name ASC</code>, limit 500.</li>
+  <li><strong>Gate izin</strong>: tombol primary <code>Buat Brand</code> (<code>frappe.new_doc('VT Brand')</code>) hanya diset bila <code>frappe.model.can_create('VT Brand')</code> true (helper client, didukung <code>frappe.boot.user.can_create</code>; <code>frappe.has_permission</code> hanya server-side). Akses halaman (<code>vt_brands.json</code> roles): <code>VT Member</code>, <code>VT Leader</code>, <code>VT Manager</code> — semua bisa membuka halaman; tombol buat tetap bergantung pada cek <code>can_create</code> per-user.</li>
+  <li><strong>Konvensi script</strong>: seluruh JS dibungkus IIFE (<code>(function () { ... })();</code>) agar <code>const</code>/<code>let</code> top-level tidak bocor ke scope global desk dan bentrok (<code>Identifier X has already been declared</code>) saat re-eval / pindah antar halaman VT. Background abu diterapkan global oleh <code>vt_page_style.js</code>.</li>
+</ul>
+
+<h3 id="portal-brands-api"><code>portal_brands</code> API surface</h3>
+<p>Endpoint whitelisted di <code>vernon_tasks/brand/api/portal_brands.py</code> (desk same-origin). Tiap aksi menegakkan <code>frappe.has_permission</code> per-aksi di server.</p>
+<table>
+  <thead><tr><th>Method</th><th>Returns</th><th>Catatan</th></tr></thead>
+  <tbody>
+    <tr><td><code>list_brands</code></td><td><code>[{id, brand_name, logo, description}]</code></td><td>read perm; urut <code>brand_name ASC</code>, limit 500. Dipakai halaman <code>vt-brands</code>.</td></tr>
+    <tr><td><code>search_brands</code></td><td><code>[{id, brand_name, logo}]</code></td><td>picker; tidak dipakai halaman <code>vt-brands</code>.</td></tr>
+    <tr><td><code>get_brand</code></td><td>satu brand</td><td>—</td></tr>
+    <tr><td><code>create_brand</code></td><td>brand baru</td><td>create perm</td></tr>
+    <tr><td><code>update_brand</code></td><td>brand ter-update</td><td>write perm</td></tr>
+    <tr><td><code>delete_brand</code></td><td>—</td><td>delete perm; <strong>blokir hapus</strong> bila ada VT Project yang link brand (mirror <code>on_trash</code> FK guard).</td></tr>
+    <tr><td><code>get_brand_permissions</code></td><td><code>{can_create, can_write, can_delete}</code></td><td>—</td></tr>
   </tbody>
 </table>
 

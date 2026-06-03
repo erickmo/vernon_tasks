@@ -133,6 +133,10 @@
   </div>
 </header>
 
+<blockquote style="border-left:3px solid var(--bad); background:rgba(220,38,38,.08); color:var(--fg); font-style:normal; padding:14px 18px; border-radius:8px; margin:0 0 28px;">
+  <strong>⚠ Removal notice (desk-only migration).</strong> The <strong>Vernon PWA</strong> (mobile-first React at <code>/m/*</code>), the standalone <code>www-react</code> SPA, the <code>/portal</code> route, and the PWA boot (<code>_boot</code>) feature-flag layer have all been <strong>removed</strong>. Vernon Tasks is now <strong>desk-only</strong>: <code>/</code> redirects to <code>/app</code> (or <code>/login</code> for guests) and the post-login landing is <code>/app/vt-home</code>. Backend services (scheduling, points, leaderboard, forecast, burndown, telemetry, etc.) survive and are consumed by Desk pages under <code>task/page/*</code> and APIs under <code>task/api/*</code>. Sections below describing the PWA, <code>/m/*</code> surfaces, PWA phases (P0.5–P4b), and <code>_boot</code> rollout are retained as <strong>historical product narrative</strong> and are marked <em>(removed — desk-only)</em> inline.
+</blockquote>
+
 <nav class="toc">
   <h4>Table of Contents</h4>
   <ol>
@@ -164,10 +168,10 @@
   <li><strong>Agile Sprints</strong> — Time-boxed iterations with velocity, burndown, forecast analytics.</li>
 </ol>
 <p><strong>Gamified point system</strong> rewards on-time delivery, penalizes late completion / revision cycles. Points feed monthly leaderboards, personal streaks, team velocity.</p>
-<p>Ships <strong>two coordinated UIs</strong>:</p>
+<p>Ships <strong>two coordinated UIs</strong> <em>(historical — the product is now desk-only; see removal notice above)</em>:</p>
 <ul>
-  <li><strong>Frappe Desk</strong> (desktop, Python/Jinja) — 7 custom pages for power users, leaders, execs.</li>
-  <li><strong>Vernon PWA</strong> (mobile-first React) — installable, offline-capable, push-enabled, at <code>/m/</code>.</li>
+  <li><strong>Frappe Desk</strong> (desktop, Python/Jinja) — custom pages for members, leaders, execs (now the sole UI; post-login landing <code>/app/vt-home</code>).</li>
+  <li><strong>Vernon PWA</strong> (mobile-first React) — installable, offline-capable, push-enabled, at <code>/m/</code>. <strong>(removed — desk-only migration)</strong></li>
 </ul>
 <h3>Vision</h3>
 <blockquote>Make execution status, blockers, outcomes visible to every member in real time, on any device — reward consistent delivery with auditable, math-driven points.</blockquote>
@@ -182,11 +186,11 @@
 <table>
   <thead><tr><th>Role</th><th>Profile</th><th>Primary Surface</th><th>Permissions</th></tr></thead>
   <tbody>
-    <tr><td><strong>VT Member</strong></td><td>Individual contributor</td><td><code>/m/work</code>, Desk <code>my_work</code>, <code>my_dashboard</code>, <code>my_analytics</code></td><td>CRUD own tasks; transition BACKLOG→PLAN→DO→CHECK; log hours; leaderboard view</td></tr>
-    <tr><td><strong>VT Leader</strong></td><td>Project lead</td><td><code>/m/leader</code>, Desk <code>leader_*</code> pages</td><td>+ approve/reject reviews, override points &amp; schedules, team analytics</td></tr>
+    <tr><td><strong>VT Member</strong></td><td>Individual contributor</td><td><code>/m/work</code> <em>(removed — desk-only)</em>, Desk <code>my_work</code>, <code>my_dashboard</code>, <code>my_analytics</code></td><td>CRUD own tasks; transition BACKLOG→PLAN→DO→CHECK; log hours; leaderboard view</td></tr>
+    <tr><td><strong>VT Leader</strong></td><td>Project lead</td><td><code>/m/leader</code> <em>(removed — desk-only)</em>, Desk <code>leader_*</code> pages</td><td>+ approve/reject reviews, override points &amp; schedules, team analytics</td></tr>
     <tr><td><strong>VT Manager</strong></td><td>Exec / dept head</td><td>Desk <code>exec_analytics</code></td><td>+ executive analytics, edit <code>VT Settings</code>, system overrides</td></tr>
     <tr><td><strong>System Manager</strong></td><td>Frappe admin</td><td>Frappe Desk</td><td>+ role assignment, fixtures, migrations</td></tr>
-    <tr><td><strong>Guest</strong></td><td>Unauthenticated</td><td><code>/m/login</code></td><td>None</td></tr>
+    <tr><td><strong>Guest</strong></td><td>Unauthenticated</td><td><code>/m/login</code> <em>(removed — desk-only; now <code>/login</code>)</em></td><td>None</td></tr>
   </tbody>
 </table>
 <p>Roles = fixtures auto-created on <code>bench migrate</code>.</p>
@@ -305,20 +309,21 @@ earned             = base + early_bonus − late_penalty − revision_deduction<
 </tbody>
 </table>
 
-<h3>5.2 Shipped — PWA Phases</h3>
+<h3>5.2 Shipped — PWA Phases <span class="badge bad">Removed — desk-only</span></h3>
+<p><em>Historical record. These PWA phases were shipped and later removed in the desk-only migration; the <code>/m/*</code> surface no longer exists. Equivalent capability now lives in Desk pages (§5.1) and <code>task/api/*</code>.</em></p>
 <table>
 <thead><tr><th>Phase</th><th>Scope</th><th>Status</th></tr></thead>
 <tbody>
-<tr><td>P0.5 Foundation</td><td>Login, My Work read-only, onboarding, offline cache, telemetry</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>P1a Mutations + Install</td><td>Complete / Log / Snooze + 5s undo; A2HS prompt</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>P1b Search + Notifications</td><td>Debounced search, filter sheet, Notif Log screen, unread badge</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>P2 Dashboard + IC Analytics</td><td>Summary cards, sprint kanban, leaderboard / velocity / streak</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>P3a Leader Review</td><td><code>/m/leader</code> review queue, approve/reject with reason</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>P3b Leader Sprint + Exec</td><td>Tabbed: Review / Sprint / Exec (Health Score, OKR, KPI)</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>P4a Push</td><td>VAPID, Web Push subscribe, Notif Log → push, dead-endpoint prune</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>P4b Push Refinements</td><td>Per-event prefs, notification action buttons (Complete / View)</td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>CSO Security Audit</td><td><code>security.py</code> guards; CSP + X-Frame headers on <code>/m/*</code></td><td><span class="badge ok">Shipped</span></td></tr>
-<tr><td>Login + Task UI Redesign</td><td>Glassmorphism login, purple gradient header, accent task cards</td><td><span class="badge ok">Shipped</span></td></tr>
+<tr><td>P0.5 Foundation</td><td>Login, My Work read-only, onboarding, offline cache, telemetry</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>P1a Mutations + Install</td><td>Complete / Log / Snooze + 5s undo; A2HS prompt</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>P1b Search + Notifications</td><td>Debounced search, filter sheet, Notif Log screen, unread badge</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>P2 Dashboard + IC Analytics</td><td>Summary cards, sprint kanban, leaderboard / velocity / streak</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>P3a Leader Review</td><td><code>/m/leader</code> review queue, approve/reject with reason</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>P3b Leader Sprint + Exec</td><td>Tabbed: Review / Sprint / Exec (Health Score, OKR, KPI)</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>P4a Push</td><td>VAPID, Web Push subscribe, Notif Log → push, dead-endpoint prune</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>P4b Push Refinements</td><td>Per-event prefs, notification action buttons (Complete / View)</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>CSO Security Audit</td><td><code>security.py</code> guards; CSP + X-Frame headers on <code>/m/*</code></td><td><span class="badge bad">Removed — desk-only</span></td></tr>
+<tr><td>Login + Task UI Redesign</td><td>Glassmorphism login, purple gradient header, accent task cards</td><td><span class="badge bad">Removed — desk-only</span></td></tr>
 </tbody>
 </table>
 
@@ -498,7 +503,8 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 
 <h2 id="s11" class="anchor">11. Rollout Strategy</h2>
 
-<h3>11.1 PWA Pilot (P0.5)</h3>
+<h3>11.1 PWA Pilot (P0.5) <span class="badge bad">Removed — desk-only</span></h3>
+<p><em>Historical rollout plan. The PWA pilot surface and its <code>/m/</code> rollout were removed in the desk-only migration; retained for product history.</em></p>
 <ol>
   <li><strong>Pre-launch:</strong> build green, iOS A2HS works, Android install works, airplane-mode shows cached + banner, session relogin modal opens, <code>pwa_boot</code> events recorded.</li>
   <li><strong>Pilot:</strong> 1 team (5–10 users), invite-only.</li>
@@ -511,11 +517,11 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
       <li>no open P0 bugs</li>
     </ul>
   </li>
-  <li><strong>Company rollout:</strong> Desk banner → <code>/m/</code>, email announcement, gradual migration.</li>
+  <li><strong>Company rollout:</strong> Desk banner → <code>/m/</code>, email announcement, gradual migration. <em>(removed — desk-only; <code>/m/</code> no longer exists)</em></li>
 </ol>
 
-<h3>11.2 Feature Phasing</h3>
-<p>Phases P0.5 → P4b sequential + additive. Each phase behind feature flag resolved via <code>/m/_boot</code>. Responsive-nav (current) requires all of P0.5–P3b.</p>
+<h3>11.2 Feature Phasing <span class="badge bad">Removed — desk-only</span></h3>
+<p>Phases P0.5 → P4b sequential + additive. Each phase behind feature flag resolved via <code>/m/_boot</code>. Responsive-nav (current) requires all of P0.5–P3b. <em>(removed — desk-only; the <code>_boot</code> feature-flag layer and <code>/m/*</code> phasing were dropped in the desk-only migration)</em></p>
 
 <h2 id="s12" class="anchor">12. KPIs / Success Metrics</h2>
 <table>

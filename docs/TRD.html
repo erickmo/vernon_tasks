@@ -93,6 +93,12 @@
   </div>
 </header>
 
+<div style="background: var(--accent-light); border: 1px solid var(--accent); border-left: 5px solid var(--accent); border-radius: 10px; padding: 16px 20px; margin-bottom: 32px;">
+  <strong style="color: var(--accent-dark); font-size: 15px;">⚠ Architecture superseded — desk-only migration</strong>
+  <p style="margin: 8px 0 0;">The PWA / <code>/m/*</code> SPA shell architecture described throughout this document was <strong>REMOVED</strong>. Vernon Tasks is now <strong>desk-only</strong>: the standalone React/Vite PWA (<code>pwa/</code>, served at <code>/m/*</code>), the <code>www/m.py</code> SPA shell, the <code>/m/_boot</code> bootstrap, the service worker, and the <code>/portal</code> route no longer exist. <code>/</code> now redirects to <code>/app</code> (or <code>/login</code> for guests). Desk pages live under <code>task/page/*</code> (<code>vt-home</code> is the post-login landing) and consume APIs under <code>task/api/*</code>.</p>
+  <p style="margin: 8px 0 0;">Backend services (scheduling, points, leaderboard, forecast, burndown, telemetry, push, etc.) <strong>survive</strong> and are consumed by desk pages/APIs. Sections and rows below tagged <strong>(removed — desk-only migration)</strong> describe the historical PWA architecture and are retained for context only — they no longer reflect the live system.</p>
+</div>
+
 <nav class="toc">
   <h4>Table of Contents</h4>
   <ol>
@@ -102,8 +108,8 @@
     <li><a href="#s4">Data Flow Diagrams</a></li>
     <li><a href="#s5">Database Schema</a></li>
     <li><a href="#s6">API Contracts</a></li>
-    <li><a href="#s7">PWA Build &amp; Bundle</a></li>
-    <li><a href="#s8">Service Worker &amp; Cache</a></li>
+    <li><a href="#s7">PWA Build &amp; Bundle</a> <em>(removed — desk-only migration)</em></li>
+    <li><a href="#s8">Service Worker &amp; Cache</a> <em>(removed — desk-only migration)</em></li>
     <li><a href="#s9">Auth &amp; Session</a></li>
     <li><a href="#s10">Security Controls</a></li>
     <li><a href="#s11">Performance Budget</a></li>
@@ -130,6 +136,7 @@
 <h2 id="s2" class="anchor">2. System Architecture</h2>
 
 <h3>2.1 High-level diagram</h3>
+<p><em>Note: the <code>Vernon PWA (/m/*)</code> client column and the <code>/m/* → www/m.py (SPA shell) + www/m/ (Vite output)</code> route below are <strong>(removed — desk-only migration)</strong>. Frappe Desk is now the sole browser client; routing is <code>/ → /app</code> with desk pages under <code>task/page/*</code>.</em></p>
 <pre class="diagram">┌───────────────────────────────────────────────────────────────────────────┐
 │                              CLIENTS                                       │
 │  ┌────────────────────┐    ┌────────────────────┐    ┌──────────────────┐ │
@@ -165,7 +172,8 @@
    │  doctypes    │       │  rate-limit  │       │                    │
    └──────────────┘       └──────────────┘       └────────────────────┘</pre>
 
-<h3>2.2 Request lifecycle (PWA mutation)</h3>
+<h3>2.2 Request lifecycle (PWA mutation) <em>(removed — desk-only migration)</em></h3>
+<p><em>The client-side flow below (<code>useUndoableMutation</code>, React Query optimistic updates) ran in the removed PWA. The same mutation endpoint is now invoked from desk pages under <code>task/page/*</code> / <code>task/api/*</code>; the server-side steps (5–6) are unchanged.</em></p>
 <ol>
   <li>User taps "Selesai" on task card.</li>
   <li><code>useUndoableMutation</code> shows 5s undo toast (no API call yet).</li>
@@ -184,7 +192,7 @@
 <thead><tr><th>Path</th><th>Purpose</th></tr></thead>
 <tbody>
 <tr><td><code>task/api/security.py</code></td><td>Reusable guards: require_login, rate_limit, clamp_int, max_str</td></tr>
-<tr><td><code>task/api/boot.py</code></td><td>SPA bootstrap: <code>{user, roles, csrf_token, flags}</code></td></tr>
+<tr><td><code>task/api/boot.py</code></td><td>SPA bootstrap: <code>{user, roles, csrf_token, flags}</code> <em>(removed — desk-only migration; <code>/m/_boot</code> no longer served)</em></td></tr>
 <tr><td><code>task/api/my_work.py</code></td><td>list / detail / search</td></tr>
 <tr><td><code>task/api/my_work_mutations.py</code></td><td>complete / log_progress / snooze</td></tr>
 <tr><td><code>task/api/notifications.py</code></td><td>list / mark_read / mark_all_read / count_unread</td></tr>
@@ -206,7 +214,8 @@
 </tbody>
 </table>
 
-<h3>3.2 PWA modules</h3>
+<h3>3.2 PWA modules <em>(removed — desk-only migration)</em></h3>
+<p><em>The entire <code>pwa/</code> tree below was deleted. Retained as a historical inventory of the removed React/Vite client; equivalent UI now lives in desk pages under <code>task/page/*</code>.</em></p>
 <table>
 <thead><tr><th>Path</th><th>Purpose</th></tr></thead>
 <tbody>
@@ -250,7 +259,8 @@
                     └─→ POST to each Vernon Push Subscription endpoint
                         └─→ dead endpoint (404/410) → prune row</pre>
 
-<h3>4.2 Boot &amp; offline read</h3>
+<h3>4.2 Boot &amp; offline read <em>(removed — desk-only migration)</em></h3>
+<p><em>The <code>/m/</code> shell render, <code>/m/_boot</code> bootstrap, service-worker cache, and offline read path below no longer exist. Desk boots via Frappe's native bootinfo; there is no PWA offline cache.</em></p>
 <pre class="diagram">PWA load → GET /m/ → www/m.py renders shell + injects CSP headers
         ↓
 SW activate (cache name = "vt-{git_sha}")
@@ -357,7 +367,8 @@ errors:   417 rate_limit (5/min) · max_str(endpoint, 2048)</code></pre>
 
 <p>Full payload catalog in <code>API_REFERENCE.md</code>.</p>
 
-<h2 id="s7" class="anchor">7. PWA Build &amp; Bundle</h2>
+<h2 id="s7" class="anchor">7. PWA Build &amp; Bundle <em>(removed — desk-only migration)</em></h2>
+<p><em>This entire section describes the removed PWA. The Vite build to <code>www/m/</code>, the <code>React.lazy</code> <code>/m/*</code> chunks, and the TypeScript config no longer apply — there is no separate frontend build. Desk assets ship via Frappe's standard bench build.</em></p>
 
 <h3>7.1 Build pipeline</h3>
 <pre><code># local dev
@@ -388,7 +399,8 @@ bench restart               # serve fresh static
   <li><code>tsc --noEmit</code> as CI gate</li>
 </ul>
 
-<h2 id="s8" class="anchor">8. Service Worker &amp; Cache</h2>
+<h2 id="s8" class="anchor">8. Service Worker &amp; Cache <em>(removed — desk-only migration)</em></h2>
+<p><em>The Workbox service worker, precache, <code>StaleWhileRevalidate</code> runtime cache, and <code>vt-{git_sha}</code> cache namespace below were all removed with the PWA. Desk has no service worker.</em></p>
 
 <h3>8.1 Strategy</h3>
 <ul>
@@ -410,6 +422,7 @@ bench restart               # serve fresh static
 <h2 id="s9" class="anchor">9. Auth &amp; Session</h2>
 
 <h3>9.1 Login flow</h3>
+<p><em>The <code>GET /m/_boot</code> step below is <strong>(removed — desk-only migration)</strong>; roles/csrf now arrive via Frappe's native desk bootinfo. Cookie/CSRF auth and session expiry handling otherwise remain.</em></p>
 <pre class="diagram">User → POST /api/method/login
        body: usr=&lt;email&gt;&amp;pwd=&lt;password&gt;
        ← Set-Cookie: sid=...; HttpOnly; SameSite=Lax
@@ -429,7 +442,8 @@ User → any mutation
 
 <h2 id="s10" class="anchor">10. Security Controls</h2>
 
-<h3>10.1 Response headers (PWA shell)</h3>
+<h3>10.1 Response headers (PWA shell) <em>(removed — desk-only migration)</em></h3>
+<p><em>These headers were set by the removed <code>www/m.py</code> shell. Desk uses Frappe's standard response headers / CSP.</em></p>
 <pre><code>X-Frame-Options: DENY
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
@@ -463,6 +477,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 </ul>
 
 <h2 id="s11" class="anchor">11. Performance Budget</h2>
+<p><em>Rows referencing <code>/m/work</code>, the service worker, bundle gzip, and offline/cache-hit metrics are <strong>(removed — desk-only migration)</strong> — they measured the removed PWA. API p95 latency still applies to <code>task/api/*</code>.</em></p>
 
 <table>
 <thead><tr><th>Metric</th><th>Target</th><th>Measure</th></tr></thead>
@@ -492,7 +507,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 
 <h3>12.2 Required reports (pre-launch)</h3>
 <ol>
-  <li><strong>PWA Boot Funnel</strong> — pwa_boot → login_success → page_view</li>
+  <li><strong>PWA Boot Funnel</strong> — pwa_boot → login_success → page_view <strong>(removed — desk-only migration; PWA boot no longer exists)</strong></li>
   <li><strong>Error Rate</strong> — error_boundary count / page_view count</li>
   <li><strong>Install Funnel</strong> — install_prompt_shown → install_accepted</li>
   <li><strong>Mutation Health</strong> — task_complete count + failure rate</li>
@@ -502,7 +517,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 <h3>12.3 Server logs</h3>
 <ul>
   <li>Frappe error log captures stack traces; review daily during pilot.</li>
-  <li>nginx access logs for /m/* — monitor 4xx/5xx ratio.</li>
+  <li>nginx access logs for /m/* — monitor 4xx/5xx ratio. <em>(removed — desk-only migration; monitor <code>/app</code> + <code>/api/method/...</code> instead)</em></li>
 </ul>
 
 <h2 id="s13" class="anchor">13. Infrastructure &amp; Deployment</h2>
@@ -515,9 +530,10 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 </ul>
 
 <h3>13.2 Deploy steps</h3>
+<p><em>The <code>pwa && npm ci && npm run build</code> step is <strong>(removed — desk-only migration)</strong>; desk assets build via <code>bench build</code>. Remaining steps (pull, migrate, clear-cache, restart) still apply.</em></p>
 <pre><code>cd ~/frappe-bench
 git -C apps/vernon_tasks pull
-cd apps/vernon_tasks/pwa &amp;&amp; npm ci &amp;&amp; npm run build
+cd apps/vernon_tasks/pwa &amp;&amp; npm ci &amp;&amp; npm run build   # removed — desk-only migration
 cd ~/frappe-bench
 bench --site &lt;site&gt; migrate          # apply schema changes, run patches
 bench --site &lt;site&gt; clear-cache
@@ -547,7 +563,8 @@ bench restart                          # gunicorn + workers</code></pre>
   <li>Coverage targets: services ≥ 80 %, <code>security.py</code> ≥ 80 %.</li>
 </ul>
 
-<h3>14.2 PWA</h3>
+<h3>14.2 PWA <em>(removed — desk-only migration)</em></h3>
+<p><em>The Vitest/Playwright suite and the <code>/m/*</code> e2e flows below targeted the removed PWA. Desk pages are exercised by backend tests (14.1) and manual desk QA.</em></p>
 <ul>
   <li>Unit/component: Vitest + happy-dom + @testing-library/react.</li>
   <li>Hook tests: useUndoableMutation, useInstallPrompt, useMediaQuery.</li>
@@ -587,7 +604,8 @@ bench restart                          # gunicorn + workers</code></pre>
   <li>Prefer <code>frappe.get_all()</code> / <code>frappe.get_doc()</code> over raw SQL.</li>
 </ul>
 
-<h3>15.2 TypeScript</h3>
+<h3>15.2 TypeScript <em>(removed — desk-only migration)</em></h3>
+<p><em>These standards governed the removed <code>pwa/</code> codebase. Desk client code follows Frappe's JS conventions.</em></p>
 <ul>
   <li>Strict mode; no <code>any</code>.</li>
   <li>API payload types in <code>pwa/src/api/types.ts</code> shared across modules.</li>
@@ -602,7 +620,7 @@ bench restart                          # gunicorn + workers</code></pre>
 <table>
 <thead><tr><th>Symptom</th><th>First check</th><th>Action</th></tr></thead>
 <tbody>
-<tr><td>PWA shows stale data company-wide</td><td>SW cache name == current git SHA?</td><td>Force redeploy; users get fresh on next visit.</td></tr>
+<tr><td>PWA shows stale data company-wide <em>(removed — desk-only migration)</em></td><td>SW cache name == current git SHA?</td><td>Force redeploy; users get fresh on next visit. <em>(no SW in desk; clear desk cache via <code>bench clear-cache</code>)</em></td></tr>
 <tr><td>Spike in <code>error_boundary</code></td><td>Error log on Frappe + telemetry props</td><td>Rollback PWA build; investigate stack trace.</td></tr>
 <tr><td>Push not delivered</td><td>VAPID keys present? Subscription rows?</td><td>Regenerate VAPID; re-prompt users to subscribe.</td></tr>
 <tr><td>Mutation 417 spam</td><td>Per-user rate-limit thresholds</td><td>Adjust limit in <code>security.py</code> if legitimate burst pattern.</td></tr>
@@ -622,10 +640,10 @@ bench restart                          # gunicorn + workers</code></pre>
 <table>
 <thead><tr><th>ID</th><th>Requirement</th><th>How verified</th></tr></thead>
 <tbody>
-<tr><td>TR-01</td><td>PWA serves at <code>/m/</code>, SPA-routed, with CSP headers</td><td>curl headers + browser navigate</td></tr>
-<tr><td>TR-02</td><td>Service worker registers, caches shell, SWR for API</td><td>Application tab in DevTools</td></tr>
-<tr><td>TR-03</td><td>Offline read: <code>/m/work</code> renders cached list with banner</td><td>Playwright airplane-mode test</td></tr>
-<tr><td>TR-04</td><td>Mutations rejected when offline; toast shown</td><td>e2e: offline + tap complete</td></tr>
+<tr><td>TR-01</td><td>PWA serves at <code>/m/</code>, SPA-routed, with CSP headers <em>(removed — desk-only migration)</em></td><td>curl headers + browser navigate</td></tr>
+<tr><td>TR-02</td><td>Service worker registers, caches shell, SWR for API <em>(removed — desk-only migration)</em></td><td>Application tab in DevTools</td></tr>
+<tr><td>TR-03</td><td>Offline read: <code>/m/work</code> renders cached list with banner <em>(removed — desk-only migration)</em></td><td>Playwright airplane-mode test</td></tr>
+<tr><td>TR-04</td><td>Mutations rejected when offline; toast shown <em>(removed — desk-only migration)</em></td><td>e2e: offline + tap complete</td></tr>
 <tr><td>TR-05</td><td>Complete task triggers point calc + Task Point Log row</td><td>Backend unit test</td></tr>
 <tr><td>TR-06</td><td>Approve task transitions CHECK → DONE, locks edits</td><td>Backend integration test</td></tr>
 <tr><td>TR-07</td><td>Reject task transitions CHECK → DO, saves reason</td><td>Backend integration test</td></tr>
@@ -634,12 +652,12 @@ bench restart                          # gunicorn + workers</code></pre>
 <tr><td>TR-10</td><td>Push respects per-user prefs (assignment/mention/due/review)</td><td>Backend unit test</td></tr>
 <tr><td>TR-11</td><td>Health Score formula: 0.4 OKR + 0.3 ontime + 0.3 velocity</td><td>Backend unit test fixtures</td></tr>
 <tr><td>TR-12</td><td>Forecast requires ≥3 sprints; "insufficient data" otherwise</td><td>Backend unit test</td></tr>
-<tr><td>TR-13</td><td>Responsive: BottomNav hidden ≥768 px, TopNav hidden &lt;768 px</td><td>Playwright multi-viewport</td></tr>
+<tr><td>TR-13</td><td>Responsive: BottomNav hidden ≥768 px, TopNav hidden &lt;768 px <em>(removed — desk-only migration)</em></td><td>Playwright multi-viewport</td></tr>
 <tr><td>TR-14</td><td>Telemetry allowlist enforced; unknown events rejected</td><td>Backend unit test</td></tr>
-<tr><td>TR-15</td><td>SW cache busted on deploy (git SHA cache name)</td><td>Visual: cache name in DevTools</td></tr>
-<tr><td>TR-16</td><td>Install prompt fires after 2 completes</td><td>e2e flow</td></tr>
-<tr><td>TR-17</td><td>id-ID strings used throughout UI</td><td>Visual + grep for English in <code>pwa/src</code></td></tr>
-<tr><td>TR-18</td><td>Main bundle gzip ≤ 100 KB</td><td>Vite build report assertion</td></tr>
+<tr><td>TR-15</td><td>SW cache busted on deploy (git SHA cache name) <em>(removed — desk-only migration)</em></td><td>Visual: cache name in DevTools</td></tr>
+<tr><td>TR-16</td><td>Install prompt fires after 2 completes <em>(removed — desk-only migration)</em></td><td>e2e flow</td></tr>
+<tr><td>TR-17</td><td>id-ID strings used throughout UI <em>(removed — desk-only migration; <code>pwa/src</code> deleted)</em></td><td>Visual + grep for English in <code>pwa/src</code></td></tr>
+<tr><td>TR-18</td><td>Main bundle gzip ≤ 100 KB <em>(removed — desk-only migration)</em></td><td>Vite build report assertion</td></tr>
 <tr><td>TR-19</td><td>Leader analytics endpoints role-gated (403 for non-leader)</td><td>Backend integration test</td></tr>
 <tr><td>TR-20</td><td>Exec analytics endpoints role-gated (403 for non-manager)</td><td>Backend integration test</td></tr>
 </tbody>

@@ -97,6 +97,32 @@
   </tbody>
 </table>
 
+<h2 id="project-detail-page">Project Detail (Desk Page)</h2>
+<p>Desk Page <code>vt-project-detail</code> (route <code>/app/vt-project-detail</code>) renders a project as a hero + tabbed view. Tab order: Kanban | Kalender | Gantt | Sprint | Milestone | Tim | Ringkasan. The Kanban board, Calendar, Gantt, and Sprint tabs are lazy-rendered on first open and pull their own data. The whole page script is wrapped in an IIFE so top-level <code>const</code>/<code>let</code> stay function-scoped and don't collide in global desk scope.</p>
+
+<h3 id="sprint-tab">Sprint tab</h3>
+<p>Fetches on first open from <code>vernon_tasks.task.api.dashboard.project_sprints</code>, called as <code>project_sprints(project_id)</code>. Access mirrors the Kanban board (admin / leader / member via <code>_assert_project_access</code>).</p>
+<table>
+  <thead><tr><th>Element</th><th>Behavior</th></tr></thead>
+  <tbody>
+    <tr><td>API shape</td><td><code>project_sprints</code> returns <code>{ sprints: [...], unassigned: [...] }</code>; each sprint maps to <code>{id, title, start_date, end_date, status, percent_done, goal, tasks}</code>; tasks with no sprint fall into <code>unassigned</code></td></tr>
+    <tr><td>Empty state</td><td><code>Belum ada sprint untuk proyek ini.</code> when both <code>sprints</code> and <code>unassigned</code> are empty</td></tr>
+    <tr><td>Sprint card</td><td>title + meta line (date range start–end · status · N task), optional goal line, progress bar (width = <code>percent_done</code>%) shown only when <code>percent_done != null</code></td></tr>
+    <tr><td>Backlog bucket</td><td>unassigned tasks render in a synthetic card <code>Tanpa Sprint</code> (id <code>__unassigned__</code>, no progress bar) when any exist</td></tr>
+    <tr><td>Task row</td><td>title + meta (kanban_status · priority · deadline), <code>Berisiko</code> chip when <code>risk_flag</code>; clicking a row reuses the board edit dialog (<code>open_task_dialog</code>) so sprint tasks are editable in place</td></tr>
+  </tbody>
+</table>
+
+<h3 id="board-create-ux">Board create-task UX</h3>
+<table>
+  <thead><tr><th>Element</th><th>Behavior</th></tr></thead>
+  <tbody>
+    <tr><td>Column picker</td><td>On create, the dialog prepends a required <code>Kolom</code> Select sourced from <code>quick_add_columns</code> (board columns with a <code>pdca_phase</code> and key <code>!== Done</code>, mirroring backend <code>board_mutations.QUICK_ADD_COLUMNS</code>); the task is born into the chosen column via <code>create_task</code> (<code>vernon_tasks.task.api.board_mutations.create_task</code>). Missing column msgprints <code>Pilih kolom untuk task baru.</code></td></tr>
+    <tr><td>Calendar create</td><td>Clicking a calendar day opens the create dialog prefilled with <code>deadline</code> = clicked date; empty calendar shows <code>Belum ada task bertanggal. Klik tanggal untuk membuat task.</code></td></tr>
+    <tr><td>Gantt empty</td><td>With no dated rows, Gantt shows <code>Belum ada task bertanggal. Tetapkan tanggal mulai atau deadline pada task untuk melihat Gantt.</code> instead of a blank panel</td></tr>
+  </tbody>
+</table>
+
 <h2 id="cross-domain-events">Cross-Domain Events</h2>
 <h3 id="triggers">Triggers</h3>
 <table>

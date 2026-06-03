@@ -19,13 +19,19 @@
 </header>
 
 <h1 id="domain-vt-settings">Domain: VT Settings</h1>
+
+<div class="callout callout-warning">
+  <span class="callout-icon">&#9888;</span>
+  <div>Desk-only migration: the mobile PWA (<code>/m/*</code>) and its <code>_boot</code> were removed. Branding/settings are now consumed by desk boot (<code>extend_bootinfo</code> in <code>vernon_tasks/boot.py</code>). The VT Settings field/rule tables, push storage, and telemetry below remain accurate and live.</div>
+</div>
+
 <p>App-level singletons + telemetry + push storage.</p>
 <h2 id="modules">Modules</h2>
 <ul>
 <li><code>vernon_tasks/vt_settings/doctype/</code> — <code>vt_settings</code> (singleton), <code>vernon_telemetry_event</code>, <code>vernon_push_subscription</code>, <code>vernon_push_preference</code></li>
 </ul>
 <h2 id="fields-vt-settings">Fields (VT Settings)</h2>
-<p>Source: PWA boot consumes branding fields. See <code>vernon_tasks/task/api/boot.py</code> + commit 1fc12ca (login left-panel link).</p>
+<p>Source: desk boot (<code>extend_bootinfo</code> in <code>vernon_tasks/boot.py</code>) consumes branding fields; <code>vernon_tasks/task/api/boot.py</code> serves the matching desk API. See commit 1fc12ca (login left-panel link). <em>(PWA boot removed — desk-only migration.)</em></p>
 <h2 id="retention">Retention</h2>
 <ul>
 <li><code>Vernon Telemetry Event</code> — 90 days, purged via scheduler <code>purge_old_telemetry</code>.</li>
@@ -120,7 +126,7 @@
 <tr>
 <td>settings.updated</td>
 <td>{fields_changed}</td>
-<td>pwa boot (refresh on next session)</td>
+<td>desk boot (<code>extend_bootinfo</code> in <code>vernon_tasks/boot.py</code>; refresh on next session) <em>(was pwa boot — removed, desk-only migration)</em></td>
 </tr>
 </tbody>
 </table>

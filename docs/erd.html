@@ -536,9 +536,13 @@
   <li><code>Vernon Push Preference</code>: <code>(user)</code> unique</li>
 </ul>
 
-<h2>Portal Cross-Domain Reuse</h2>
+<h2>Portal Cross-Domain Reuse <em>(removed — desk-only migration)</em></h2>
+<div style="background: var(--accent-light); border: 1px solid var(--accent); border-left: 5px solid var(--accent); border-radius: 10px; padding: 16px 20px; margin: 16px 0;">
+  <strong style="color: var(--accent-dark); font-size: 15px;">⚠ Removal notice — desk-only migration</strong>
+  <p style="margin: 8px 0 0;">The <code>/portal</code> route and the <code>pwa/</code> tree (including <code>pwa/src/portal/okr/hooks/</code> and the <code>portal/projects/ObjectiveLink</code> component) were <strong>removed</strong>. The portal-side consumption described below no longer exists. The underlying <code>VT Project.objective → Objective</code> FK <strong>survives</strong> and is still valid; it is now surfaced by Desk pages under <code>task/page/*</code> and APIs under <code>task/api/*</code>.</p>
+</div>
 <ul>
-  <li><strong>Portal Projects (P3.1)</strong> surfaces the existing <code>VT Project.objective → Objective</code> FK in the desktop portal: <code>portal/projects/ObjectiveLink</code> renders a compact linked-Objective summary by consuming the <code>useObjective</code> hook directly from <code>pwa/src/portal/okr/hooks/</code> (no duplication). See <a href="superpowers/specs/2026-05-17-portal-projects-p3-design.html">Portal Projects P3.1 spec</a> §3.4 and <a href="adr/portal-projects-stack.html">ADR-020</a>.</li>
+  <li><em>(removed — desk-only migration)</em> <strong>Portal Projects (P3.1)</strong> <em>historically</em> surfaced the existing <code>VT Project.objective → Objective</code> FK in the desktop portal: <code>portal/projects/ObjectiveLink</code> rendered a compact linked-Objective summary by consuming the <code>useObjective</code> hook directly from <code>pwa/src/portal/okr/hooks/</code> (no duplication). The FK itself remains live; only the portal surface was removed. See <a href="superpowers/specs/2026-05-17-portal-projects-p3-design.html">Portal Projects P3.1 spec</a> §3.4 and <a href="adr/portal-projects-stack.html">ADR-020</a> (historical).</li>
 </ul>
 
 <h2>Related Docs</h2>

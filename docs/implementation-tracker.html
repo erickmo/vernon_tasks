@@ -22,10 +22,10 @@
   <h1>Implementation Tracker</h1>
   <div class="sub">PRD / TRD / ADR items mapped to code + tests.</div>
   <div class="meta">
-    <span>Last updated 2026-05-23</span>
+    <span>Last updated 2026-06-03</span>
     <span>Source: PRD v1.0 + TRD + ADR</span>
+    <span>Desk-only — PWA / www-react removed</span>
     <span>216/216 backend tests</span>
-    <span>88/88 PWA tests</span>
   </div>
 </header>
 
@@ -33,7 +33,7 @@
   <span class="badge ok">complete</span>
   <span class="badge warn">partial</span>
   <span class="badge bad">pending</span>
-  <span class="badge superseded">future</span>
+  <span class="badge superseded">future / removed / superseded</span>
 </div>
 
 <h2>PRD — Desk Pages (§5.1)</h2>
@@ -48,24 +48,28 @@
     <tr><td class="id">PRD-006</td><td>Leader Analytics — burndown, velocity, forecast, risks</td><td><span class="badge ok">complete</span></td><td>ADR-001</td><td><code>services/{burndown,forecast,risk_evaluator}</code></td></tr>
     <tr><td class="id">PRD-007</td><td>Executive Analytics — OKR roll-up, KPI trends, Health Score</td><td><span class="badge ok">complete</span></td><td>ADR-001</td><td><code>task/api/exec_analytics.py</code> + tests</td></tr>
     <tr><td class="id">PRD-008</td><td>Workspace shortcuts + global page nav bar</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>public/js/page_nav.js</code></td></tr>
+    <tr><td class="id">PRD-026</td><td>vt-home post-login landing — hero greeting, onboarding checklist card (PRD-025), workload stats, "Progres Saya" velocity/sprint/next-actions, "Proyek Saya" (led + member, first-run empty state), "Jadwal 8 Hari" agenda, "Akses Cepat" links; header "Buat Proyek" primary action + quick-create dialog. IIFE-wrapped, gray bg via <code>vt_page_style.js</code>.</td><td><span class="badge ok">shipped</span></td><td>—</td><td><code>task/page/vt_home/*</code>; data <code>task/api/dashboard.py</code> (me_progress, my_projects, schedule_agenda) + <code>task/api/onboarding.py</code>; shared empty state <code>public/js/vt_empty.js</code>. Tests: <code>task/api/test_onboarding.py</code> (3)</td></tr>
+    <tr><td class="id">PRD-027</td><td>vt-brands desk page — VT Brand card grid (<code>.vh-card</code> grid reusing vt-home styling); each card clickable to native VT Brand form; list/read-only, all create/edit/delete delegate to the form. Create button gated client-side by <code>frappe.model.can_create</code>. XSS-safe escaped rendering. IIFE-wrapped (85d5299).</td><td><span class="badge ok">shipped</span></td><td>—</td><td>Route <code>/app/vt-brands</code>; <code>task/page/vt_brands/*</code>; API <code>brand/api/portal_brands.list_brands</code> ({id, brand_name, logo, description}); page roles VT Member/Leader/Manager</td></tr>
+    <tr><td class="id">PRD-028</td><td>vt-project-detail Sprint tab + board UX — new "Sprint" tab (between Gantt & Milestone) with sprint cards + "Tanpa Sprint" backlog bucket; task-create "Kolom" column picker; calendar day-click create; Gantt/calendar empty-state hints. IIFE-wrapped (85d5299).</td><td><span class="badge ok">shipped</span></td><td>—</td><td>Route <code>/app/vt-project-detail</code>; <code>task/page/vt_project_detail/*</code>; sprint API <code>task/api/dashboard.project_sprints</code> ({sprints, unassigned}); create via <code>task/api/board_mutations.create_task</code></td></tr>
   </tbody>
 </table>
 
-<h2>PRD — PWA Phases (§5.2)</h2>
+<h2>PRD — PWA Phases (§5.2) — REMOVED (historical)</h2>
+<p style="color: var(--text-muted); font-size: 13px; margin: var(--space-2) 0 var(--space-4);">The mobile PWA (<code>pwa/</code>, served at <code>/m/*</code>) was removed (commits dd7cb43, 5833ccf); the app is now desk-only (<code>/</code> redirects to <code>/app</code>). These phases shipped historically but no longer back any live surface — backend services they relied on (push, security guards) are reused by desk where noted.</p>
 <table>
   <thead><tr><th>ID</th><th>Phase</th><th>Status</th><th>ADR</th><th>Notes</th></tr></thead>
   <tbody>
-    <tr><td class="id">PRD-009</td><td>P0.5 Foundation — login, list/detail, onboarding, offline, telemetry</td><td><span class="badge ok">complete</span></td><td>ADR-002,003,004,005</td><td>pilot complete per PRD §11.1</td></tr>
-    <tr><td class="id">PRD-010</td><td>P1a Mutations + Install — complete/log/snooze undo, A2HS</td><td><span class="badge ok">complete</span></td><td>ADR-006</td><td><code>my_work_mutations.py</code> + tests</td></tr>
-    <tr><td class="id">PRD-011</td><td>P1b Search + Notifications — debounced search, filter sheet, log, badge</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>notifications.py</code> + <code>test_my_work_search.py</code></td></tr>
-    <tr><td class="id">PRD-012</td><td>P2 Dashboard + IC Analytics — summary, kanban, leaderboard tabs</td><td><span class="badge ok">complete</span></td><td>—</td><td>PWA <code>/m/dashboard</code> + analytics tabs</td></tr>
-    <tr><td class="id">PRD-013</td><td>P3a Leader Review — /m/leader queue, approve/reject</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>leader_review.py</code> + PWA leader page</td></tr>
-    <tr><td class="id">PRD-014</td><td>P3b Leader Sprint + Exec — burndown, forecast, Health Score, OKR</td><td><span class="badge ok">complete</span></td><td>—</td><td>services + exec_analytics</td></tr>
-    <tr><td class="id">PRD-015</td><td>P4a Push Notifications — VAPID, subscribe, pipeline, pruning</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>push.py</code>, <code>push_sender.py</code> + tests</td></tr>
-    <tr><td class="id">PRD-016</td><td>P4b Push Refinements — per-event prefs, action buttons</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>push_prefs.py</code>, <code>push_action.py</code> + tests</td></tr>
-    <tr><td class="id">PRD-017</td><td>CSO Security Audit — security.py guards, CSP/X-Frame</td><td><span class="badge ok">complete</span></td><td>ADR-011</td><td><code>task/api/security.py</code> + <code>test_security.py</code></td></tr>
-    <tr><td class="id">PRD-018</td><td>Login + Task UI Redesign — glassmorphism, purple, accent cards</td><td><span class="badge ok">complete</span></td><td>—</td><td>commits 52588ef…1fc12ca</td></tr>
-    <tr><td class="id">PRD-019</td><td>Mobile/Desktop Responsive Nav — 768px breakpoint, TopNav/BottomNav</td><td><span class="badge ok">complete</span></td><td>ADR-016</td><td>merge acf48f4; <code>useMediaQuery</code>, <code>TopNav.test.tsx</code></td></tr>
+    <tr><td class="id">PRD-009</td><td>P0.5 Foundation — login, list/detail, onboarding, offline, telemetry</td><td><span class="badge superseded">removed</span></td><td>ADR-002,003,004,005</td><td>PWA removed (dd7cb43); was pilot-complete per PRD §11.1</td></tr>
+    <tr><td class="id">PRD-010</td><td>P1a Mutations + Install — complete/log/snooze undo, A2HS</td><td><span class="badge superseded">removed</span></td><td>ADR-006</td><td>PWA removed; <code>my_work_mutations.py</code> backend retained for desk</td></tr>
+    <tr><td class="id">PRD-011</td><td>P1b Search + Notifications — debounced search, filter sheet, log, badge</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA removed; <code>notifications.py</code> backend retained</td></tr>
+    <tr><td class="id">PRD-012</td><td>P2 Dashboard + IC Analytics — summary, kanban, leaderboard tabs</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA <code>/m/dashboard</code> removed</td></tr>
+    <tr><td class="id">PRD-013</td><td>P3a Leader Review — /m/leader queue, approve/reject</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA <code>/m/leader</code> removed; <code>leader_review.py</code> backend retained</td></tr>
+    <tr><td class="id">PRD-014</td><td>P3b Leader Sprint + Exec — burndown, forecast, Health Score, OKR</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA removed; services + exec_analytics backend retained</td></tr>
+    <tr><td class="id">PRD-015</td><td>P4a Push Notifications — VAPID, subscribe, pipeline, pruning</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA removed; <code>push_sender.py</code> deep-links now point to <code>/app/*</code></td></tr>
+    <tr><td class="id">PRD-016</td><td>P4b Push Refinements — per-event prefs, action buttons</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA removed; <code>push_prefs.py</code>, <code>push_action.py</code> backend retained</td></tr>
+    <tr><td class="id">PRD-017</td><td>CSO Security Audit — security.py guards, CSP/X-Frame</td><td><span class="badge superseded">removed</span></td><td>ADR-011</td><td>PWA <code>/m/*</code> headers gone; <code>security.py</code> guards (require_login, rate_limit, clamp_int) still exist</td></tr>
+    <tr><td class="id">PRD-018</td><td>Login + Task UI Redesign — glassmorphism, purple, accent cards</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA UI removed; commits 52588ef…1fc12ca</td></tr>
+    <tr><td class="id">PRD-019</td><td>Mobile/Desktop Responsive Nav — 768px breakpoint, TopNav/BottomNav</td><td><span class="badge superseded">removed</span></td><td>ADR-016</td><td>PWA removed; merge acf48f4</td></tr>
   </tbody>
 </table>
 
@@ -78,20 +82,21 @@
   </tbody>
 </table>
 
-<h2>Desktop Portal — Sub-PRDs</h2>
+<h2>Desktop Portal — Sub-PRDs — REMOVED (historical)</h2>
+<p style="color: var(--text-muted); font-size: 13px; margin: var(--space-2) 0 var(--space-4);">The <code>/portal</code> route, the <code>pwa/src/portal/*</code> tree, and the standalone <code>www-react/</code> SPA were removed (commits dd7cb43, 5833ccf); the app is now desk-only. These modules shipped historically but no longer back any live surface. Equivalent functionality now lives in Frappe Desk pages (e.g. <code>vt-home</code>, <code>vt-brands</code>, <code>vt-project-detail</code>).</p>
 <table>
   <thead><tr><th>ID</th><th>Module</th><th>Status</th><th>Spec</th><th>Notes</th></tr></thead>
   <tbody>
-    <tr><td class="id">PORTAL-P1</td><td>Foundation — shell, topbar, auth/permission, error boundaries</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-17-desktop-portal-foundation-design.html">spec</a></td><td><code>pwa/src/portal/PortalShell.tsx</code>, <code>TopBar.tsx</code>, <code>routes.tsx</code>, <code>guards/</code>, <code>layouts/</code>; on master 2026-05-18</td></tr>
-    <tr><td class="id">PORTAL-P2</td><td>OKR — list/detail/filters, inline KR autosave, bulk PDCA, create/edit Objective</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-17-portal-okr-p2-design.html">spec</a></td><td>Branch <code>feat/portal-okr-p2</code>; flag <code>portal_okr_enabled</code></td></tr>
-    <tr><td class="id">PORTAL-P3.1</td><td>Portal Projects — master-detail list, linked-OKR preview, inline status/PDCA, bulk actions, create/edit. Sprint/Task deferred to P3.2+.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-17-portal-projects-p3-design.html">spec</a></td><td>Branch <code>feat/portal-projects-p3</code>; flag <code>portal_projects_enabled</code>; ADR-020</td></tr>
-    <tr><td class="id">PORTAL-P3.2</td><td>Portal Sprints — sprint board (kanban), sprint CRUD modal, task board (axis toggle kanban_status/pdca_phase), burndown chart, dnd-kit drag-drop with fractional rank, backend perm matrix, <code>kanban_rank</code> field, <code>portal_sprints_enabled</code> flag.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/plans/2026-05-18-portal-sprints-p3.2.md">plan</a></td><td>Branch <code>feat/portal-sprints-p3.2</code>; Implemented 2026-05-18</td></tr>
-    <tr><td class="id">PORTAL-P3.3</td><td>Portal Tasks — task detail slide-over, task create modal, comment/activity log; permission-gated CRUD; backend <code>portal_tasks.py</code>; frontend <code>pwa/src/portal/tasks/</code>.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-18-portal-tasks-p3.3-design.html">spec</a></td><td>Branch <code>feat/portal-tasks-p3.3</code>; Implemented 2026-05-18; tests: <code>tests/portal/test_portal_tasks.py</code></td></tr>
-    <tr><td class="id">PORTAL-P4c</td><td>Portal Notifications — bell icon + badge, 5-item dropdown panel, full /portal/notifications inbox; 4 doc-event triggers; polling every 30s; portal_notifications_enabled flag.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-18-portal-notifications-p4c-design.html">spec</a></td><td>Branch <code>feat/portal-notifications-p4c</code>; Implemented 2026-05-18; backend: <code>tests/portal/test_portal_notifications.py</code> (277 tests pass)</td></tr>
-    <tr><td class="id">PORTAL-P5</td><td>Portal Reports — exec dashboard /portal/reports; 3 tabs (OKR, Sprints, Team); 9 backend endpoints; recharts charts; portal_reports_enabled flag; cache + invalidation hooks.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-18-portal-reports-p5-design.html">spec</a></td><td>Branch <code>feat/portal-reports-p5</code>; Implemented 2026-05-18; 329 frontend tests pass; backend: <code>api/test_portal_reports.py</code></td></tr>
-    <tr><td class="id">PORTAL-P6</td><td>Portal Dashboard — role-aware /portal landing; 3 collapsible sections (Leader → Owner → Member); top-down workflow; drag-reorder (localStorage); 7-day task timeline; summary bar; light glassmorphism; <code>portal_dashboard_v2_enabled</code> flag.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-19-portal-dashboard-p6-design.html">spec</a></td><td>master; Implemented 2026-05-19; 7 Python tests pass; frontend: <code>pwa/src/portal/dashboard/</code>; backend: <code>api/portal_dashboard.py</code></td></tr>
-    <tr><td class="id">WWW-REACT</td><td>www-react Dashboard SPA (2026-05-23) — standalone Vite + React 18 + TS strict + React Router 7 + TanStack Query 5 + Tailwind + dnd-kit + recharts + sonner + i18n on its own domain via Caddy; cross-domain Frappe session cookie auth. Ships 5 pages (Login, Dashboard role-aware, Projects list + 5 detail tabs with default group-by OKR/KR, Worksheet weekly dnd planner + capacity + Friday review + PM team view, Reports hub + 6 slug reports + ScheduleModal). Backend: <code>portal_dashboard.get_home</code>, <code>portal_projects.{get_project_tasks, bulk_*, relink_task_kr, get_project_detail, get_project_members}</code>, <code>portal_worksheet.{get_worksheet, schedule_task, update_entry, unschedule, bulk_carry_over, get_team_worksheet}</code>, <code>portal_reports.{list_reports, run_report, export, create_subscription}</code>, <code>okr.get_for_project</code>, <code>sprints.get_burndown</code>; 6 report runner modules at <code>task/services/reports/</code>; hourly scheduler <code>report_subscription_runner.run_due_subscriptions</code>. New doctypes: <code>VT Report Subscription</code> (+ Recipient child), <code>Risk Event</code>. Field additions across VT Project, VT Sprint, Key Result, Task Schedule Entry, VT Task. Caddy snippet: <code>caddy/dashboard.Caddyfile</code>. Satisfies PRD requirements: desktop-first dashboard, weekly planner UX, bulk task actions, report scheduling.</td><td><span class="badge ok">shipped</span></td><td><a href="superpowers/specs/2026-05-23-www-react-dashboard-design.html">spec</a> · <a href="superpowers/specs/2026-05-23-schema-mapping.html">schema</a> · <a href="adr/standalone-www-react-spa.html">ADR-021</a></td><td>Branch <code>master</code>; 50+ commits; frontend: <code>www-react/src/{features,app,lib,components,hooks}/</code>; backend: <code>vernon_tasks/task/api/portal_*.py</code>, <code>vernon_tasks/task/services/reports/</code></td></tr>
-    <tr><td class="id">MOBILE-REPORTS</td><td>Mobile Reports Hub — <code>/m/reports</code> landing dengan 3 role-filtered cards (My Reports, Projects I Manage, My Team); drill flow projects→list→detail; 9 endpoint mobile_* di portal_reports.py; redirect /m/analytics → /m/reports/me; <code>mobile_reports_enabled</code> flag.</td><td><span class="badge ok">implemented</span></td><td><a href="superpowers/specs/2026-05-22-mobile-reports-hub-design.html">spec</a> · <a href="superpowers/plans/2026-05-22-mobile-reports-hub.md">plan</a></td><td>Branch <code>feature/mobile-reports-hub</code>; Implemented 2026-05-22; frontend: <code>pwa/src/mobile/pages/Reports/</code> (Landing, MyReports, ProjectsList, ProjectDetail, TeamReport); backend: 9 endpoints + <code>TestListManagedProjects</code> + <code>TestMobileProjectEndpoints</code> + <code>TestMobileTeamEndpoints</code>; 342 PWA tests pass</td></tr>
+    <tr><td class="id">PORTAL-P1</td><td>Foundation — shell, topbar, auth/permission, error boundaries</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-17-desktop-portal-foundation-design.html">spec</a></td><td>Removed with <code>/portal</code>; was <code>pwa/src/portal/PortalShell.tsx</code> etc.</td></tr>
+    <tr><td class="id">PORTAL-P2</td><td>OKR — list/detail/filters, inline KR autosave, bulk PDCA, create/edit Objective</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-17-portal-okr-p2-design.html">spec</a></td><td>Removed with <code>/portal</code>; flag <code>portal_okr_enabled</code> no longer gates a live surface</td></tr>
+    <tr><td class="id">PORTAL-P3.1</td><td>Portal Projects — master-detail list, linked-OKR preview, inline status/PDCA, bulk actions, create/edit. Sprint/Task deferred to P3.2+.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-17-portal-projects-p3-design.html">spec</a></td><td>Removed with <code>/portal</code>; flag <code>portal_projects_enabled</code>; ADR-020</td></tr>
+    <tr><td class="id">PORTAL-P3.2</td><td>Portal Sprints — sprint board (kanban), sprint CRUD modal, task board (axis toggle kanban_status/pdca_phase), burndown chart, dnd-kit drag-drop with fractional rank, backend perm matrix, <code>kanban_rank</code> field, <code>portal_sprints_enabled</code> flag.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/plans/2026-05-18-portal-sprints-p3.2.md">plan</a></td><td>Removed with <code>/portal</code>; sprint board now in desk <code>vt-project-detail</code> Sprint tab (PRD-028)</td></tr>
+    <tr><td class="id">PORTAL-P3.3</td><td>Portal Tasks — task detail slide-over, task create modal, comment/activity log; permission-gated CRUD; backend <code>portal_tasks.py</code>; frontend <code>pwa/src/portal/tasks/</code>.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-18-portal-tasks-p3.3-design.html">spec</a></td><td>Removed with <code>/portal</code>; <code>portal_tasks.py</code> + <code>tests/portal/</code> deleted (dd7cb43)</td></tr>
+    <tr><td class="id">PORTAL-P4c</td><td>Portal Notifications — bell icon + badge, 5-item dropdown panel, full /portal/notifications inbox; 4 doc-event triggers; polling every 30s; portal_notifications_enabled flag.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-18-portal-notifications-p4c-design.html">spec</a></td><td>Removed with <code>/portal</code>; <code>tests/portal/</code> deleted (dd7cb43)</td></tr>
+    <tr><td class="id">PORTAL-P5</td><td>Portal Reports — exec dashboard /portal/reports; 3 tabs (OKR, Sprints, Team); 9 backend endpoints; recharts charts; portal_reports_enabled flag; cache + invalidation hooks.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-18-portal-reports-p5-design.html">spec</a></td><td>Removed with <code>/portal</code>; <code>portal_reports.py</code> + tests deleted (dd7cb43)</td></tr>
+    <tr><td class="id">PORTAL-P6</td><td>Portal Dashboard — role-aware /portal landing; 3 collapsible sections (Leader → Owner → Member); top-down workflow; drag-reorder (localStorage); 7-day task timeline; summary bar; light glassmorphism; <code>portal_dashboard_v2_enabled</code> flag.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-19-portal-dashboard-p6-design.html">spec</a></td><td>Removed with <code>/portal</code>; role-aware landing now in desk <code>vt-home</code> (PRD-026)</td></tr>
+    <tr><td class="id">WWW-REACT</td><td>www-react Dashboard SPA (2026-05-23) — standalone Vite + React 18 + TS strict + React Router 7 + TanStack Query 5 + Tailwind + dnd-kit + recharts + sonner + i18n on its own domain via Caddy; cross-domain Frappe session cookie auth. Ships 5 pages (Login, Dashboard role-aware, Projects list + 5 detail tabs with default group-by OKR/KR, Worksheet weekly dnd planner + capacity + Friday review + PM team view, Reports hub + 6 slug reports + ScheduleModal). Backend: <code>portal_dashboard.get_home</code>, <code>portal_projects.{get_project_tasks, bulk_*, relink_task_kr, get_project_detail, get_project_members}</code>, <code>portal_worksheet.{get_worksheet, schedule_task, update_entry, unschedule, bulk_carry_over, get_team_worksheet}</code>, <code>portal_reports.{list_reports, run_report, export, create_subscription}</code>, <code>okr.get_for_project</code>, <code>sprints.get_burndown</code>; 6 report runner modules at <code>task/services/reports/</code>; hourly scheduler <code>report_subscription_runner.run_due_subscriptions</code>. New doctypes: <code>VT Report Subscription</code> (+ Recipient child), <code>Risk Event</code>. Field additions across VT Project, VT Sprint, Key Result, Task Schedule Entry, VT Task. Caddy snippet: <code>caddy/dashboard.Caddyfile</code>. Satisfies PRD requirements: desktop-first dashboard, weekly planner UX, bulk task actions, report scheduling.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-23-www-react-dashboard-design.html">spec</a> · <a href="superpowers/specs/2026-05-23-schema-mapping.html">schema</a> · <a href="adr/standalone-www-react-spa.html">ADR-021</a></td><td>Standalone <code>www-react/</code> SPA + <code>/portal</code> removed; the app is desk-only. The <code>portal_*.py</code> endpoints it consumed are no longer served by a live SPA. (A git-tracked <code>www-react/</code> dir may remain but is not wired into desk routing.)</td></tr>
+    <tr><td class="id">MOBILE-REPORTS</td><td>Mobile Reports Hub — <code>/m/reports</code> landing dengan 3 role-filtered cards (My Reports, Projects I Manage, My Team); drill flow projects→list→detail; 9 endpoint mobile_* di portal_reports.py; redirect /m/analytics → /m/reports/me; <code>mobile_reports_enabled</code> flag.</td><td><span class="badge superseded">removed</span></td><td><a href="superpowers/specs/2026-05-22-mobile-reports-hub-design.html">spec</a> · <a href="superpowers/plans/2026-05-22-mobile-reports-hub.md">plan</a></td><td>Removed with the PWA (<code>/m/*</code>); <code>pwa/src/mobile/pages/Reports/</code> + <code>get_mobile_*</code> endpoints deleted (dd7cb43); <code>mobile_reports_enabled</code> flag dead</td></tr>
   </tbody>
 </table>
 
@@ -126,10 +131,11 @@
   <thead><tr><th>ID</th><th>Requirement</th><th>Status</th><th>ADR</th><th>Notes</th></tr></thead>
   <tbody>
     <tr><td class="id">TRD-001</td><td>Frappe v15 backend</td><td><span class="badge ok">complete</span></td><td>ADR-001</td><td></td></tr>
-    <tr><td class="id">TRD-002</td><td>React 18 + Vite 5 + TS strict</td><td><span class="badge ok">complete</span></td><td>ADR-003</td><td><code>pwa/</code></td></tr>
-    <tr><td class="id">TRD-003</td><td>Dual-UI architecture (Desk + PWA)</td><td><span class="badge ok">complete</span></td><td>ADR-002</td><td></td></tr>
-    <tr><td class="id">TRD-004</td><td>TanStack Query 5 client cache</td><td><span class="badge ok">complete</span></td><td>ADR-006</td><td></td></tr>
+    <tr><td class="id">TRD-002</td><td>React 18 + Vite 5 + TS strict</td><td><span class="badge superseded">removed</span></td><td>ADR-003</td><td><code>pwa/</code> removed (dd7cb43); desk uses Frappe Web (Jinja) + Frappe Desk</td></tr>
+    <tr><td class="id">TRD-003</td><td>Dual-UI architecture (Desk + PWA)</td><td><span class="badge superseded">removed</span></td><td>ADR-002</td><td>now desk-only; <code>/</code> → <code>/app</code> (or <code>/login</code> for guests)</td></tr>
+    <tr><td class="id">TRD-004</td><td>TanStack Query 5 client cache</td><td><span class="badge superseded">removed</span></td><td>ADR-006</td><td>removed with PWA/www-react frontends</td></tr>
     <tr><td class="id">TRD-005</td><td>Layer separation: Controller / Service / Page Handler</td><td><span class="badge ok">complete</span></td><td>—</td><td>enforced via <code>services/</code> split</td></tr>
+    <tr><td class="id">TRD-023</td><td>Desk-only routing — <code>/</code> + <code>/index</code> 302 → <code>/app</code> (website_redirects); authenticated → <code>/app/vt-home</code>, guests → <code>/login</code></td><td><span class="badge ok">shipped</span></td><td>—</td><td>commit 5833ccf; <code>hooks.py</code> website_redirects + <code>www/index.py</code> + <code>www/login.py</code>; gray bg applied globally via <code>vt_page_style.js</code></td></tr>
   </tbody>
 </table>
 
@@ -147,15 +153,15 @@
 <table>
   <thead><tr><th>ID</th><th>Requirement</th><th>Status</th><th>ADR</th><th>Notes</th></tr></thead>
   <tbody>
-    <tr><td class="id">TRD-009</td><td>Vite build pipeline + bundle budget (~95KB gz)</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>build-pwa.sh</code></td></tr>
-    <tr><td class="id">TRD-010</td><td>Service worker StaleWhileRevalidate offline</td><td><span class="badge ok">complete</span></td><td>ADR-004</td><td>Workbox</td></tr>
-    <tr><td class="id">TRD-011</td><td>Reuse Frappe session cookie (no JWT)</td><td><span class="badge ok">complete</span></td><td>ADR-005</td><td></td></tr>
-    <tr><td class="id">TRD-012</td><td>Security headers on /m/*</td><td><span class="badge ok">complete</span></td><td>ADR-011</td><td><code>www/m.py</code></td></tr>
-    <tr><td class="id">TRD-013</td><td>API guards (rate_limit, clamp, max_str, require_login)</td><td><span class="badge ok">complete</span></td><td>ADR-011</td><td><code>task/api/security.py</code></td></tr>
+    <tr><td class="id">TRD-009</td><td>Vite build pipeline + bundle budget (~95KB gz)</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA removed; desk uses <code>bench build</code> asset pipeline</td></tr>
+    <tr><td class="id">TRD-010</td><td>Service worker StaleWhileRevalidate offline</td><td><span class="badge superseded">removed</span></td><td>ADR-004</td><td>Workbox SW removed with PWA</td></tr>
+    <tr><td class="id">TRD-011</td><td>Reuse Frappe session cookie (no JWT)</td><td><span class="badge ok">complete</span></td><td>ADR-005</td><td>desk uses native Frappe session cookie</td></tr>
+    <tr><td class="id">TRD-012</td><td>Security headers on /m/*</td><td><span class="badge superseded">removed</span></td><td>ADR-011</td><td><code>www/m.py</code> deleted; <code>/m/*</code> route gone</td></tr>
+    <tr><td class="id">TRD-013</td><td>API guards (rate_limit, clamp, max_str, require_login)</td><td><span class="badge ok">complete</span></td><td>ADR-011</td><td><code>task/api/security.py</code> (guards retained for desk APIs)</td></tr>
     <tr><td class="id">TRD-014</td><td>Role checks at endpoint top</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>frappe.has_role()</code></td></tr>
     <tr><td class="id">TRD-015</td><td>Telemetry pipeline + Report Builder reports</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>telemetry.py</code> + <code>Vernon Telemetry Event</code></td></tr>
-    <tr><td class="id">TRD-016</td><td>Deploy topology + rollback procedure</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>docs/rollout/pwa-pilot.md</code></td></tr>
-    <tr><td class="id">TRD-017</td><td>VAPID key one-time provisioning</td><td><span class="badge ok">complete</span></td><td>—</td><td>docs/trd/infrastructure.html §13.3</td></tr>
+    <tr><td class="id">TRD-016</td><td>Deploy topology + rollback procedure</td><td><span class="badge warn">partial</span></td><td>—</td><td>desk-only deploy via <code>bench build</code>; <code>docs/rollout/pwa-pilot.md</code> is historical (PWA removed)</td></tr>
+    <tr><td class="id">TRD-017</td><td>VAPID key one-time provisioning</td><td><span class="badge superseded">removed</span></td><td>—</td><td>web-push relied on the removed PWA; flag/keys no longer drive a live surface</td></tr>
   </tbody>
 </table>
 
@@ -164,32 +170,33 @@
   <thead><tr><th>ID</th><th>Requirement</th><th>Status</th><th>ADR</th><th>Notes</th></tr></thead>
   <tbody>
     <tr><td class="id">TRD-018</td><td>Backend test coverage ≥80% (services + security)</td><td><span class="badge ok">complete</span></td><td>—</td><td>216/216 passing; <code>[tool.coverage.*]</code> pyproject.toml; CI <code>--coverage</code>; <code>test_trd018_coverage.py</code></td></tr>
-    <tr><td class="id">TRD-019</td><td>PWA Vitest + happy-dom + RTL</td><td><span class="badge ok">complete</span></td><td>—</td><td>88/88 passing 2026-05-16</td></tr>
-    <tr><td class="id">TRD-020</td><td>PWA Playwright e2e (env-gated)</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>pwa/e2e/smoke.spec.ts</code></td></tr>
-    <tr><td class="id">TRD-021</td><td>TS <code>tsc --noEmit</code> strict</td><td><span class="badge ok">complete</span></td><td>—</td><td>2026-05-16: no errors</td></tr>
-    <tr><td class="id">TRD-022</td><td>CI gates (lint, type, test)</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>.github/workflows/test.yml</code> — PWA (typecheck + vitest) + backend (bench run-tests) on push/PR to master</td></tr>
+    <tr><td class="id">TRD-019</td><td>PWA Vitest + happy-dom + RTL</td><td><span class="badge superseded">removed</span></td><td>—</td><td>PWA suite removed with <code>pwa/</code> (dd7cb43)</td></tr>
+    <tr><td class="id">TRD-020</td><td>PWA Playwright e2e (env-gated)</td><td><span class="badge superseded">removed</span></td><td>—</td><td><code>pwa/e2e/smoke.spec.ts</code> deleted with PWA</td></tr>
+    <tr><td class="id">TRD-021</td><td>TS <code>tsc --noEmit</code> strict</td><td><span class="badge superseded">removed</span></td><td>—</td><td>covered the removed PWA/www-react TS frontends</td></tr>
+    <tr><td class="id">TRD-022</td><td>CI gates (lint, type, test)</td><td><span class="badge ok">complete</span></td><td>—</td><td><code>.github/workflows/test.yml</code> — backend (bench run-tests) on push/PR to master; dead <code>pwa-lint-type-test</code> job removed (2b44bbc)</td></tr>
   </tbody>
 </table>
 
 <h2>ADR Implementation Status</h2>
+<p style="color: var(--text-muted); font-size: 13px; margin: var(--space-2) 0 var(--space-4);">ADR-002/003/004/006/016/019/020/021 are <span class="badge superseded">superseded</span> — they decided on the PWA, the <code>/portal</code> route, or the standalone www-react SPA, all of which were removed. The app is now desk-only.</p>
 <table>
   <thead><tr><th>ADR</th><th>Title</th><th>Status</th></tr></thead>
   <tbody>
     <tr><td class="id">ADR-001</td><td>Build on Frappe Framework</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-002</td><td>Dual UI: Frappe Desk + Mobile PWA</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-003</td><td>React 18 + Vite 5 + TypeScript 5 for PWA</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-004</td><td>Workbox StaleWhileRevalidate offline</td><td><span class="badge ok">complete</span></td></tr>
+    <tr><td class="id">ADR-002</td><td>Dual UI: Frappe Desk + Mobile PWA</td><td><span class="badge superseded">superseded</span></td></tr>
+    <tr><td class="id">ADR-003</td><td>React 18 + Vite 5 + TypeScript 5 for PWA</td><td><span class="badge superseded">superseded</span></td></tr>
+    <tr><td class="id">ADR-004</td><td>Workbox StaleWhileRevalidate offline</td><td><span class="badge superseded">superseded</span></td></tr>
     <tr><td class="id">ADR-005</td><td>Reuse Frappe session cookie (no JWT)</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-006</td><td>TanStack Query 5 for client cache</td><td><span class="badge ok">complete</span></td></tr>
+    <tr><td class="id">ADR-006</td><td>TanStack Query 5 for client cache</td><td><span class="badge superseded">superseded</span></td></tr>
     <tr><td class="id">ADR-007</td><td>Doctype model + PDCA state machine</td><td><span class="badge ok">complete</span></td></tr>
     <tr><td class="id">ADR-008</td><td>Point calculation + override audit</td><td><span class="badge ok">complete</span></td></tr>
     <tr><td class="id">ADR-009</td><td>Scheduling engine + capacity</td><td><span class="badge ok">complete</span></td></tr>
     <tr><td class="id">ADR-010</td><td>Data layer (see docs/adr/data.html)</td><td><span class="badge ok">complete</span></td></tr>
     <tr><td class="id">ADR-011</td><td>Security guards + CSP headers</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-016</td><td>Responsive nav (768px breakpoint)</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-019</td><td>Portal OKR vanilla React Query + composed UI (over TanStack Table)</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-020</td><td>Portal Projects reuses Portal OKR composition (vanilla React Query + composed UI)</td><td><span class="badge ok">complete</span></td></tr>
-    <tr><td class="id">ADR-021</td><td>Standalone www-react SPA on separate domain</td><td><span class="badge ok">complete</span></td></tr>
+    <tr><td class="id">ADR-016</td><td>Responsive nav (768px breakpoint)</td><td><span class="badge superseded">superseded</span></td></tr>
+    <tr><td class="id">ADR-019</td><td>Portal OKR vanilla React Query + composed UI (over TanStack Table)</td><td><span class="badge superseded">superseded</span></td></tr>
+    <tr><td class="id">ADR-020</td><td>Portal Projects reuses Portal OKR composition (vanilla React Query + composed UI)</td><td><span class="badge superseded">superseded</span></td></tr>
+    <tr><td class="id">ADR-021</td><td>Standalone www-react SPA on separate domain</td><td><span class="badge superseded">superseded</span></td></tr>
   </tbody>
 </table>
 
@@ -201,11 +208,12 @@
     <tr><td>TRD-018 coverage % not measured</td><td><span class="badge ok">done</span></td><td>CI runs <code>bench run-tests --coverage</code>; <code>coverage.xml</code> uploaded as artifact (<code>.github/workflows/test.yml</code>)</td></tr>
     <tr><td>TRD-022 CI config</td><td><span class="badge ok">done</span></td><td><code>.github/workflows/test.yml</code> added 2026-05-18</td></tr>
     <tr><td>Domain README stubs missing</td><td><span class="badge ok">done</span></td><td>created 2026-05-16 (see <code>docs/domains/*/README.md</code>)</td></tr>
+    <tr><td>Desk-only migration — remove PWA (<code>/m/*</code>), <code>/portal</code>, www-react SPA</td><td><span class="badge ok">done</span></td><td>commits dd7cb43 (bulk delete) + 5833ccf (<code>/m/*</code> → <code>/app/*</code> refs, global gray bg) + 2b44bbc (drop dead PWA CI job); <code>/</code> → <code>/app</code>; no <code>/m/</code> refs remain in live code</td></tr>
   </tbody>
 </table>
 
 <footer>
-Implementation tracker — synthesized from PRD v1.0 + TRD + ADR on 2026-05-16. Source markdown: <code>docs/implementation-tracker.md</code>. Hub: <a href="index.html">docs/index.html</a>.
+Implementation tracker — synthesized from PRD v1.0 + TRD + ADR on 2026-05-16; revised 2026-06-03 for the desk-only migration (mobile PWA at <code>/m/*</code>, the <code>/portal</code> route, and the standalone www-react SPA removed; <code>/</code> redirects to <code>/app</code>). Source markdown: <code>docs/implementation-tracker.md</code>. Hub: <a href="index.html">docs/index.html</a>.
 </footer>
 
 </div>

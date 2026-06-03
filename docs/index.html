@@ -12,12 +12,12 @@
 
 <header class="hero large">
   <h1>Vernon Tasks Documentation</h1>
-  <div class="sub">PDCA × OKR × Agile — company-wide task &amp; performance platform on Frappe v15 with installable mobile PWA.</div>
+  <div class="sub">PDCA × OKR × Agile — company-wide task &amp; performance platform on Frappe v15 (Frappe Desk, desk-only).</div>
   <div class="meta">
     <span>Docs v1.0</span>
     <span>2026-05-23</span>
     <span>Frappe v15</span>
-    <span>React 18 + Vite 5 (PWA + www-react)</span>
+    <span>Frappe Desk + Jinja/JS</span>
   </div>
 </header>
 
@@ -70,7 +70,6 @@
 <ul class="meta-list">
   <li><span><a href="DEVELOPER_GUIDE.md">DEVELOPER_GUIDE.md</a></span><span class="desc">Local setup, conventions, contributing</span></li>
   <li><span><a href="API_REFERENCE.md">API_REFERENCE.md</a></span><span class="desc">Endpoint catalog with payload shapes</span></li>
-  <li><span><a href="rollout/pwa-pilot.md">rollout/pwa-pilot.md</a></span><span class="desc">PWA pilot checklist + go/no-go gates</span></li>
   <li><span><a href="../README.md">README.md</a></span><span class="desc">Quick-start &amp; feature overview</span></li>
   <li><span><a href="../CLAUDE.md">CLAUDE.md</a></span><span class="desc">Project conventions for AI-assisted work</span></li>
 </ul>
@@ -79,12 +78,17 @@
 <ul class="meta-list">
   <li><span><a href="superpowers/specs/">docs/superpowers/specs/</a></span><span class="desc">15 per-feature design specs (markdown)</span></li>
   <li><span><a href="superpowers/plans/">docs/superpowers/plans/</a></span><span class="desc">11 implementation plans with task breakdowns</span></li>
-  <li><span><a href="superpowers/specs/2026-05-17-desktop-portal-foundation-design.html">Desktop Portal Foundation (P1)</a></span><span class="desc">Umbrella PRD — shell, routing, auth/permission</span></li>
-  <li><span><a href="superpowers/specs/2026-05-17-portal-okr-p2-design.html">Portal OKR Module (P2)</a></span><span class="desc">Sub-PRD — draft</span></li>
-  <li><span><a href="superpowers/specs/2026-05-17-portal-projects-p3-design.html">Portal Projects (P3.1) — Draft</a></span><span class="desc">Sub-PRD — draft (master-detail, linked-OKR preview, bulk actions)</span></li>
-  <li><span><a href="superpowers/specs/2026-05-23-www-react-dashboard-design.html">www-react Dashboard SPA (2026-05-23)</a></span><span class="desc">Standalone Vite + React 18 + TS desktop SPA on its own domain; cross-domain Frappe session cookie</span></li>
-  <li><span><a href="superpowers/specs/2026-05-23-schema-mapping.html">www-react Schema Mapping</a></span><span class="desc">Doctype field additions + 6 report runner mapping</span></li>
-  <li><span><a href="superpowers/plans/">www-react plans 0–4</a></span><span class="desc"><code>2026-05-23-www-react-{0..4}-*.md</code> — foundation, dashboard, projects, worksheet, reports</span></li>
+</ul>
+
+<h2>Historical / Removed Subsystems</h2>
+<ul class="meta-list">
+  <li><span><strong>Note</strong></span><span class="desc">The www-react SPA and the <code>/portal</code> route were removed; the app is desk-only. The specs/plans below are kept for reference only — not current design references.</span></li>
+  <li><span><a href="superpowers/specs/2026-05-17-desktop-portal-foundation-design.html">Desktop Portal Foundation (P1)</a></span><span class="desc">Removed — umbrella PRD: shell, routing, auth/permission</span></li>
+  <li><span><a href="superpowers/specs/2026-05-17-portal-okr-p2-design.html">Portal OKR Module (P2)</a></span><span class="desc">Removed — sub-PRD draft</span></li>
+  <li><span><a href="superpowers/specs/2026-05-17-portal-projects-p3-design.html">Portal Projects (P3.1)</a></span><span class="desc">Removed — sub-PRD draft (master-detail, linked-OKR preview, bulk actions)</span></li>
+  <li><span><a href="superpowers/specs/2026-05-23-www-react-dashboard-design.html">www-react Dashboard SPA (2026-05-23)</a></span><span class="desc">Removed — standalone Vite + React 18 + TS desktop SPA on its own domain; cross-domain Frappe session cookie</span></li>
+  <li><span><a href="superpowers/specs/2026-05-23-schema-mapping.html">www-react Schema Mapping</a></span><span class="desc">Removed — doctype field additions + 6 report runner mapping</span></li>
+  <li><span><a href="superpowers/plans/">www-react plans 0–4</a></span><span class="desc">Removed — <code>2026-05-23-www-react-{0..4}-*.md</code> — foundation, dashboard, projects, worksheet, reports</span></li>
 </ul>
 
 <h2>How to Read</h2>
@@ -92,7 +96,7 @@
   <li><span><strong>New to Vernon?</strong></span><span class="desc">Start <a href="prd/overview.html">PRD Overview</a></span></li>
   <li><span><strong>Joining engineering?</strong></span><span class="desc"><a href="trd/architecture.html">TRD Architecture</a> + <a href="adr/index.html">ADR</a></span></li>
   <li><span><strong>Reviewing a PR?</strong></span><span class="desc"><a href="trd/quality.html">TRD Quality</a> (standards + acceptance)</span></li>
-  <li><span><strong>Shipping a phase?</strong></span><span class="desc"><a href="prd/ops.html">PRD Ops</a> + <a href="rollout/pwa-pilot.md">pilot checklist</a></span></li>
+  <li><span><strong>Shipping a phase?</strong></span><span class="desc"><a href="prd/ops.html">PRD Ops</a></span></li>
   <li><span><strong>Operating in prod?</strong></span><span class="desc"><a href="trd/infrastructure.html">TRD Infrastructure</a> + <a href="trd/quality.html">runbook</a></span></li>
 </ul>
 
