@@ -1,6 +1,6 @@
 {
   "charts": [],
-  "content": "[{\"id\":\"hdr-today\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Hari Ini</b>\",\"col\":12}},{\"id\":\"sc-mywork\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Work\",\"col\":3}},{\"id\":\"sc-newtask\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New Task\",\"col\":3}},{\"id\":\"sc-mypoints\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Points Progress\",\"col\":3}},{\"id\":\"sc-sprint\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Sprint\",\"col\":3}},{\"id\":\"hdr-todo\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Perlu Dikerjakan</b>\",\"col\":12}},{\"id\":\"card-tasks\",\"type\":\"card\",\"data\":{\"card_name\":\"My Tasks\",\"col\":12}},{\"id\":\"hdr-progress\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Progress & Laporan</b>\",\"col\":12}},{\"id\":\"card-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"My Reports\",\"col\":12}}]",
+  "content": "[{\"id\":\"hdr-today\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Hari Ini</b>\",\"col\":12}},{\"id\":\"sc-newtask\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New Task\",\"col\":3}},{\"id\":\"sc-mypoints\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Points Progress\",\"col\":3}},{\"id\":\"sc-sprint\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"My Sprint\",\"col\":3}},{\"id\":\"hdr-todo\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Perlu Dikerjakan</b>\",\"col\":12}},{\"id\":\"card-tasks\",\"type\":\"card\",\"data\":{\"card_name\":\"My Tasks\",\"col\":12}},{\"id\":\"hdr-progress\",\"type\":\"header\",\"data\":{\"text\":\"<b class=\\\"h4\\\">Progress & Laporan</b>\",\"col\":12}},{\"id\":\"card-reports\",\"type\":\"card\",\"data\":{\"card_name\":\"My Reports\",\"col\":12}}]",
   "creation": "2026-05-08 00:00:00.000000",
   "doctype": "Workspace",
   "for_user": "",
@@ -104,13 +104,6 @@
   ],
   "sequence_id": 1.0,
   "shortcuts": [
-    {
-      "color": "Blue",
-      "icon": "book-open",
-      "label": "My Work",
-      "link_to": "my-work",
-      "type": "Page"
-    },
     {
       "color": "Green",
       "icon": "add",
