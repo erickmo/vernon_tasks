@@ -1,3 +1,5 @@
+import json
+
 import frappe
 
 _RATE_LIMIT_TTL = 90  # seconds — bucket expires 90s after first hit
@@ -38,3 +40,23 @@ def max_str(val, limit: int) -> str:
     if val is None:
         return ""
     return str(val)[:limit]
+
+
+def parse_payload(payload) -> dict:
+    """Normalize a whitelisted-method payload to a dict (accepts dict or JSON string)."""
+    if payload is None:
+        return {}
+    if isinstance(payload, dict):
+        return payload
+    try:
+        parsed = json.loads(payload)
+    except (TypeError, ValueError):
+        frappe.throw("invalid payload", frappe.ValidationError)
+    if not isinstance(parsed, dict):
+        frappe.throw("payload must be an object", frappe.ValidationError)
+    return parsed
+
+
+def pick_fields(payload: dict, allowed: tuple) -> dict:
+    """Keep only allow-listed keys from a payload — blocks mass-assignment."""
+    return {k: payload[k] for k in allowed if k in payload}

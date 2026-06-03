@@ -100,7 +100,7 @@ function brand_card(b) {
         ${desc_safe ? `<div class="vh-item-meta">${desc_safe}</div>` : ""}
     </div>`);
 
-    card.on("click", () => frappe.set_route("Form", BRAND_DOCTYPE, b.id));
+    card.on("click", () => frappe.set_route("vt-brand-detail", b.id));
     return card;
 }
 
