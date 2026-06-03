@@ -186,7 +186,7 @@
 <table>
   <thead><tr><th>Role</th><th>Profile</th><th>Primary Surface</th><th>Permissions</th></tr></thead>
   <tbody>
-    <tr><td><strong>VT Member</strong></td><td>Individual contributor</td><td><code>/m/work</code> <em>(removed — desk-only)</em>, Desk <code>my_work</code>, <code>my_dashboard</code>, <code>my_analytics</code></td><td>CRUD own tasks; transition BACKLOG→PLAN→DO→CHECK; log hours; leaderboard view</td></tr>
+    <tr><td><strong>VT Member</strong></td><td>Individual contributor</td><td><code>/m/work</code> <em>(removed — desk-only)</em>, Desk <code>my_work</code>, <code>vt-home</code> (Beranda tab), <code>my_analytics</code></td><td>CRUD own tasks; transition BACKLOG→PLAN→DO→CHECK; log hours; leaderboard view</td></tr>
     <tr><td><strong>VT Leader</strong></td><td>Project lead</td><td><code>/m/leader</code> <em>(removed — desk-only)</em>, Desk <code>leader_*</code> pages</td><td>+ approve/reject reviews, override points &amp; schedules, team analytics</td></tr>
     <tr><td><strong>VT Manager</strong></td><td>Exec / dept head</td><td>Desk <code>exec_analytics</code></td><td>+ executive analytics, edit <code>VT Settings</code>, system overrides</td></tr>
     <tr><td><strong>System Manager</strong></td><td>Frappe admin</td><td>Frappe Desk</td><td>+ role assignment, fixtures, migrations</td></tr>
@@ -299,9 +299,9 @@ earned             = base + early_bonus − late_penalty − revision_deduction<
 <thead><tr><th>#</th><th>Feature</th><th>Page</th><th>Roles</th></tr></thead>
 <tbody>
 <tr><td>1</td><td>My Work — daily queue + PDCA quick-actions</td><td><code>my_work</code></td><td>Member+</td></tr>
-<tr><td>2</td><td>My Dashboard — personal stats, 7-day chart, hours donut</td><td><code>my_dashboard</code></td><td>Member+</td></tr>
+<tr><td>2</td><td>My Dashboard — personal stats, 7-day chart, hours donut <em>(merged into vt-home Beranda tab)</em></td><td><code>vt_home</code></td><td>Member+</td></tr>
 <tr><td>3</td><td>My Analytics — leaderboard, personal velocity, streak</td><td><code>my_analytics</code></td><td>Member+</td></tr>
-<tr><td>4</td><td>Leader Dashboard — pending review, approval rate, leaderboard, overdue</td><td><code>leader_dashboard</code></td><td>Leader+</td></tr>
+<tr><td>4</td><td>Leader Dashboard — pending review, approval rate, leaderboard, overdue <em>(merged into vt-home Tim tab)</em></td><td><code>vt_home</code></td><td>Leader+</td></tr>
 <tr><td>5</td><td>Leader Review — queue, workload, blocked, approve/reject</td><td><code>leader_review</code></td><td>Leader+</td></tr>
 <tr><td>6</td><td>Leader Analytics — burndown, velocity, forecast, risks</td><td><code>leader_analytics</code></td><td>Leader+</td></tr>
 <tr><td>7</td><td>Exec Analytics — OKR roll-up, KPI trends, Health Score</td><td><code>exec_analytics</code></td><td>Manager</td></tr>
@@ -344,13 +344,13 @@ earned             = base + early_bonus − late_penalty − revision_deduction<
 <h3>6.1 IC / Member</h3>
 <ul>
   <li><code>task.page.my_work.my_work</code> — get_my_day, get_what_to_do_today, get_my_blocked_tasks, start_task, submit_for_review</li>
-  <li><code>task.page.my_dashboard.my_dashboard</code> — get_employee_stats, get_daily_completions, get_hours_summary, get_sprint_kanban</li>
+  <li><code>task.api.dashboard</code> — personal_stats, daily_completions, hours_summary (vt-home Beranda tab)</li>
   <li><code>task.api.ic_analytics</code> — get_leaderboard(period, limit), get_personal_velocity(project, n), get_streak(project)</li>
 </ul>
 
 <h3>6.2 Leader</h3>
 <ul>
-  <li><code>task.page.leader_dashboard.leader_dashboard</code> — get_leader_stats, get_phase_distribution, get_team_leaderboard, get_overdue_tasks</li>
+  <li><code>task.api.dashboard</code> — team_tab_state, team_overview (vt-home Tim tab; consolidates leader stats, phase distribution, team leaderboard, overdue)</li>
   <li><code>task.page.leader_review.leader_review</code> — get_review_queue, get_team_workload, get_team_blocked_tasks, approve_task, reject_task</li>
   <li><code>task.api.analytics</code> — get_burndown(sprint), get_velocity_trend(project, n=6), get_forecast(project), get_risks(project)</li>
   <li><code>task.api.leader_review</code> — get_my_led_projects, get_latest_sprint(project)</li>
@@ -544,7 +544,7 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 <h2 id="s13" class="anchor">13. Workspaces (Fixtures)</h2>
 <ul>
   <li><strong>My Tasks</strong> (Member) — Active Sprints, My Projects, Blocked Escalation, Team Workload, Sprint Velocity, Review Schedule</li>
-  <li><strong>My Projects</strong> (Leader) — project shortcuts + Leader Dashboard</li>
+  <li><strong>My Projects</strong> (Leader) — project shortcuts</li>
   <li><strong>Overview</strong> (Manager) — Team Workload, KPI Achievement, Project vs OKR, Point Audit + Leader Review</li>
 </ul>
 
@@ -560,8 +560,8 @@ Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline';
 │   ├── services/   point_calculator, scheduling_engine,
 │   │               velocity_service, burndown_service,
 │   │               forecast_service, risk_evaluator, push_sender
-│   ├── page/       my_work, my_dashboard, my_analytics,
-│   │               leader_dashboard, leader_review,
+│   ├── page/       my_work, vt_home, my_analytics,
+│   │               leader_review,
 │   │               leader_analytics, exec_analytics
 │   └── report/     blocked_tasks_escalation, leader_review_schedule,
 │                   point_override_audit

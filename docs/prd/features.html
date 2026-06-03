@@ -24,9 +24,9 @@
 <thead><tr><th>#</th><th>Feature</th><th>Page</th><th>Roles</th></tr></thead>
 <tbody>
 <tr><td>1</td><td>My Work — daily queue + PDCA quick-actions</td><td><code>my_work</code></td><td>Member+</td></tr>
-<tr><td>2</td><td>My Dashboard — personal stats, 7-day chart, hours donut</td><td><code>my_dashboard</code></td><td>Member+</td></tr>
+<tr><td>2</td><td>My Dashboard — personal stats, 7-day chart, hours donut <em>(merged into vt-home Beranda tab)</em></td><td><code>vt_home</code></td><td>Member+</td></tr>
 <tr><td>3</td><td>My Analytics — leaderboard, personal velocity, streak</td><td><code>my_analytics</code></td><td>Member+</td></tr>
-<tr><td>4</td><td>Leader Dashboard — pending review, approval rate, leaderboard, overdue</td><td><code>leader_dashboard</code></td><td>Leader+</td></tr>
+<tr><td>4</td><td>Leader Dashboard — pending review, approval rate, leaderboard, overdue <em>(merged into vt-home Tim tab)</em></td><td><code>vt_home</code></td><td>Leader+</td></tr>
 <tr><td>5</td><td>Leader Review — queue, workload, blocked, approve/reject</td><td><code>leader_review</code></td><td>Leader+</td></tr>
 <tr><td>6</td><td>Leader Analytics — burndown, velocity, forecast, risks</td><td><code>leader_analytics</code></td><td>Leader+</td></tr>
 <tr><td>7</td><td>Exec Analytics — OKR roll-up, KPI trends, Health Score</td><td><code>exec_analytics</code></td><td>Manager</td></tr>
@@ -80,13 +80,13 @@
 <h3>6.1 IC / Member</h3>
 <ul>
   <li><code>task.page.my_work.my_work</code> — get_my_day, get_what_to_do_today, get_my_blocked_tasks, start_task, submit_for_review</li>
-  <li><code>task.page.my_dashboard.my_dashboard</code> — get_employee_stats, get_daily_completions, get_hours_summary, get_sprint_kanban</li>
+  <li><code>task.api.dashboard</code> — personal_stats, daily_completions, hours_summary (vt-home Beranda tab)</li>
   <li><code>task.api.ic_analytics</code> — get_leaderboard(period, limit), get_personal_velocity(project, n), get_streak(project)</li>
 </ul>
 
 <h3>6.2 Leader</h3>
 <ul>
-  <li><code>task.page.leader_dashboard.leader_dashboard</code> — get_leader_stats, get_phase_distribution, get_team_leaderboard, get_overdue_tasks</li>
+  <li><code>task.api.dashboard</code> — team_tab_state, team_overview (vt-home Tim tab; consolidates leader stats, phase distribution, team leaderboard, overdue)</li>
   <li><code>task.page.leader_review.leader_review</code> — get_review_queue, get_team_workload, get_team_blocked_tasks, approve_task, reject_task</li>
   <li><code>task.api.analytics</code> — get_burndown(sprint), get_velocity_trend(project, n=6), get_forecast(project), get_risks(project)</li>
   <li><code>task.api.leader_review</code> — get_my_led_projects, get_latest_sprint(project)</li>

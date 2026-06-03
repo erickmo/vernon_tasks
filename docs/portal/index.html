@@ -431,7 +431,7 @@ td.id-col{font-family:var(--font-mono);font-size:11px;color:var(--text-muted);wh
 
 Frappe Desk Pages        |  React PWA (/m/* and /portal/*)
   my_work                |  React 18 + Vite 5 + TS strict
-  my_dashboard           |  TanStack Query 5 client cache
+  vt_home                |  TanStack Query 5 client cache
   leader_review          |  Service Worker (Workbox)
   exec_analytics         |  Push notifications (VAPID)</code></pre>
 
@@ -602,7 +602,7 @@ npm run e2e</code></pre>
     <li><code>task/doctype/</code> &#8212; vt_task, task_dependency, task_schedule_entry, task_point_log, recurring_rule</li>
     <li><code>task/api/</code> &#8212; whitelisted endpoints</li>
     <li><code>task/services/</code> &#8212; point_calculator, scheduling_engine, burndown_service, forecast_service, risk_evaluator, push_sender</li>
-    <li><code>task/page/</code> &#8212; my_work, my_dashboard, leader_review, leader_analytics, exec_analytics</li>
+    <li><code>task/page/</code> &#8212; my_work, vt_home, leader_review, leader_analytics, exec_analytics</li>
   </ul>
 
   <h2 id="dt-sm">PDCA State Machine</h2>
@@ -1130,8 +1130,8 @@ bench --site mysite migrate</code></pre>
   <table>
     <thead><tr><th>Role</th><th>Access</th></tr></thead>
     <tbody>
-      <tr><td><code>VT IC</code></td><td>My Work, My Dashboard, PWA</td></tr>
-      <tr><td><code>VT Leader</code></td><td>All IC access + Leader Review, Leader Dashboard, Portal</td></tr>
+      <tr><td><code>VT IC</code></td><td>My Work, vt-home (Beranda tab, all roles), PWA</td></tr>
+      <tr><td><code>VT Leader</code></td><td>All IC access + Leader Review, vt-home (Tim tab, leaders/managers), Portal</td></tr>
       <tr><td><code>VT Executive</code></td><td>All Leader access + Exec Analytics, Portal Reports</td></tr>
       <tr><td><code>VT Admin</code></td><td>Full access + VT Settings, VAPID config</td></tr>
     </tbody>
@@ -1209,9 +1209,9 @@ bench --site mysite migrate</code></pre>
     <thead><tr><th>ID</th><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
     <tbody>
       <tr data-id="PRD-001" data-status="complete" data-domain="task" data-title="My Work daily queue PDCA" class="row-complete"><td class="id-col">PRD-001</td><td>My Work &#8212; daily queue + PDCA quick-actions</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/my_work</code></td></tr>
-      <tr data-id="PRD-002" data-status="complete" data-domain="task" data-title="My Dashboard stats chart" class="row-complete"><td class="id-col">PRD-002</td><td>My Dashboard &#8212; stats + 7-day chart + hours donut</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/my_dashboard</code></td></tr>
+      <tr data-id="PRD-002" data-status="complete" data-domain="task" data-title="My Dashboard stats chart" class="row-complete"><td class="id-col">PRD-002</td><td>My Dashboard &#8212; stats + 7-day chart + hours donut <em>(merged into vt-home Beranda tab)</em></td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/vt_home</code></td></tr>
       <tr data-id="PRD-003" data-status="complete" data-domain="task" data-title="My Analytics leaderboard velocity streak" class="row-complete"><td class="id-col">PRD-003</td><td>My Analytics &#8212; leaderboard, velocity, streak</td><td><span class="badge badge-ok">complete</span></td><td><code>task/api/ic_analytics.py</code></td></tr>
-      <tr data-id="PRD-004" data-status="complete" data-domain="task" data-title="Leader Dashboard KPIs" class="row-complete"><td class="id-col">PRD-004</td><td>Leader Dashboard &#8212; pending review, KPIs, leaderboard, overdue</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/leader_dashboard</code></td></tr>
+      <tr data-id="PRD-004" data-status="complete" data-domain="task" data-title="Leader Dashboard KPIs" class="row-complete"><td class="id-col">PRD-004</td><td>Leader Dashboard &#8212; pending review, KPIs, leaderboard, overdue <em>(merged into vt-home Tim tab)</em></td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/vt_home</code></td></tr>
       <tr data-id="PRD-005" data-status="complete" data-domain="task" data-title="Leader Review approve reject" class="row-complete"><td class="id-col">PRD-005</td><td>Leader Review &#8212; queue, workload, blocked, approve/reject</td><td><span class="badge badge-ok">complete</span></td><td><code>task/page/leader_review</code></td></tr>
       <tr data-id="PRD-006" data-status="complete" data-domain="task" data-title="Leader Analytics burndown forecast" class="row-complete"><td class="id-col">PRD-006</td><td>Leader Analytics &#8212; burndown, velocity, forecast, risks</td><td><span class="badge badge-ok">complete</span></td><td><code>services/{burndown,forecast,risk_evaluator}</code></td></tr>
       <tr data-id="PRD-007" data-status="complete" data-domain="task" data-title="Executive Analytics OKR Health Score" class="row-complete"><td class="id-col">PRD-007</td><td>Executive Analytics &#8212; OKR roll-up, KPI trends, Health Score</td><td><span class="badge badge-ok">complete</span></td><td><code>task/api/exec_analytics.py</code></td></tr>

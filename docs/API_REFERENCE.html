@@ -30,8 +30,8 @@ Framework: Frappe v15+</p>
 <li><a href="#request--response-format">Request &amp; Response Format</a></li>
 <li><a href="#error-reference">Error Reference</a></li>
 <li><a href="#my-work-page-apis">My Work Page APIs</a></li>
-<li><a href="#my-dashboard-page-apis">My Dashboard Page APIs</a></li>
-<li><a href="#leader-dashboard-page-apis">Leader Dashboard Page APIs</a></li>
+<li><a href="#personal-dashboard-apis">Personal Dashboard APIs (vt-home Beranda)</a></li>
+<li><a href="#team-dashboard-apis">Team Dashboard APIs (vt-home Tim)</a></li>
 <li><a href="#leader-review-page-apis">Leader Review Page APIs</a></li>
 <li><a href="#point-calculator-service-apis">Point Calculator Service APIs</a></li>
 <li><a href="#scheduling-engine-service-apis">Scheduling Engine Service APIs</a></li>
@@ -73,11 +73,11 @@ Framework: Frappe v15+</p>
 <tbody>
 <tr>
 <td>Any authenticated user</td>
-<td>Access to personal My Work and My Dashboard endpoints</td>
+<td>Access to personal My Work and Personal Dashboard (vt-home Beranda) endpoints</td>
 </tr>
 <tr>
 <td><code>VT Leader</code></td>
-<td>Access to Leader Dashboard and Leader Review endpoints</td>
+<td>Access to Team dashboard (team_overview) and Leader Review endpoints</td>
 </tr>
 <tr>
 <td><code>VT Manager</code></td>
@@ -567,19 +567,19 @@ X-Frappe-CSRF-Token: abc123
 </tbody>
 </table>
 <hr />
-<h2 id="my-dashboard-page-apis">My Dashboard Page APIs</h2>
-<p><strong>Module path:</strong> <code>vernon_tasks.task.page.my_dashboard.my_dashboard</code></p>
-<p>These endpoints power the personal <strong>My Dashboard</strong> page. All endpoints operate on the currently authenticated user and require no special roles.</p>
+<h2 id="personal-dashboard-apis">Personal Dashboard APIs (vt-home Beranda)</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.api.dashboard</code></p>
+<p>These endpoints power the personal <strong>Beranda</strong> tab of the <code>vt-home</code> page (formerly the standalone My Dashboard). All endpoints operate on the currently authenticated user (self-scoped) and require no special roles.</p>
 <hr />
-<h3 id="get_employee_stats"><code>get_employee_stats</code></h3>
+<h3 id="personal_stats"><code>personal_stats</code></h3>
 <p>Returns high-level productivity statistics for the current user.</p>
 <p><strong>Endpoint</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_employee_stats
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.personal_stats
 </code></pre>
 <p><strong>Authentication:</strong> Any authenticated user</p>
 <p><strong>Request Parameters:</strong> None</p>
 <p><strong>Request Example</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_employee_stats
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.personal_stats
 Content-Type: application/json
 X-Frappe-CSRF-Token: abc123
 
@@ -628,15 +628,15 @@ X-Frappe-CSRF-Token: abc123
 </tbody>
 </table>
 <hr />
-<h3 id="get_daily_completions"><code>get_daily_completions</code></h3>
+<h3 id="daily_completions"><code>daily_completions</code></h3>
 <p>Returns daily task completion counts for the last 7 days (for rendering a completion trend chart).</p>
 <p><strong>Endpoint</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_daily_completions
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.daily_completions
 </code></pre>
 <p><strong>Authentication:</strong> Any authenticated user</p>
 <p><strong>Request Parameters:</strong> None</p>
 <p><strong>Request Example</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_daily_completions
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.daily_completions
 Content-Type: application/json
 X-Frappe-CSRF-Token: abc123
 
@@ -679,15 +679,15 @@ X-Frappe-CSRF-Token: abc123
 </tbody>
 </table>
 <hr />
-<h3 id="get_hours_summary"><code>get_hours_summary</code></h3>
-<p>Returns the total estimated vs. actual hours for the current user's active tasks.</p>
+<h3 id="hours_summary"><code>hours_summary</code></h3>
+<p>Returns the logged vs. remaining hours for the current user's active tasks, in hours.</p>
 <p><strong>Endpoint</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_hours_summary
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.hours_summary
 </code></pre>
 <p><strong>Authentication:</strong> Any authenticated user</p>
 <p><strong>Request Parameters:</strong> None</p>
 <p><strong>Request Example</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.my_dashboard.my_dashboard.get_hours_summary
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.hours_summary
 Content-Type: application/json
 X-Frappe-CSRF-Token: abc123
 
@@ -696,8 +696,8 @@ X-Frappe-CSRF-Token: abc123
 <p><strong>Response</strong></p>
 <pre><code class="language-json">{
   &quot;message&quot;: {
-    &quot;actual_hours&quot;: 12.5,
-    &quot;estimated_hours&quot;: 18.0
+    &quot;logged_hours&quot;: 12.5,
+    &quot;remaining_hours&quot;: 5.5
   }
 }
 </code></pre>
@@ -712,33 +712,86 @@ X-Frappe-CSRF-Token: abc123
 </thead>
 <tbody>
 <tr>
-<td><code>actual_hours</code></td>
+<td><code>logged_hours</code></td>
 <td>float</td>
-<td>Sum of <code>actual_hours</code> across active tasks</td>
+<td>Total hours already logged across active tasks (converted from minutes to hours)</td>
 </tr>
 <tr>
-<td><code>estimated_hours</code></td>
+<td><code>remaining_hours</code></td>
 <td>float</td>
-<td>Sum of <code>estimated_hours</code> across active tasks</td>
+<td>Estimated hours still remaining across active tasks (converted from minutes to hours)</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Notes</strong>
+- Values are returned in <strong>hours</strong> (the underlying task fields are stored in minutes and converted server-side).
 - "Active" means not in <code>DONE</code> or <code>ACT</code> phase.</p>
 <hr />
-<h2 id="leader-dashboard-page-apis">Leader Dashboard Page APIs</h2>
-<p><strong>Module path:</strong> <code>vernon_tasks.task.page.leader_dashboard.leader_dashboard</code></p>
-<p>These endpoints power the <strong>Leader Dashboard</strong> page. All endpoints require the caller to have the <code>VT Leader</code> or <code>VT Manager</code> role.</p>
+<h2 id="team-dashboard-apis">Team Dashboard APIs (vt-home Tim)</h2>
+<p><strong>Module path:</strong> <code>vernon_tasks.task.api.dashboard</code></p>
+<p>These endpoints power the <strong>Tim</strong> tab of the <code>vt-home</code> page (formerly the standalone Leader Dashboard). The Tim tab is visible to anyone who leads at least one project (data scoped to their led projects) or to <code>VT Manager</code>/admin (global, all projects). Scope is resolved server-side.</p>
 <hr />
-<h3 id="get_leader_stats"><code>get_leader_stats</code></h3>
-<p>Returns high-level team performance statistics.</p>
+<h3 id="team_tab_state"><code>team_tab_state</code></h3>
+<p>Cheap probe that drives whether the <strong>Tim</strong> tab is shown. Safe to call for any logged-in user — it never raises a permission error.</p>
 <p><strong>Endpoint</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_leader_stats
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.team_tab_state
 </code></pre>
-<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
+<p><strong>Authentication:</strong> Any authenticated user</p>
 <p><strong>Request Parameters:</strong> None</p>
 <p><strong>Request Example</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_leader_stats
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.team_tab_state
+Content-Type: application/json
+X-Frappe-CSRF-Token: abc123
+
+{}
+</code></pre>
+<p><strong>Response</strong></p>
+<pre><code class="language-json">{
+  &quot;message&quot;: {
+    &quot;visible&quot;: true,
+    &quot;scope&quot;: &quot;led&quot;,
+    &quot;led_count&quot;: 2
+  }
+}
+</code></pre>
+<p><strong>Response Fields</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>visible</code></td>
+<td>bool</td>
+<td>Whether the Tim tab should be shown for this user</td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td>string</td>
+<td>Resolved scope: <code>global</code> (VT Manager/admin), <code>led</code> (leads ≥1 project), or none when not visible</td>
+</tr>
+<tr>
+<td><code>led_count</code></td>
+<td>int</td>
+<td>Number of projects the user leads</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="team_overview"><code>team_overview</code></h3>
+<p>Consolidated team dashboard payload (replaces the four former leader endpoints: leader stats, phase distribution, team leaderboard, and overdue tasks).</p>
+<p><strong>Endpoint</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.team_overview
+</code></pre>
+<p><strong>Authentication:</strong> Must be a project leader of at least one project, or have the <code>VT Manager</code>/admin role</p>
+<p><strong>Scope rule:</strong> <code>VT Manager</code>/admin → global (all projects); user who leads ≥1 project → led-only (their led projects); otherwise <code>PermissionError</code>.</p>
+<p><strong>Request Parameters:</strong> None</p>
+<p><strong>Request Example</strong></p>
+<pre><code>POST /api/method/vernon_tasks.task.api.dashboard.team_overview
 Content-Type: application/json
 Authorization: token api_key:api_secret
 
@@ -747,9 +800,35 @@ Authorization: token api_key:api_secret
 <p><strong>Response</strong></p>
 <pre><code class="language-json">{
   &quot;message&quot;: {
-    &quot;pending_review&quot;: 3,
-    &quot;approval_rate&quot;: 87.5,
-    &quot;team_points_month&quot;: 1240.0
+    &quot;scope&quot;: &quot;led&quot;,
+    &quot;stats&quot;: {
+      &quot;pending_review&quot;: 3,
+      &quot;approval_rate&quot;: 87.5,
+      &quot;team_points_month&quot;: 1240.0
+    },
+    &quot;phase_distribution&quot;: [
+      {&quot;phase&quot;: &quot;BACKLOG&quot;, &quot;count&quot;: 14},
+      {&quot;phase&quot;: &quot;PLAN&quot;,    &quot;count&quot;: 5},
+      {&quot;phase&quot;: &quot;DO&quot;,      &quot;count&quot;: 9},
+      {&quot;phase&quot;: &quot;CHECK&quot;,   &quot;count&quot;: 3},
+      {&quot;phase&quot;: &quot;ACT&quot;,     &quot;count&quot;: 1},
+      {&quot;phase&quot;: &quot;DONE&quot;,    &quot;count&quot;: 42}
+    ],
+    &quot;leaderboard&quot;: [
+      {&quot;member&quot;: &quot;alice@example.com&quot;, &quot;points&quot;: 312.5},
+      {&quot;member&quot;: &quot;bob@example.com&quot;,   &quot;points&quot;: 278.0},
+      {&quot;member&quot;: &quot;carol@example.com&quot;, &quot;points&quot;: 251.0}
+    ],
+    &quot;overdue&quot;: [
+      {
+        &quot;task_name&quot;: &quot;VT-TASK-00029&quot;,
+        &quot;task_title&quot;: &quot;Complete security audit report&quot;,
+        &quot;member&quot;: &quot;dave@example.com&quot;,
+        &quot;deadline&quot;: &quot;2026-05-05&quot;,
+        &quot;phase&quot;: &quot;DO&quot;,
+        &quot;days_overdue&quot;: 4
+      }
+    ]
   }
 }
 </code></pre>
@@ -764,19 +843,39 @@ Authorization: token api_key:api_secret
 </thead>
 <tbody>
 <tr>
-<td><code>pending_review</code></td>
+<td><code>scope</code></td>
+<td>string</td>
+<td>Resolved data scope: <code>global</code> (VT Manager/admin) or <code>led</code> (leader's led projects)</td>
+</tr>
+<tr>
+<td><code>stats.pending_review</code></td>
 <td>int</td>
 <td>Count of tasks in <code>CHECK</code> phase with kanban status "In Review"</td>
 </tr>
 <tr>
-<td><code>approval_rate</code></td>
+<td><code>stats.approval_rate</code></td>
 <td>float</td>
 <td>Percentage of this month's <code>DONE</code> tasks that had zero revisions (<code>revision_count = 0</code>)</td>
 </tr>
 <tr>
-<td><code>team_points_month</code></td>
+<td><code>stats.team_points_month</code></td>
 <td>float</td>
 <td>Sum of <code>earned_points</code> for all <code>DONE</code> tasks completed in the current calendar month</td>
+</tr>
+<tr>
+<td><code>phase_distribution[]</code></td>
+<td>array</td>
+<td>Count of tasks per PDCA phase. Always returns all 6 phases in PDCA sequence order, even if count is 0. Each item: <code>{phase: string, count: int}</code></td>
+</tr>
+<tr>
+<td><code>leaderboard[]</code></td>
+<td>array</td>
+<td>Top team members by points this month (at most 10, ordered by <code>points</code> descending). Each item: <code>{member: string (user email), points: float}</code></td>
+</tr>
+<tr>
+<td><code>overdue[]</code></td>
+<td>array</td>
+<td>Overdue tasks (deadline passed, not yet complete). Excludes <code>DONE</code>/<code>ACT</code>; ordered by <code>days_overdue</code> descending. Each item: <code>{task_name: string (task ID), task_title: string, member: string (assignee email), deadline: string (YYYY-MM-DD), phase: string, days_overdue: int}</code></td>
 </tr>
 </tbody>
 </table>
@@ -791,161 +890,10 @@ Authorization: token api_key:api_secret
 <tbody>
 <tr>
 <td><code>403</code></td>
-<td>Caller does not have <code>VT Leader</code> or <code>VT Manager</code> role</td>
+<td><code>PermissionError</code> — caller is neither a project leader nor a <code>VT Manager</code>/admin</td>
 </tr>
 </tbody>
 </table>
-<hr />
-<h3 id="get_phase_distribution"><code>get_phase_distribution</code></h3>
-<p>Returns the count of tasks in each PDCA phase for the leader's team.</p>
-<p><strong>Endpoint</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_phase_distribution
-</code></pre>
-<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
-<p><strong>Request Parameters:</strong> None</p>
-<p><strong>Request Example</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_phase_distribution
-Content-Type: application/json
-Authorization: token api_key:api_secret
-
-{}
-</code></pre>
-<p><strong>Response</strong></p>
-<pre><code class="language-json">{
-  &quot;message&quot;: [
-    {&quot;phase&quot;: &quot;BACKLOG&quot;, &quot;count&quot;: 14},
-    {&quot;phase&quot;: &quot;PLAN&quot;,    &quot;count&quot;: 5},
-    {&quot;phase&quot;: &quot;DO&quot;,      &quot;count&quot;: 9},
-    {&quot;phase&quot;: &quot;CHECK&quot;,   &quot;count&quot;: 3},
-    {&quot;phase&quot;: &quot;ACT&quot;,     &quot;count&quot;: 1},
-    {&quot;phase&quot;: &quot;DONE&quot;,    &quot;count&quot;: 42}
-  ]
-}
-</code></pre>
-<p><strong>Notes</strong>
-- Always returns all 6 phases in PDCA sequence order, even if count is 0.</p>
-<hr />
-<h3 id="get_team_leaderboard"><code>get_team_leaderboard</code></h3>
-<p>Returns the top 10 team members ranked by points earned in the current month.</p>
-<p><strong>Endpoint</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_team_leaderboard
-</code></pre>
-<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
-<p><strong>Request Parameters:</strong> None</p>
-<p><strong>Request Example</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_team_leaderboard
-Content-Type: application/json
-Authorization: token api_key:api_secret
-
-{}
-</code></pre>
-<p><strong>Response</strong></p>
-<pre><code class="language-json">{
-  &quot;message&quot;: [
-    {&quot;member&quot;: &quot;alice@example.com&quot;, &quot;points&quot;: 312.5},
-    {&quot;member&quot;: &quot;bob@example.com&quot;,   &quot;points&quot;: 278.0},
-    {&quot;member&quot;: &quot;carol@example.com&quot;, &quot;points&quot;: 251.0}
-  ]
-}
-</code></pre>
-<p><strong>Response Fields</strong></p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>member</code></td>
-<td>string</td>
-<td>User email address</td>
-</tr>
-<tr>
-<td><code>points</code></td>
-<td>float</td>
-<td>Total earned points for the current month</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Notes</strong>
-- Returns at most 10 entries, ordered by <code>points</code> descending.</p>
-<hr />
-<h3 id="get_overdue_tasks"><code>get_overdue_tasks</code></h3>
-<p>Returns all overdue tasks (deadline passed, not yet complete) across the leader's team.</p>
-<p><strong>Endpoint</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_overdue_tasks
-</code></pre>
-<p><strong>Authentication:</strong> <code>VT Leader</code> or <code>VT Manager</code></p>
-<p><strong>Request Parameters:</strong> None</p>
-<p><strong>Request Example</strong></p>
-<pre><code>POST /api/method/vernon_tasks.task.page.leader_dashboard.leader_dashboard.get_overdue_tasks
-Content-Type: application/json
-Authorization: token api_key:api_secret
-
-{}
-</code></pre>
-<p><strong>Response</strong></p>
-<pre><code class="language-json">{
-  &quot;message&quot;: [
-    {
-      &quot;task_name&quot;: &quot;VT-TASK-00029&quot;,
-      &quot;task_title&quot;: &quot;Complete security audit report&quot;,
-      &quot;member&quot;: &quot;dave@example.com&quot;,
-      &quot;deadline&quot;: &quot;2026-05-05&quot;,
-      &quot;phase&quot;: &quot;DO&quot;,
-      &quot;days_overdue&quot;: 4
-    }
-  ]
-}
-</code></pre>
-<p><strong>Response Fields</strong></p>
-<table>
-<thead>
-<tr>
-<th>Field</th>
-<th>Type</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>task_name</code></td>
-<td>string</td>
-<td>Task ID</td>
-</tr>
-<tr>
-<td><code>task_title</code></td>
-<td>string</td>
-<td>Task title</td>
-</tr>
-<tr>
-<td><code>member</code></td>
-<td>string</td>
-<td>Assigned user email</td>
-</tr>
-<tr>
-<td><code>deadline</code></td>
-<td>string</td>
-<td>Original deadline (<code>YYYY-MM-DD</code>)</td>
-</tr>
-<tr>
-<td><code>phase</code></td>
-<td>string</td>
-<td>Current PDCA phase</td>
-</tr>
-<tr>
-<td><code>days_overdue</code></td>
-<td>int</td>
-<td>Number of calendar days past deadline</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Notes</strong>
-- Excludes tasks in <code>DONE</code> and <code>ACT</code> phases.
-- Ordered by <code>days_overdue</code> descending (most overdue first).</p>
 <hr />
 <h2 id="leader-review-page-apis">Leader Review Page APIs</h2>
 <p><strong>Module path:</strong> <code>vernon_tasks.task.page.leader_review.leader_review</code></p>
@@ -2224,13 +2172,12 @@ hours to <code>actual_hours</code>, appends Comment. Validates <code>hours ∈ (
 <p>Permission gate: <code>assigned_to == frappe.session.user</code> OR
 <code>has_permission("VT Task", "write")</code>.</p>
 <h3 id="dashboard">Dashboard</h3>
-<p><code>vernon_tasks.task.page.my_dashboard.my_dashboard.get_sprint_kanban</code> —
-active sprint tasks for current user, grouped by <code>kanban_status</code>
-(Backlog / Doing / Review / Done). Returns
-<code>{sprint: {name, title, start_date, end_date, progress_pct}, columns}</code>
-or <code>{sprint: null, columns: {…empty}}</code> if no active sprint.</p>
-<p><code>...get_employee_stats</code>, <code>...get_daily_completions</code>, <code>...get_hours_summary</code>
-— see Desk page section above.</p>
+<p><code>vernon_tasks.task.api.dashboard.personal_stats</code>,
+<code>...dashboard.daily_completions</code>, <code>...dashboard.hours_summary</code>
+— personal (Beranda tab) metrics; see the Personal Dashboard APIs section above.</p>
+<p><code>vernon_tasks.task.api.dashboard.team_tab_state</code>,
+<code>...dashboard.team_overview</code> — team (Tim tab) visibility probe and
+consolidated payload; see the Team Dashboard APIs section above.</p>
 <h3 id="notifications">Notifications</h3>
 <p><code>vernon_tasks.task.api.notifications.list(limit=50, offset=0, only_unread=0)</code>
 — Frappe <code>Notification Log</code> filtered by <code>for_user == session.user</code>,
