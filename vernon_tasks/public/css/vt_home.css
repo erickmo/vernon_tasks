@@ -256,12 +256,13 @@ input, textarea, select, button {
    .vh-card (stats, lists) keeps its flexible sizing. */
 .vt-home .vt-brands-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  /* min 280px → auto-fill yields ~4 columns on a wide desk, ~3 when narrower. */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 .vt-home .vt-brand-card {
-  display: flex; flex-direction: column; gap: 8px;
-  height: 132px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 10px;
+  height: 150px; padding: 22px 24px; overflow: hidden;
 }
 .vt-home .vt-brand-head { display: flex; align-items: center; gap: 10px; }
 /* Keep the logo at a fixed 40px and let the name take the rest; min-width:0
