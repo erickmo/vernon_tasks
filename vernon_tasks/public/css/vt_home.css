@@ -248,3 +248,32 @@ input, textarea, select, button {
 .vt-home .vh-onb-step.done .vh-onb-mark { color: #16a34a; }
 .vt-home .vh-onb-mark { width: 16px; text-align: center; font-weight: 700; }
 .vt-home .vh-onb-cta { margin-top: 12px; display: flex; gap: 8px; }
+
+/* ── Brand grid (vt-brands) ──
+   Uniform card size: CSS grid gives equal-width columns (auto-fill so the row
+   stays tidy at any count); fixed card height makes every brand the same height
+   whether or not it has a description. Scoped to brand cards so the shared
+   .vh-card (stats, lists) keeps its flexible sizing. */
+.vt-home .vt-brands-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.vt-home .vt-brand-card {
+  display: flex; flex-direction: column; gap: 8px;
+  height: 132px; overflow: hidden;
+}
+.vt-home .vt-brand-head { display: flex; align-items: center; gap: 10px; }
+/* Keep the logo at a fixed 40px and let the name take the rest; min-width:0
+   is required for text-overflow:ellipsis to work inside a flex child. */
+.vt-home .vt-brand-head > :first-child { flex: 0 0 auto; }
+.vt-home .vt-brand-name {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 14px; font-weight: 600; color: #0f172a;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Clamp description to 3 lines so cards never overflow their fixed height. */
+.vt-home .vt-brand-desc {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}

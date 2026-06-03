@@ -60,9 +60,15 @@ function paint_brands(container, brands) {
         return;
     }
 
-    const row = $('<div class="vh-row"></div>');
+    // Sort A→Z by brand name (locale-aware, case-insensitive). Backend already
+    // returns brand_name ASC; this guarantees order even if the source changes.
+    const sorted = brands.slice().sort((a, b) =>
+        (a.brand_name || "").localeCompare(b.brand_name || "", undefined, { sensitivity: "base" })
+    );
+
+    const row = $('<div class="vt-brands-grid"></div>');
     section.append(row);
-    brands.forEach((b) => row.append(brand_card(b)));
+    sorted.forEach((b) => row.append(brand_card(b)));
 }
 
 /**
@@ -92,12 +98,12 @@ function brand_card(b) {
                ${name_safe.slice(0, 1).toUpperCase() || "?"}
            </span>`;
 
-    const card = $(`<div class="vh-card" style="flex:1 1 220px;cursor:pointer;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+    const card = $(`<div class="vh-card vt-brand-card" style="cursor:pointer;">
+        <div class="vt-brand-head">
             ${logo_html}
-            <strong style="font-size:14px;">${name_safe}</strong>
+            <span class="vt-brand-name">${name_safe}</span>
         </div>
-        ${desc_safe ? `<div class="vh-item-meta">${desc_safe}</div>` : ""}
+        <div class="vh-item-meta vt-brand-desc">${desc_safe}</div>
     </div>`);
 
     card.on("click", () => frappe.set_route("vt-brand-detail", b.id));
