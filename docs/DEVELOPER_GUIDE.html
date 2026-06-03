@@ -39,7 +39,6 @@
 <li><a href="#frontend">Frontend</a></li>
 <li><a href="#development-setup">Development Setup</a></li>
 <li><a href="#coding-conventions">Coding Conventions</a></li>
-<li><a href="#working-on-www-react">Working on www-react</a></li>
 </ol>
 <hr />
 <h2 id="overview">Overview</h2>
@@ -600,7 +599,48 @@ earned = base + early_bonus − late_penalty − revision_deduction
 <p>Loaded on every Frappe page. The script self-identifies the current page and injects the nav bar only on member and leader pages.</p>
 <hr />
 <h2 id="pages">Pages</h2>
-<p>Four Frappe Pages with Python-backed whitelisted API methods:</p>
+<p>Frappe Desk Pages with Python-backed whitelisted API methods. The app is
+desk-only: <code>/</code> redirects to <code>/app</code> (guests to <code>/login</code>), and the
+post-login landing is <code>/app/vt-home</code>.</p>
+<h3 id="vt-home"><code>vt-home</code> — <code>/app/vt-home</code></h3>
+<p><strong>Audience:</strong> VT Member, VT Leader, VT Manager<br />
+Post-login landing (title <code>Beranda</code>), a presentation-only dashboard. Builds a
+hero greeting, an onboarding checklist card (PRD-025), workload stat cards, a
+<code>Progres Saya</code> section (8-week velocity chart, active-sprint progress,
+next-actions), a <code>Proyek Saya</code> section, a <code>Jadwal 8 Hari</code> agenda and an
+<code>Akses Cepat</code> quick-links bar. Header primary action <code>Buat Proyek</code> opens the
+shared <code>vt_quick_create_project</code> dialog (inserts a <code>VT Project</code> with
+owner/leader = session user, dates today / today+30). Dashboard data comes from
+<code>vernon_tasks.task.api.dashboard</code>; onboarding + demo-data state from
+<code>vernon_tasks.task.api.onboarding</code> (<code>get_onboarding_state</code>,
+<code>dismiss_onboarding</code>, <code>load_demo</code>, <code>clear_demo</code>). First-run no-projects empty
+state uses <code>window.vt_render_empty_state</code> (<code>public/js/vt_empty.js</code>).</p>
+<h3 id="vt-brands"><code>vt-brands</code> — <code>/app/vt-brands</code></h3>
+<p><strong>Audience:</strong> VT Member, VT Leader, VT Manager<br />
+Card-grid listing of <code>VT Brand</code> records (reuses the <code>vt-home</code> / <code>vh-*</code> card
+styling), list/read-only. Each card shows <code>brand_name</code>, <code>logo</code> (or an indigo
+initial badge fallback) and a truncated <code>description</code>; clicking a card opens the
+native <code>VT Brand</code> form — every create/edit/delete delegates to the native form.
+Data comes from <code>vernon_tasks.brand.api.portal_brands.list_brands</code> (returns
+<code>{id, brand_name, logo, description}</code>, server-side requires login +
+<code>frappe.has_permission('VT Brand', 'read')</code>). The <code>Buat Brand</code> primary action
+is gated client-side by <code>frappe.model.can_create('VT Brand')</code>. The
+<code>portal_brands</code> module also exposes <code>get_brand</code>, <code>search_brands</code>,
+<code>create_brand</code>, <code>update_brand</code>, <code>delete_brand</code> (blocks deletion when a
+<code>VT Project</code> links the brand) and <code>get_brand_permissions</code>, though the page only
+calls <code>list_brands</code>.</p>
+<h3 id="vt-project-detail"><code>vt-project-detail</code> — <code>/app/vt-project-detail</code></h3>
+<p><strong>Audience:</strong> VT Member, VT Leader, VT Manager<br />
+Per-project hero + tabbed view. Tabs: <code>Kanban</code>, <code>Kalender</code>, <code>Gantt</code>,
+<code>Sprint</code>, <code>Milestone</code>, <code>Tim</code>, <code>Ringkasan</code>. The <code>Sprint</code> tab is
+lazy-rendered on first open and fetches from
+<code>vernon_tasks.task.api.dashboard.project_sprints</code> (returns
+<code>{ sprints, unassigned }</code>; access mirrors <code>project_board</code>), rendering one card per
+sprint plus a synthetic <code>Tanpa Sprint</code> backlog bucket for unassigned tasks; sprint
+task rows reuse the board edit dialog. Task creation prepends a required <code>Kolom</code>
+(column) Select to the create dialog so tasks can be born into any board column
+(sourced from <code>quick_add_columns</code>, mirroring <code>board_mutations.QUICK_ADD_COLUMNS</code>);
+the calendar day-click create flow prefills the clicked date as <code>deadline</code>.</p>
 <h3 id="my_work"><code>my_work</code></h3>
 <p><strong>Audience:</strong> VT Member<br />
 Member's daily work view. Shows today's scheduled tasks from <code>Task Schedule Entry</code>, hours planned vs. logged, and quick-action buttons for PDCA transitions.</p>
@@ -754,110 +794,14 @@ Review queue for tasks in <code>CHECK</code> phase awaiting leader approval. Lea
 </table>
 <p><strong>Security:</strong> Labels are escaped via <code>frappe.utils.escape_html()</code>. Icon names are validated against <code>/^[a-z0-9-]+$/</code> before being interpolated into SVG <code>href</code> — invalid names render no icon.</p>
 <hr />
-<h2 id="mobile-pwa">Mobile PWA</h2>
-<p>Standalone React 18 + Vite 5 + TypeScript SPA at <code>/m/</code>, complements
-Desk pages. Source: <code>pwa/src/</code>. Build output <code>vernon_tasks/www/m/</code>
-(git-ignored). Served via <code>website_route_rules</code> →
-<code>vernon_tasks/www/m.py</code> SPA shell.</p>
-<h3 id="stack">Stack</h3>
-<ul>
-<li>React 18 + react-router-dom 6 + @tanstack/react-query 5</li>
-<li>Vite 5 + vite-plugin-pwa (workbox 7 generateSW)</li>
-<li>TypeScript 5 strict, <code>tsc --noEmit</code> for type-check</li>
-<li>Vitest + happy-dom + @testing-library/react (unit + component)</li>
-<li>Playwright (e2e, gated by env vars)</li>
-<li>recharts (lazy chunk shared by IC and Leader analytics)</li>
-<li>idb-keyval (read-cache for offline tolerance)</li>
-</ul>
-<h3 id="layout">Layout</h3>
-<pre><code>pwa/
-  src/
-    api/          # fetch wrappers per domain (client, tasks, mutations,
-                  # search, notifications, dashboard, analytics, leader,
-                  # leaderExec, boot via session, telemetry)
-    auth/         # session probe, login, route guard
-    cache/        # idb + sync-time stamping
-    components/   # primitives (SwipeRow, Skeleton, etc.) + domain widgets
-    hooks/        # useDebounce, useUndoableMutation, useCompleteCounter,
-                  # useInstallPrompt, useUnreadCount, useUserProjects,
-                  # useLedProjects, useIsLeader, useIsManager
-    pages/        # MyWork/{List,Detail}, Dashboard, Analytics,
-                  # Notifications, Me, Onboarding, Leader,
-                  # LeaderSprint, LeaderExec
-    theme/        # CSS tokens (light + dark, safe-area, shimmer keyframe)
-    i18n.ts       # id-ID strings, fmtDate/fmtTime/fmtRelative/greeting
-    telemetry.ts  # logEvent wrapper
-    router.tsx    # createBrowserRouter, lazy splits
-    main.tsx      # SW register + QueryClient + RouterProvider
-  public/
-    icons/        # 192, 512, maskable-512 placeholders
-  vite.config.ts  # base=/m/, outDir=../vernon_tasks/www/m, VitePWA, vitest config
-</code></pre>
-<h3 id="build-commands">Build commands</h3>
-<pre><code class="language-bash">./pwa/build-pwa.sh       # npm install + tsc --noEmit + vite build
-cd pwa &amp;&amp; npm run dev    # Vite dev server :5173 (proxy backend separately)
-cd pwa &amp;&amp; npm test       # vitest run
-cd pwa &amp;&amp; npm run e2e    # Playwright (set PWA_BASE_URL, PWA_TEST_USER, PWA_TEST_PASS)
-</code></pre>
-<h3 id="conventions">Conventions</h3>
-<ul>
-<li><strong>Imports use relative paths</strong>, NOT <code>@/</code> alias. Vitest's resolver does
-  not pick up <code>@/</code> from transitively-imported files; using relative
-  paths sidesteps the issue. The alias is left in <code>tsconfig.json</code> for
-  IDE intellisense only.</li>
-<li><strong>Backend DocType is <code>VT Task</code></strong> (not <code>Task</code>) with fields <code>title</code>,
-  <code>deadline</code>, <code>assigned_to</code>, <code>kanban_status</code>, <code>priority</code>,
-  <code>base_points</code>. The API client maps these to a UI-friendly <code>TaskCard</code>
-  shape in <code>pwa/src/api/tasks.ts</code>.</li>
-<li><strong>All mutations are online-only</strong> in P0.5–P1a. Components check
-  <code>navigator.onLine</code> and disable + toast when offline.</li>
-<li><strong>Optimistic UI with 5s undo</strong> for completes via
-  <code>useUndoableMutation</code> (setTimeout wrapper, NOT a real queue).</li>
-<li><strong>Telemetry events are server-allowlisted</strong>. Adding a new event
-  requires both <code>pwa/src/telemetry.ts</code> <code>TelemetryEvent</code> union and
-  <code>vernon_tasks/task/api/telemetry.py</code> <code>ALLOWED_EVENTS</code> set.</li>
-<li><strong>Role gating is dual</strong>: frontend hides tab via <code>useIsLeader</code> /
-  <code>useIsManager</code>; backend <code>_guard()</code> rejects unauthorized requests.</li>
-</ul>
-<h3 id="service-worker">Service worker</h3>
-<ul>
-<li>workbox <code>generateSW</code> strategy</li>
-<li>App shell precached (5 entries)</li>
-<li>Runtime: <code>StaleWhileRevalidate</code> on <code>/api/method/vernon_tasks.*</code>,
-  cache name keyed by git SHA, 50 entries / 1-day expiry</li>
-<li>SW version = git short SHA at build time, injected via
-  <code>__SW_VERSION__</code> define</li>
-</ul>
-<h3 id="code-split">Code split</h3>
-<ul>
-<li><code>Analytics</code> page lazy via <code>React.lazy</code> (~23 KB)</li>
-<li><code>LeaderSprint</code> + <code>LeaderExec</code> lazy</li>
-<li>Recharts ends up in its own chunk (~357 KB lazy) shared across
-  all analytics pages</li>
-<li>Main bundle stable around 300 KB</li>
-</ul>
-<h3 id="testing-patterns">Testing patterns</h3>
-<ul>
-<li>API client tests: stub <code>fetch</code> with <code>vi.stubGlobal</code>, assert URL +
-  body shape</li>
-<li>Hook tests: <code>renderHook</code> + <code>act</code>, use <code>vi.useFakeTimers</code> for
-  setTimeout-based hooks</li>
-<li>Component tests: wrap in <code>QueryClientProvider</code> + <code>MemoryRouter</code> for
-  router-aware components</li>
-<li>Setup: <code>pwa/src/test-setup.ts</code> imports <code>@testing-library/jest-dom</code>
-  matchers + <code>fake-indexeddb/auto</code> polyfill</li>
-</ul>
-<h3 id="telemetry-pipeline">Telemetry pipeline</h3>
-<ol>
-<li><code>logEvent(event, props)</code> in pwa POSTs to
-   <code>/api/method/vernon_tasks.task.api.telemetry.log_event</code></li>
-<li>Server validates event ∈ ALLOWED_EVENTS, enforces rate limit</li>
-<li>Persisted as <code>Vernon Telemetry Event</code> DocType row</li>
-<li>Daily purge at 90-day retention via <code>scheduler_events.daily</code></li>
-</ol>
-<p>Use <code>Report Builder</code> on <code>Vernon Telemetry Event</code> for funnel analysis.</p>
-<h3 id="rollout">Rollout</h3>
-<p>See <code>docs/rollout/pwa-pilot.md</code> for the pilot checklist + go/no-go gates.</p>
+<h2 id="removed-subsystems">Removed Subsystems</h2>
+<p>The mobile PWA (<code>pwa/</code>, served at <code>/m/*</code>), the standalone
+<code>www-react/</code> SPA (<code>/portal/*</code>) and the <code>/portal</code> route were removed. The
+app is now <strong>desk-only</strong>: <code>/</code> and <code>/index</code> 302-redirect to <code>/app</code>
+(guests to <code>/login</code>), and authenticated users land on <code>/app/vt-home</code>. There is
+no <code>pwa/</code> tree, no <code>vernon_tasks/www/m</code>, and no <code>www/m.py</code> SPA shell — all
+UI now lives in Frappe Desk pages under <code>task/page/*</code> and shared assets under
+<code>public/js/*</code>.</p>
 <hr />
 <h2 id="development-setup">Development Setup</h2>
 <h3 id="prerequisites">Prerequisites</h3>
@@ -1020,62 +964,6 @@ def calculate_points(task):
 </tr>
 </tbody>
 </table>
-<hr />
-<h2 id="working-on-www-react">Working on www-react</h2>
-<p>The <code>www-react/</code> directory is a standalone Vite + React 18 + TypeScript (strict) SPA shipped 2026-05-23. It is <strong>not</strong> part of the Frappe asset pipeline — it builds independently and is served from its own domain by Caddy (see <a href="adr/standalone-www-react-spa.html">ADR-021</a>).</p>
-
-<h3 id="www-react-layout">Project Layout</h3>
-<pre><code>www-react/
-├── src/
-│   ├── app/             # Router config, providers, root shell
-│   ├── components/      # Cross-feature UI primitives (Button, Table, Modal, …)
-│   ├── features/
-│   │   ├── auth/        # Login page + session bootstrap
-│   │   ├── dashboard/   # /portal/dashboard (Today/Me/Sprints/Projects)
-│   │   ├── projects/    # /portal/projects + 5 detail tabs
-│   │   ├── worksheet/   # /portal/worksheet (weekly dnd planner + PM team view)
-│   │   └── reports/     # /portal/reports hub + 6 slug reports + ScheduleModal
-│   ├── hooks/           # Cross-feature hooks (useDebounce, useMediaQuery, …)
-│   └── lib/             # api (axios + session cookie), i18n, formatters
-├── tests/               # Vitest unit + integration (MockAdapter)
-├── playwright.config.ts # Playwright e2e
-└── README.md            # Hosting + cross-domain auth checklist
-</code></pre>
-
-<h3 id="www-react-dev">Dev Workflow</h3>
-<pre><code>cd www-react
-npm install
-cp .env.example .env          # set VITE_API_BASE to your Frappe origin
-npm run dev                   # http://localhost:5174
-npm test                      # vitest unit + integration
-npm run e2e                   # Playwright (auto-starts dev server)
-npm run typecheck             # tsc --noEmit
-npm run build                 # dist/
-</code></pre>
-
-<h3 id="www-react-api">Frappe API Client</h3>
-<p>All HTTP traffic goes through <code>@/lib/api</code> (axios with <code>withCredentials: true</code>). Cross-domain Frappe session cookie auth — no JWT, no token refresh. The Frappe site must allow the dashboard origin via <code>"allow_cors"</code> in <code>common_site_config.json</code>, and the session cookie must be <code>SameSite=None; Secure</code> (TLS required everywhere). All mutating calls send the <code>X-Frappe-CSRF-Token</code> header — fetched once after login and cached in memory.</p>
-
-<h3 id="www-react-query">TanStack Query Keys Convention</h3>
-<p>Query keys are tuples namespaced by feature, then resource, then params:</p>
-<pre><code>['dashboard', 'home']
-['projects', 'list']
-['projects', 'detail', projectId]
-['projects', 'tasks', projectId, { groupBy }]
-['worksheet', weekStartIso]
-['reports', 'list']
-['reports', 'run', slug, params]
-</code></pre>
-<p>Mutations invalidate the narrowest matching prefix (e.g. <code>['projects', 'detail', projectId]</code> after a task bulk update). Use <code>queryClient.invalidateQueries({ queryKey: […] })</code>; never call <code>refetch()</code> directly from components.</p>
-
-<h3 id="www-react-tdd">TDD Pattern</h3>
-<ul>
-<li>Write the failing test first using <strong>Vitest + RTL + axios-mock-adapter</strong>. Mount the component inside a <code>QueryClientProvider</code> + <code>MemoryRouter</code> test harness from <code>tests/utils/render.tsx</code>.</li>
-<li>Stub the API at the axios layer with <code>MockAdapter</code>; assert the request URL/payload <em>and</em> the rendered output.</li>
-<li>Snapshot only stable, low-information surfaces (toast text, table headings). Avoid full-tree snapshots.</li>
-<li>Playwright e2e covers cross-page flows (login → dashboard → drill into project → schedule report) against a live Frappe site behind an env flag.</li>
-</ul>
-
 <hr />
 <p><em>Vernon Tasks Developer Guide — maintained by the Vernon Corp engineering team.</em></p>
 

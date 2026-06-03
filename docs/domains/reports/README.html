@@ -9,16 +9,21 @@
 </head>
 <body data-root="../../" data-audience="dev">
 <h1>Reports Domain</h1>
-<p><strong>Owner:</strong> Erick Mo &nbsp;|&nbsp; <strong>Status:</strong> Active</p>
+<p><strong>Owner:</strong> Erick Mo &nbsp;|&nbsp; <strong>Status:</strong> Active (backend services) — UI surfaces migrated to desk</p>
+
+<p style="background: #fff8e1; border-left: 4px solid #f0ad4e; padding: 8px 12px; margin: 12px 0;">
+  <strong>Removal notice — desk-only migration.</strong> The mobile PWA (<code>pwa/</code>, served at <code>/m/*</code>) and the <code>/portal</code> route were removed; the app is now desk-only (<code>/</code> redirects to <code>/app</code>). The two routes below (<code>/portal/reports</code>, <code>/m/reports</code>) and their feature-flag gates no longer exist. The underlying report services, aggregation methods, and APIs documented here <strong>survive</strong> and now back the desk analytics pages: <code>/app/exec-analytics</code>, <code>/app/leader-analytics</code>, and <code>/app/my-analytics</code>.
+</p>
 
 <h2>Scope</h2>
-<p>Mobile + portal reporting hub. Aggregates analytics, OKR rollup, sprint velocity, risk, leaderboard, workload, and overdue tasks. Two surfaces:</p>
+<p>Reporting hub. Aggregates analytics, OKR rollup, sprint velocity, risk, leaderboard, workload, and overdue tasks. Originally exposed via two surfaces (both <strong>removed — desk-only migration</strong>); the aggregation now backs the desk analytics pages:</p>
 <ul>
-  <li><code>/portal/reports</code> — desktop exec dashboard (3 tabs: OKR, Sprints, Team).</li>
-  <li><code>/m/reports</code> — mobile hub (3 cards: My Reports, Projects I Manage, My Team).</li>
+  <li><code>/portal/reports</code> — desktop exec dashboard (3 tabs: OKR, Sprints, Team). <strong>(removed — desk-only migration; superseded by <code>/app/exec-analytics</code> + <code>/app/leader-analytics</code>)</strong></li>
+  <li><code>/m/reports</code> — mobile hub (3 cards: My Reports, Projects I Manage, My Team). <strong>(removed — desk-only migration; superseded by <code>/app/my-analytics</code>)</strong></li>
 </ul>
 
 <h2>Endpoints</h2>
+<p>These whitelisted methods <strong>survive</strong> the desk-only migration and now back the desk analytics pages (the <code>get_mobile_*</code> names are historical and unchanged). The report-runner services (<code>list_reports</code>, <code>run_report</code>, <code>export</code> CSV/PDF, <code>create_subscription</code>) in <code>task/api/portal_reports.py</code> also survive.</p>
 <table>
   <tr><th>Endpoint</th><th>Permission</th><th>Cache</th></tr>
   <tr><td>list_managed_projects</td><td>Leader+</td><td>5m / user+bucket</td></tr>
@@ -34,8 +39,8 @@
 
 <h2>Feature flags</h2>
 <ul>
-  <li><code>portal_reports_enabled</code> (VT Settings) — gates <code>/portal/reports</code>.</li>
-  <li><code>mobile_reports_enabled</code> (VT Settings) — gates <code>/m/reports</code>.</li>
+  <li><code>portal_reports_enabled</code> (VT Settings) — gated <code>/portal/reports</code>. <strong>(removed — desk-only migration; route and gate no longer exist)</strong></li>
+  <li><code>mobile_reports_enabled</code> (VT Settings) — gated <code>/m/reports</code>. <strong>(removed — desk-only migration; route and gate no longer exist)</strong></li>
 </ul>
 
 <h2>Cross-Domain Events</h2>

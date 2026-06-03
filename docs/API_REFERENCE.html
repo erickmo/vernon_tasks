@@ -2188,13 +2188,17 @@ X-Frappe-CSRF-Token: abc123
 <li><code>score = okr_pct × 0.5 + ontime_pct × 0.3 + velocity_health × 0.2</code>.</li>
 </ul>
 <hr />
-<h2 id="mobile-pwa-endpoints">Mobile PWA Endpoints</h2>
-<p>All endpoints consumed by the React PWA at <code>/m/</code>. Use Frappe session
-cookie auth (same as Desk). Whitelisted via <code>@frappe.whitelist()</code>.</p>
+<h2 id="mobile-pwa-endpoints">My Work / Personal Desk Endpoints</h2>
+<p>Whitelisted <code>@frappe.whitelist()</code> endpoints under <code>vernon_tasks.task.api.*</code>,
+consumed same-origin by Frappe Desk pages. Use Frappe session cookie auth
+(same as Desk).</p>
+<p><em>Note: the mobile PWA (served at <code>/m/*</code>) was removed; the app is
+desk-only. These endpoints survive and now back desk surfaces. Review each
+signature against the live <code>task/api/*</code> module before relying on it.</em></p>
 <h3 id="boot">Boot</h3>
 <p><code>vernon_tasks.task.api.boot.boot</code> — allow_guest</p>
-<p>Returns current session metadata for SPA bootstrap. Always-available
-endpoint, no auth required.</p>
+<p>Returns current session metadata. Always-available endpoint, no auth
+required.</p>
 <pre><code class="language-json">{ &quot;user&quot;: &quot;user@example.com&quot;, &quot;csrf_token&quot;: &quot;abc…&quot;, &quot;roles&quot;: [&quot;VT Member&quot;] }
 </code></pre>
 <p>For guests: <code>{"user": null, "csrf_token": null, "roles": []}</code>.</p>
@@ -2226,7 +2230,7 @@ active sprint tasks for current user, grouped by <code>kanban_status</code>
 <code>{sprint: {name, title, start_date, end_date, progress_pct}, columns}</code>
 or <code>{sprint: null, columns: {…empty}}</code> if no active sprint.</p>
 <p><code>...get_employee_stats</code>, <code>...get_daily_completions</code>, <code>...get_hours_summary</code>
-— see Desk page section above (also consumed by PWA).</p>
+— see Desk page section above.</p>
 <h3 id="notifications">Notifications</h3>
 <p><code>vernon_tasks.task.api.notifications.list(limit=50, offset=0, only_unread=0)</code>
 — Frappe <code>Notification Log</code> filtered by <code>for_user == session.user</code>,
@@ -2251,7 +2255,7 @@ Allowlist enforced; unknown event → <code>ValidationError</code>.</p>
 <code>leader_review_view</code>, <code>leader_approve</code>, <code>leader_reject</code>,
 <code>leader_sprint_view</code>, <code>leader_exec_view</code>, <code>leader_project_change</code>.</p>
 <p>Daily purge at 90-day retention via <code>scheduler_events.daily</code>.</p>
-<h3 id="leader-pwa-additions-to-existing-leader_review-module">Leader (PWA additions to existing <code>leader_review</code> module)</h3>
+<h3 id="leader-pwa-additions-to-existing-leader_review-module">Leader (additions to the <code>leader_review</code> module)</h3>
 <p><code>...leader_review.get_my_led_projects()</code> — list of project names where
 <code>session.user</code> is <code>project_leader</code> OR <code>Project Team Member</code> with
 <code>role="Leader"</code>.</p>
@@ -2259,14 +2263,20 @@ Allowlist enforced; unknown event → <code>ValidationError</code>.</p>
 <code>start_date</code> DESC. Requires leader of project (403 otherwise).</p>
 <p>Existing <code>get_review_queue</code>, <code>approve_task</code>, <code>reject_task</code> already
 documented in Leader Review section above.</p>
-<h3 id="spa-route">SPA route</h3>
-<p><code>/m/&lt;path:rest&gt;</code> → served by <code>vernon_tasks/www/m.py</code> which inlines
-<code>vernon_tasks/www/m/index.html</code> (built by Vite). All other paths
-client-routed by react-router.</p>
 
 <hr />
-<h2 id="portal-www-react">Portal — www-react Dashboard (2026-05-23)</h2>
-<p>Endpoints consumed by the standalone <code>www-react/</code> SPA. All are <code>@frappe.whitelist()</code>; call via <code>POST /api/method/&lt;dotted.path&gt;</code> with credentialed (cross-domain) fetch. Role gates use Frappe's role checks; unauthorised → 403. All read methods accept <code>GET</code> as well.</p>
+<h2 id="portal-www-react">Project / Worksheet / Reports Endpoints</h2>
+<p>Whitelisted <code>@frappe.whitelist()</code> endpoints in the <code>portal_*</code> /
+<code>okr</code> / <code>sprints</code> modules under <code>vernon_tasks.task.api.*</code>. Call via
+<code>POST /api/method/&lt;dotted.path&gt;</code> same-origin; read methods also accept
+<code>GET</code>. Role gates use Frappe's role checks; unauthorised → 403.</p>
+<p><em>Note: the standalone <code>www-react/</code> SPA and the <code>/portal</code> route that
+originally consumed these were removed; the app is desk-only. The modules
+(<code>portal_dashboard</code>, <code>portal_projects</code>, <code>portal_worksheet</code>,
+<code>portal_reports</code>, <code>okr</code>, <code>sprints</code>) still exist and are now invoked
+same-origin from Frappe Desk. Verify each method against the live module
+before relying on it; any method that only served the removed SPA may be
+dead.</em></p>
 
 <h3 id="portal-dashboard">portal_dashboard</h3>
 <p><code>vernon_tasks.task.api.portal_dashboard.get_home</code> — role-aware landing payload.</p>
