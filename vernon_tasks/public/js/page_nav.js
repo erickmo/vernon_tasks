@@ -3,7 +3,7 @@
  *
  * @param {Object} page  - the Frappe page object from frappe.ui.make_app_page()
  * @param {Array}  links - array of { label: string, route: string, icon: string }
- *                         route examples: "workspace/My Tasks", "my-work", "vt-home"
+ *                         route examples: "workspace/My Tasks", "vt-projects", "vt-home"
  */
 window.vt_render_page_nav = function (page, links) {
     const nav = $('<div class="vt-page-nav"></div>').css({
