@@ -284,25 +284,30 @@ def _ensure_vt_contact_request_table():
 # Ordered navbar items for VT Settings.
 # is_group=1 items are dropdown group headers; route="#" is placeholder for non-navigable groups.
 # role_restriction: blank = all roles. Single role = only users with that role.
+#
+# The former "Saya" and "Leader" dropdown groups were FLATTENED: their personal /
+# leader dashboards now live as tabs inside vt-home (Beranda+Tim), so the group
+# headers were removed and the remaining child pages promoted to top-level links
+# (parent_group=""). Existing installs are migrated by the
+# patches/v1_x/flatten_saya_leader_nav.py data patch (this list only governs
+# fresh installs via ensure_navbar_seeded). See ADR note in workspace domain docs.
 _NAVBAR_ITEMS = [
     # ── Standalone ────────────────────────────────────────────────────────
     dict(label="Beranda",        route="/app/vt-home",        icon="home",          is_group=0, parent_group="",       role_restriction="",          enabled=1),
-    # ── Saya group (all roles) ────────────────────────────────────────────
-    dict(label="Saya",           route="#",                   icon="user",          is_group=1, parent_group="",       role_restriction="",          enabled=1),
-    dict(label="My Work",        route="/app/my-work",        icon="check-circle",  is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
-    dict(label="Analytics",      route="/app/my-analytics",   icon="trend",         is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
-    dict(label="Scorecard",      route="/app/vt-scorecard",   icon="star",          is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
+    # ── Personal (ex-"Saya" group, now flat; all roles) ───────────────────
+    dict(label="My Work",        route="/app/my-work",        icon="check-circle",  is_group=0, parent_group="",       role_restriction="",          enabled=1),
+    dict(label="Analytics",      route="/app/my-analytics",   icon="trend",         is_group=0, parent_group="",       role_restriction="",          enabled=1),
+    dict(label="Scorecard",      route="/app/vt-scorecard",   icon="star",          is_group=0, parent_group="",       role_restriction="",          enabled=1),
     # ── Proyek standalone ────────────────────────────────────────────────
     dict(label="Proyek",         route="/app/vt-projects",    icon="folder-normal", is_group=0, parent_group="",       role_restriction="",          enabled=1),
-    # ── Leader group ─────────────────────────────────────────────────────
-    dict(label="Leader",         route="#",                   icon="users",         is_group=1, parent_group="",       role_restriction="VT Leader", enabled=1),
-    dict(label="Review",         route="/app/leader-review",  icon="tick",          is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
-    dict(label="Sprint Analytics",route="/app/leader-analytics",icon="chart",       is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
-    dict(label="OKR",            route="/app/vt-okr",         icon="target-doc",    is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
-    dict(label="Tim & Kapasitas",route="/app/vt-team",        icon="users",         is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
+    # ── Leader pages (ex-"Leader" group, now flat; VT Leader only) ────────
+    dict(label="Review",         route="/app/leader-review",  icon="tick",          is_group=0, parent_group="",       role_restriction="VT Leader", enabled=1),
+    dict(label="Sprint Analytics",route="/app/leader-analytics",icon="chart",       is_group=0, parent_group="",       role_restriction="VT Leader", enabled=1),
+    dict(label="OKR",            route="/app/vt-okr",         icon="target-doc",    is_group=0, parent_group="",       role_restriction="VT Leader", enabled=1),
+    dict(label="Tim & Kapasitas",route="/app/vt-team",        icon="users",         is_group=0, parent_group="",       role_restriction="VT Leader", enabled=1),
     # ── Eksekutif standalone (Manager) ───────────────────────────────────
     dict(label="Eksekutif",      route="/app/exec-analytics", icon="chart",         is_group=0, parent_group="",       role_restriction="VT Manager",enabled=1),
-    # ── Admin group (Manager) ─────────────────────────────────────────────
+    # ── Admin group (Manager) — kept grouped: low-traffic, manager-only ───
     dict(label="Admin",          route="#",                   icon="setting",       is_group=1, parent_group="",       role_restriction="VT Manager",enabled=1),
     dict(label="Pengaturan",     route="/app/vt-settings",    icon="setting",       is_group=0, parent_group="Admin",  role_restriction="VT Manager",enabled=1),
     dict(label="Brand",          route="/app/vt-brands",      icon="badge",         is_group=0, parent_group="Admin",  role_restriction="VT Manager",enabled=1),

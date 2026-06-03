@@ -194,6 +194,14 @@ team_overview()         -&gt; {scope, stats, phase_distribution, leaderboard, ov
 <li><strong>Scope leakage:</strong> <code>team_overview</code> must re-resolve scope server-side (never trust a client-supplied scope) — <code>team_tab_state</code> is a hint only.</li>
 <li><strong>Nav drift:</strong> missing one of the §9.3 links leaves a 404; grep <code>my-dashboard</code> / <code>leader-dashboard</code> across <code>.js</code>, fixtures, and <code>navbar_items</code> before declaring done.</li>
 </ul>
+<h2 id="13-followup-navbar-flatten">13. Follow-up — Navbar flatten (2026-06-03)</h2>
+<p>With the personal and leader dashboards folded into <code>vt-home</code> (Beranda + Tim tabs), the <strong>&ldquo;Saya&rdquo;</strong> and <strong>&ldquo;Leader&rdquo;</strong> dropdown <em>group headers</em> in the desk sub-nav became redundant. They were removed and their remaining child pages promoted to top-level flat links:</p>
+<ul>
+<li><strong>Saya</strong> (all roles) → <code>My Work</code>, <code>Analytics</code>, <code>Scorecard</code> now top-level.</li>
+<li><strong>Leader</strong> (<code>VT Leader</code>) → <code>Review</code>, <code>Sprint Analytics</code>, <code>OKR</code>, <code>Tim &amp; Kapasitas</code> now top-level, gating preserved per-row.</li>
+<li><strong>Admin</strong> group kept (low-traffic, manager-only) — proves the renderer still supports dropdown groups.</li>
+</ul>
+<p>Mechanism: seed (<code>setup_website._NAVBAR_ITEMS</code>) edited for fresh installs; existing installs migrated by idempotent data patch <code>patches/v1_x/flatten_saya_leader_nav.py</code> (VT Navbar Item is not a fixture, and <code>ensure_navbar_seeded</code> only seeds an empty navbar). Role gating is unchanged because <code>boot._filter_by_roles</code> filters per row by <code>role_restriction</code>, not by group. Tests: <code>tests/test_flatten_nav_patch.py</code> (order, gating, idempotency) + seed guards.</p>
 </article>
 
 <footer>
