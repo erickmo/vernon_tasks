@@ -644,12 +644,17 @@ the calendar day-click create flow prefills the clicked date as <code>deadline</
 <h3 id="my_work"><code>my_work</code></h3>
 <p><strong>Audience:</strong> VT Member<br />
 Member's daily work view. Shows today's scheduled tasks from <code>Task Schedule Entry</code>, hours planned vs. logged, and quick-action buttons for PDCA transitions.</p>
-<h3 id="my_dashboard"><code>my_dashboard</code></h3>
-<p><strong>Audience:</strong> VT Member<br />
-Stats overview: cumulative points, task completion rate, current sprint progress. Includes charts rendered on the client side using data fetched from whitelisted methods.</p>
-<h3 id="leader_dashboard"><code>leader_dashboard</code></h3>
-<p><strong>Audience:</strong> VT Leader, VT Manager<br />
-Team-level view: sprint board, member workload, blocked tasks, and OKR alignment summary.</p>
+<h3 id="vt_home"><code>vt_home</code> (Beranda / Tim tabs)</h3>
+<p><strong>Audience:</strong> VT Member, VT Leader, VT Manager<br />
+Post-login landing page (<code>/app/vt-home</code>) with two tabs. The <strong>Beranda</strong> tab (personal,
+all roles) merges the former My Dashboard: stats overview (cumulative points, task completion
+rate, current sprint progress) with charts rendered client-side from
+<code>task.api.dashboard</code> (<code>personal_stats</code>, <code>daily_completions</code>,
+<code>hours_summary</code>). The <strong>Tim</strong> tab merges the former Leader Dashboard:
+team-level view (pending review, approval rate, phase distribution, leaderboard, overdue) from
+<code>task.api.dashboard.team_overview</code>. The Tim tab is visible to anyone leading ≥1 project
+(data scoped to their led projects) or VT Manager/admin (global); visibility is driven by the
+cheap <code>task.api.dashboard.team_tab_state</code> probe and scope is resolved server-side.</p>
 <h3 id="leader_review"><code>leader_review</code></h3>
 <p><strong>Audience:</strong> VT Leader, VT Manager<br />
 Review queue for tasks in <code>CHECK</code> phase awaiting leader approval. Leader can approve (move to <code>DONE</code>), reject (move to <code>ACT</code>/Revision), or override points directly from this page.</p>
@@ -762,7 +767,7 @@ Review queue for tasks in <code>CHECK</code> phase awaiting leader approval. Lea
 <p><strong>Usage example (from <code>my_work.js</code>):</strong></p>
 <pre><code class="language-javascript">vt_render_page_nav(page, [
     { label: &quot;My Tasks&quot;,     route: &quot;workspace/My Tasks&quot;, icon: &quot;home&quot; },
-    { label: &quot;My Dashboard&quot;, route: &quot;my-dashboard&quot;,       icon: &quot;bar-chart&quot; },
+    { label: &quot;Beranda&quot;,      route: &quot;vt-home&quot;,            icon: &quot;bar-chart&quot; },
 ]);
 </code></pre>
 <p><strong>Nav links per page:</strong></p>
@@ -776,19 +781,15 @@ Review queue for tasks in <code>CHECK</code> phase awaiting leader approval. Lea
 <tbody>
 <tr>
 <td>My Work</td>
-<td>My Tasks, My Dashboard</td>
+<td>My Tasks, Beranda (vt-home)</td>
 </tr>
 <tr>
-<td>My Dashboard</td>
+<td>vt-home (Beranda / Tim tab)</td>
 <td>My Tasks, My Work</td>
 </tr>
 <tr>
-<td>Leader Dashboard</td>
-<td>Leader Review, My Projects</td>
-</tr>
-<tr>
 <td>Leader Review</td>
-<td>Leader Dashboard, My Projects</td>
+<td>My Projects</td>
 </tr>
 </tbody>
 </table>
@@ -848,8 +849,8 @@ bench --site &lt;site-name&gt; export-fixtures --app vernon_tasks
 <ul>
 <li><strong>Roles:</strong> <code>VT Manager</code>, <code>VT Leader</code>, <code>VT Member</code></li>
 <li><strong>Workspaces:</strong> <code>My Tasks</code>, <code>My Projects</code>, <code>Overview</code></li>
-<li><code>My Projects</code> shortcuts: Active Sprints, My Projects, Blocked Escalation, Team Workload, Sprint Velocity, Review Schedule, <strong>Leader Dashboard</strong>, <strong>Leader Review</strong></li>
-<li><code>Overview</code> shortcuts: Team Workload, KPI Achievement, Project vs OKR, Blocked Escalation, Point Audit, Sprint Velocity, All Projects, Objectives, <strong>Leader Dashboard</strong>, <strong>Leader Review</strong></li>
+<li><code>My Projects</code> shortcuts: Active Sprints, My Projects, Blocked Escalation, Team Workload, Sprint Velocity, Review Schedule, <strong>Leader Review</strong></li>
+<li><code>Overview</code> shortcuts: Team Workload, KPI Achievement, Project vs OKR, Blocked Escalation, Point Audit, Sprint Velocity, All Projects, Objectives, <strong>Leader Review</strong></li>
 <li><strong>VT Settings:</strong> default configuration values</li>
 </ul>
 <p>Fixtures are applied automatically on <code>bench migrate</code>. To re-export after changes:</p>
