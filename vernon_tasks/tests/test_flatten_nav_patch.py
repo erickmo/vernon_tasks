@@ -35,7 +35,7 @@ _EXPECTED_ORDER = [
     "Beranda", "My Work", "Analytics", "Scorecard", "Proyek",
     "Review", "Sprint Analytics", "OKR", "Tim & Kapasitas",
 ]
-_SAYA_CHILDREN = ("My Work", "Analytics", "Scorecard")
+_SAYA_CHILDREN = ("Analytics", "Scorecard")  # My Work merged into vt-home (Tab Tugas Saya)
 _LEADER_CHILDREN = ("Review", "Sprint Analytics", "OKR", "Tim & Kapasitas")
 
 
