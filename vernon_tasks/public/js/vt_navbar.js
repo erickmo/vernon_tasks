@@ -165,7 +165,7 @@ function vt_navbar_update_active() {
     const $bar = $(`#${VT_NAVBAR_ID}`);
     // Clear every active state first. Group triggers carry no data-route and are
     // only ever switched ON below (when a child matches), so without this reset a
-    // group like "Saya" stays highlighted on every later route once one of its
+    // group like "Admin" stays highlighted on every later route once one of its
     // children was visited. Resetting all .vt-nav-item (triggers included) plus
     // dropdown items makes the highlight reflect the current route only.
     $bar.find(".vt-nav-item, .vt-nav-dropdown-item").removeClass("active");
