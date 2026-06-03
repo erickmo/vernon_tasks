@@ -7,7 +7,7 @@ frappe.pages["my-work"].on_page_load = function (wrapper) {
 
     vt_render_page_nav(page, [
         { label: "My Tasks", route: "workspace/My Tasks", icon: "home" },
-        { label: "My Dashboard", route: "my-dashboard", icon: "bar-chart" },
+        { label: "Beranda", route: "vt-home", icon: "bar-chart" },
     ]);
 
     page.add_button(__("Refresh"), () => render_all(), { icon: "refresh" });

@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard Merge — POV Home — Design Spec — Vernon Tasks</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../../index.html">Docs</a> · <a href="index.html">Specs</a> · <strong>Dashboard Merge — POV Home</strong></div>
+
+<article class="spec">
+<h1 id="dashboard-merge-pov-home-design-spec">Dashboard Merge — POV Home — Design Spec</h1>
+<p><strong>Date:</strong> 2026-06-03 · <strong>Status:</strong> approved (brainstorm) · <strong>Scope:</strong> M→L (consolidates 3 pages, re-scopes team data, deletes 2 pages, touches ~10 files)</p>
+<h2 id="1-goal">1. Goal</h2>
+<p>Collapse the three coexisting desk dashboards into a single post-login home (<code>vt-home</code>) that always renders from the logged-in user's point of view:</p>
+<ul>
+<li><strong>My work</strong> — tasks assigned to me, my progress.</li>
+<li><strong>Projects I lead</strong> and <strong>projects I'm involved in</strong> — already on <code>vt-home</code>.</li>
+<li><strong>The team inside the projects I lead</strong> — currently lives on a separate, <em>system-global</em> leader dashboard; this is the core re-scope.</li>
+</ul>
+<p>After this change there is one dashboard. <code>my-dashboard</code> and <code>leader-dashboard</code> are deleted.</p>
+<h2 id="2-current-state-as-mapped">2. Current state (as mapped)</h2>
+<table>
+<thead>
+<tr>
+<th>Page</th>
+<th>Route</th>
+<th>Roles</th>
+<th>Nature</th>
+<th>Data source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vt-home</code> ("Beranda")</td>
+<td><code>/app/vt-home</code></td>
+<td>Member/Leader/Manager</td>
+<td>Post-login landing, JS-only</td>
+<td><code>task.api.dashboard.me_progress</code> / <code>my_projects</code> / <code>schedule_agenda</code> + <code>onboarding.*</code></td>
+</tr>
+<tr>
+<td><code>my-dashboard</code></td>
+<td><code>/app/my-dashboard</code></td>
+<td>Member/Leader/Manager</td>
+<td>Personal analytics</td>
+<td>page methods <code>get_employee_stats</code> / <code>get_daily_completions</code> / <code>get_hours_summary</code> / <code>get_sprint_kanban</code> (orphan)</td>
+</tr>
+<tr>
+<td><code>leader-dashboard</code></td>
+<td><code>/app/leader-dashboard</code></td>
+<td>Leader/Manager</td>
+<td><strong>System-global</strong> team aggregate</td>
+<td>page methods <code>get_leader_stats</code> / <code>get_phase_distribution</code> / <code>get_team_leaderboard</code> / <code>get_overdue_tasks</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Key gaps / bugs found during mapping:</strong></p>
+<ul>
+<li><code>leader-dashboard</code> is <strong>global across the whole system</strong>, not scoped to the projects a user leads — contradicts the "my POV" intent.</li>
+<li><code>my-dashboard</code> hours summary is labeled "Hours" but the values and tooltip are in <strong>minutes</strong> (unit bug).</li>
+<li><code>my-dashboard</code> <code>get_sprint_kanban</code> is built but <strong>never rendered</strong> (orphan) — drop it.</li>
+<li>Role model is decoupled: holding the <code>VT Leader</code> desk <em>role</em> does not make you the leader of any project, and being a project's <code>project_leader</code> does not grant the role. Dashboard "led" bucket keys solely on the <code>project_leader</code> Link field (<code>_user_project_ids()</code> in <code>dashboard.py</code>).</li>
+</ul>
+<h2 id="3-locked-decisions">3. Locked decisions</h2>
+<ol>
+<li><strong>Team scope:</strong> Leader → only projects they lead; Manager/admin → global.</li>
+<li><strong>Old pages:</strong> delete <code>my-dashboard</code> + <code>leader-dashboard</code> entirely (fold into <code>vt-home</code>).</li>
+<li><strong>Layout:</strong> tabs — <strong>Beranda</strong> (always) and <strong>Tim</strong> (eligible users only).</li>
+<li><strong>Analytics:</strong> keep daily-completions chart and hours summary; <strong>fix the hours unit bug</strong>.</li>
+<li><strong>Tim tab trigger:</strong> data-driven — visible to anyone who <strong>leads ≥ 1 project</strong> (led-scope), plus <strong>VT Manager / admin</strong> (global-scope). The <code>VT Leader</code> desk role alone is no longer required; backend role guard is loosened accordingly.</li>
+</ol>
+<h2 id="4-target-architecture">4. Target architecture</h2>
+<p><code>vt-home</code> stays the single dashboard Page (<code>/app/vt-home</code>, roles Member/Leader/Manager, post-login landing). <code>vt_home.js</code> gains a two-tab shell. All read-aggregation lives in <code>task/api/dashboard.py</code> (Vernon Frappe rule: dashboard reads belong in the API module, not page <code>.py</code>). The two page modules are deleted with their methods migrated/re-scoped into <code>dashboard.py</code>.</p>
+<pre><code>/app/vt-home  (Page, JS-only presentation)
+├── Tab: Beranda  (always)            ← personal POV
+│     me_progress · my_projects · schedule_agenda · onboarding.*
+│     + personal_stats · daily_completions · hours_summary   (folded from my-dashboard)
+└── Tab: Tim      (if team_tab_state.visible) ← leadership POV
+      team_overview()  [scope resolved server-side]   (folded + re-scoped from leader-dashboard)
+</code></pre>
+<h2 id="5-tab-1-beranda-personal-all-roles">5. Tab 1 — Beranda (personal, all roles)</h2>
+<p>Existing <code>vt-home</code> spine is unchanged:</p>
+<ul>
+<li>Hero greeting + "Buat Proyek" action, onboarding checklist</li>
+<li>Workload cards (Task Terbuka / Terlambat / Jatuh Tempo) — <code>me_progress.workload</code></li>
+<li>Progres Saya: velocity chart, active sprint card, next-actions — <code>me_progress</code></li>
+<li>Proyek Saya: led cards + "Sebagai Anggota" list — <code>my_projects</code></li>
+<li>Jadwal 8 Hari — <code>schedule_agenda</code>, Akses Cepat quick links</li>
+</ul>
+<p><strong>New (folded from <code>my-dashboard</code>), placed inside "Progres Saya":</strong></p>
+<ul>
+<li><strong>Daily completions</strong> bar chart — <code>daily_completions</code> (self-scoped).</li>
+<li><strong>Hours summary</strong> — <code>hours_summary</code> (self-scoped). <strong>Bug fix:</strong> convert minute sums to hours (<code>÷ 60</code>, 1 decimal), label "Jam", split Tercatat (logged) vs Sisa (remaining); tooltip in hours.</li>
+<li><code>get_sprint_kanban</code> (orphan) is <strong>not</strong> migrated.</li>
+</ul>
+<h2 id="6-tab-2-tim-leaders-re-scoped">6. Tab 2 — Tim (leaders, re-scoped)</h2>
+<p>Folded from <code>leader-dashboard</code>, rendered only when <code>team_tab_state.visible</code>:</p>
+<ul>
+<li>KPI cards: <strong>Pending Review</strong>, <strong>Approval Rate %</strong>, <strong>Team Points (Bulan)</strong></li>
+<li><strong>PDCA Phase Distribution</strong> donut</li>
+<li><strong>Team Points Leaderboard</strong> (top 10)</li>
+<li><strong>Overdue Tasks</strong> table</li>
+<li>A link to <code>leader-review</code> for approve/reject actions (that page stays).</li>
+</ul>
+<p><strong>Scope rules (resolved server-side):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Caller</th>
+<th><code>scope</code></th>
+<th>Task filter applied to all 4 blocks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Admin (System Manager / Vernon Admin)</td>
+<td><code>global</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>VT Manager</td>
+<td><code>global</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>Leads ≥ 1 project (else)</td>
+<td><code>led</code></td>
+<td><code>task.project IN (led_project_ids)</code></td>
+</tr>
+<tr>
+<td>None of the above</td>
+<td>—</td>
+<td>not eligible → no tab, <code>team_overview</code> raises <code>PermissionError</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>led_project_ids</code> comes from the existing <code>_user_project_ids(user).led</code> (projects where <code>project_leader == user</code>). Definitions preserved from the old methods: Pending Review = <code>kanban_status='In Review'</code> AND <code>pdca_phase='CHECK'</code>; Approval Rate = this-month DONE with <code>revision_count=0</code> / this-month DONE; Team Points = sum <code>earned_points</code> of this-month DONE.</p>
+<h2 id="7-data-layer">7. Data layer</h2>
+<p>All in <code>task/api/dashboard.py</code>, each begins with <code>require_login()</code>.</p>
+<pre><code class="language-python"># Personal (self-scoped to frappe.session.user) — migrated from my_dashboard page
+personal_stats()        -&gt; {...}                  # from get_employee_stats
+daily_completions()     -&gt; [{date, count}]        # from get_daily_completions
+hours_summary()         -&gt; {logged_hours, remaining_hours}   # from get_hours_summary, minutes→hours
+
+# Team — migrated + re-scoped from leader_dashboard page
+team_tab_state()        -&gt; {visible: bool, scope: &quot;led&quot;|&quot;global&quot;, led_count: int}   # cheap; drives tab visibility
+team_overview()         -&gt; {scope, stats, phase_distribution, leaderboard, overdue} # heavy; lazy on Tim click
+</code></pre>
+<ul>
+<li><code>team_tab_state()</code> is cheap (a role check + one count) and is safe for everyone; it never throws — returns <code>visible:false</code> for the ineligible.</li>
+<li><code>team_overview()</code> re-resolves scope via a private <code>_team_scope(user)</code> and raises <code>PermissionError</code> if not eligible (defense-in-depth, mirrors old per-method guards).</li>
+<li><code>_team_scope(user)</code>: <code>global</code> if admin or <code>VT Manager</code>; else <code>led</code> if <code>_user_project_ids(user).led</code> non-empty; else raise.</li>
+<li>The four team blocks share one <code>led_ids</code> filter helper so the led/global branch is written once (no duplicated SQL).</li>
+<li>Reuse existing constants/helpers (<code>_user_project_ids</code>, <code>_is_admin</code>, PDCA maps). Watch the known <code>PRIORITY_RANK</code> (no Critical) quirk — out of scope to fix here, but do not regress.</li>
+</ul>
+<h2 id="8-frontend-vt_homejs">8. Frontend (<code>vt_home.js</code>)</h2>
+<ul>
+<li>Add a tab bar (two buttons: Beranda / Tim) toggling two content containers. Keep the IIFE wrapper and the existing presentation-only style (functions &lt; 40 lines, named constants).</li>
+<li>On load: render Beranda; call <code>team_tab_state()</code> — if <code>visible</code>, show the Tim tab button.</li>
+<li>Tim data is <strong>lazy</strong> — <code>team_overview()</code> fires on first Tim click; reuse chart instances on refresh (donut/bar <code>.update()</code>), matching the old pattern to avoid duplicate canvases.</li>
+<li>New named constants for the folded charts (heights, colors) alongside existing <code>VELOCITY_CHART_HEIGHT</code> / <code>BRAND_BLUE</code>.</li>
+<li>UI strings in Bahasa Indonesia.</li>
+</ul>
+<h2 id="9-migration-cleanup">9. Migration &amp; cleanup</h2>
+<ol>
+<li><strong>Delete</strong> <code>task/page/my_dashboard/</code> and <code>task/page/leader_dashboard/</code> (dirs incl. <code>.json</code>, <code>.js</code>, <code>.py</code>, <code>__pycache__</code>, tests — assertions migrated first, see §10).</li>
+<li><strong><code>hooks.py</code></strong> — remove the Page fixtures for <code>my-dashboard</code> and <code>leader-dashboard</code>; keep the <code>vt-home</code> fixture. Check <code>app_include_css</code> for any <code>my_dashboard</code>/<code>leader_dashboard</code> CSS and remove dead entries.</li>
+<li><strong>Fix dead nav links</strong> (these point at routes being deleted → would 404):</li>
+<li><code>task/page/my_work/my_work.js</code> sub-nav link → <code>my-dashboard</code> → repoint to <code>vt-home</code>.</li>
+<li><code>task/page/leader_review/leader_review.js</code> sub-nav link → <code>leader-dashboard</code> → repoint to <code>vt-home</code>.</li>
+<li>"My Projects" workspace fixture (<code>my_projects.json</code>) card "Leader Reports" → if it targets <code>leader-dashboard</code>, repoint to <code>vt-home</code> or remove.</li>
+<li><code>VT Settings.navbar_items</code> (child <code>VT Navbar Item</code>) — audit for <code>my-dashboard</code>/<code>leader-dashboard</code> routes; update via the navbar seed (<code>setup_website</code>) / fixture.</li>
+<li><strong>Rebuild</strong> assets (<code>bench build --app vernon_tasks</code>) and <code>migrate</code> (page registry) after code lands.</li>
+</ol>
+<h2 id="10-testing">10. Testing</h2>
+<ul>
+<li><code>test_vt_home.py</code> — keep page-exists + role-gating; add: tab shell renders; Tim tab hidden for a Member with 0 led projects, shown for a project leader.</li>
+<li><code>dashboard.py</code> API tests:</li>
+<li><code>personal_stats</code> / <code>daily_completions</code> / <code>hours_summary</code> self-scope; <strong>assert hours unit</strong> (minutes ÷ 60).</li>
+<li><code>team_tab_state</code>: member-no-led → <code>visible:false</code>; leads ≥1 project → <code>visible:true, scope:"led"</code>; Manager → <code>visible:true, scope:"global"</code>.</li>
+<li><code>team_overview</code>: led-scope filters to led project tasks only; global for Manager/admin; <code>PermissionError</code> for the ineligible.</li>
+<li>Migrate the meaningful assertions from <code>test_my_dashboard</code> / <code>test_leader_dashboard</code> (metric definitions: approval rate, pending-review filter, points) into the new API tests before deleting.</li>
+<li><strong>Test-data note:</strong> <code>VT Project</code> requires <code>brand</code> + <code>project_owner</code> (MandatoryError otherwise — known fixture debt); fixtures must set both.</li>
+</ul>
+<h2 id="11-out-of-scope-unchanged">11. Out of scope (unchanged)</h2>
+<p><code>my_work</code>, <code>leader_review</code>, <code>my_analytics</code>, <code>leader_analytics</code>, <code>exec_analytics</code>, <code>vt_scorecard</code>. The <code>PRIORITY_RANK</code> (missing Critical) and other pre-existing <code>dashboard.py</code> quirks are not fixed here beyond not regressing them.</p>
+<h2 id="12-risks">12. Risks</h2>
+<ul>
+<li><strong>Tab visibility flicker:</strong> Tim tab appears after <code>team_tab_state()</code> resolves; render the tab bar first, reveal the Tim button on callback to avoid layout jump.</li>
+<li><strong>Scope leakage:</strong> <code>team_overview</code> must re-resolve scope server-side (never trust a client-supplied scope) — <code>team_tab_state</code> is a hint only.</li>
+<li><strong>Nav drift:</strong> missing one of the §9.3 links leaves a 404; grep <code>my-dashboard</code> / <code>leader-dashboard</code> across <code>.js</code>, fixtures, and <code>navbar_items</code> before declaring done.</li>
+</ul>
+</article>
+
+<footer>
+  <p>Vernon Tasks · generated from <code>docs/superpowers/specs/2026-06-03-dashboard-merge-pov-design.md</code></p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -7,7 +7,7 @@ frappe.pages["leader-review"].on_page_load = function (wrapper) {
 
     vt_render_page_nav(page, [
         { label: "My Projects", route: "workspace/My Projects", icon: "home" },
-        { label: "Leader Dashboard", route: "leader-dashboard", icon: "bar-chart" },
+        { label: "Beranda", route: "vt-home", icon: "bar-chart" },
     ]);
 
     page.add_button(__("Refresh"), () => render_active_tab(), { icon: "refresh" });

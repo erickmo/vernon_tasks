@@ -879,3 +879,269 @@ def schedule_agenda(include: str = "") -> dict[str, Any]:
         days.append({"date": d_str, "label": label, "items": day_items})
 
     return {"today_summary": today_summary, "days": days}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Personal dashboard (folded from the deleted my-dashboard page).
+#  Self-scoped to frappe.session.user; feeds the Beranda tab of vt-home.
+# ──────────────────────────────────────────────────────────────────────────
+
+DONE_PHASE = "DONE"
+# Phases that count as "finished" — excluded from active/blocked/overdue queries.
+CLOSED_PHASES = ("DONE", "ACT")
+DAILY_COMPLETION_DAYS = 7
+MINUTES_PER_HOUR = 60.0
+
+
+@frappe.whitelist()
+def personal_stats() -> dict[str, Any]:
+    """Headline counts for the Beranda tab: tasks done today / this ISO week,
+    points earned this calendar month, and currently-blocked task count.
+    Self-scoped. Migrated from my_dashboard.get_employee_stats. (PRD-dashboard-merge)"""
+    require_login()
+    user = frappe.session.user
+    _today = today()
+
+    done_today = frappe.db.sql(
+        """SELECT COUNT(*) FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND completion_date = %(today)s""",
+        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
+    )[0][0]
+
+    done_week = frappe.db.sql(
+        """SELECT COUNT(*) FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND YEARWEEK(completion_date, 1) = YEARWEEK(%(today)s, 1)""",
+        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
+    )[0][0]
+
+    points_month = frappe.db.sql(
+        """SELECT COALESCE(SUM(earned_points), 0) FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND YEAR(completion_date) = YEAR(%(today)s)
+             AND MONTH(completion_date) = MONTH(%(today)s)""",
+        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
+    )[0][0]
+
+    blocked = frappe.db.sql(
+        """SELECT COUNT(DISTINCT t.name) FROM `tabVT Task` t
+           INNER JOIN `tabTask Dependency` td ON td.parent = t.name
+           INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
+           WHERE t.assigned_to = %(user)s
+             AND t.pdca_phase NOT IN %(closed)s
+             AND bt.pdca_phase NOT IN %(closed)s""",
+        {"user": user, "closed": CLOSED_PHASES}, as_list=True,
+    )[0][0]
+
+    return {
+        "done_today": int(done_today),
+        "done_week": int(done_week),
+        "points_month": float(points_month),
+        "blocked": int(blocked),
+    }
+
+
+@frappe.whitelist()
+def daily_completions() -> list[dict[str, Any]]:
+    """Tasks the user completed on each of the last 7 days, zero-filled, oldest
+    first — for the Beranda completions bar chart. Self-scoped. Migrated from
+    my_dashboard.get_daily_completions. (PRD-dashboard-merge)"""
+    require_login()
+    user = frappe.session.user
+    start = add_days(today(), -(DAILY_COMPLETION_DAYS - 1))
+
+    rows = frappe.db.sql(
+        """SELECT completion_date AS date, COUNT(*) AS count
+           FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND completion_date >= %(start)s AND completion_date <= %(today)s
+           GROUP BY completion_date""",
+        {"user": user, "done": DONE_PHASE, "start": start, "today": today()},
+        as_dict=True,
+    )
+
+    counts_by_date = {str(r["date"]): r["count"] for r in rows}
+    out: list[dict[str, Any]] = []
+    for i in range(DAILY_COMPLETION_DAYS):
+        d = str(add_days(today(), -(DAILY_COMPLETION_DAYS - 1 - i)))
+        out.append({"date": d, "count": int(counts_by_date.get(d, 0))})
+    return out
+
+
+@frappe.whitelist()
+def hours_summary() -> dict[str, Any]:
+    """Logged vs remaining effort across the user's active (non-DONE/ACT) tasks,
+    returned in HOURS. Migrated from my_dashboard.get_hours_summary, which
+    returned raw minutes while its chart mislabeled them 'Hours' — this fixes the
+    unit at the source. Self-scoped. (PRD-dashboard-merge / bug-hours-unit)"""
+    require_login()
+    user = frappe.session.user
+
+    row = frappe.db.sql(
+        """SELECT COALESCE(SUM(actual_minutes), 0) AS actual_minutes,
+                  COALESCE(SUM(estimated_minutes), 0) AS estimated_minutes
+           FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase NOT IN %(closed)s""",
+        {"user": user, "closed": CLOSED_PHASES}, as_dict=True,
+    )
+
+    actual = float(row[0]["actual_minutes"])
+    estimated = float(row[0]["estimated_minutes"])
+    remaining = max(0.0, estimated - actual)
+    return {
+        "logged_hours": round(actual / MINUTES_PER_HOUR, 1),
+        "remaining_hours": round(remaining / MINUTES_PER_HOUR, 1),
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Team dashboard (folded + re-scoped from the deleted leader-dashboard page).
+#  Scope: VT Manager / admin → global; anyone leading >=1 project → led-only.
+# ──────────────────────────────────────────────────────────────────────────
+
+MANAGER_ROLE = "VT Manager"
+IN_REVIEW_STATUS = "In Review"
+CHECK_PHASE = "CHECK"
+LEADERBOARD_LIMIT = 10
+
+
+def _resolve_team_scope(user: str) -> tuple[str, set[str] | None]:
+    """Decide a caller's team-view scope. ('global', None) for admins and VT
+    Managers; ('led', led_ids) for anyone leading >=1 project; raises
+    PermissionError otherwise. Both team_tab_state and team_overview defer to
+    this so the rule lives once and the client can never widen its own scope."""
+    if _is_admin() or MANAGER_ROLE in frappe.get_roles(user):
+        return "global", None
+    led, _member = _user_project_ids(user)
+    if led:
+        return "led", led
+    frappe.throw("Not authorized", frappe.PermissionError)
+
+
+def _scope_clause(scope: str, led_ids: set[str] | None, column: str) -> tuple[str, dict[str, Any]]:
+    """Build the optional ' AND <column> IN %(projects)s' fragment + params that
+    restrict a team query to led projects; ('', {}) for global scope so one query
+    string serves both. `column` is the project column ('project' unaliased,
+    't.project' when the task table is aliased). pymysql renders the tuple as a
+    SQL list, so led_ids must be non-empty (guaranteed in 'led' scope)."""
+    if scope == "led":
+        return f" AND {column} IN %(projects)s", {"projects": tuple(led_ids)}
+    return "", {}
+
+
+@frappe.whitelist()
+def team_tab_state() -> dict[str, Any]:
+    """Cheap probe driving Tim-tab visibility in vt-home. Never throws for a
+    logged-in user: returns visible=False for someone who neither manages nor
+    leads any project. (PRD-dashboard-merge)"""
+    require_login()
+    user = frappe.session.user
+    if _is_admin() or MANAGER_ROLE in frappe.get_roles(user):
+        return {"visible": True, "scope": "global", "led_count": 0}
+    led, _member = _user_project_ids(user)
+    if led:
+        return {"visible": True, "scope": "led", "led_count": len(led)}
+    return {"visible": False, "scope": None, "led_count": 0}
+
+
+def _team_stats(scope: str, led_ids: set[str] | None) -> dict[str, Any]:
+    """Pending-review count, first-try approval rate %, and points earned this
+    month, restricted to `scope`. approval_rate = DONE-this-month with
+    revision_count=0 over all DONE-this-month."""
+    _today = today()
+    clause, extra = _scope_clause(scope, led_ids, "project")
+
+    pending_review = frappe.db.sql(
+        f"""SELECT COUNT(*) FROM `tabVT Task`
+            WHERE kanban_status = %(in_review)s AND pdca_phase = %(check)s{clause}""",
+        {"in_review": IN_REVIEW_STATUS, "check": CHECK_PHASE, **extra}, as_list=True,
+    )[0][0]
+
+    agg = frappe.db.sql(
+        f"""SELECT COUNT(*) AS month_done,
+                   SUM(CASE WHEN revision_count = 0 THEN 1 ELSE 0 END) AS approved,
+                   COALESCE(SUM(earned_points), 0) AS team_points
+            FROM `tabVT Task`
+            WHERE pdca_phase = %(done)s
+              AND YEAR(completion_date) = YEAR(%(today)s)
+              AND MONTH(completion_date) = MONTH(%(today)s){clause}""",
+        {"done": DONE_PHASE, "today": _today, **extra}, as_dict=True,
+    )[0]
+
+    month_done = int(agg["month_done"] or 0)
+    approved = int(agg["approved"] or 0)
+    rate = round(approved / month_done * 100, 1) if month_done > 0 else 0.0
+    return {
+        "pending_review": int(pending_review),
+        "approval_rate": float(rate),
+        "team_points_month": float(agg["team_points"] or 0),
+    }
+
+
+def _team_phase_distribution(scope: str, led_ids: set[str] | None) -> list[dict[str, Any]]:
+    """Task counts grouped by PDCA phase (BACKLOG→DONE order), restricted to scope."""
+    clause, extra = _scope_clause(scope, led_ids, "project")
+    rows = frappe.db.sql(
+        f"""SELECT pdca_phase AS phase, COUNT(*) AS count FROM `tabVT Task`
+            WHERE 1=1{clause}
+            GROUP BY pdca_phase
+            ORDER BY FIELD(pdca_phase, 'BACKLOG','PLAN','DO','CHECK','ACT','DONE')""",
+        extra, as_dict=True,
+    )
+    return [{"phase": r["phase"], "count": int(r["count"])} for r in rows]
+
+
+def _team_leaderboard(scope: str, led_ids: set[str] | None) -> list[dict[str, Any]]:
+    """Top members by points earned this month, restricted to scope."""
+    clause, extra = _scope_clause(scope, led_ids, "project")
+    rows = frappe.db.sql(
+        f"""SELECT assigned_to AS member, COALESCE(SUM(earned_points), 0) AS points
+            FROM `tabVT Task`
+            WHERE pdca_phase = %(done)s
+              AND YEAR(completion_date) = YEAR(%(today)s)
+              AND MONTH(completion_date) = MONTH(%(today)s){clause}
+            GROUP BY assigned_to ORDER BY points DESC LIMIT {LEADERBOARD_LIMIT}""",
+        {"done": DONE_PHASE, "today": today(), **extra}, as_dict=True,
+    )
+    return [{"member": r["member"], "points": float(r["points"])} for r in rows]
+
+
+def _team_overdue(scope: str, led_ids: set[str] | None) -> list[dict[str, Any]]:
+    """Open (non-DONE/ACT) tasks past deadline, most-overdue first, scope-restricted."""
+    clause, extra = _scope_clause(scope, led_ids, "t.project")
+    rows = frappe.db.sql(
+        f"""SELECT t.name AS task_name, t.title AS task_title, t.assigned_to AS member,
+                   t.deadline, t.pdca_phase AS phase,
+                   DATEDIFF(%(today)s, t.deadline) AS days_overdue
+            FROM `tabVT Task` t
+            WHERE t.deadline < %(today)s
+              AND t.pdca_phase NOT IN %(closed)s{clause}
+            ORDER BY days_overdue DESC""",
+        {"today": today(), "closed": CLOSED_PHASES, **extra}, as_dict=True,
+    )
+    return [
+        {"task_name": r["task_name"], "task_title": r["task_title"],
+         "member": r["member"], "deadline": str(r["deadline"]),
+         "phase": r["phase"], "days_overdue": int(r["days_overdue"])}
+        for r in rows
+    ]
+
+
+@frappe.whitelist()
+def team_overview() -> dict[str, Any]:
+    """Aggregate leadership cockpit for the Tim tab: review/approval KPIs, PDCA
+    phase mix, points leaderboard, and overdue tasks — scoped by
+    _resolve_team_scope (led projects for leaders, global for managers/admins).
+    Re-resolves scope server-side; never trusts a client hint. Folded + re-scoped
+    from the deleted leader_dashboard page. (PRD-dashboard-merge)"""
+    require_login()
+    user = frappe.session.user
+    scope, led_ids = _resolve_team_scope(user)
+    return {
+        "scope": scope,
+        "stats": _team_stats(scope, led_ids),
+        "phase_distribution": _team_phase_distribution(scope, led_ids),
+        "leaderboard": _team_leaderboard(scope, led_ids),
+        "overdue": _team_overdue(scope, led_ids),
+    }
