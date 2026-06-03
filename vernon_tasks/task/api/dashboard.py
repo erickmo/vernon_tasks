@@ -879,3 +879,117 @@ def schedule_agenda(include: str = "") -> dict[str, Any]:
         days.append({"date": d_str, "label": label, "items": day_items})
 
     return {"today_summary": today_summary, "days": days}
+
+
+# ──────────────────────────────────────────────────────────────────────────
+#  Personal dashboard (folded from the deleted my-dashboard page).
+#  Self-scoped to frappe.session.user; feeds the Beranda tab of vt-home.
+# ──────────────────────────────────────────────────────────────────────────
+
+DONE_PHASE = "DONE"
+# Phases that count as "finished" — excluded from active/blocked/overdue queries.
+CLOSED_PHASES = ("DONE", "ACT")
+DAILY_COMPLETION_DAYS = 7
+MINUTES_PER_HOUR = 60.0
+
+
+@frappe.whitelist()
+def personal_stats() -> dict[str, Any]:
+    """Headline counts for the Beranda tab: tasks done today / this ISO week,
+    points earned this calendar month, and currently-blocked task count.
+    Self-scoped. Migrated from my_dashboard.get_employee_stats. (PRD-dashboard-merge)"""
+    require_login()
+    user = frappe.session.user
+    _today = today()
+
+    done_today = frappe.db.sql(
+        """SELECT COUNT(*) FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND completion_date = %(today)s""",
+        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
+    )[0][0]
+
+    done_week = frappe.db.sql(
+        """SELECT COUNT(*) FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND YEARWEEK(completion_date, 1) = YEARWEEK(%(today)s, 1)""",
+        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
+    )[0][0]
+
+    points_month = frappe.db.sql(
+        """SELECT COALESCE(SUM(earned_points), 0) FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND YEAR(completion_date) = YEAR(%(today)s)
+             AND MONTH(completion_date) = MONTH(%(today)s)""",
+        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
+    )[0][0]
+
+    blocked = frappe.db.sql(
+        """SELECT COUNT(DISTINCT t.name) FROM `tabVT Task` t
+           INNER JOIN `tabTask Dependency` td ON td.parent = t.name
+           INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
+           WHERE t.assigned_to = %(user)s
+             AND t.pdca_phase NOT IN %(closed)s
+             AND bt.pdca_phase NOT IN %(closed)s""",
+        {"user": user, "closed": CLOSED_PHASES}, as_list=True,
+    )[0][0]
+
+    return {
+        "done_today": int(done_today),
+        "done_week": int(done_week),
+        "points_month": float(points_month),
+        "blocked": int(blocked),
+    }
+
+
+@frappe.whitelist()
+def daily_completions() -> list[dict[str, Any]]:
+    """Tasks the user completed on each of the last 7 days, zero-filled, oldest
+    first — for the Beranda completions bar chart. Self-scoped. Migrated from
+    my_dashboard.get_daily_completions. (PRD-dashboard-merge)"""
+    require_login()
+    user = frappe.session.user
+    start = add_days(today(), -(DAILY_COMPLETION_DAYS - 1))
+
+    rows = frappe.db.sql(
+        """SELECT completion_date AS date, COUNT(*) AS count
+           FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
+             AND completion_date >= %(start)s AND completion_date <= %(today)s
+           GROUP BY completion_date""",
+        {"user": user, "done": DONE_PHASE, "start": start, "today": today()},
+        as_dict=True,
+    )
+
+    counts_by_date = {str(r["date"]): r["count"] for r in rows}
+    out: list[dict[str, Any]] = []
+    for i in range(DAILY_COMPLETION_DAYS):
+        d = str(add_days(today(), -(DAILY_COMPLETION_DAYS - 1 - i)))
+        out.append({"date": d, "count": int(counts_by_date.get(d, 0))})
+    return out
+
+
+@frappe.whitelist()
+def hours_summary() -> dict[str, Any]:
+    """Logged vs remaining effort across the user's active (non-DONE/ACT) tasks,
+    returned in HOURS. Migrated from my_dashboard.get_hours_summary, which
+    returned raw minutes while its chart mislabeled them 'Hours' — this fixes the
+    unit at the source. Self-scoped. (PRD-dashboard-merge / bug-hours-unit)"""
+    require_login()
+    user = frappe.session.user
+
+    row = frappe.db.sql(
+        """SELECT COALESCE(SUM(actual_minutes), 0) AS actual_minutes,
+                  COALESCE(SUM(estimated_minutes), 0) AS estimated_minutes
+           FROM `tabVT Task`
+           WHERE assigned_to = %(user)s AND pdca_phase NOT IN %(closed)s""",
+        {"user": user, "closed": CLOSED_PHASES}, as_dict=True,
+    )
+
+    actual = float(row[0]["actual_minutes"])
+    estimated = float(row[0]["estimated_minutes"])
+    remaining = max(0.0, estimated - actual)
+    return {
+        "logged_hours": round(actual / MINUTES_PER_HOUR, 1),
+        "remaining_hours": round(remaining / MINUTES_PER_HOUR, 1),
+    }
