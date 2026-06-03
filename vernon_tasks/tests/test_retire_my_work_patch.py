@@ -22,13 +22,18 @@ def _navbar_routes():
 def _seed_old_install():
     """Recreate the pre-merge state: a my-work Page doc + a navbar row."""
     if not frappe.db.exists("Page", _PAGE):
-        frappe.get_doc({
+        page = frappe.get_doc({
             "doctype": "Page",
             "name": _PAGE,
             "page_name": _PAGE,
             "title": "My Work",
             "module": "Task",
-        }).insert(ignore_permissions=True)
+        })
+        # In developer_mode Page.on_update would export this stub back to disk
+        # (recreating the deleted task/page/my_work/ dir). do_not_update_json
+        # short-circuits that export — we only need the DB row to test deletion.
+        page.flags.do_not_update_json = True
+        page.insert(ignore_permissions=True)
     if _ROUTE not in _navbar_routes():
         settings = frappe.get_single(_VT_SETTINGS)
         settings.append("navbar_items", {
