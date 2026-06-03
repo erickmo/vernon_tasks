@@ -321,13 +321,6 @@
       "type": "DocType"
     },
     {
-      "color": "Purple",
-      "icon": "bar-chart",
-      "label": "Leader Dashboard",
-      "link_to": "leader-dashboard",
-      "type": "Page"
-    },
-    {
       "color": "Blue",
       "icon": "check-circle",
       "label": "Leader Review",

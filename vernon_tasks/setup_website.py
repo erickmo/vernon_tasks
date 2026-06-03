@@ -290,14 +290,12 @@ _NAVBAR_ITEMS = [
     # ── Saya group (all roles) ────────────────────────────────────────────
     dict(label="Saya",           route="#",                   icon="user",          is_group=1, parent_group="",       role_restriction="",          enabled=1),
     dict(label="My Work",        route="/app/my-work",        icon="check-circle",  is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
-    dict(label="Dashboard",      route="/app/my-dashboard",   icon="bar-chart",     is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
     dict(label="Analytics",      route="/app/my-analytics",   icon="trend",         is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
     dict(label="Scorecard",      route="/app/vt-scorecard",   icon="star",          is_group=0, parent_group="Saya",   role_restriction="",          enabled=1),
     # ── Proyek standalone ────────────────────────────────────────────────
     dict(label="Proyek",         route="/app/vt-projects",    icon="folder-normal", is_group=0, parent_group="",       role_restriction="",          enabled=1),
     # ── Leader group ─────────────────────────────────────────────────────
     dict(label="Leader",         route="#",                   icon="users",         is_group=1, parent_group="",       role_restriction="VT Leader", enabled=1),
-    dict(label="Dashboard Tim",  route="/app/leader-dashboard",icon="dashboard",    is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
     dict(label="Review",         route="/app/leader-review",  icon="tick",          is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
     dict(label="Sprint Analytics",route="/app/leader-analytics",icon="chart",       is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
     dict(label="OKR",            route="/app/vt-okr",         icon="target-doc",    is_group=0, parent_group="Leader", role_restriction="VT Leader", enabled=1),
