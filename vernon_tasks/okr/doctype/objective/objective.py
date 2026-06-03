@@ -239,11 +239,32 @@ class Objective(Document):
 			)
 
 
+def aggregate_kr_progress(pairs: list[tuple[float, float]]) -> float:
+	"""Mean of `min(current/target, 1.0) * 100` over pairs with target > 0, 2dp.
+
+	Canonical OKR progress scalar. Callers pass pre-loaded (current, target)
+	pairs so read paths can batch their Key Result query (avoids N+1):
+	  - get_objective_progress() — single-objective rollup (Health Score)
+	  - vernon_tasks.brand.api.brand_okr — brand-detail page (batched)
+
+	Clamping the ratio at 1.0 means over-performance does not pull the mean
+	above 100%. Rounds once at the end (no double-rounding).
+
+	Returns:
+		Float in [0.0, 100.0]. 0.0 when no pair has a positive target.
+	"""
+	# Only well-formed rows (positive target) count toward the mean denominator.
+	valid = [(c, t) for (c, t) in pairs if t and t > 0]
+	if not valid:
+		return 0.0
+	total = sum(min((c or 0) / t, 1.0) for (c, t) in valid)
+	return round((total / len(valid)) * 100, 2)
+
+
 def get_objective_progress(objective_name: str) -> float:
 	"""Aggregate progress for an Objective across its Key Results.
 
-	Formula: mean of `min(current/target, 1.0)` for each KR with target > 0,
-	expressed as a percentage rounded to 2 decimals.
+	Delegates to aggregate_kr_progress (the canonical formula).
 
 	Args:
 		objective_name: Frappe `name` of the parent Objective.
@@ -257,13 +278,4 @@ def get_objective_progress(objective_name: str) -> float:
 		filters={"objective": objective_name},
 		fields=["target_value", "current_value"],
 	)
-	if not key_results:
-		return 0.0
-	# Filter to KRs with positive target so the mean denominator only
-	# counts well-formed rows. Clamp ratio at 1.0 — over-performance does
-	# not pull the average above 100%.
-	valid = [kr for kr in key_results if kr.target_value > 0]
-	if not valid:
-		return 0.0
-	total = sum(min(kr.current_value / kr.target_value, 1.0) for kr in valid)
-	return round((total / len(valid)) * 100, 2)
+	return aggregate_kr_progress([(kr.current_value, kr.target_value) for kr in key_results])
