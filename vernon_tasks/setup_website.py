@@ -307,10 +307,11 @@ _NAVBAR_ITEMS = [
     dict(label="Tim & Kapasitas",route="/app/vt-team",        icon="users",         is_group=0, parent_group="",       role_restriction="VT Leader", enabled=1),
     # ── Eksekutif standalone (Manager) ───────────────────────────────────
     dict(label="Eksekutif",      route="/app/exec-analytics", icon="chart",         is_group=0, parent_group="",       role_restriction="VT Manager",enabled=1),
+    # ── Brand standalone (Manager) — promoted out of Admin for quick access ─
+    dict(label="Brand",          route="/app/vt-brands",      icon="badge",         is_group=0, parent_group="",       role_restriction="VT Manager",enabled=1),
     # ── Admin group (Manager) — kept grouped: low-traffic, manager-only ───
     dict(label="Admin",          route="#",                   icon="setting",       is_group=1, parent_group="",       role_restriction="VT Manager",enabled=1),
     dict(label="Pengaturan",     route="/app/vt-settings",    icon="setting",       is_group=0, parent_group="Admin",  role_restriction="VT Manager",enabled=1),
-    dict(label="Brand",          route="/app/vt-brands",      icon="badge",         is_group=0, parent_group="Admin",  role_restriction="VT Manager",enabled=1),
 ]
 
 
