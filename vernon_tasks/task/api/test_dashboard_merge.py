@@ -111,3 +111,92 @@ class TestPersonalDashboard(unittest.TestCase):
         self.assertEqual(out["logged_hours"], 2.0)
         self.assertEqual(out["remaining_hours"], 1.0)
         self.assertNotIn("actual_minutes", out)
+
+
+def _ensure_user(email, roles):
+    if not frappe.db.exists("User", email):
+        frappe.get_doc({
+            "doctype": "User", "email": email, "first_name": email.split("@")[0],
+            "send_welcome_email": 0,
+        }).insert(ignore_permissions=True)
+    user = frappe.get_doc("User", email)
+    user.add_roles(*roles)
+    return email
+
+
+class TestTeamDashboard(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        frappe.set_user("Administrator")
+        cls.leader = _ensure_user("dm_leader@test.local", ["VT Leader", "VT Member"])
+        cls.manager = _ensure_user("dm_manager@test.local", ["VT Manager", "VT Member"])
+        cls.plain = _ensure_user("dm_plain@test.local", ["VT Member"])
+        # Led project (leader is project_leader) + a foreign project the leader
+        # does NOT lead — used to prove led-scope filtering.
+        cls.led = _make_project("DM Led Project", leader=cls.leader).name
+        cls.other = _make_project("DM Other Project").name
+        _make_task("DM led overdue", cls.led, cls.leader, pdca_phase="DO",
+                   kanban_status="In Progress", deadline=add_days(today(), -2))
+        _make_task("DM other overdue", cls.other, cls.manager, pdca_phase="DO",
+                   kanban_status="In Progress", deadline=add_days(today(), -2))
+
+    @classmethod
+    def tearDownClass(cls):
+        frappe.set_user("Administrator")
+
+    def test_tab_state_plain_member_not_visible(self):
+        frappe.set_user(self.plain)
+        try:
+            st = dashboard.team_tab_state()
+            self.assertFalse(st["visible"])
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_tab_state_leader_led_scope(self):
+        frappe.set_user(self.leader)
+        try:
+            st = dashboard.team_tab_state()
+            self.assertTrue(st["visible"])
+            self.assertEqual(st["scope"], "led")
+            self.assertGreaterEqual(st["led_count"], 1)
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_tab_state_manager_global_scope(self):
+        frappe.set_user(self.manager)
+        try:
+            st = dashboard.team_tab_state()
+            self.assertTrue(st["visible"])
+            self.assertEqual(st["scope"], "global")
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_overview_led_scope_excludes_foreign_projects(self):
+        frappe.set_user(self.leader)
+        try:
+            data = dashboard.team_overview()
+            self.assertEqual(data["scope"], "led")
+            titles = {o["task_title"] for o in data["overdue"]}
+            self.assertIn("DM led overdue", titles)
+            self.assertNotIn("DM other overdue", titles)
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_overview_manager_global_includes_all(self):
+        frappe.set_user(self.manager)
+        try:
+            data = dashboard.team_overview()
+            self.assertEqual(data["scope"], "global")
+            titles = {o["task_title"] for o in data["overdue"]}
+            self.assertIn("DM led overdue", titles)
+            self.assertIn("DM other overdue", titles)
+        finally:
+            frappe.set_user("Administrator")
+
+    def test_overview_denied_for_plain_member(self):
+        frappe.set_user(self.plain)
+        try:
+            with self.assertRaises(frappe.PermissionError):
+                dashboard.team_overview()
+        finally:
+            frappe.set_user("Administrator")
