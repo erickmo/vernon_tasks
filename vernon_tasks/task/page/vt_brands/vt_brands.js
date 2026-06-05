@@ -15,6 +15,65 @@ const BRAND_DOCTYPE = "VT Brand";
 // Maximum description characters shown on a card before truncating.
 const DESC_MAX = 80;
 
+// Minutes per hour — used to format estimated time as "Xj Ym".
+const MIN_PER_HOUR = 60;
+
+/**
+ * Format a minute total as a short human duration: "Xj Ym" / "Xj" / "Ym".
+ * Local to this page — no shared JS minutes formatter exists yet; promote to a
+ * public/js util when a second caller (e.g. vt-brand-detail) needs it.
+ *
+ * @param {number} total - Minutes (may be 0, null or undefined).
+ * @returns {string}
+ */
+function fmt_minutes(total) {
+    const mins = Math.max(0, Math.round(total || 0));
+    if (!mins) return "0m";
+    const hours = Math.floor(mins / MIN_PER_HOUR);
+    const rem = mins % MIN_PER_HOUR;
+    if (hours && rem) return `${hours}j ${rem}m`;
+    if (hours) return `${hours}j`;
+    return `${rem}m`;
+}
+
+/**
+ * Build the per-brand stats footer: active sprint, remaining tasks, remaining
+ * estimated time and an effort-weighted progress bar. All values come from the
+ * list_brands API (computed brand-wide, Cancelled work excluded).
+ *
+ * @param {object} b - Brand data incl. stats fields.
+ * @returns {string} HTML string (all dynamic text escaped).
+ */
+function brand_stats_html(b) {
+    const pct = Math.max(0, Math.min(100, Number(b.progress_pct) || 0));
+    const sprint_title = (b.active_sprint_title || "").trim();
+    const extra = b.active_sprint_count > 1 ? ` +${b.active_sprint_count - 1}` : "";
+    const sprint_label = sprint_title
+        ? frappe.utils.escape_html(sprint_title) + frappe.utils.escape_html(extra)
+        : "—";
+
+    return `<div class="vt-brand-stats">
+        <div class="vt-brand-sprint">
+            <span class="vt-brand-stat-lbl">Sprint aktif</span>
+            <span class="vt-brand-sprint-name">${sprint_label}</span>
+        </div>
+        <div class="vt-brand-stat-grid">
+            <div class="vt-brand-stat">
+                <span class="vt-brand-stat-num">${Number(b.remaining_tasks) || 0}</span>
+                <span class="vt-brand-stat-lbl">Sisa task</span>
+            </div>
+            <div class="vt-brand-stat">
+                <span class="vt-brand-stat-num">${fmt_minutes(b.remaining_minutes)}</span>
+                <span class="vt-brand-stat-lbl">Sisa estimasi</span>
+            </div>
+        </div>
+        <div class="vt-brand-progress">
+            <div class="vh-bar"><span style="width:${pct}%"></span></div>
+            <span class="vt-brand-pct">${pct}%</span>
+        </div>
+    </div>`;
+}
+
 frappe.pages["vt-brands"].on_page_load = function (wrapper) {
     // Gray background applied globally by vt_page_style.js.
     const page = frappe.ui.make_app_page({
@@ -104,6 +163,7 @@ function brand_card(b) {
             <span class="vt-brand-name">${name_safe}</span>
         </div>
         <div class="vh-item-meta vt-brand-desc">${desc_safe}</div>
+        ${brand_stats_html(b)}
     </div>`);
 
     card.on("click", () => frappe.set_route("vt-brand-detail", b.id));

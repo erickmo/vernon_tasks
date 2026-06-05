@@ -19,9 +19,91 @@ class TestPortalBrands(FrappeTestCase):
         frappe.set_user("Administrator")
 
     def tearDown(self):
+        # Brands can't be deleted while linked; tear down dependents first
+        # (sprints + tasks before their project, then the brand).
         for n in (TEST_BRAND, TEST_BRAND_2):
+            for p in frappe.get_all("VT Project", filters={"brand": n}, pluck="name"):
+                for s in frappe.get_all("VT Sprint", filters={"project": p}, pluck="name"):
+                    frappe.delete_doc("VT Sprint", s, force=True, ignore_permissions=True)
+                for t in frappe.get_all("VT Task", filters={"project": p}, pluck="name"):
+                    frappe.delete_doc("VT Task", t, force=True, ignore_permissions=True)
+                frappe.delete_doc("VT Project", p, force=True, ignore_permissions=True)
             if frappe.db.exists("VT Brand", n):
                 frappe.delete_doc("VT Brand", n, force=True, ignore_permissions=True)
+
+    def _mk_project(self, brand: str) -> str:
+        doc = frappe.get_doc({
+            "doctype": "VT Project", "title": f"Proj-{brand}", "brand": brand,
+            "project_owner": "Administrator", "start_date": "2026-05-01",
+            "end_date": "2026-05-31", "pdca_phase": "PLAN", "status": "Open",
+        }).insert(ignore_permissions=True)
+        return doc.name
+
+    def _mk_task(self, project: str, phase: str, minutes: int) -> str:
+        doc = frappe.get_doc({
+            "doctype": "VT Task", "title": f"T-{phase}-{minutes}",
+            "project": project, "pdca_phase": phase, "estimated_minutes": minutes,
+        }).insert(ignore_permissions=True)
+        return doc.name
+
+    def _row_for(self, brand: str) -> dict:
+        rows = portal_brands.list_brands()
+        return next(r for r in rows if r["id"] == brand)
+
+    def test_list_includes_brand_stats(self):
+        portal_brands.create_brand({"brand_name": TEST_BRAND})
+        proj = self._mk_project(TEST_BRAND)
+        self._mk_task(proj, "DO", 60)    # open (In Progress)
+        self._mk_task(proj, "DO", 120)   # open
+        self._mk_task(proj, "DONE", 60)  # done
+        frappe.get_doc({
+            "doctype": "VT Sprint", "sprint_title": "S-1", "project": proj,
+            "status": "Active", "start_date": "2026-05-01", "end_date": "2026-05-14",
+        }).insert(ignore_permissions=True)
+
+        row = self._row_for(TEST_BRAND)
+        # total=240, remaining=180 (two DO), done=60 -> progress (240-180)/240 = 25%
+        self.assertEqual(row["remaining_tasks"], 2)
+        self.assertEqual(row["remaining_minutes"], 180)
+        self.assertEqual(row["total_minutes"], 240)
+        self.assertEqual(row["progress_pct"], 25)
+        self.assertEqual(row["active_sprint_count"], 1)
+        self.assertEqual(row["active_sprint_title"], "S-1")
+
+    def test_cancelled_task_excluded(self):
+        portal_brands.create_brand({"brand_name": TEST_BRAND})
+        proj = self._mk_project(TEST_BRAND)
+        task = self._mk_task(proj, "DO", 100)
+        # Cancelled docs (docstatus=2) must drop out of every tally.
+        frappe.db.set_value("VT Task", task, "docstatus", 2)
+
+        row = self._row_for(TEST_BRAND)
+        self.assertEqual(row["remaining_tasks"], 0)
+        self.assertEqual(row["remaining_minutes"], 0)
+        self.assertEqual(row["total_minutes"], 0)
+        self.assertEqual(row["progress_pct"], 0)
+
+    def test_progress_count_fallback_when_no_estimates(self):
+        portal_brands.create_brand({"brand_name": TEST_BRAND})
+        proj = self._mk_project(TEST_BRAND)
+        self._mk_task(proj, "DO", 0)     # open, un-estimated
+        self._mk_task(proj, "DONE", 0)   # done
+        self._mk_task(proj, "DONE", 0)   # done
+
+        row = self._row_for(TEST_BRAND)
+        # total_minutes=0 -> fall back to done/total tasks = 2/3 = 67%
+        self.assertEqual(row["total_minutes"], 0)
+        self.assertEqual(row["remaining_tasks"], 1)
+        self.assertEqual(row["progress_pct"], 67)
+
+    def test_list_zero_stats_for_brand_without_projects(self):
+        portal_brands.create_brand({"brand_name": TEST_BRAND})
+        row = self._row_for(TEST_BRAND)
+        self.assertEqual(row["remaining_tasks"], 0)
+        self.assertEqual(row["total_minutes"], 0)
+        self.assertEqual(row["progress_pct"], 0)
+        self.assertEqual(row["active_sprint_count"], 0)
+        self.assertIsNone(row["active_sprint_title"])
 
     def test_create_then_get(self):
         res = portal_brands.create_brand({"brand_name": TEST_BRAND, "description": "hi"})
