@@ -25,6 +25,7 @@ OBJECTIVE_FETCH_LIMIT = 500
 KEY_RESULT_FETCH_LIMIT = 1000
 USER_DOCTYPE = "User"
 DEFAULT_STATUS = "Open"
+AT_RISK_STATUS = "At Risk"
 
 
 @frappe.whitelist()
@@ -49,7 +50,7 @@ def get_brand_okr(brand_id: str) -> dict:
     objectives = _read_objectives(brand_id)
     krs_by_obj = _read_key_results([o["name"] for o in objectives])
     periods = _group_by_period(objectives, krs_by_obj)
-    _attach_owners(periods)
+    periods = _attach_owners(periods)
     return {
         "brand": {
             "id": brand["name"],
@@ -174,17 +175,18 @@ def _summary(periods: list[dict]) -> dict:
         "kr_count": kr_count,
         "avg_progress": avg_progress,
         "status_counts": status_counts,
-        "at_risk_count": status_counts.get("At Risk", 0),
+        "at_risk_count": status_counts.get(AT_RISK_STATUS, 0),
         "active_period": active_period,
     }
 
 
-def _attach_owners(periods: list[dict]) -> None:
+def _attach_owners(periods: list[dict]) -> list[dict]:
     """Resolve each objective's owner to display name + avatar in ONE query.
 
-    Mutates the period dicts in place, adding owner_name / owner_image. Falls back
-    to the raw owner id (name) and None (image) when the User row is missing.
-    Avoids N+1 by batching all distinct owners into a single get_all.
+    Mutates the period dicts in place, adding owner_name / owner_image, then
+    returns the list. Falls back to the raw owner id (name) and None (image)
+    when the User row is missing. Avoids N+1 by batching all distinct owners
+    into a single get_all.
     """
     owner_ids = {o["owner"] for p in periods for o in p["objectives"] if o.get("owner")}
     info: dict[str, dict] = {}
@@ -193,6 +195,7 @@ def _attach_owners(periods: list[dict]) -> None:
             USER_DOCTYPE,
             filters={"name": ["in", list(owner_ids)]},
             fields=["name", "full_name", "user_image"],
+            limit_page_length=len(owner_ids),  # exact — never truncate owners
         )
         info = {r["name"]: {"name": r.get("full_name") or r["name"],
                             "image": r.get("user_image")} for r in rows}
@@ -201,3 +204,4 @@ def _attach_owners(periods: list[dict]) -> None:
             resolved = info.get(o.get("owner"))
             o["owner_name"] = resolved["name"] if resolved else (o.get("owner") or None)
             o["owner_image"] = resolved["image"] if resolved else None
+    return periods

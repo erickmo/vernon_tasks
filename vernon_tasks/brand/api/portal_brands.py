@@ -143,6 +143,7 @@ def _active_sprints(proj_to_brand: dict[str, str]) -> dict[str, dict]:
         fields=["project", "sprint_title"],
         filters={"status": ACTIVE_SPRINT_STATUS, "project": ["in", list(proj_to_brand)]},
         order_by="creation desc",  # deterministic "first" title across reloads
+        limit_page_length=0,
     )
     for s in rows:
         brand = proj_to_brand.get(s.get("project"))
@@ -212,6 +213,7 @@ def brand_execution(brand_id: str) -> dict:
         fields=["name", "title", "percent_done"],
         filters={"brand": brand_id},
         order_by="title asc",
+        limit_page_length=0,
     )
     proj_to_brand = {p["name"]: brand_id for p in projects}
     agg = _task_aggregates(proj_to_brand).get(brand_id) or _zero_task_agg()

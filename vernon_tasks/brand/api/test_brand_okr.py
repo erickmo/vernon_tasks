@@ -46,7 +46,8 @@ class TestBrandOkrEndpoint(FrappeTestCase):
             ignore_permissions=True)
         self.obj_current = frappe.get_doc({
             "doctype": "Objective", "title": "Current Obj", "brand": TEST_BRAND,
-            "period": "2026-Q2", "objective_owner": "Administrator",
+            "period": "2026-Q2", "period_start": "2026-04-01", "period_end": "2026-06-30",
+            "objective_owner": "Administrator",
             "status": "Open", "pdca_phase": "PLAN"}).insert(ignore_permissions=True)
         self.obj_past = frappe.get_doc({
             "doctype": "Objective", "title": "Past Obj", "brand": TEST_BRAND,
@@ -105,10 +106,9 @@ class TestBrandOkrEndpoint(FrappeTestCase):
         self.assertIsInstance(summary["status_counts"], dict)
         self.assertEqual(summary["at_risk_count"], summary["status_counts"].get("At Risk", 0))
         current = next((p for p in res["periods"] if p.get("is_current")), None)
-        if current:
-            self.assertEqual(summary["active_period"]["period"], current["period"])
-        else:
-            self.assertIsNone(summary["active_period"])
+        self.assertIsNotNone(current, "seeded 2026-Q2 objective should be the current period")
+        self.assertEqual(summary["active_period"]["period"], current["period"])
+        self.assertEqual(summary["active_period"]["progress"], current["progress"])
 
         execution = res["execution"]
         for key in ("project_count", "active_sprint_count", "remaining_tasks",
