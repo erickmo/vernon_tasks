@@ -71,6 +71,8 @@ function render(page, brand_id, data) {
     page.main.empty().append(root);
     root.append(hero(data.brand));
     root.append(stat_bar(data.summary));
+    const snap = snapshot_card(data.summary);
+    if (snap) root.append(snap);
     if (data.execution && data.execution.project_count > 0) {
         root.append(execution_section(data.execution));
     }
@@ -91,6 +93,7 @@ function render(page, brand_id, data) {
         root.append('<div class="vh-section"><div class="vh-empty">Belum ada OKR untuk brand ini.</div></div>');
         return;
     }
+    root.append('<div class="vt-group-label">OKR per Periode</div>');
     data.periods.forEach((p) => root.append(period_section(page, brand_id, p, perms)));
 }
 
@@ -102,39 +105,61 @@ function render(page, brand_id, data) {
 function hero(brand) {
     const name = esc(brand.brand_name);
     const logo = brand.logo
-        ? `<img src="${esc(brand.logo)}" alt="${name}" style="width:56px;height:56px;border-radius:10px;object-fit:cover;">`
-        : `<span style="display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:10px;background:#6366f1;color:#fff;font-weight:700;font-size:22px;">${name.slice(0, 1).toUpperCase() || "?"}</span>`;
+        ? `<img class="vt-hero-logo" src="${esc(brand.logo)}" alt="${name}">`
+        : `<span class="vt-hero-logo vt-hero-logo--ph">${name.slice(0, 1).toUpperCase() || "?"}</span>`;
     const desc = (brand.description || "").trim();
-    return $(`<div class="vh-section" style="display:flex;align-items:center;gap:14px;">
+    return $(`<div class="vh-section vt-hero">
         ${logo}
-        <div>
-            <h2 style="margin:0;font-size:20px;">${name}</h2>
+        <div class="vt-hero-meta">
+            <h2 class="vt-hero-name">${name}</h2>
             ${desc ? `<div class="vh-item-meta">${esc(desc)}</div>` : ""}
         </div>
     </div>`);
 }
 
 /**
- * Summary stat bar: metric chips + active-period bar + status segment bar.
+ * Summary KPI strip: one mini stat-card per headline metric.
  * @param {object} s - get_brand_okr().summary.
  * @returns {jQuery}
  */
 function stat_bar(s) {
-    const chips = [
-        `<span class="vt-stat-chip"><b>${s.objective_count}</b> Objective</span>`,
-        `<span class="vt-stat-chip"><b>${s.kr_count}</b> KR</span>`,
-        `<span class="vt-stat-chip"><b>${pct(s.avg_progress)}%</b> rata-rata</span>`,
-        `<span class="vt-stat-chip vt-stat-chip--risk"><b>${s.at_risk_count}</b> At Risk</span>`,
+    const cards = [
+        kpi_card(s.objective_count, "Objective"),
+        kpi_card(s.kr_count, "Key Result"),
+        kpi_card(pct(s.avg_progress) + "%", "Rata-rata"),
+        kpi_card(s.at_risk_count, "At Risk", s.at_risk_count > 0 ? "vt-kpi--risk" : ""),
     ].join("");
+    return $(`<div class="vh-section vt-kpi-strip">${cards}</div>`);
+}
+
+/**
+ * One KPI mini-card (big serif number + uppercase label).
+ * @param {(number|string)} value
+ * @param {string} label
+ * @param {string} [mod] - optional modifier class (e.g. vt-kpi--risk).
+ * @returns {string} HTML.
+ */
+function kpi_card(value, label, mod) {
+    return `<div class="vh-card vt-kpi ${mod || ""}">
+        <span class="vt-kpi-num">${esc(String(value))}</span>
+        <span class="vt-kpi-lbl">${esc(label)}</span>
+    </div>`;
+}
+
+/**
+ * Snapshot card: active-period progress + status distribution bar + legend.
+ * @param {object} s - get_brand_okr().summary.
+ * @returns {?jQuery} null when there is nothing to show.
+ */
+function snapshot_card(s) {
     const ap = s.active_period
-        ? `<div class="vt-stat-active">Period aktif <b>${esc(s.active_period.period)}</b>: ${pct(s.active_period.progress)}%
+        ? `<div class="vt-stat-active">Period aktif <b>${esc(s.active_period.period)}</b> · ${pct(s.active_period.progress)}%
              <div class="vt-bar"><div class="vt-bar-fill" style="width:${pct(s.active_period.progress)}%;"></div></div></div>`
         : "";
-    return $(`<div class="vh-section vt-stat-bar">
-        <div class="vt-stat-chips">${chips}</div>
-        ${ap}
-        ${status_segments(s.status_counts)}
-    </div>`);
+    const seg = status_segments(s.status_counts);
+    if (!ap && !seg) return null;  // no active period and no objectives → skip card
+    const dist = seg ? `<div class="vt-seg-wrap">${seg}${status_legend(s.status_counts)}</div>` : "";
+    return $(`<div class="vh-section vt-snapshot">${ap}${dist}</div>`);
 }
 
 /**
@@ -150,6 +175,17 @@ function status_segments(counts) {
         return `<div title="${esc(k)}: ${counts[k]}" style="width:${width}%;background:${STATUS_COLORS[k]};"></div>`;
     }).join("");
     return `<div class="vt-status-seg">${segs}</div>`;
+}
+
+/**
+ * Color-dot legend for the status segment bar.
+ * @param {object} counts - {status: n}.
+ * @returns {string} HTML (empty when no objectives).
+ */
+function status_legend(counts) {
+    const items = STATUS_ORDER.filter((k) => counts[k]).map((k) =>
+        `<span class="vt-seg-leg"><i style="background:${STATUS_COLORS[k]};"></i>${esc(k)} ${counts[k]}</span>`).join("");
+    return items ? `<div class="vt-seg-legend">${items}</div>` : "";
 }
 
 /**
