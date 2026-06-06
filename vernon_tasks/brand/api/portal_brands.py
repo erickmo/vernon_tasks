@@ -78,6 +78,12 @@ def _zero_stats() -> dict:
     }
 
 
+def _zero_task_agg() -> dict:
+    """Empty task-rollup bucket — five counters that _progress_pct understands."""
+    return {"total_minutes": 0, "remaining_minutes": 0,
+            "remaining_tasks": 0, "total_tasks": 0, "done_tasks": 0}
+
+
 def _project_brand_map() -> dict[str, str]:
     """Map every brand-linked VT Project name -> its brand (orphans dropped)."""
     rows = frappe.get_all(
@@ -112,9 +118,7 @@ def _task_aggregates(proj_to_brand: dict[str, str]) -> dict[str, dict]:
         if not brand or status == CANCELLED_KANBAN_STATUS:
             continue
         minutes = int(t.get("estimated_minutes") or 0)
-        bucket = agg.setdefault(
-            brand, {"total_minutes": 0, "remaining_minutes": 0,
-                    "remaining_tasks": 0, "total_tasks": 0, "done_tasks": 0})
+        bucket = agg.setdefault(brand, _zero_task_agg())
         bucket["total_minutes"] += minutes
         bucket["total_tasks"] += 1
         if status == DONE_KANBAN_STATUS:
@@ -126,13 +130,20 @@ def _task_aggregates(proj_to_brand: dict[str, str]) -> dict[str, dict]:
 
 
 def _active_sprints(proj_to_brand: dict[str, str]) -> dict[str, dict]:
-    """Count active sprints per brand + the newest active sprint title."""
+    """Count active sprints per brand + the newest active sprint title.
+
+    Scoped to the given projects at the DB layer (mirrors _task_aggregates) so a
+    single-brand caller does not load every active sprint site-wide.
+    """
     out: dict[str, dict] = {}
+    if not proj_to_brand:
+        return out
     rows = frappe.get_all(
         SPRINT_DOCTYPE,
         fields=["project", "sprint_title"],
-        filters={"status": ACTIVE_SPRINT_STATUS},
+        filters={"status": ACTIVE_SPRINT_STATUS, "project": ["in", list(proj_to_brand)]},
         order_by="creation desc",  # deterministic "first" title across reloads
+        limit_page_length=0,
     )
     for s in rows:
         brand = proj_to_brand.get(s.get("project"))
@@ -186,6 +197,41 @@ def _brand_stats_map() -> dict[str, dict]:
         stats["active_sprint_count"] = info["count"]
         stats["active_sprint_title"] = info["title"]
     return out
+
+
+def brand_execution(brand_id: str) -> dict:
+    """Single-brand execution rollup: projects + active sprint + remaining work.
+
+    Reuses the SAME primitives as the brand-list cards (_task_aggregates /
+    _active_sprints / _progress_pct) so detail-page numbers cannot drift from the
+    list. Per-project progress is read from VT Project.percent_done (the project's
+    own computed field) — no task re-aggregation. Read-only; safe for the detail
+    page's single get_brand_okr call. spec: 2026-06-06-brand-detail-informative.
+    """
+    projects = frappe.get_all(
+        PROJECT_DOCTYPE,
+        fields=["name", "title", "percent_done"],
+        filters={"brand": brand_id},
+        order_by="title asc",
+        limit_page_length=0,
+    )
+    proj_to_brand = {p["name"]: brand_id for p in projects}
+    agg = _task_aggregates(proj_to_brand).get(brand_id) or _zero_task_agg()
+    sprint = _active_sprints(proj_to_brand).get(brand_id, {"count": 0, "title": None})
+    return {
+        "project_count": len(projects),
+        "active_sprint_count": sprint["count"],
+        "active_sprint_title": sprint["title"],
+        "remaining_tasks": agg["remaining_tasks"],
+        "remaining_minutes": agg["remaining_minutes"],
+        "total_minutes": agg["total_minutes"],
+        "progress_pct": _progress_pct(agg),
+        "projects": [
+            {"id": p["name"], "name": p.get("title") or p["name"],
+             "progress": round(p.get("percent_done") or 0)}
+            for p in projects
+        ],
+    }
 
 
 @frappe.whitelist()

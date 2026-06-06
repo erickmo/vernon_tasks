@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Brand Detail diperkaya (stats + execution + owner/confidence)</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Brand Detail diperkaya</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-06-06-brand-detail-informative-design.html</span>
+  </div>
+</header>
+
+<h1 id="brand-detail-informative">Brand Detail — lebih informatif</h1>
+<p><strong>Date:</strong> 2026-06-06
+<strong>Task size:</strong> M (extend 1 read endpoint, extract 1 reused helper, rewrite 1 page JS, add CSS, 2 test files, docs; ~6 files)
+<strong>App ownership:</strong> 100% <code>vernon_tasks</code> — no Frappe core files touched
+<strong>Base branch:</strong> <code>master</code>
+<strong>Builds on:</strong> docs/superpowers/specs/2026-06-04-brand-detail-okr-design.html</p>
+<hr />
+
+<h2 id="1-goal">1. Goal</h2>
+<p>The <code>vt-brand-detail</code> page today shows only the OKR surface: a brand hero (logo / name / description) and collapsible period sections listing Objectives and their Key Results. It answers "what objectives, what KRs" but gives no at-a-glance health, hides data it already loads (<code>confidence</code>, <code>objective_owner</code>), and never links the brand's strategy to its execution (projects / sprints / tasks).</p>
+<p>This change makes the page <strong>informative at a glance</strong> by adding four blocks inside the existing enriched-scroll layout:</p>
+<ol>
+  <li><strong>Summary stat bar</strong> — objective count, KR count, average progress, At Risk count, active-period progress, and a status-distribution segment bar.</li>
+  <li><strong>Execution section</strong> — the brand's projects + active sprint + remaining work + effort-weighted progress, reusing the exact rollup that powers the <code>/app/vt-brands</code> cards.</li>
+  <li><strong>Owner on objective cards</strong> — avatar + name (data already linked, just not rendered).</li>
+  <li><strong>Confidence on KR rows</strong> — confidence% chip (already in payload, just not rendered).</li>
+</ol>
+<p>Native Frappe infrastructure only: one whitelisted read endpoint, extended; no new page, no new doctype, no core files touched.</p>
+<hr />
+
+<h2 id="2-non-goals">2. Non-goals (YAGNI)</h2>
+<ul>
+  <li>No multi-period sparkline chart. Trend is expressed as a <code>progress %</code> per period header + the active-period bar — honest with available data, no chart library.</li>
+  <li>No new write paths. All create/edit dialogs stay exactly as they are.</li>
+  <li>No second HTTP round-trip. Everything ships in the existing single <code>get_brand_okr</code> call.</li>
+  <li>No per-project drill-down page. The execution list links to existing <code>vt-project-detail</code>.</li>
+</ul>
+<hr />
+
+<h2 id="3-architecture">3. Architecture</h2>
+
+<h3 id="31-read-api">3.1 Read API — extend <code>brand/api/brand_okr.py</code></h3>
+<p>Keep the single endpoint <code>get_brand_okr(brand_id)</code>. Add three things to its response, each delegated to a helper so the entrypoint stays under 40 lines.</p>
+
+<h4>3.1.1 <code>summary</code> — zero extra queries</h4>
+<p>Computed from the objectives + KRs already loaded in memory. No DB hit.</p>
+<pre><code class="language-json">"summary": {
+  "objective_count": 12,
+  "kr_count": 34,
+  "avg_progress": 68,
+  "status_counts": {"Open": 3, "On Track": 6, "At Risk": 2, "Closed": 1},
+  "at_risk_count": 2,
+  "active_period": {"period": "2026-Q2", "progress": 72}
+}</code></pre>
+<ul>
+  <li><code>avg_progress</code> = mean of per-objective aggregate progress (0 when no objectives).</li>
+  <li><code>status_counts</code> drives the segment bar; <code>at_risk_count</code> is a convenience mirror of the "At Risk" bucket.</li>
+  <li><code>active_period</code> = the period flagged <code>is_current</code> (null when none); <code>progress</code> = mean of that period's objective progress.</li>
+</ul>
+
+<h4>3.1.2 <code>execution</code> — reuse <code>portal_brands</code> rollup (no duplication)</h4>
+<p>The per-brand sprint/task/progress rollup already exists in <code>brand/api/portal_brands.py</code> (<code>_task_aggregates</code>, <code>_active_sprints</code>, <code>_progress_pct</code>) but is private and computes the map for <em>all</em> brands. Extract a single-brand public function there and call it from <code>brand_okr.py</code>:</p>
+<pre><code class="language-python"># portal_brands.py
+def brand_execution(brand_id: str) -&gt; dict:
+    """Single-brand sprint/task/progress rollup + project list.
+    Reuses the same _task_aggregates / _active_sprints / _progress_pct
+    primitives as the brand-list cards so the numbers cannot drift."""
+</code></pre>
+<p>Response block:</p>
+<pre><code class="language-json">"execution": {
+  "project_count": 4,
+  "active_sprint_count": 1,
+  "active_sprint_title": "W-23 Sprint",
+  "remaining_tasks": 18,
+  "remaining_minutes": 240,
+  "total_minutes": 600,
+  "progress_pct": 60,
+  "projects": [{"id": "PROJ-0001", "name": "Situs Baru", "progress": 60}]
+}</code></pre>
+<p>The same completion contract holds: <code>kanban_status</code>-based done detection, Cancelled work excluded from both numerator and denominator, effort-weighted progress with a task-count fallback when no estimates exist.</p>
+
+<h4>3.1.3 owner display + per-period progress</h4>
+<ul>
+  <li>Batch-fetch <code>User.full_name</code> + <code>user_image</code> for every distinct <code>objective_owner</code> in one <code>frappe.get_all</code> (avoids N+1). Attach <code>owner_name</code> + <code>owner_image</code> onto each objective (fall back to the raw owner id / initial when missing).</li>
+  <li>Add <code>progress</code> to each period dict = mean of its objectives' aggregate progress, for the period header label.</li>
+</ul>
+
+<h3 id="32-ui">3.2 UI — <code>task/page/vt_brand_detail/vt_brand_detail.js</code></h3>
+<p>Enriched-scroll layout. Order: hero → stat bar → execution section → period sections. New render functions, each focused and small:</p>
+<ul>
+  <li><code>stat_bar(summary)</code> — 4 metric chips <code>[Obj][KR][avg%][At Risk]</code> + an "Period aktif: NN%" progress line + a thin segmented status bar (On Track green / At Risk amber / Closed gray / Open slate). Renders nothing meaningful-but-empty when counts are zero.</li>
+  <li><code>execution_section(brand_id, execution)</code> — collapsible (mirrors <code>period_section</code> caret pattern). Shows active sprint title + count, remaining tasks/minutes, a progress bar, and the project list (each row links to <code>vt-project-detail</code>). Hidden entirely when <code>project_count === 0</code>.</li>
+  <li><code>objective_card</code> — add an owner chip (avatar img or initial circle + name) into the existing header row.</li>
+  <li><code>kr_row</code> — add a confidence chip <code>c:NN%</code> next to the progress %.</li>
+  <li><code>period_section</code> header — append the period <code>progress %</code> beside the objective count.</li>
+</ul>
+<p>All new strings are Bahasa Indonesia. All values run through the existing <code>esc()</code> / <code>pct()</code> helpers. No business logic in the page — it only renders the payload.</p>
+
+<h3 id="33-css">3.3 CSS — <code>public/js/vt_home.css</code> (or the page's stylesheet)</h3>
+<p>Move repeated inline styles into named classes to keep the JS readable: <code>.vt-stat-bar</code>, <code>.vt-stat-chip</code>, <code>.vt-stat-chip--risk</code>, <code>.vt-status-seg</code>, <code>.vt-owner-chip</code>, <code>.vt-kr-conf</code>, <code>.vt-exec</code>. No magic colors inline — define them once.</p>
+<hr />
+
+<h2 id="4-data-flow">4. Data flow</h2>
+<pre><code>vt_brand_detail.js  on_page_load
+  -&gt; frappe.call get_brand_okr(brand_id)        [ONE request]
+       brand_okr.get_brand_okr
+         _read_objectives / _read_key_results   (existing)
+         _summary(objectives, krs_by_obj)       (new, in-memory)
+         portal_brands.brand_execution(brand_id)(new, reused primitives)
+         _owner_map(objectives)                 (new, 1 query)
+  -&gt; render: hero, stat_bar, execution_section, period_sections</code></pre>
+<hr />
+
+<h2 id="5-testing">5. Testing</h2>
+<ul>
+  <li><code>brand/api/test_brand_okr.py</code> — assert new <code>summary</code> keys (counts, avg_progress, status_counts, at_risk_count, active_period), <code>execution</code> block presence + correct numbers against seeded projects/tasks/sprints, and owner_name/owner_image resolution (incl. missing-owner fallback). Tag each test with the PRD/ADR ref + this spec.</li>
+  <li><code>brand/api/test_portal_brands.py</code> — assert <code>brand_execution(brand_id)</code> matches the per-brand slice of the existing <code>_brand_stats_map()</code> (proves no drift) and returns the project list.</li>
+  <li><code>task/page/vt_brand_detail/test_vt_brand_detail.py</code> — keep existing page-doc smoke; no JS unit harness in this project.</li>
+  <li>Pre-existing test debt: <code>VT Project.brand</code> mandatory makes some task-module fixtures error on insert — out of scope, smoke new endpoints via <code>bench execute</code> if fixtures block.</li>
+</ul>
+<hr />
+
+<h2 id="6-files-touched">6. Files touched</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>brand/api/brand_okr.py</code></td><td>add <code>summary</code> + <code>execution</code> + owner/period-progress; new private helpers</td></tr>
+  <tr><td><code>brand/api/portal_brands.py</code></td><td>extract public <code>brand_execution(brand_id)</code> from existing private primitives</td></tr>
+  <tr><td><code>task/page/vt_brand_detail/vt_brand_detail.js</code></td><td>add <code>stat_bar</code> + <code>execution_section</code>; enrich objective_card / kr_row / period header</td></tr>
+  <tr><td>page stylesheet (<code>vt_home.css</code>)</td><td>new named classes for stat bar / chips / owner / confidence / execution</td></tr>
+  <tr><td><code>brand/api/test_brand_okr.py</code></td><td>extend: summary / execution / owner assertions</td></tr>
+  <tr><td><code>brand/api/test_portal_brands.py</code></td><td>extend: <code>brand_execution</code> no-drift + project list</td></tr>
+  <tr><td>docs/implementation-tracker + anatomy/memory</td><td>status + entry updates</td></tr>
+</table>
+<hr />
+
+<h2 id="7-risks">7. Risks &amp; mitigations</h2>
+<ul>
+  <li><strong>Number drift</strong> between brand-list cards and detail execution → mitigated by reusing the same primitives + a no-drift test asserting equality with <code>_brand_stats_map()</code>.</li>
+  <li><strong>Restart needed</strong>: extending an existing whitelisted method does not need a new registration, but gunicorn caches the module — restart <code>frappe-backend-1</code> after deploy (see memory: new whitelist method needs backend restart).</li>
+  <li><strong>Owner image missing</strong> → initial-circle fallback, same as the brand-logo fallback.</li>
+</ul>
+
+</div>
+</body>
+</html>
