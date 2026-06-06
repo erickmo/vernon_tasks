@@ -152,3 +152,39 @@ class TestPortalBrands(FrappeTestCase):
         portal_brands.create_brand({"brand_name": TEST_BRAND})
         rows = portal_brands.search_brands(query="TestBrandAPI")
         self.assertTrue(any(r["id"] == TEST_BRAND for r in rows))
+
+    def test_brand_execution_matches_stats_map_and_lists_projects(self):
+        # PRD-brand | spec: 2026-06-06-brand-detail-informative
+        # brand_execution(brand) must equal the per-brand slice of the list-endpoint
+        # rollup (proves the numbers cannot drift) and must list the brand's projects.
+        portal_brands.create_brand({"brand_name": TEST_BRAND})
+        proj = self._mk_project(TEST_BRAND)
+        self._mk_task(proj, "DO", 60)
+        self._mk_task(proj, "DO", 120)
+        self._mk_task(proj, "DONE", 60)
+        frappe.get_doc({
+            "doctype": "VT Sprint", "sprint_title": "S-exec", "project": proj,
+            "status": "Active", "start_date": "2026-05-01", "end_date": "2026-05-14",
+        }).insert(ignore_permissions=True)
+
+        exec_block = portal_brands.brand_execution(TEST_BRAND)
+        map_slice = portal_brands._brand_stats_map().get(TEST_BRAND, portal_brands._zero_stats())
+
+        self.assertEqual(exec_block["progress_pct"], map_slice["progress_pct"])
+        self.assertEqual(exec_block["remaining_tasks"], map_slice["remaining_tasks"])
+        self.assertEqual(exec_block["remaining_minutes"], map_slice["remaining_minutes"])
+        self.assertEqual(exec_block["total_minutes"], map_slice["total_minutes"])
+        self.assertEqual(exec_block["active_sprint_count"], map_slice["active_sprint_count"])
+        self.assertEqual(exec_block["active_sprint_title"], map_slice["active_sprint_title"])
+
+        self.assertGreaterEqual(exec_block["project_count"], 1)
+        self.assertTrue(all({"id", "name", "progress"} <= set(p) for p in exec_block["projects"]))
+
+    def test_brand_execution_empty_brand_is_zero(self):
+        # A brand with no projects returns zeros + empty project list, never errors.
+        empty = frappe.get_doc({"doctype": "VT Brand", "brand_name": "Empty Exec Brand"}).insert()
+        block = portal_brands.brand_execution(empty.name)
+        self.assertEqual(block["project_count"], 0)
+        self.assertEqual(block["progress_pct"], 0)
+        self.assertEqual(block["projects"], [])
+        frappe.delete_doc("VT Brand", empty.name, force=True, ignore_permissions=True)
