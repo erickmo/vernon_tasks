@@ -337,3 +337,40 @@ class TestObjectiveProgress(FrappeTestCase):
 		}).insert(ignore_permissions=True)
 		# (0.5 + 1.0) / 2 = 0.75 → 75.0
 		self.assertEqual(get_objective_progress(self.obj.name), 75.0)
+
+
+class TestObjectiveQuickEntryMeta(FrappeTestCase):
+	"""Guard the native quick-entry config the vt-brand-detail page relies on.
+
+	The brand page opens Objective creation via frappe.ui.form.make_quick_entry.
+	That dialog only renders when the doctype has quick_entry=1, and only shows
+	a field when it is reqd or has allow_in_quick_entry. These asserts pin the
+	contract so a future doctype edit cannot silently break the page's create flow.
+	"""
+
+	def test_doctype_quick_entry_enabled(self):
+		"""quick_entry=1 → make_quick_entry shows the dialog, not the full form."""
+		self.assertEqual(frappe.get_meta("Objective").quick_entry, 1)
+
+	def test_status_and_description_shown_in_quick_entry(self):
+		"""status + description surface via allow_in_quick_entry (they aren't reqd)."""
+		meta = frappe.get_meta("Objective")
+		self.assertTrue(meta.get_field("status").allow_in_quick_entry)
+		self.assertTrue(meta.get_field("description").allow_in_quick_entry)
+
+	def test_period_field_carries_format_hint(self):
+		"""period grammar hint moved from JS into the field description for the dialog."""
+		self.assertIn("YYYY-Qn", frappe.get_meta("Objective").get_field("period").description)
+
+	def test_minimal_quick_entry_payload_inserts_and_autofills(self):
+		"""Quick entry sends only title/brand/period/owner; controller fills the rest."""
+		_ensure_user()
+		_ensure_brand()
+		doc = frappe.get_doc({
+			"doctype": "Objective", "brand": TEST_BRAND,
+			"title": "QE Minimal", "period": "2026-Q3", "objective_owner": TEST_USER,
+		}).insert(ignore_permissions=True)
+		self.assertEqual(str(doc.period_start), "2026-07-01")
+		self.assertEqual(str(doc.period_end), "2026-09-30")
+		self.assertEqual(doc.pdca_phase, "PLAN")  # default, never shown in quick entry
+		doc.delete()

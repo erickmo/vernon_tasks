@@ -4,23 +4,24 @@
 (function () {
 /* vt_brand_detail.js — desk Page: per-brand OKR surface.
    Hero (brand logo/name/desc) + period sections (collapsible, newest first)
-   listing Objectives and their Key Results with progress. Inline create/edit of
-   Objective + Key Result via frappe.ui.Dialog — PDCA transitions and deletes stay
+   listing Objectives and their Key Results with progress. Objective create uses
+   Frappe native quick entry; Objective edit opens the native full form. Key Result
+   create/edit stays inline via frappe.ui.Dialog. PDCA transitions and deletes stay
    on the native form (state machine + cascade guards live in the controllers).
    Route shape: ["vt-brand-detail", <brand_id>].
-   APIs: vernon_tasks.brand.api.brand_okr.* + brand_okr_mutations.* */
+   APIs: vernon_tasks.brand.api.brand_okr.* + brand_okr_mutations.* (KR only) */
 
 const READ_API = "vernon_tasks.brand.api.brand_okr.get_brand_okr";
-const CREATE_OBJ_API = "vernon_tasks.brand.api.brand_okr_mutations.create_objective";
-const UPDATE_OBJ_API = "vernon_tasks.brand.api.brand_okr_mutations.update_objective";
-const GET_OBJ_API = "vernon_tasks.brand.api.brand_okr_mutations.get_objective";
 const CREATE_KR_API = "vernon_tasks.brand.api.brand_okr_mutations.create_key_result";
 const UPDATE_KR_API = "vernon_tasks.brand.api.brand_okr_mutations.update_key_result";
 const GET_KR_API = "vernon_tasks.brand.api.brand_okr_mutations.get_key_result";
 
 const BRAND_DOCTYPE = "VT Brand";
-const STATUS_OPTIONS = "Open\nOn Track\nAt Risk\nClosed";
-const PERIOD_HINT = "Format: YYYY, YYYY-Hn, YYYY-Qn, atau YYYY-MM";
+const OBJECTIVE_DOCTYPE = "Objective";
+// Objective create/edit run through native Frappe flows (quick entry / full form).
+// The brand-scoped create prefills + locks this field so the new Objective always
+// belongs to the brand whose page we're on.
+const BRAND_FIELD = "brand";
 const STATUS_COLORS = {
     "Open": "#6b7280", "On Track": "#16a34a", "At Risk": "#f59e0b", "Closed": "#374151",
 };
@@ -108,7 +109,7 @@ function render(page, brand_id, data) {
     };
     page.clear_primary_action();
     if (data.can_create_objective) {
-        page.set_primary_action(__("+ Objective"), () => objective_dialog(page, brand_id, null), "add");
+        page.set_primary_action(__("+ Objective"), () => objective_create(page, brand_id), "add");
     }
 
     // The page mirrors the domain flow: STRATEGI (OKR + KPI) and EKSEKUSI
@@ -432,7 +433,7 @@ function objective_card(page, brand_id, o, perms) {
         o.key_results.forEach((kr) => list.append(kr_row(page, brand_id, kr, perms)));
     }
     card.append(project_chips(o.projects));  // OKR↔Project bridge
-    card.find(".vt-obj-edit").on("click", () => objective_dialog(page, brand_id, o.id));
+    card.find(".vt-obj-edit").on("click", () => frappe.set_route("Form", OBJECTIVE_DOCTYPE, o.id));
     card.find(".vt-kr-add").on("click", () => kr_dialog(page, brand_id, o.id, null));
     return card;
 }
@@ -474,39 +475,31 @@ function kr_row(page, brand_id, kr, perms) {
 }
 
 /**
- * Create/edit Objective dialog. objective_id null => create.
- * On a server validation error frappe shows the message and the dialog stays
- * open (we only hide on success), so the user can correct and retry.
+ * Create an Objective via Frappe native quick entry, scoped to this brand.
+ *
+ * Quick entry surfaces the doctype's reqd + allow_in_quick_entry fields (title,
+ * brand, period, objective_owner, status, description) and saves through
+ * frappe.client.save, so the Objective controller validates exactly as on the
+ * full form — no app-specific create endpoint needed. brand is prefilled + locked
+ * read-only (page is brand-scoped); owner is prefilled to the current user.
+ * after_insert re-renders the page in place instead of redirecting to the new doc.
+ * Editing an Objective opens the native full form (see the .vt-obj-edit handler).
+ *
+ * @param {object} page - the desk Page (for re-render via load_page).
+ * @param {string} brand_id - VT Brand this Objective must belong to.
  */
-function objective_dialog(page, brand_id, objective_id) {
-    const dialog = new frappe.ui.Dialog({
-        title: objective_id ? __("Edit Objective") : __("Objective Baru"),
-        fields: [
-            { fieldname: "title", label: __("Judul"), fieldtype: "Data", reqd: 1 },
-            { fieldname: "period", label: __("Periode"), fieldtype: "Data", reqd: 1, description: PERIOD_HINT },
-            { fieldname: "objective_owner", label: __("Owner"), fieldtype: "Link", options: "User" },
-            { fieldname: "status", label: __("Status"), fieldtype: "Select", options: STATUS_OPTIONS },
-            { fieldname: "description", label: __("Deskripsi"), fieldtype: "Small Text" },
-        ],
-        primary_action_label: __("Simpan"),
-        primary_action(values) {
-            const method = objective_id ? UPDATE_OBJ_API : CREATE_OBJ_API;
-            const args = objective_id ? { objective_id, values } : { brand_id, values };
-            frappe.call({ method, args }).then((r) => {
-                if (!r || r.exc) return;  // server threw — keep dialog open
-                dialog.hide();
-                load_page(page, brand_id);
-            });
+function objective_create(page, brand_id) {
+    frappe.ui.form.make_quick_entry(
+        OBJECTIVE_DOCTYPE,
+        () => load_page(page, brand_id),  // after_insert: stay on page, re-render
+        (dialog) => {
+            // Lock brand to this page's brand — the value still reaches the insert
+            // because quick entry reads read-only fields via dialog.get_values(true).
+            dialog.set_value(BRAND_FIELD, brand_id);
+            dialog.set_df_property(BRAND_FIELD, "read_only", 1);
         },
-    });
-    if (objective_id) {
-        frappe.call({ method: GET_OBJ_API, args: { objective_id } }).then((r) => {
-            dialog.set_values(r.message || {});
-            dialog.show();
-        });
-    } else {
-        dialog.show();
-    }
+        { [BRAND_FIELD]: brand_id, objective_owner: frappe.session.user },
+    );
 }
 
 /**
