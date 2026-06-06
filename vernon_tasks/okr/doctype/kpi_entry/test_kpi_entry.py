@@ -5,11 +5,9 @@ Covers:
   - Validations (date <= today, value finite, dedupe per (kpi, date))
   - Project↔KPI brand coherence (entry.project.brand == kpi.brand)
 """
-import datetime
-
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import today
+from frappe.utils import add_days, today
 
 TEST_BRAND = "Test KPI Entry Brand"
 TEST_BRAND_ALT = "Test KPI Entry Brand Alt"
@@ -108,8 +106,13 @@ class TestKPIEntryValidations(FrappeTestCase):
 			}).insert(ignore_permissions=True)
 
 	def test_future_date_rejected(self):
-		"""KPI entries are observed history — future dates are nonsensical."""
-		tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+		"""KPI entries are observed history — future dates are nonsensical.
+
+		"Tomorrow" is computed in the SITE timezone (add_days(today(),1)); using
+		datetime.date.today() (UTC) would equal the site's today during the UTC
+		evening window and spuriously pass.
+		"""
+		tomorrow = add_days(today(), 1)
 		with self.assertRaises(frappe.ValidationError):
 			frappe.get_doc({
 				"doctype": "KPI Entry",

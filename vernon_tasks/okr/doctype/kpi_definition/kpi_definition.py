@@ -64,7 +64,25 @@ class KPIDefinition(Document):
 				f"Formula maksimal {KPI_FORMULA_MAX_LEN} karakter",
 				frappe.ValidationError,
 			)
+		self._validate_target_sign()
 		self._validate_brand_matches_objective()
+
+	def _validate_target_sign(self) -> None:
+		"""Reject a negative `target_value` unless `allow_negative=1`.
+
+		Mirrors the KPI Entry value-sign rule (kpi_entry.py): count/level KPIs
+		(revenue, headcount) cannot target a value below zero; delta-style KPIs
+		opt in via `allow_negative`. A blank/zero target means "tracked without
+		a target" and is always allowed.
+		"""
+		if self.target_value is None or self.target_value >= 0:
+			return
+		if not self.allow_negative:
+			frappe.throw(
+				"Target KPI tidak boleh negatif kecuali 'Allow Negative Values' "
+				"aktif (KPI delta).",
+				frappe.ValidationError,
+			)
 
 	def _validate_brand_matches_objective(self) -> None:
 		"""When `objective` is linked, brand must equal `objective.brand`.

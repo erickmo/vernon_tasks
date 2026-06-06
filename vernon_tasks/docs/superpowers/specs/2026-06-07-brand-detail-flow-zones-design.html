@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Brand Detail Strategi/Eksekusi zones (full flow)</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Brand Detail — Strategi / Eksekusi zones</h1>
+  <div class="sub">Vernon Tasks documentation</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-06-07-brand-detail-flow-zones-design.html</span>
+  </div>
+</header>
+
+<h1 id="brand-detail-strategi-eksekusi-zones-full-flow">Brand Detail — Strategi / Eksekusi zones (full flow)</h1>
+<p><strong>Date:</strong> 2026-06-07
+<strong>Task size:</strong> L (schema change: KPI Definition gains a field; + 1 read endpoint extended, 1 dead module deleted, 1 page JS rewritten, CSS, tests, docs; ~7 files)
+<strong>App ownership:</strong> 100% <code>vernon_tasks</code> — no Frappe core files touched
+<strong>Base branch:</strong> <code>master</code>
+<strong>Builds on:</strong> docs/superpowers/specs/2026-06-04-brand-detail-okr-design.html, docs/superpowers/specs/2026-06-06-brand-detail-informative-design.html</p>
+<hr />
+<h2 id="1-goal">1. Goal</h2>
+<p>Make <code>vt-brand-detail</code> express the verified domain flow end to end:</p>
+<pre><code>VT Brand ─┬─ [STRATEGI]  Objective ──&lt; Key Result        (OKR tree, mandatory)
+          │              KPI Definition ──&lt; KPI Entry     (KPI tree, mandatory)
+          └─ [EKSEKUSI]  VT Project ──&lt; VT Sprint ──&lt; VT Task
+</code></pre>
+<p>The two trees both hang off Brand by mandatory links; they are stitched by
+<strong>optional</strong> bridges (<code>VT Project.objective</code>, <code>KPI Entry.project</code>). The page
+today shows the OKR surface + an execution rollup but (a) renders <strong>no KPI</strong> at
+all, and (b) never shows the OKR↔Project bridge. This change reorganizes the
+page into two labeled zones and surfaces both the KPI tree and the bridges.</p>
+<p>Native Frappe infrastructure only: one whitelisted read endpoint extended, one
+doctype field added (app-owned doctype, not a Custom Field), no new page.</p>
+<hr />
+<h2 id="2-current-state">2. Current state</h2>
+<ul>
+<li>Page JS: <code>task/page/vt_brand_detail/vt_brand_detail.js</code> — hero, stat strip,
+  snapshot, collapsible execution section, OKR-per-period objective cards + KR rows.</li>
+<li>Read API: <code>brand/api/brand_okr.py::get_brand_okr</code> — returns <code>brand</code>, perms,
+  <code>summary</code>, <code>execution</code> (via <code>brand_execution</code>), <code>periods[].objectives[].key_results[]</code>.</li>
+<li><code>brand/api/brand_strategy.py::get_brand_strategy_tree</code> — already computes
+  Brand → Objective → {KRs, KPI Definitions, linked projects} + unlinked
+  projects, <strong>but is wired to nothing</strong> (orphaned; no JS/page/test references it).</li>
+<li>KPI Definition fields: <code>kpi_name, brand(reqd), frequency(reqd), allow_negative,
+  unit, objective(opt), formula</code>. <strong>No target field.</strong> KPI Entry: <code>kpi_definition
+  (reqd), date(reqd), value(reqd), project(opt), notes</code>.</li>
+</ul>
+<hr />
+<h2 id="3-data-model-change">3. Data model change</h2>
+<p>Add one field to the app-owned <strong>KPI Definition</strong> doctype
+(<code>okr/doctype/kpi_definition/kpi_definition.json</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Reqd</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>target_value</code></td>
+<td>Float</td>
+<td>0 (optional)</td>
+<td>Goal value for the metric. Optional so existing KPI Definitions keep working.</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Optional, not mandatory — existing rows have no target.</li>
+<li>Migration: <code>bench --site task.localhost migrate</code> (Frappe auto-adds the column).</li>
+<li>Not a fixture: KPI Definition is <strong>not</strong> in <code>hooks.py</code> fixtures, so no fixture
+  export step.</li>
+<li>Controller (<code>kpi_definition.py::validate</code>): when <code>target_value</code> is set and
+  <code>allow_negative</code> is 0, reject a negative target (mirror the existing positivity
+  intent). One inline guard, no new method.</li>
+</ul>
+<p>KPI progress = <code>clamp(latest_value / target_value * 100, 0, 100)</code> when
+<code>target_value &gt; 0</code>; when target is unset, progress is <code>None</code> and the row renders
+value-only (no bar). <code>allow_negative</code> KPIs with a target still clamp display to
+[0,100] for the bar; the raw value is always shown alongside.</p>
+<hr />
+<h2 id="4-api-change-brand_okrpy">4. API change — <code>brand_okr.py</code></h2>
+<p><code>get_brand_okr</code> gains two payload blocks and one execution-field addition.
+All additions are batched to preserve the single-round-trip, no-N+1 contract.</p>
+<h3 id="41-bridge-projects-per-objective">4.1 Bridge — projects per objective</h3>
+<p>New <code>_read_objective_projects(objective_ids)</code> → one <code>frappe.get_all("VT Project",
+filters={objective: ["in", ids]}, fields=[name, title, status, percent_done,
+objective])</code>, grouped by objective. Each objective in <code>periods[].objectives[]</code>
+gains:</p>
+<pre><code>&quot;projects&quot;: [{&quot;id&quot;, &quot;title&quot;, &quot;progress&quot; (round percent_done), &quot;status&quot;}]
+</code></pre>
+<h3 id="42-kpi-tree-brand-level-kpi-block">4.2 KPI tree — brand-level KPI block</h3>
+<p>New <code>_read_brand_kpis(brand_id)</code>:
+1. <code>frappe.get_all("KPI Definition", filters={brand}, fields=[name, kpi_name,
+   unit, frequency, objective, target_value, allow_negative])</code>.
+2. <code>frappe.get_all("KPI Entry", filters={kpi_definition: ["in", def_ids]},
+   fields=[kpi_definition, date, value], order_by="date desc")</code> — take the
+   latest two entries per definition (latest + previous) in Python.
+3. Emit <code>kpis: [{id, kpi_name, unit, frequency, objective, objective_title,
+   target_value, latest_value, latest_date, prev_value, progress_percent, trend}]</code>
+   where <code>trend ∈ {up, down, flat, none}</code> from <code>latest vs prev</code>, and
+   <code>progress_percent</code> per §3.</p>
+<p>Returned at top level: <code>"kpis": [...]</code>. Added to <code>summary</code>: <code>kpi_count</code>.</p>
+<h3 id="43-execution-bridge">4.3 Execution bridge</h3>
+<p><code>portal_brands.py::brand_execution</code> projects gain <code>objective</code> + <code>objective_title</code>
+(one extra <code>get_all</code> field + a batched Objective-title lookup), so EKSEKUSI rows
+can show which objective each project serves.</p>
+<h3 id="44-permissions">4.4 Permissions</h3>
+<p>Add <code>can_read_kpi = has_permission("KPI Definition", "read")</code>. KPI block hidden
+when false. No KPI mutation in this change (KPIs are managed on their native
+forms) — read-only surface.</p>
+<h3 id="45-cleanup">4.5 Cleanup</h3>
+<p>Delete <code>brand/api/brand_strategy.py</code> (orphaned; no test file exists). Its query
+patterns (objective→projects, objective→kpi_defs) are reused inside <code>brand_okr.py</code>
+helpers above — one source of truth.</p>
+<hr />
+<h2 id="5-render-change-vt_brand_detailjs">5. Render change — <code>vt_brand_detail.js</code></h2>
+<p>Rewrite <code>render()</code> to lay out two labeled zones; keep hero, stat strip
+(+ KPI count), snapshot above the zones.</p>
+<pre><code>hero
+stat strip  (Objective · KR · KPI · Rata-rata · At Risk)
+snapshot    (active period bar + status segments)
+═ STRATEGI ═
+  OKR per Periode
+    objective_card  → KR rows  +  &quot;↳ Proyek tertaut: [chip][chip]&quot;
+  KPI
+    kpi_row (name · value/target bar OR value-only · trend · frequency · objective chip)
+═ EKSEKUSI ═
+  execution_section (active sprint · remaining work · progress)
+    project_row  +  objective chip   → click opens vt-project-detail
+</code></pre>
+<ul>
+<li><strong>Zone divider</strong>: a labeled <code>.vt-zone</code> heading element between blocks.</li>
+<li><strong>Project chip</strong> (STRATEGI, under objective): <code>title · progress%</code>, click →
+  <code>frappe.set_route("vt-project-detail", id)</code>. Empty → "belum ada proyek tertaut".</li>
+<li><strong>KPI row</strong>: progress bar vs target when <code>target_value</code> set, else latest value +
+  trend arrow only; frequency badge; objective chip (or "Umum" when objective null).
+  Empty KPI list → "belum ada KPI untuk brand ini".</li>
+<li><strong>EKSEKUSI project objective chip</strong>: shows <code>objective_title</code> or "tanpa objective".</li>
+<li>Exec depth: <strong>summary only</strong> — Sprint→Task drill stays on <code>vt-project-detail</code>.</li>
+<li>Reuse existing <code>esc</code> / <code>pct</code> helpers and the <code>on_page_show</code> route-rerender
+  lifecycle already in place.</li>
+</ul>
+<hr />
+<h2 id="6-css-publiccssvt_homecss">6. CSS — <code>public/css/vt_home.css</code></h2>
+<p>New classes (scoped under <code>.vt-detail</code>): <code>.vt-zone</code> (zone divider/heading),
+<code>.vt-kpi-row</code> + <code>.vt-kpi-bar</code>, <code>.vt-proj-chip</code>, <code>.vt-obj-chip</code>, <code>.vt-trend</code>
+(up/down/flat color variants). No global styles; follow existing <code>.vh-*</code> /
+<code>.vt-*</code> token patterns already in the file.</p>
+<hr />
+<h2 id="7-tests">7. Tests</h2>
+<ul>
+<li><code>okr/doctype/kpi_definition/test_kpi_definition.py</code> — add: target_value accepted;
+  negative target rejected when <code>allow_negative=0</code>; accepted when <code>allow_negative=1</code>.</li>
+<li><code>brand/api/test_brand_okr.py</code> — add: payload includes <code>kpis</code> with
+  latest/prev/trend/progress; objective payload includes <code>projects</code> bridge;
+  execution projects include <code>objective_title</code>; KPI block hidden without read perm;
+  brand with no KPI → empty list (no error).</li>
+<li>Tag each test with <code># PRD/spec: 2026-06-07-brand-detail-flow-zones</code>.</li>
+<li>Fixtures for KPI Definition + KPI Entry + linked VT Project under
+  <code>tests/testdata/brand/</code> if not already present.</li>
+<li>Smoke: <code>bench --site task.localhost execute
+  vernon_tasks.brand.api.brand_okr.get_brand_okr --kwargs "{'brand_id': 'Default'}"</code>.</li>
+</ul>
+<hr />
+<h2 id="8-docs-tracker">8. Docs / tracker</h2>
+<ul>
+<li>Update <code>docs/domains/brand/README.html</code> (or create) Cross-Domain Events +
+  fields if KPI target is documented there.</li>
+<li>Update <code>docs/implementation-tracker.md</code> row + Summary table.</li>
+<li>Update <code>.wolf/anatomy.md</code> (brand_strategy.py removed; brand_okr.py + page JS
+  behavior changed) and <code>.wolf/cerebrum.md</code> (KPI now has target; two-zone layout).</li>
+</ul>
+<hr />
+<h2 id="9-risks-mitigations">9. Risks &amp; mitigations</h2>
+<ul>
+<li><strong>Backend restart</strong>: extending an existing whitelisted method needs no new
+  registration, but gunicorn caches the module — restart <code>frappe-backend-1</code>
+  after deploy (memory: new whitelist method needs backend restart). The new
+  doctype field needs <code>bench migrate</code> + a restart.</li>
+<li><strong>N+1</strong>: all new reads are batched <code>["in", ids]</code> queries — assert query count
+  stays flat in the API test.</li>
+<li><strong>Existing KPI rows without target</strong>: render value-only; no crash, no fake 0%
+  bar — <code>progress_percent is None</code> path tested.</li>
+<li><strong>Deleting brand_strategy.py</strong>: confirmed orphaned (no JS/page/test reference);
+  grep before delete in the plan.</li>
+<li><strong>allow_negative KPIs</strong>: bar clamps to [0,100] but raw value always shown, so a
+  negative-trending KPI is not misread as 0.</li>
+</ul>
+
+</div>
+</body>
+</html>

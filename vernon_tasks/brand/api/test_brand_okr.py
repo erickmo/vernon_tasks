@@ -2,12 +2,13 @@ import datetime
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import today
+from frappe.utils import add_days, today
 
 from vernon_tasks.brand.api import brand_okr
 
 TEST_BRAND = "TestBrandOKR-Z"
 EMPTY_BRAND = "TestBrandOKR-Empty"
+FLOW_BRAND = "TestBrandFlow-Z"
 
 
 def _current_quarter_label() -> str:
@@ -145,3 +146,127 @@ class TestBrandOkrEndpoint(FrappeTestCase):
         periods = brand_okr._group_by_period(objectives, krs)
         self.assertIn("progress", periods[0])
         self.assertEqual(periods[0]["progress"], periods[0]["objectives"][0]["progress"])
+
+
+class TestKpiHelpers(FrappeTestCase):
+    """Pure-function tests for KPI progress + trend (no DB).
+
+    spec: 2026-06-07-brand-detail-flow-zones
+    """
+
+    def test_kpi_progress_none_when_target_not_positive(self):
+        # Float defaults to 0 (never None) for untouched rows -> target>0 is the
+        # only safe "has target" discriminator.
+        self.assertIsNone(brand_okr._kpi_progress(50, 0))
+        self.assertIsNone(brand_okr._kpi_progress(50, None))
+        self.assertIsNone(brand_okr._kpi_progress(50, -5))
+
+    def test_kpi_progress_ratio_unclamped(self):
+        self.assertEqual(brand_okr._kpi_progress(50, 100), 50.0)
+        # over-performance is meaningful for a single KPI -> not clamped at 100
+        self.assertEqual(brand_okr._kpi_progress(150, 100), 150.0)
+
+    def test_kpi_progress_handles_none_value(self):
+        self.assertEqual(brand_okr._kpi_progress(None, 100), 0.0)
+
+    def test_kpi_trend(self):
+        self.assertEqual(brand_okr._kpi_trend(10, 5), "up")
+        self.assertEqual(brand_okr._kpi_trend(5, 10), "down")
+        self.assertEqual(brand_okr._kpi_trend(5, 5), "flat")
+        self.assertEqual(brand_okr._kpi_trend(5, None), "none")
+        self.assertEqual(brand_okr._kpi_trend(None, None), "none")
+
+
+class TestBrandOkrProjectsBridge(FrappeTestCase):
+    """_group_by_period attaches linked projects per objective (the OKR↔Project bridge)."""
+
+    def _obj(self):
+        return [{"name": "O1", "title": "A", "status": "Open", "pdca_phase": "PLAN",
+                 "objective_owner": None, "period": "2026-Q1",
+                 "period_start": "2026-01-01", "period_end": "2026-03-31"}]
+
+    def test_projects_attached_from_map(self):
+        projects = {"O1": [{"id": "P1", "title": "Proj", "progress": 30, "status": "Open"}]}
+        periods = brand_okr._group_by_period(self._obj(), {}, projects)
+        self.assertEqual(periods[0]["objectives"][0]["projects"], projects["O1"])
+
+    def test_objective_without_projects_has_empty_list(self):
+        periods = brand_okr._group_by_period(self._obj(), {}, None)
+        self.assertEqual(periods[0]["objectives"][0]["projects"], [])
+
+
+class TestBrandOkrFlowZones(FrappeTestCase):
+    """End-to-end: KPI block + project bridge + execution objective_title.
+
+    spec: 2026-06-07-brand-detail-flow-zones
+    """
+
+    def setUp(self):
+        frappe.set_user("Administrator")
+        self._cleanup()
+        frappe.get_doc({"doctype": "VT Brand", "brand_name": FLOW_BRAND}).insert(
+            ignore_permissions=True)
+        self.obj = frappe.get_doc({
+            "doctype": "Objective", "title": "Flow Obj", "brand": FLOW_BRAND,
+            "period": "2026-Q2", "objective_owner": "Administrator",
+            "status": "Open", "pdca_phase": "PLAN"}).insert(ignore_permissions=True)
+        self.project = frappe.get_doc({
+            "doctype": "VT Project", "title": "Flow Project", "brand": FLOW_BRAND,
+            "project_owner": "Administrator", "objective": self.obj.name,
+            "start_date": today(), "end_date": add_days(today(), 7)}).insert(ignore_permissions=True)
+        self.kpi = frappe.get_doc({
+            "doctype": "KPI Definition", "kpi_name": "Flow KPI Z", "brand": FLOW_BRAND,
+            "frequency": "Daily", "unit": "%", "target_value": 100,
+            "objective": self.obj.name}).insert(ignore_permissions=True)
+        frappe.get_doc({"doctype": "KPI Entry", "kpi_definition": self.kpi.name,
+            "date": add_days(today(), -1), "value": 40}).insert(ignore_permissions=True)
+        frappe.get_doc({"doctype": "KPI Entry", "kpi_definition": self.kpi.name,
+            "date": today(), "value": 60}).insert(ignore_permissions=True)
+
+    def tearDown(self):
+        self._cleanup()
+
+    def _cleanup(self):
+        for d in frappe.get_all("KPI Definition", filters={"brand": FLOW_BRAND}, pluck="name"):
+            for e in frappe.get_all("KPI Entry", filters={"kpi_definition": d}, pluck="name"):
+                frappe.delete_doc("KPI Entry", e, force=True, ignore_permissions=True)
+            frappe.delete_doc("KPI Definition", d, force=True, ignore_permissions=True)
+        for p in frappe.get_all("VT Project", filters={"brand": FLOW_BRAND}, pluck="name"):
+            frappe.delete_doc("VT Project", p, force=True, ignore_permissions=True)
+        for o in frappe.get_all("Objective", filters={"brand": FLOW_BRAND}, pluck="name"):
+            frappe.delete_doc("Objective", o, force=True, ignore_permissions=True)
+        if frappe.db.exists("VT Brand", FLOW_BRAND):
+            frappe.delete_doc("VT Brand", FLOW_BRAND, force=True, ignore_permissions=True)
+
+    def test_kpis_block_shape(self):
+        res = brand_okr.get_brand_okr(FLOW_BRAND)
+        self.assertEqual(res["summary"]["kpi_count"], 1)
+        kpi = res["kpis"][0]
+        self.assertEqual(kpi["title"], "Flow KPI Z")
+        self.assertEqual(kpi["target"], 100.0)
+        self.assertEqual(kpi["value"], 60.0)
+        self.assertEqual(kpi["prev_value"], 40.0)
+        self.assertEqual(kpi["progress"], 60.0)
+        self.assertEqual(kpi["trend"], "up")
+        self.assertEqual(kpi["objective_title"], "Flow Obj")
+
+    def test_project_bridge_on_objective(self):
+        res = brand_okr.get_brand_okr(FLOW_BRAND)
+        obj = res["periods"][0]["objectives"][0]
+        self.assertEqual(len(obj["projects"]), 1)
+        self.assertEqual(obj["projects"][0]["id"], self.project.name)
+
+    def test_execution_projects_have_objective_title(self):
+        res = brand_okr.get_brand_okr(FLOW_BRAND)
+        proj = next(p for p in res["execution"]["projects"] if p["id"] == self.project.name)
+        self.assertEqual(proj["objective_title"], "Flow Obj")
+
+    def test_kpi_without_target_has_none_progress(self):
+        k2 = frappe.get_doc({"doctype": "KPI Definition", "kpi_name": "Flow KPI NoTarget",
+            "brand": FLOW_BRAND, "frequency": "Daily"}).insert(ignore_permissions=True)
+        frappe.get_doc({"doctype": "KPI Entry", "kpi_definition": k2.name,
+            "date": today(), "value": 5}).insert(ignore_permissions=True)
+        res = brand_okr.get_brand_okr(FLOW_BRAND)
+        nt = next(k for k in res["kpis"] if k["title"] == "Flow KPI NoTarget")
+        self.assertIsNone(nt["progress"])
+        self.assertEqual(nt["value"], 5.0)

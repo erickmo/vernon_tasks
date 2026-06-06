@@ -210,7 +210,9 @@ def brand_execution(brand_id: str) -> dict:
     """
     projects = frappe.get_all(
         PROJECT_DOCTYPE,
-        fields=["name", "title", "percent_done"],
+        # `objective` carries the Project→OKR link so the detail page can show an
+        # objective chip per project; title resolution is done by the caller.
+        fields=["name", "title", "percent_done", "objective"],
         filters={"brand": brand_id},
         order_by="title asc",
         limit_page_length=0,
@@ -228,7 +230,8 @@ def brand_execution(brand_id: str) -> dict:
         "progress_pct": _progress_pct(agg),
         "projects": [
             {"id": p["name"], "name": p.get("title") or p["name"],
-             "progress": round(p.get("percent_done") or 0)}
+             "progress": round(p.get("percent_done") or 0),
+             "objective": p.get("objective")}
             for p in projects
         ],
     }
