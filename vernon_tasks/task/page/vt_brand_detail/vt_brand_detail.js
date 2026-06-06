@@ -24,6 +24,8 @@ const PERIOD_HINT = "Format: YYYY, YYYY-Hn, YYYY-Qn, atau YYYY-MM";
 const STATUS_COLORS = {
     "Open": "#6b7280", "On Track": "#16a34a", "At Risk": "#f59e0b", "Closed": "#374151",
 };
+// Status segment bar — render order + color, reusing STATUS_COLORS values.
+const STATUS_ORDER = ["On Track", "At Risk", "Open", "Closed"];
 
 const esc = (s) => frappe.utils.escape_html(s == null ? "" : String(s));
 const pct = (n) => Math.min(Math.max(Number(n) || 0, 0), 100);
@@ -68,6 +70,10 @@ function render(page, brand_id, data) {
     const root = $('<div class="vt-home vt-detail"></div>');
     page.main.empty().append(root);
     root.append(hero(data.brand));
+    root.append(stat_bar(data.summary));
+    if (data.execution && data.execution.project_count > 0) {
+        root.append(execution_section(data.execution));
+    }
 
     // Per-doctype affordance gating (Objective and Key Result are separate perms).
     const perms = {
@@ -109,6 +115,82 @@ function hero(brand) {
 }
 
 /**
+ * Summary stat bar: metric chips + active-period bar + status segment bar.
+ * @param {object} s - get_brand_okr().summary.
+ * @returns {jQuery}
+ */
+function stat_bar(s) {
+    const chips = [
+        `<span class="vt-stat-chip"><b>${s.objective_count}</b> Objective</span>`,
+        `<span class="vt-stat-chip"><b>${s.kr_count}</b> KR</span>`,
+        `<span class="vt-stat-chip"><b>${pct(s.avg_progress)}%</b> rata-rata</span>`,
+        `<span class="vt-stat-chip vt-stat-chip--risk"><b>${s.at_risk_count}</b> At Risk</span>`,
+    ].join("");
+    const ap = s.active_period
+        ? `<div class="vt-stat-active">Period aktif <b>${esc(s.active_period.period)}</b>: ${pct(s.active_period.progress)}%
+             <div class="vt-bar"><div class="vt-bar-fill" style="width:${pct(s.active_period.progress)}%;"></div></div></div>`
+        : "";
+    return $(`<div class="vh-section vt-stat-bar">
+        <div class="vt-stat-chips">${chips}</div>
+        ${ap}
+        ${status_segments(s.status_counts)}
+    </div>`);
+}
+
+/**
+ * Thin segmented bar showing objective status distribution.
+ * @param {object} counts - {status: n}.
+ * @returns {string} HTML (empty when no objectives).
+ */
+function status_segments(counts) {
+    const total = STATUS_ORDER.reduce((acc, k) => acc + (counts[k] || 0), 0);
+    if (!total) return "";
+    const segs = STATUS_ORDER.filter((k) => counts[k]).map((k) => {
+        const width = (counts[k] / total) * 100;
+        return `<div title="${esc(k)}: ${counts[k]}" style="width:${width}%;background:${STATUS_COLORS[k]};"></div>`;
+    }).join("");
+    return `<div class="vt-status-seg">${segs}</div>`;
+}
+
+/**
+ * Collapsible execution section: active sprint + remaining work + project list.
+ * @param {object} e - get_brand_okr().execution.
+ * @returns {jQuery}
+ */
+function execution_section(e) {
+    const sprint = e.active_sprint_title
+        ? `Sprint aktif: <b>${esc(e.active_sprint_title)}</b>${e.active_sprint_count > 1 ? ` (+${e.active_sprint_count - 1})` : ""}`
+        : "Tidak ada sprint aktif";
+    const projects = e.projects.map((p) =>
+        `<div class="vt-exec-proj" data-id="${esc(p.id)}">
+            <span>${esc(p.name)}</span>
+            <span class="vh-item-meta">${pct(p.progress)}%</span>
+        </div>`).join("");
+    const section = $(`<div class="vh-section vt-period vt-exec">
+        <div class="vt-period-head" style="cursor:pointer;">
+            <span class="vt-caret">▼</span>
+            <strong>Eksekusi</strong>
+            <span class="vh-item-meta">${e.project_count} proyek</span>
+        </div>
+        <div class="vt-period-body" style="margin-top:10px;">
+            <div class="vt-exec-meta">${sprint} · Sisa: ${e.remaining_tasks} tugas / ${e.remaining_minutes}m · Progress ${pct(e.progress_pct)}%</div>
+            <div class="vt-bar"><div class="vt-bar-fill vt-bar-fill--exec" style="width:${pct(e.progress_pct)}%;"></div></div>
+            <div class="vt-exec-list">${projects}</div>
+        </div>
+    </div>`);
+    const body = section.find(".vt-period-body");
+    section.find(".vt-period-head").on("click", () => {
+        const visible = body.is(":visible");
+        body.toggle();
+        section.find(".vt-caret").text(visible ? "▶" : "▼");
+    });
+    section.find(".vt-exec-proj").on("click", function () {
+        frappe.set_route("vt-project-detail", $(this).data("id"));
+    });
+    return section;
+}
+
+/**
  * One collapsible period section. Auto-expanded when is_current.
  * @returns {jQuery}
  */
@@ -118,7 +200,7 @@ function period_section(page, brand_id, p, perms) {
         <div class="vt-period-head" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <span class="vt-caret">${open ? "▼" : "▶"}</span>
             <strong>${esc(p.period)}</strong>
-            <span class="vh-item-meta">${p.objectives.length} objective</span>
+            <span class="vh-item-meta">${p.objectives.length} objective · ${pct(p.progress)}%</span>
             ${p.is_current ? '<span style="font-size:11px;padding:1px 6px;border-radius:8px;background:#dbeafe;color:#1d4ed8;">aktif</span>' : ""}
         </div>
         <div class="vt-period-body" style="${open ? "" : "display:none;"}margin-top:10px;"></div>
@@ -149,6 +231,7 @@ function objective_card(page, brand_id, o, perms) {
             <span style="font-size:11px;padding:1px 6px;border-radius:8px;background:${color}1a;color:${color};">${esc(o.status || "")}</span>
             <span class="vh-item-meta">PDCA: ${esc(o.pdca_phase || "")}</span>
             <span class="vh-item-meta">${o.progress}%</span>
+            ${owner_chip(o)}
             <span style="margin-left:auto;display:flex;gap:6px;">${obj_edit}${kr_add}</span>
         </div>
         <div style="height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-bottom:8px;">
@@ -168,6 +251,20 @@ function objective_card(page, brand_id, o, perms) {
 }
 
 /**
+ * Owner chip: avatar (image or initial circle) + name. Empty when no owner.
+ * @param {object} o - objective with owner_name / owner_image.
+ * @returns {string} HTML.
+ */
+function owner_chip(o) {
+    if (!o.owner_name) return "";
+    const name = esc(o.owner_name);
+    const avatar = o.owner_image
+        ? `<img src="${esc(o.owner_image)}" alt="${name}">`
+        : `<span class="vt-owner-initial">${name.slice(0, 1).toUpperCase()}</span>`;
+    return `<span class="vt-owner-chip">${avatar}${name}</span>`;
+}
+
+/**
  * Single Key Result row: metric, current/target, progress bar.
  * @returns {jQuery}
  */
@@ -182,6 +279,7 @@ function kr_row(page, brand_id, kr, perms) {
             <div style="height:100%;width:${pct(kr.progress_percent)}%;background:#16a34a;"></div>
         </div>
         <span class="vh-item-meta">${kr.progress_percent}%</span>
+        ${kr.confidence ? `<span class="vt-kr-conf" title="Confidence">c:${pct(kr.confidence)}%</span>` : ""}
         ${edit}
     </div>`);
     row.find(".vt-kr-edit").on("click", () => kr_dialog(page, brand_id, null, kr.id));
