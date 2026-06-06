@@ -11,11 +11,9 @@ date. Entries are append-only history; validations here protect against:
 
 Source of truth: docs/domains/okr/README.html.
 """
-from datetime import date as _date
-
 import frappe
 from frappe.model.document import Document
-from frappe.utils import getdate
+from frappe.utils import getdate, today
 
 
 class KPIEntry(Document):
@@ -52,13 +50,15 @@ class KPIEntry(Document):
 	def _validate_date_not_future(self) -> None:
 		"""Reject dates after today — entries are observed history.
 
-		`frappe.utils.getdate` normalizes strings + datetime → date so the
-		comparison is timezone-stable.
+		Both sides use `frappe.utils` (`getdate` + `today`) so the comparison is
+		in the SITE timezone. Comparing against `datetime.date.today()` (UTC)
+		instead wrongly rejected same-site-day entries during the UTC evening
+		window (site ahead of UTC) — e.g. Asia/Jakarta after 17:00 UTC.
 		"""
 		if not self.date:
 			return
 		entry_date = getdate(self.date)
-		if entry_date > _date.today():
+		if entry_date > getdate(today()):
 			frappe.throw(
 				"Tanggal entry tidak boleh di masa depan",
 				frappe.ValidationError,
