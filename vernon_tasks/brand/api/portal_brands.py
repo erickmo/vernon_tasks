@@ -130,12 +130,18 @@ def _task_aggregates(proj_to_brand: dict[str, str]) -> dict[str, dict]:
 
 
 def _active_sprints(proj_to_brand: dict[str, str]) -> dict[str, dict]:
-    """Count active sprints per brand + the newest active sprint title."""
+    """Count active sprints per brand + the newest active sprint title.
+
+    Scoped to the given projects at the DB layer (mirrors _task_aggregates) so a
+    single-brand caller does not load every active sprint site-wide.
+    """
     out: dict[str, dict] = {}
+    if not proj_to_brand:
+        return out
     rows = frappe.get_all(
         SPRINT_DOCTYPE,
         fields=["project", "sprint_title"],
-        filters={"status": ACTIVE_SPRINT_STATUS},
+        filters={"status": ACTIVE_SPRINT_STATUS, "project": ["in", list(proj_to_brand)]},
         order_by="creation desc",  # deterministic "first" title across reloads
     )
     for s in rows:

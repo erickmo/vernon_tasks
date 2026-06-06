@@ -5,13 +5,14 @@ from vernon_tasks.brand.api import portal_brands
 
 TEST_BRAND = "TestBrandAPI-X"
 TEST_BRAND_2 = "TestBrandAPI-Y"
+TEST_BRAND_EMPTY = "TestBrandAPI-Empty"
 
 
 class TestPortalBrands(FrappeTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        for n in (TEST_BRAND, TEST_BRAND_2):
+        for n in (TEST_BRAND, TEST_BRAND_2, TEST_BRAND_EMPTY):
             if frappe.db.exists("VT Brand", n):
                 frappe.delete_doc("VT Brand", n, force=True, ignore_permissions=True)
 
@@ -21,7 +22,7 @@ class TestPortalBrands(FrappeTestCase):
     def tearDown(self):
         # Brands can't be deleted while linked; tear down dependents first
         # (sprints + tasks before their project, then the brand).
-        for n in (TEST_BRAND, TEST_BRAND_2):
+        for n in (TEST_BRAND, TEST_BRAND_2, TEST_BRAND_EMPTY):
             for p in frappe.get_all("VT Project", filters={"brand": n}, pluck="name"):
                 for s in frappe.get_all("VT Sprint", filters={"project": p}, pluck="name"):
                     frappe.delete_doc("VT Sprint", s, force=True, ignore_permissions=True)
@@ -182,9 +183,8 @@ class TestPortalBrands(FrappeTestCase):
 
     def test_brand_execution_empty_brand_is_zero(self):
         # A brand with no projects returns zeros + empty project list, never errors.
-        empty = frappe.get_doc({"doctype": "VT Brand", "brand_name": "Empty Exec Brand"}).insert()
-        block = portal_brands.brand_execution(empty.name)
+        portal_brands.create_brand({"brand_name": TEST_BRAND_EMPTY})
+        block = portal_brands.brand_execution(TEST_BRAND_EMPTY)
         self.assertEqual(block["project_count"], 0)
         self.assertEqual(block["progress_pct"], 0)
         self.assertEqual(block["projects"], [])
-        frappe.delete_doc("VT Brand", empty.name, force=True, ignore_permissions=True)
