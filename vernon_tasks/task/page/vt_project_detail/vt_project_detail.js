@@ -71,17 +71,36 @@ function require_lib(assets) {
     return _lib_cache[key];
 }
 
+// Stashed on the page object so on_page_show can detect a project change.
+const CURRENT_PROJECT_KEY = "__vt_project_id";
+
+// Desk Page lifecycle: on_page_load fires ONCE (page DOM created); on_page_show
+// fires on EVERY navigation, including route-arg changes (.../A -> .../B) where
+// the page DOM is reused. Reading the route arg only in on_page_load left the
+// view stale until a full reload. Build static scaffold here; do the per-project
+// fetch in on_page_show keyed on the current route arg.
 frappe.pages["vt-project-detail"].on_page_load = function (wrapper) {
     // Gray page background; styled via .vt-gray-bg in vt_home.css.
     $(wrapper).addClass("vt-gray-bg");
     const page = frappe.ui.make_app_page({ parent: wrapper, title: "Proyek", single_column: true });
+    // Button callbacks re-read the route at click time so they stay correct
+    // after navigating between projects without re-adding the buttons.
+    page.add_button(__("Refresh"), () => load_page(page, frappe.get_route()[1]), { icon: "refresh" });
+    page.add_button(__("Edit"), () => frappe.set_route("Form", "VT Project", frappe.get_route()[1]));
+    wrapper.__vt_project_page = page;
+};
+
+// Re-render when the project in the route differs from the one already painted.
+frappe.pages["vt-project-detail"].on_page_show = function (wrapper) {
+    const page = wrapper.__vt_project_page;
+    if (!page) return;
     const id = frappe.get_route()[1];
+    if (page[CURRENT_PROJECT_KEY] === id) return;  // same project already shown
+    page[CURRENT_PROJECT_KEY] = id;
     if (!id) {
         page.main.empty().append('<div class="vt-home"><div class="vh-empty">Proyek tidak ditemukan.</div></div>');
         return;
     }
-    page.add_button(__("Refresh"), () => load_page(page, id), { icon: "refresh" });
-    page.add_button(__("Edit"), () => frappe.set_route("Form", "VT Project", id));
     load_page(page, id);
 };
 
