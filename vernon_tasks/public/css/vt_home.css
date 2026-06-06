@@ -308,15 +308,74 @@ input, textarea, select, button {
   flex: 0 0 auto; font-size: 12px; font-weight: 600; color: var(--vh-text-2);
 }
 
-/* ---- Brand detail: stat bar + execution + owner/confidence chips ---- */
-.vt-stat-bar { display: flex; flex-direction: column; gap: 10px; }
-.vt-stat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.vt-stat-chip {
-    font-size: 12px; padding: 4px 10px; border-radius: 999px;
-    background: #f1f5f9; color: #334155;
+/* ---- Brand detail: carded layout ----
+   Each top-level block (hero, KPI strip, snapshot, execution, period) becomes a
+   distinct surface. Scoped under .vt-detail so the shared .vh-section used by the
+   vt-home dashboard stays flat. .vt-detail sits on the same node as .vt-home, so
+   .vt-home.vt-detail wins specificity over the base ".vt-home .vh-section" rule. */
+.vt-home.vt-detail .vh-section {
+    margin-top: 16px;
+    background: #fff;
+    border: 1px solid var(--vh-border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 6px 16px rgba(15,23,42,0.05);
+    animation: vhFadeUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
 }
-.vt-stat-chip b { font-size: 14px; }
-.vt-stat-chip--risk { background: #fef3c7; color: #92400e; }
+.vt-home.vt-detail .vh-section:first-child { margin-top: 8px; }
+
+/* Hero card: brand identity, serif name for presence. */
+.vt-home.vt-detail .vt-hero { display: flex; align-items: center; gap: 16px; }
+.vt-hero-logo { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; flex: 0 0 auto; }
+.vt-hero-logo--ph {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #6366f1, #2563eb);
+    color: #fff; font-weight: 700; font-size: 24px;
+}
+.vt-hero-meta { min-width: 0; }
+.vt-hero-name {
+    margin: 0; font-family: 'DM Serif Display', Georgia, serif; font-weight: 400;
+    font-size: 24px; line-height: 1.1; letter-spacing: -0.3px; color: #0f172a;
+}
+
+/* KPI strip: transparent wrapper holding equal-width mini stat-cards. */
+.vt-home.vt-detail .vt-kpi-strip {
+    background: none; border: 0; box-shadow: none; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px;
+}
+.vt-kpi { display: flex; flex-direction: column; gap: 3px; padding: 16px 18px; }
+.vt-kpi-num {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-size: 30px; line-height: 1; color: #0f172a;
+}
+.vt-kpi-lbl {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.4px;
+    text-transform: uppercase; color: var(--vh-text-2);
+}
+.vt-kpi--risk { background: #fffbeb; border-color: #fde68a; }
+.vt-kpi--risk .vt-kpi-num { color: #b45309; }
+
+/* Snapshot card: active-period progress + status distribution. */
+.vt-snapshot { display: flex; flex-direction: column; gap: 12px; }
+.vt-seg-wrap { display: flex; flex-direction: column; gap: 8px; }
+.vt-seg-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.vt-seg-leg { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #475569; }
+.vt-seg-leg i { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+
+/* Period group label (above the period card stack). */
+.vt-group-label {
+    margin: 26px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--vh-text-2);
+}
+
+/* Objective cards nest inside the now-white period card → subtle surface so the
+   nesting reads as cards-in-card, not white-on-white. */
+.vt-home.vt-detail .vt-period .vh-card {
+    background: #f8fafc; border-color: #eef2f6; border-radius: 10px;
+    box-shadow: none; animation: none;
+}
+.vt-home.vt-detail .vt-period .vh-card:hover { background: #f5f8fc; border-color: #e2e8f0; }
+
 .vt-stat-active { font-size: 12px; color: #475569; }
 .vt-bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; margin-top: 4px; }
 .vt-bar-fill { height: 100%; background: #6366f1; }
