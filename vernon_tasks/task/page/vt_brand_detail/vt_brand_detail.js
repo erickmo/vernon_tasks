@@ -29,6 +29,11 @@ const STATUS_ORDER = ["On Track", "At Risk", "Open", "Closed"];
 
 const esc = (s) => frappe.utils.escape_html(s == null ? "" : String(s));
 const pct = (n) => Math.min(Math.max(Number(n) || 0, 0), 100);
+// Compact number: integers as-is, otherwise ≤2 decimals with trailing zeros trimmed.
+const fmt_num = (n) => {
+    const x = Number(n) || 0;
+    return Number.isInteger(x) ? String(x) : x.toFixed(2).replace(/\.?0+$/, "");
+};
 
 // Stashed on the page object so on_page_show can detect a brand change.
 const CURRENT_BRAND_KEY = "__vt_brand_id";
@@ -81,7 +86,8 @@ function load_page(page, brand_id) {
 }
 
 /**
- * Paint hero + period sections; wire the "+ Objective" primary action.
+ * Paint hero + stat strip + snapshot, then the two flow zones (Strategi /
+ * Eksekusi); wire the "+ Objective" primary action.
  * @param {object} page
  * @param {string} brand_id
  * @param {object} data - get_brand_okr response.
@@ -93,9 +99,6 @@ function render(page, brand_id, data) {
     root.append(stat_bar(data.summary));
     const snap = snapshot_card(data.summary);
     if (snap) root.append(snap);
-    if (data.execution && data.execution.project_count > 0) {
-        root.append(execution_section(data.execution));
-    }
 
     // Per-doctype affordance gating (Objective and Key Result are separate perms).
     const perms = {
@@ -103,18 +106,57 @@ function render(page, brand_id, data) {
         can_create_kr: data.can_create_kr,
         can_edit_kr: data.can_edit_kr,
     };
-
     page.clear_primary_action();
     if (data.can_create_objective) {
         page.set_primary_action(__("+ Objective"), () => objective_dialog(page, brand_id, null), "add");
     }
 
+    // The page mirrors the domain flow: STRATEGI (OKR + KPI) and EKSEKUSI
+    // (projects → sprints → tasks), stitched by the optional OKR↔Project bridge.
+    root.append(strategy_zone(page, brand_id, data, perms));
+    root.append(execution_zone(data.execution));
+}
+
+/**
+ * Labeled zone divider (title + subtitle).
+ * @param {string} title
+ * @param {string} sub
+ * @returns {string} HTML.
+ */
+function zone_label(title, sub) {
+    return `<div class="vt-zone"><span class="vt-zone-title">${esc(title)}</span>
+        <span class="vt-zone-sub">${esc(sub)}</span></div>`;
+}
+
+/**
+ * STRATEGI zone: OKR-per-period sections + the brand-level KPI block.
+ * @returns {jQuery}
+ */
+function strategy_zone(page, brand_id, data, perms) {
+    const zone = $('<div class="vt-zone-wrap"></div>');
+    zone.append(zone_label(__("Strategi"), __("Objective, Key Result & KPI")));
     if (!data.periods.length) {
-        root.append('<div class="vh-section"><div class="vh-empty">Belum ada OKR untuk brand ini.</div></div>');
-        return;
+        zone.append('<div class="vh-section"><div class="vh-empty">Belum ada OKR untuk brand ini.</div></div>');
+    } else {
+        zone.append('<div class="vt-group-label">OKR per Periode</div>');
+        data.periods.forEach((p) => zone.append(period_section(page, brand_id, p, perms)));
     }
-    root.append('<div class="vt-group-label">OKR per Periode</div>');
-    data.periods.forEach((p) => root.append(period_section(page, brand_id, p, perms)));
+    if (data.can_read_kpi) zone.append(kpi_block(data.kpis));
+    return zone;
+}
+
+/**
+ * EKSEKUSI zone: project rollup + active sprint. Empty when the brand has no
+ * projects (sprint→task drill lives on vt-project-detail).
+ * @param {object} execution - get_brand_okr().execution.
+ * @returns {jQuery}
+ */
+function execution_zone(execution) {
+    if (!execution || !execution.project_count) return $();
+    const zone = $('<div class="vt-zone-wrap"></div>');
+    zone.append(zone_label(__("Eksekusi"), __("Proyek, sprint & sisa kerja")));
+    zone.append(execution_section(execution));
+    return zone;
 }
 
 /**
@@ -146,6 +188,7 @@ function stat_bar(s) {
     const cards = [
         kpi_card(s.objective_count, "Objective"),
         kpi_card(s.kr_count, "Key Result"),
+        kpi_card(s.kpi_count || 0, "KPI"),
         kpi_card(pct(s.avg_progress) + "%", "Rata-rata"),
         kpi_card(s.at_risk_count, "At Risk", s.at_risk_count > 0 ? "vt-kpi--risk" : ""),
     ].join("");
@@ -209,6 +252,86 @@ function status_legend(counts) {
 }
 
 /**
+ * Brand-level KPI block (STRATEGI zone). Read-only — KPIs are managed on their
+ * native forms; this only surfaces latest value + attainment + trend.
+ * @param {Array<object>} kpis - get_brand_okr().kpis.
+ * @returns {jQuery}
+ */
+function kpi_block(kpis) {
+    const wrap = $('<div class="vh-section vt-kpi-section"></div>');
+    wrap.append('<div class="vt-kpi-head"><strong>KPI</strong></div>');
+    if (!kpis || !kpis.length) {
+        wrap.append('<div class="vh-item-meta">Belum ada KPI untuk brand ini.</div>');
+        return wrap;
+    }
+    const list = $('<div class="vt-kpi-rows"></div>');
+    kpis.forEach((k) => list.append(kpi_metric_row(k)));
+    wrap.append(list);
+    return wrap;
+}
+
+/**
+ * One KPI row: name · latest value (+ target bar when a target is set) · trend ·
+ * frequency · linked objective chip ("Umum" when brand-level).
+ * @param {object} k - one item from get_brand_okr().kpis.
+ * @returns {jQuery}
+ */
+function kpi_metric_row(k) {
+    const unit = k.unit ? " " + esc(k.unit) : "";
+    const value = (k.value == null) ? "—" : esc(fmt_num(k.value)) + unit;
+    // progress is null when target ≤ 0 (KPI tracked without a target) → no bar.
+    const has_target = k.progress != null;
+    const target = has_target ? `<span class="vh-item-meta">/ ${esc(fmt_num(k.target))}${unit}</span>` : "";
+    const bar = has_target
+        ? `<div class="vt-kpi-bar"><div class="vt-kpi-bar-fill" style="width:${pct(k.progress)}%;"></div></div>
+           <span class="vh-item-meta">${Math.round(k.progress)}%</span>`
+        : "";
+    const obj = k.objective_title
+        ? `<span class="vt-obj-chip">${esc(k.objective_title)}</span>`
+        : '<span class="vt-obj-chip vt-obj-chip--none">Umum</span>';
+    return $(`<div class="vt-kpi-row">
+        <span class="vt-kpi-name">${esc(k.title)}</span>
+        <span class="vt-kpi-val">${value}</span>
+        ${target}
+        ${trend_icon(k.trend)}
+        ${bar}
+        <span class="vt-kpi-freq">${esc(k.frequency || "")}</span>
+        ${obj}
+    </div>`);
+}
+
+/**
+ * Trend arrow vs the previous entry. "none" (no/one entry) renders nothing.
+ * @param {string} trend - up | down | flat | none.
+ * @returns {string} HTML.
+ */
+function trend_icon(trend) {
+    const map = { up: ["▲", "vt-trend--up"], down: ["▼", "vt-trend--down"], flat: ["–", "vt-trend--flat"] };
+    const t = map[trend];
+    return t ? `<span class="vt-trend ${t[1]}" title="Tren vs entry sebelumnya">${t[0]}</span>` : "";
+}
+
+/**
+ * Linked-project chips for an objective (the OKR↔Project bridge). Each chip
+ * routes to the project detail page on click.
+ * @param {Array<object>} projects - objective.projects.
+ * @returns {jQuery}
+ */
+function project_chips(projects) {
+    const wrap = $('<div class="vt-proj-bridge"><span class="vt-proj-bridge-lbl">Proyek tertaut</span></div>');
+    if (!projects || !projects.length) {
+        wrap.append('<span class="vh-item-meta">belum ada proyek tertaut</span>');
+        return wrap;
+    }
+    projects.forEach((p) => {
+        const chip = $(`<span class="vt-proj-chip" data-id="${esc(p.id)}">${esc(p.title)} · ${pct(p.progress)}%</span>`);
+        chip.on("click", () => frappe.set_route("vt-project-detail", p.id));
+        wrap.append(chip);
+    });
+    return wrap;
+}
+
+/**
  * Collapsible execution section: active sprint + remaining work + project list.
  * @param {object} e - get_brand_okr().execution.
  * @returns {jQuery}
@@ -217,11 +340,18 @@ function execution_section(e) {
     const sprint = e.active_sprint_title
         ? `Sprint aktif: <b>${esc(e.active_sprint_title)}</b>${e.active_sprint_count > 1 ? ` (+${e.active_sprint_count - 1})` : ""}`
         : "Tidak ada sprint aktif";
-    const projects = e.projects.map((p) =>
-        `<div class="vt-exec-proj" data-id="${esc(p.id)}">
+    const projects = e.projects.map((p) => {
+        // Objective chip shows which OKR this project serves (the bridge); blank
+        // → "tanpa objective".
+        const obj = p.objective_title
+            ? `<span class="vt-obj-chip">${esc(p.objective_title)}</span>`
+            : '<span class="vt-obj-chip vt-obj-chip--none">tanpa objective</span>';
+        return `<div class="vt-exec-proj" data-id="${esc(p.id)}">
             <span>${esc(p.name)}</span>
+            ${obj}
             <span class="vh-item-meta">${pct(p.progress)}%</span>
-        </div>`).join("");
+        </div>`;
+    }).join("");
     const section = $(`<div class="vh-section vt-period vt-exec">
         <div class="vt-period-head" style="cursor:pointer;">
             <span class="vt-caret">▼</span>
@@ -301,6 +431,7 @@ function objective_card(page, brand_id, o, perms) {
     } else {
         o.key_results.forEach((kr) => list.append(kr_row(page, brand_id, kr, perms)));
     }
+    card.append(project_chips(o.projects));  // OKR↔Project bridge
     card.find(".vt-obj-edit").on("click", () => objective_dialog(page, brand_id, o.id));
     card.find(".vt-kr-add").on("click", () => kr_dialog(page, brand_id, o.id, null));
     return card;

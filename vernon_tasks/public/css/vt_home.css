@@ -401,7 +401,69 @@ input, textarea, select, button {
 .vt-exec-meta { font-size: 12px; color: #475569; margin-bottom: 6px; }
 .vt-exec-list { margin-top: 8px; }
 .vt-exec-proj {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
     padding: 5px 0; border-top: 1px solid #f1f1f1; cursor: pointer;
 }
+.vt-exec-proj > span:first-child { flex: 1; }
 .vt-exec-proj:hover { color: #6366f1; }
+
+/* --- Flow zones (Strategi / Eksekusi) -----------------------------------
+   Scoped under .vt-detail like the rest of the detail surface. A zone is a
+   labeled divider; .vt-zone-wrap groups the sections that follow it. */
+.vt-home.vt-detail .vt-zone {
+    display: flex; align-items: baseline; gap: 8px;
+    margin: 18px 2px 8px; padding-bottom: 4px;
+    border-bottom: 2px solid #e2e8f0;
+}
+.vt-zone-title {
+    font-size: 13px; font-weight: 800; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #0f172a;
+}
+.vt-zone-sub { font-size: 11px; color: #94a3b8; }
+
+/* --- KPI block ----------------------------------------------------------- */
+.vt-kpi-head { font-size: 13px; margin-bottom: 8px; }
+.vt-kpi-rows { display: flex; flex-direction: column; gap: 2px; }
+.vt-kpi-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 6px 0; border-top: 1px solid #f1f1f1;
+}
+.vt-kpi-name { flex: 1; min-width: 120px; font-size: 13px; }
+.vt-kpi-val { font-weight: 700; font-size: 13px; }
+.vt-kpi-bar {
+    width: 90px; height: 6px; background: #e5e7eb;
+    border-radius: 3px; overflow: hidden;
+}
+.vt-kpi-bar-fill { height: 100%; background: #0ea5e9; }
+.vt-kpi-freq {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: #94a3b8;
+}
+
+/* --- Trend arrow --------------------------------------------------------- */
+.vt-trend { font-size: 12px; font-weight: 700; }
+.vt-trend--up { color: #16a34a; }
+.vt-trend--down { color: #dc2626; }
+.vt-trend--flat { color: #94a3b8; }
+
+/* --- Objective chip (bridge marker) -------------------------------------- */
+.vt-obj-chip {
+    font-size: 11px; padding: 1px 8px; border-radius: 10px;
+    background: #eef2ff; color: #4338ca; white-space: nowrap;
+}
+.vt-obj-chip--none { background: #f1f5f9; color: #94a3b8; }
+
+/* --- Project bridge chips (under an objective) --------------------------- */
+.vt-proj-bridge {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0;
+}
+.vt-proj-bridge-lbl {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: #94a3b8;
+}
+.vt-proj-chip {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: #ecfeff; color: #0e7490; cursor: pointer;
+}
+.vt-proj-chip:hover { background: #cffafe; }

@@ -216,3 +216,42 @@ class TestKPIDefinitionOnTrash(FrappeTestCase):
 		}).insert(ignore_permissions=True)
 		with self.assertRaises(frappe.ValidationError):
 			frappe.delete_doc("KPI Definition", "KPI With Entries")
+
+
+class TestKPIDefinitionTarget(FrappeTestCase):
+	"""target_value sign guard mirrors the KPI Entry value-sign rule.
+
+	spec: 2026-06-07-brand-detail-flow-zones
+	"""
+
+	def setUp(self):
+		_ensure_brand(TEST_BRAND)
+		for n in ("KPI Target Pos", "KPI Target Neg", "KPI Target NegOK"):
+			_cleanup_kpi(n)
+
+	def tearDown(self):
+		for n in ("KPI Target Pos", "KPI Target Neg", "KPI Target NegOK"):
+			_cleanup_kpi(n)
+
+	def test_positive_target_accepted(self):
+		doc = frappe.get_doc({
+			"doctype": "KPI Definition", "kpi_name": "KPI Target Pos",
+			"brand": TEST_BRAND, "frequency": "Daily", "target_value": 90,
+		}).insert(ignore_permissions=True)
+		self.assertEqual(doc.target_value, 90)
+
+	def test_negative_target_rejected_without_allow_negative(self):
+		with self.assertRaises(frappe.ValidationError):
+			frappe.get_doc({
+				"doctype": "KPI Definition", "kpi_name": "KPI Target Neg",
+				"brand": TEST_BRAND, "frequency": "Daily",
+				"target_value": -5, "allow_negative": 0,
+			}).insert(ignore_permissions=True)
+
+	def test_negative_target_allowed_with_allow_negative(self):
+		doc = frappe.get_doc({
+			"doctype": "KPI Definition", "kpi_name": "KPI Target NegOK",
+			"brand": TEST_BRAND, "frequency": "Daily",
+			"target_value": -5, "allow_negative": 1,
+		}).insert(ignore_permissions=True)
+		self.assertEqual(doc.target_value, -5)
