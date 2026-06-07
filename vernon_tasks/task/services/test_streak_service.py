@@ -3,74 +3,105 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
 from vernon_tasks.task.services.streak_service import get_streak
 
-_STREAK_BRAND = "TEST-STREAK-BRAND"
+_PROJ_TITLE = "SK-Proj"
+_EMPTY_TITLE = "SK-Empty"
+_TITLES = (_PROJ_TITLE, _EMPTY_TITLE)
+_USER = "sk-me@x.com"
 
 
-def _ensure_streak_brand():
-    if not frappe.db.exists("VT Brand", _STREAK_BRAND):
-        frappe.get_doc({
-            "doctype": "VT Brand",
-            "brand_name": _STREAK_BRAND,
-        }).insert(ignore_permissions=True)
-    return _STREAK_BRAND
+def _ensure_user():
+	if not frappe.db.exists("User", _USER):
+		frappe.get_doc({
+			"doctype": "User", "email": _USER,
+			"first_name": "T", "send_welcome_email": 0, "enabled": 1,
+		}).insert(ignore_permissions=True)
+	return _USER
+
+
+def _cleanup():
+	# NestedSet blocks deleting a parent before its children, so delete each
+	# project's whole subtree deepest-first (highest lft) then the project.
+	for title in _TITLES:
+		for proj in frappe.get_all(
+			"VT Item", {"title": title, "node_type": "Project"}, ["name", "lft", "rgt"]
+		):
+			descendants = frappe.get_all(
+				"VT Item",
+				filters={"lft": [">", proj["lft"]], "rgt": ["<", proj["rgt"]]},
+				fields=["name"],
+				order_by="lft desc",
+			)
+			for d in descendants:
+				frappe.delete_doc("VT Item", d["name"], force=True)
+			frappe.delete_doc("VT Item", proj["name"], force=True)
+
+
+def _make_project(title=_PROJ_TITLE):
+	return frappe.get_doc({
+		"doctype": "VT Item",
+		"node_type": "Project",
+		"title": title,
+		"start_date": add_days(today(), -120),
+		"end_date": add_days(today(), 30),
+		"health_status": "Open",
+	}).insert(ignore_permissions=True)
+
+
+def _make_sprint(project, idx, start_offset):
+	return frappe.get_doc({
+		"doctype": "VT Item",
+		"node_type": "Sprint",
+		"title": f"SK-S{idx}",
+		"parent_vt_item": project,
+		"start_date": add_days(today(), start_offset),
+		"end_date": add_days(today(), start_offset + 13),
+		"sprint_state": "Closed",
+	}).insert(ignore_permissions=True)
+
+
+def _make_task(sprint, user_hrs, completion_offset):
+	# On VT Item the completed phase is 'CLOSED' (legacy VT Task 'DONE').
+	return frappe.get_doc({
+		"doctype": "VT Item",
+		"node_type": "Task",
+		"title": "T",
+		"parent_vt_item": sprint,
+		"owner_user": _USER,
+		"estimated_minutes": user_hrs,
+		"actual_minutes": user_hrs,
+		"pdca_phase": "CLOSED",
+		"kanban_status": "Done",
+		"completion_date": add_days(today(), completion_offset),
+	}).insert(ignore_permissions=True)
 
 
 class TestStreak(FrappeTestCase):
-    def setUp(self):
-        if not frappe.db.exists("User", "sk-me@x.com"):
-            frappe.get_doc({"doctype": "User", "email": "sk-me@x.com",
-                            "first_name": "T", "send_welcome_email": 0, "enabled": 1}
-                           ).insert(ignore_permissions=True)
-        if frappe.db.exists("VT Project", "SK-Proj"):
-            frappe.delete_doc("VT Project", "SK-Proj", force=True)
-        self.project = frappe.get_doc({
-            "doctype": "VT Project", "title": "SK-Proj",
-            "brand": _ensure_streak_brand(),
-            "project_owner": "Administrator",
-            "start_date": add_days(today(), -120),
-            "end_date": add_days(today(), 30),
-            "status": "Open",
-        }).insert(ignore_permissions=True)
+	def setUp(self):
+		_ensure_user()
+		_cleanup()
+		self.project = _make_project()
 
-        def _s(idx, off, user_hrs):
-            s = frappe.get_doc({
-                "doctype": "VT Sprint", "sprint_title": f"SK-S{idx}",
-                "project": self.project.name,
-                "start_date": add_days(today(), off),
-                "end_date": add_days(today(), off + 13),
-                "status": "Closed",
-            }).insert(ignore_permissions=True)
-            if user_hrs > 0:
-                frappe.get_doc({
-                    "doctype": "VT Task", "title": "T",
-                    "project": self.project.name, "sprint": s.name,
-                    "assigned_to": "sk-me@x.com",
-                    "estimated_minutes": user_hrs, "actual_minutes": user_hrs,
-                    "pdca_phase": "DONE", "kanban_status": "Done",
-                    "completion_date": add_days(today(), off + 2),
-                }).insert(ignore_permissions=True)
-            return s
+		def _s(idx, off, user_hrs):
+			s = _make_sprint(self.project.name, idx, off)
+			if user_hrs > 0:
+				_make_task(s.name, user_hrs, off + 2)
+			return s
 
-        _s(1, -84, 0)   # gap (oldest)
-        _s(2, -56, 4)
-        _s(3, -28, 6)
-        _s(4, -14, 8)   # newest
+		_s(1, -84, 0)   # gap (oldest)
+		_s(2, -56, 4)
+		_s(3, -28, 6)
+		_s(4, -14, 8)   # newest
 
-    def test_streak_three(self):
-        r = get_streak("sk-me@x.com", self.project.name)
-        self.assertEqual(r["streak"], 3)
-        self.assertEqual(r["sprints_checked"], 4)
+	def tearDown(self):
+		_cleanup()
 
-    def test_no_sprints(self):
-        if frappe.db.exists("VT Project", "SK-Empty"):
-            frappe.delete_doc("VT Project", "SK-Empty", force=True)
-        p = frappe.get_doc({
-            "doctype": "VT Project", "title": "SK-Empty",
-            "brand": _ensure_streak_brand(),
-            "project_owner": "Administrator",
-            "start_date": today(), "end_date": add_days(today(), 1),
-            "status": "Open",
-        }).insert(ignore_permissions=True)
-        r = get_streak("sk-me@x.com", p.name)
-        self.assertEqual(r["streak"], 0)
-        self.assertEqual(r["sprints_checked"], 0)
+	def test_streak_three(self):
+		r = get_streak(_USER, self.project.name)
+		self.assertEqual(r["streak"], 3)
+		self.assertEqual(r["sprints_checked"], 4)
+
+	def test_no_sprints(self):
+		p = _make_project(_EMPTY_TITLE)
+		r = get_streak(_USER, p.name)
+		self.assertEqual(r["streak"], 0)
+		self.assertEqual(r["sprints_checked"], 0)
