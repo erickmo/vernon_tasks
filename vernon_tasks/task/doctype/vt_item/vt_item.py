@@ -51,6 +51,16 @@ class VTItem(NestedSet):
 		"""Field + tree invariants on every save."""
 		self._validate_parent_type()
 		self._inherit_brand()
+		self._sync_is_group()
+
+	def _sync_is_group(self) -> None:
+		"""A node with children must be a group (NestedSet rejects a leaf that
+		has children). Auto-promote so callers/pages need not manage the flag
+		when editing a parent that already has descendants."""
+		if not self.is_group and self.name and frappe.db.exists(
+			"VT Item", {"parent_vt_item": self.name}
+		):
+			self.is_group = 1
 
 	def _validate_parent_type(self) -> None:
 		"""Reject illegal parent node_type per ALLOWED_PARENTS (spec §4)."""
