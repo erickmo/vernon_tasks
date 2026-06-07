@@ -119,14 +119,18 @@ def generate_recurring_tasks() -> None:
 	)
 	for rec in recurring_tasks:
 		task = frappe.get_doc("VT Item", rec.name)
-		occurrence_count = frappe.db.count("VT Item", {"parent_vt_item": task.name, "node_type": "Task"})
+		# Recurrence lineage is tracked via `recurring_parent` (a plain Link),
+		# NOT the tree parent — a Task may not be a tree-child of a Task.
+		occurrence_count = frappe.db.count("VT Item", {"recurring_parent": task.name})
 		if is_rule_expired(task.recurring_rule, occurrence_count, today_date):
 			frappe.db.set_value("VT Item", task.name, "is_recurring", 0)
 			continue
 		new_task = frappe.copy_doc(task)
 		new_task.pdca_phase = "BACKLOG"
 		new_task.kanban_status = "Backlog"
-		new_task.parent_vt_item = task.name
+		# Keep the template's tree position (same Project/Sprint); record lineage.
+		new_task.parent_vt_item = task.parent_vt_item
+		new_task.recurring_parent = task.name
 		new_task.is_recurring = 0
 		new_task.next_occurrence = None
 		new_task.completion_date = None

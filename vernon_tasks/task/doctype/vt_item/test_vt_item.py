@@ -95,3 +95,22 @@ class TestVTItem(FrappeTestCase):
 		kpi.reload()
 		self.assertEqual(len(kpi.kpi_entries), 1)
 		self.assertEqual(kpi.kpi_entries[0].value, 42)
+
+	def test_task_kanban_synced_from_pdca(self):
+		# P2 — Task board column derives from pdca_phase (CLOSED → Done)
+		proj = _make("Project", "Sync proj")
+		task = _make("Task", "sync t", parent=proj.name, pdca_phase="CLOSED")
+		self.assertEqual(task.kanban_status, "Done")
+
+	def test_blocked_kanban_preserved(self):
+		# P2 — Blocked is orthogonal; pdca sync must not overwrite it
+		proj = _make("Project", "Blk proj")
+		task = _make("Task", "blk t", parent=proj.name,
+			pdca_phase="DO", kanban_status="Blocked")
+		self.assertEqual(task.kanban_status, "Blocked")
+
+	def test_empty_pdca_keeps_explicit_kanban(self):
+		# P2 — unknown/empty pdca_phase must not clobber an explicit kanban_status
+		proj = _make("Project", "Exp proj")
+		task = _make("Task", "exp t", parent=proj.name, kanban_status="In Progress")
+		self.assertEqual(task.kanban_status, "In Progress")

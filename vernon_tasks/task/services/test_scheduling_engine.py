@@ -95,6 +95,33 @@ class TestSchedulingEngine(FrappeTestCase):
 		total_remaining = sum(r.allocated_minutes for r in non_overridden)
 		self.assertAlmostEqual(total_remaining, 5.0, places=0)
 
+	def test_generate_recurring_keeps_tree_position(self):
+		# P2 regression — a recurring instance must NOT become a tree-child of
+		# the template Task (illegal); it keeps the template's parent + records
+		# lineage via recurring_parent.
+		from vernon_tasks.task.services.scheduling_engine import generate_recurring_tasks
+		rule = frappe.get_doc({
+			"doctype": "Recurring Rule", "rule_type": "Daily",
+			"interval": 1, "max_occurrences": 5,
+		}).insert(ignore_permissions=True)
+		template = frappe.get_doc({
+			"doctype": "VT Item", "node_type": "Task",
+			"title": "Recurring Template",
+			"parent_vt_item": self.project.name, "owner_user": MEMBER,
+			"pdca_phase": "PLAN", "kanban_status": "Scheduled",
+			"is_recurring": 1, "recurring_rule": rule.name,
+			"next_occurrence": "2026-05-01",
+		}).insert(ignore_permissions=True)
+		generate_recurring_tasks()  # must not raise
+		instances = frappe.get_all("VT Item",
+			filters={"recurring_parent": template.name},
+			fields=["name", "parent_vt_item"])
+		self.assertEqual(len(instances), 1)
+		self.assertEqual(instances[0]["parent_vt_item"], self.project.name)
+		frappe.delete_doc("VT Item", instances[0]["name"], force=True)
+		frappe.delete_doc("VT Item", template.name, force=True)
+		frappe.delete_doc("Recurring Rule", rule.name, force=True)
+
 	def tearDown(self):
 		frappe.db.delete("Task Schedule Entry", {"parent": self.task.name})
 		self.task.delete()
