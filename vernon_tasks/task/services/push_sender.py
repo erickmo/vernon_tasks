@@ -11,6 +11,23 @@ _TYPE_TO_PREF = {
 _PREF_FIELDS = ("event_assignment", "event_mention", "event_due", "event_review")
 _PREF_DEFAULTS = {f: 1 for f in _PREF_FIELDS}
 
+# Tasks now live in the unified VT Item tree: a notification targeting a task
+# carries document_type="VT Item" and a document_name whose node_type="Task".
+_ITEM_DOCTYPE = "VT Item"
+_TASK_NODE_TYPE = "Task"
+
+
+def _is_task_doc(doc) -> bool:
+    """True when the notification targets a Task node in the VT Item tree."""
+    if doc.get("document_type") != _ITEM_DOCTYPE:
+        return False
+    name = doc.get("document_name")
+    if not name:
+        return False
+    return (
+        frappe.db.get_value(_ITEM_DOCTYPE, name, "node_type") == _TASK_NODE_TYPE
+    )
+
 
 def _vapid() -> tuple[str, str, str]:
     pub = frappe.db.get_single_value("VT Settings", "push_vapid_public_key") or ""
@@ -23,8 +40,8 @@ def _vapid() -> tuple[str, str, str]:
 
 
 def _target_url(doc) -> str:
-    if doc.get("document_type") == "VT Task" and doc.get("document_name"):
-        return f"/app/vt-task/{doc.get('document_name')}"
+    if _is_task_doc(doc):
+        return f"/app/vt-item/{doc.get('document_name')}"
     return "/app/notification-log"
 
 
@@ -42,13 +59,13 @@ def _pref_field_for(doc) -> str:
     t = (doc.get("type") or "").strip()
     if t in _TYPE_TO_PREF:
         return _TYPE_TO_PREF[t]
-    if doc.get("document_type") == "VT Task":
+    if _is_task_doc(doc):
         return "event_review"
     return ""
 
 
 def _actions_for(doc, field: str) -> list:
-    if doc.get("document_type") == "VT Task" and field in (
+    if _is_task_doc(doc) and field in (
         "event_assignment",
         "event_due",
     ):
@@ -117,6 +134,7 @@ def send_push_for_notification(doc, method=None):
     if field and not prefs.get(field):
         return  # user opted out
 
+    is_task = _is_task_doc(doc)
     actions = _actions_for(doc, field)
     payload = {
         "title": "Vernon Tasks",
@@ -124,8 +142,6 @@ def send_push_for_notification(doc, method=None):
         "url": _target_url(doc),
         "tag": doc.name,
         "actions": actions,
-        "task_id": doc.get("document_name")
-        if doc.get("document_type") == "VT Task"
-        else None,
+        "task_id": doc.get("document_name") if is_task else None,
     }
     send_to_user(doc.for_user, payload)
