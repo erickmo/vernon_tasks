@@ -46,3 +46,27 @@ class VTItem(NestedSet):
 		if not series:
 			frappe.throw(_("Unknown node_type: {0}").format(self.node_type))
 		self.name = make_autoname(series, doc=self)
+
+	def validate(self) -> None:
+		"""Field + tree invariants on every save."""
+		self._validate_parent_type()
+		self._inherit_brand()
+
+	def _validate_parent_type(self) -> None:
+		"""Reject illegal parent node_type per ALLOWED_PARENTS (spec §4)."""
+		parent_type = None
+		if self.parent_vt_item:
+			parent_type = frappe.db.get_value(
+				"VT Item", self.parent_vt_item, "node_type"
+			)
+		allowed = ALLOWED_PARENTS.get(self.node_type, set())
+		if parent_type not in allowed:
+			frappe.throw(
+				_("A {0} cannot be placed under a {1}.").format(
+					self.node_type, parent_type or _("root")
+				)
+			)
+
+	def _inherit_brand(self) -> None:
+		"""Brand inheritance — implemented in the next task."""
+		return

@@ -28,3 +28,26 @@ class TestVTItem(FrappeTestCase):
 		self.assertTrue(sp.name.startswith("SP-"))
 		task = _make("Task", "Build hero", parent=sp.name)
 		self.assertTrue(task.name.startswith("TASK-"))
+
+	def test_illegal_parent_type_rejected(self):
+		# spec §4 — Project under Task is illegal
+		okr = _make("OKR", "O1")
+		proj = _make("Project", "P1", parent=okr.name)
+		sp = _make("Sprint", "S1", parent=proj.name)
+		task = _make("Task", "T1", parent=sp.name)
+		with self.assertRaises(frappe.ValidationError):
+			_make("Project", "bad", parent=task.name)
+
+	def test_skip_levels_allowed(self):
+		# spec §4 — Task directly under Project (backlog), Project at root
+		proj = _make("Project", "Standalone")  # no OKR parent
+		task = _make("Task", "Backlog item", parent=proj.name)
+		self.assertEqual(task.parent_vt_item, proj.name)
+
+	def test_kpi_root_and_under_okr(self):
+		# spec §4 — KPI may be top-tier or under an OKR
+		kpi_root = _make("KPI", "NPS")
+		self.assertIsNone(kpi_root.parent_vt_item)
+		okr = _make("OKR", "O2")
+		kpi_child = _make("KPI", "Churn", parent=okr.name)
+		self.assertEqual(kpi_child.parent_vt_item, okr.name)
