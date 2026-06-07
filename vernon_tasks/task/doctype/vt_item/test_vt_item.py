@@ -77,3 +77,21 @@ class TestVTItem(FrappeTestCase):
 		self.assertEqual(proj.percent_done, 50)
 		okr.reload()
 		self.assertEqual(okr.percent_done, 50)
+
+	def test_okr_holds_key_results(self):
+		# spec §3.2 — Key Result lives as a child row under an OKR node
+		okr = _make("OKR", "OKR with KR")
+		okr.append("key_results", {"metric": "Signups", "target_value": 1000})
+		okr.save(ignore_permissions=True)
+		okr.reload()
+		self.assertEqual(len(okr.key_results), 1)
+		self.assertEqual(okr.key_results[0].metric, "Signups")
+
+	def test_kpi_holds_entries(self):
+		# spec §3.2 — KPI Entry lives as a child row under a KPI node
+		kpi = _make("KPI", "Daily active users")
+		kpi.append("kpi_entries", {"date": frappe.utils.today(), "value": 42})
+		kpi.save(ignore_permissions=True)
+		kpi.reload()
+		self.assertEqual(len(kpi.kpi_entries), 1)
+		self.assertEqual(kpi.kpi_entries[0].value, 42)
