@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VT Item — Unified Hierarchy — Design Spec — Vernon Tasks</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<div class="breadcrumb"><a href="../../index.html">Docs</a> · <a href="index.html">Specs</a> · <strong>VT Item — Unified Hierarchy</strong></div>
+
+<article class="spec">
+<h1 id="vt-item-unified-hierarchy-design-spec">VT Item — Unified Hierarchy — Design Spec</h1>
+<p><strong>Date:</strong> 2026-06-07 · <strong>Status:</strong> approved (brainstorm) · <strong>Scope:</strong> XL (collapses 5 doctypes into one nested-set tree, fresh-start data wipe, rewrites ~60 consumer files, phased P1–P4)</p>
+
+<h2 id="1-goal">1. Goal</h2>
+<p>Collapse the strategy-to-execution hierarchy into a single navigable tree. Today five separate doctypes hold the chain:</p>
+<pre><code>Objective ──&lt; Key Result
+   │   └──&lt; KPI Definition ──&lt; KPI Entry
+   └──&lt; VT Project ──&lt; VT Sprint ──&lt; VT Task (self-link via parent_task)
+</code></pre>
+<p>After this change there is <strong>one</strong> doctype <code>VT Item</code>, a Frappe nested-set tree discriminated by <code>node_type</code>. The canonical order is:</p>
+<pre><code>OKR / KPI  →  Project  →  Sprint  →  Task
+</code></pre>
+<p>Two drivers, both in scope: (1) <strong>navigation/UX</strong> — one tree screen to drill OKR → Project → Sprint → Task; (2) <strong>data-model unification</strong> — literally one doctype, replacing the five.</p>
+
+<h2 id="2-decisions">2. Decisions locked in brainstorm</h2>
+<table>
+<thead><tr><th>#</th><th>Decision</th><th>Choice</th></tr></thead>
+<tbody>
+<tr><td>D1</td><td>Drivers</td><td>Navigation/UX <em>and</em> data-model unification (both)</td></tr>
+<tr><td>D2</td><td>Measurement data</td><td><strong>Hybrid</strong> — tree node types = OKR/KPI/Project/Sprint/Task; Key Result + KPI Entry stay as child tables hanging off their node</td></tr>
+<tr><td>D3</td><td>Doctype shape</td><td><strong>Fat node</strong> — one doctype holds the union of all fields, shown by <code>node_type</code> via <code>depends_on</code></td></tr>
+<tr><td>D4</td><td>Existing data</td><td><strong>Fresh start</strong> — wipe legacy doctypes, recreate empty, reseed demo (no migration patches)</td></tr>
+<tr><td>D5</td><td>Consumer scope</td><td><strong>Full rewrite</strong> — all pages + APIs + services + reports ported to <code>VT Item</code></td></tr>
+<tr><td>D6</td><td>Hierarchy rules</td><td><strong>Strict + flexible skips</strong> — enforce legal parent type, allow optional skips; KPI may be top-tier or under an OKR</td></tr>
+<tr><td>D7</td><td>Doctype name</td><td><code>VT Item</code></td></tr>
+<tr><td>D8</td><td>Delivery</td><td>Phased P1–P4, P1 first</td></tr>
+</tbody>
+</table>
+
+<h2 id="3-doctype">3. <code>VT Item</code> doctype</h2>
+<p>Frappe tree doctype: <code>"is_tree": 1</code>, nested-set columns (<code>lft</code>, <code>rgt</code>, <code>old_parent</code>), parent field <code>parent_vt_item</code>, flag <code>is_group</code>. Controller extends <code>frappe.utils.nestedset.NestedSet</code>.</p>
+
+<h3 id="31-field-groups">3.1 Field groups (fat node, <code>depends_on: node_type</code>)</h3>
+<table>
+<thead><tr><th>Group</th><th>Fields</th></tr></thead>
+<tbody>
+<tr><td><strong>Shared (all)</strong></td><td><code>node_type</code> (Select: OKR/KPI/Project/Sprint/Task), <code>title</code>, <code>parent_vt_item</code>, <code>is_group</code>, <code>brand</code> (Link VT Brand), <code>owner_user</code> (Link User), <code>description</code>, <code>percent_done</code>, <code>start_date</code>, <code>end_date</code></td></tr>
+<tr><td><strong>OKR</strong></td><td><code>period</code>, <code>period_start</code>, <code>period_end</code>, <code>pdca_phase</code>, <code>health_status</code>, <code>key_results</code> (Table → Key Result)</td></tr>
+<tr><td><strong>KPI</strong></td><td><code>frequency</code>, <code>unit</code>, <code>target_value</code>, <code>allow_negative</code>, <code>formula</code>, <code>kpi_entries</code> (Table → KPI Entry)</td></tr>
+<tr><td><strong>Project</strong></td><td><code>leader_user</code>, <code>health_score</code>, <code>health_history_json</code>, <code>blocked_days_threshold</code>, <code>slip_pct_threshold</code>, <code>capacity_pct_threshold</code>, <code>team_members</code>, <code>milestones</code>, <code>documentation</code></td></tr>
+<tr><td><strong>Sprint</strong></td><td><code>goal</code>, <code>actual_velocity</code>, <code>burndown_actual_json</code>, <code>outcome</code>, <code>sprint_state</code></td></tr>
+<tr><td><strong>Task</strong></td><td><code>kanban_status</code>, <code>kanban_rank</code>, <code>priority</code>, <code>risk_flag</code>, <code>deadline</code>, <code>completion_date</code>, <code>estimated_minutes</code>, <code>actual_minutes</code>, <code>review_estimated_minutes</code>, <code>review_scheduled_date</code>, <code>weight</code>, <code>base_points</code>, <code>earned_points</code>, <code>leader_override_points</code>, <code>override_reason</code>, <code>rejection_note</code>, <code>revision_count</code>, <code>is_recurring</code>, <code>recurring_rule</code>, <code>next_occurrence</code>, <code>dependencies</code> (Table), <code>schedule_entries</code> (Table)</td></tr>
+</tbody>
+</table>
+<p>Status enums differ per type and are kept as separate <code>depends_on</code> fields rather than one merged enum: <code>health_status</code> (OKR/Project), <code>sprint_state</code> (Sprint), <code>kanban_status</code> (Task), <code>pdca_phase</code> (OKR/Project/Task variants). Task subtasks reuse the tree parent (<code>parent_task</code> retired — a subtask is simply a Task whose parent is another Task).</p>
+
+<h3 id="32-child-tables">3.2 Child tables retained</h3>
+<ul>
+<li><strong>Key Result</strong> — under OKR node (<code>metric</code>, <code>target_value</code>, <code>current_value</code>, <code>unit</code>, <code>progress_percent</code>, <code>confidence</code>).</li>
+<li><strong>KPI Entry</strong> — under KPI node (<code>date</code>, <code>value</code>, <code>notes</code>). Becomes a child table of <code>VT Item</code> instead of a standalone doctype.</li>
+<li>Existing children stay: Project Team Member, Project Milestone, Project Documentation, Task Dependency, Task Schedule Entry.</li>
+<li><strong>Sprint Task</strong> child table is <strong>dropped</strong> — tasks are tree children of the sprint node, not table rows.</li>
+</ul>
+
+<h3 id="33-naming">3.3 Naming (controller <code>autoname</code> by type)</h3>
+<pre><code>OKR     → OKR-.YYYY.-.#####
+KPI     → KPI-.YYYY.-.#####
+Project → PROJ-.YYYY.-.#####
+Sprint  → SP-.YYYY.-.#####
+Task    → TASK-.YYYY.-.#####
+</code></pre>
+
+<h2 id="4-hierarchy">4. Hierarchy validation (strict + skips)</h2>
+<p>Controller <code>validate()</code> enforces legal parent type and rejects illegal nesting (e.g. a Project under a Task).</p>
+<table>
+<thead><tr><th>node_type</th><th>Allowed parent</th><th>Skip rule</th></tr></thead>
+<tbody>
+<tr><td>OKR</td><td>root / none</td><td>top tier</td></tr>
+<tr><td>KPI</td><td>root <em>or</em> OKR</td><td>both allowed</td></tr>
+<tr><td>Project</td><td>OKR <em>or</em> root</td><td>OKR optional (standalone OK)</td></tr>
+<tr><td>Sprint</td><td>Project</td><td>—</td></tr>
+<tr><td>Task</td><td>Sprint <em>or</em> Project</td><td>Sprint optional (backlog)</td></tr>
+</tbody>
+</table>
+<p><code>brand</code> inherits from the nearest ancestor with a brand when left blank.</p>
+
+<h2 id="5-rollup">5. Rollup</h2>
+<p>On save, <code>percent_done</code> rolls up the chain Task → Sprint → Project → OKR as the mean of direct children's <code>percent_done</code>. Light derived metric, not the primary driver, but natural with nested set.</p>
+
+<h2 id="6-tree-ui">6. Tree UI</h2>
+<ul>
+<li><strong>Native</strong>: Frappe Tree view free with <code>is_tree</code> at <code>/app/vt-item/view/tree</code>.</li>
+<li><strong>New desk page</strong> <code>vt-tree</code>: the "one tree screen" — full OKR → Task drill navigator.</li>
+<li><strong>Rewired custom pages</strong>: <code>vt-project-detail</code>, <code>vt-brand-detail</code>, <code>vt-home</code> dashboards, kanban — query <code>VT Item</code> by type instead of legacy doctypes.</li>
+</ul>
+
+<h2 id="7-blast-radius">7. Consumer blast radius (~60 files)</h2>
+<table>
+<thead><tr><th>Layer</th><th>Files (count)</th></tr></thead>
+<tbody>
+<tr><td>APIs</td><td><code>brand/api/{brand_okr,brand_okr_mutations,portal_brands}</code>, <code>task/api/{board_mutations,dashboard,my_work,my_work_mutations,okr,onboarding,portal_projects,portal_worksheet,sprints}</code> (13)</td></tr>
+<tr><td>Services</td><td><code>task/services/*</code> — okr_rollup, burndown, health_score, kpi_trend, point_calculator, scheduling_engine, risk_evaluator, forecast, velocity, personal_velocity, leaderboard, streak, threshold, worksheet_aggregator, dashboard_aggregator, project_task_grouper, push_sender, reports/* (~22)</td></tr>
+<tr><td>Pages</td><td><code>vt_project_detail</code>, <code>vt_brand_detail</code>, <code>vt_home</code>, <code>vt_okr</code>, <code>vt_scorecard</code>, <code>vt_team</code>, <code>leader_review</code>, <code>leader_analytics</code>, <code>my_analytics</code> (~12)</td></tr>
+<tr><td>Reports</td><td>kpi_achievement, sprint_velocity, project_progress_vs_okr, blocked_tasks_escalation, leader_review_schedule, point_override_audit, team_workload_overview (7)</td></tr>
+<tr><td>Setup / misc</td><td><code>setup/demo_data</code>, <code>setup/onboarding_seed</code>, <code>hooks.py</code>, <code>public/js/{vt_navbar,vt_project_redirect}</code> (~5)</td></tr>
+</tbody>
+</table>
+
+<h2 id="8-fresh-start">8. Fresh start (no migration)</h2>
+<p>Patch <code>drop_legacy_hierarchy_doctypes</code> deletes Objective, KPI Definition, KPI Entry (standalone), Key Result (standalone), VT Project, VT Sprint, VT Task, and the redundant Sprint Task child. Create <code>VT Item</code> + retained child tables. Rewrite <code>demo_data.py</code> to seed a node tree. Reload fixtures. <strong>No data is preserved</strong> — confirmed acceptable (dev/demo only).</p>
+
+<h2 id="9-testing">9. Testing</h2>
+<ul>
+<li>Autoname per type produces the right prefix.</li>
+<li>Parent validation: legal combinations pass; illegal (Project under Task, Sprint under OKR, etc.) raises.</li>
+<li>Skip levels: Task with no Sprint (parent = Project) passes; Project with no OKR (parent = root) passes; KPI at root and under OKR both pass.</li>
+<li>Rollup: child <code>percent_done</code> changes propagate to ancestors.</li>
+<li>Brand inheritance: blank brand resolves from nearest ancestor.</li>
+<li>Child tables: Key Result on OKR, KPI Entry on KPI persist and read back.</li>
+<li>Smoke each rewired API via <code>bench execute</code> after its phase.</li>
+<li>Tag each test file/function with the PRD/ADR id it covers.</li>
+</ul>
+
+<h2 id="10-phasing">10. Phasing (each its own plan → test → commit cycle)</h2>
+<table>
+<thead><tr><th>Phase</th><th>Deliverable</th></tr></thead>
+<tbody>
+<tr><td><strong>P1 (this turn)</strong></td><td><code>VT Item</code> doctype + retained child tables + controller (autoname / validate / rollup / NestedSet) + unit tests + fresh-start patch + demo seed</td></tr>
+<tr><td>P2</td><td>Services layer rewrite (~22)</td></tr>
+<tr><td>P3</td><td>APIs rewrite (13)</td></tr>
+<tr><td>P4</td><td>Pages + kanban + <code>vt-tree</code> page (12) + reports (7) + hooks/public js</td></tr>
+</tbody>
+</table>
+
+<h2 id="11-risks">11. Risks &amp; mitigations</h2>
+<table>
+<thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>Fat doctype form is cluttered</td><td>Strict <code>depends_on</code> per group; native Tree view + custom pages are the primary surfaces, raw form is secondary</td></tr>
+<tr><td>~60-file rewrite destabilizes app between phases</td><td>Phase boundaries keep the app buildable; smoke each phase via <code>bench execute</code> before commit</td></tr>
+<tr><td>New whitelist methods 404 until restart</td><td>Restart <code>frappe-backend-1</code> after adding endpoints (known gotcha)</td></tr>
+<tr><td>Desk Page vs DocType slug collision (<code>vt-item</code>)</td><td>Tree page named <code>vt-tree</code>, distinct from the doctype slug</td></tr>
+</tbody>
+</table>
+
+</article>
+</div>
+</body>
+</html>
