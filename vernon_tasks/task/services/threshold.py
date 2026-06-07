@@ -26,7 +26,10 @@ def get_project_threshold(project: str | None, key: str) -> float:
         raise ValueError(f"Unknown threshold key: {key}")
 
     if project:
-        val = frappe.db.get_value("VT Project", project, _PROJECT_FIELD[key])
+        # project is now a VT Item node (node_type="Project"); threshold
+        # fields are preserved on the node, so a direct lookup suffices —
+        # no tree traversal needed.
+        val = frappe.db.get_value("VT Item", project, _PROJECT_FIELD[key])
         if val not in (None, 0, ""):
             return float(val)
 
