@@ -9,6 +9,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, today
 
 from vernon_tasks.task.api.board_mutations import (
+    bulk_assign,
     create_task,
     get_task,
     move_task,
@@ -308,3 +309,53 @@ class TestBoardMutations(FrappeTestCase):
         frappe.set_user(self.outsider)
         with self.assertRaises(frappe.PermissionError):
             move_task(t.name, "Scheduled")
+
+    # ── bulk_assign (Fokus feed batch triage) ────────────────────────
+    def test_bulk_assign_sets_all(self):
+        frappe.set_user(self.leader)
+        t1 = self._make_task("bulk1")
+        t2 = self._make_task("bulk2")
+        r = bulk_assign(PROJ, [t1.name, t2.name], self.member)
+        self.assertTrue(r["ok"])
+        self.assertEqual(frappe.db.get_value("VT Task", t1.name, "assigned_to"), self.member)
+        self.assertEqual(frappe.db.get_value("VT Task", t2.name, "assigned_to"), self.member)
+
+    def test_bulk_assign_accepts_json_string_ids(self):
+        # frappe.call serializes the list to a JSON string over HTTP.
+        frappe.set_user(self.leader)
+        t = self._make_task("bulkjson")
+        bulk_assign(PROJ, frappe.as_json([t.name]), self.member)
+        self.assertEqual(frappe.db.get_value("VT Task", t.name, "assigned_to"), self.member)
+
+    def test_bulk_assign_rejects_non_team_assignee(self):
+        frappe.set_user(self.leader)
+        t = self._make_task("bulk3")
+        with self.assertRaises(frappe.ValidationError):
+            bulk_assign(PROJ, [t.name], self.outsider)
+
+    def test_bulk_assign_rejects_outsider_caller(self):
+        frappe.set_user(self.leader)
+        t = self._make_task("bulk4")
+        frappe.set_user(self.outsider)
+        with self.assertRaises(frappe.PermissionError):
+            bulk_assign(PROJ, [t.name], self.member)
+
+    def test_bulk_assign_rejects_task_from_other_project(self):
+        # A task whose project != the passed project_id must be rejected even if
+        # the caller can access both projects (cross-project smuggling guard).
+        other = "TEST-BOARD-PROJ-2"
+        if not frappe.db.exists("VT Project", other):
+            p = frappe.get_doc({
+                "doctype": "VT Project", "name": other, "title": "Other Board",
+                "brand": "TEST-BOARD-BRAND", "project_owner": "Administrator",
+                "project_leader": self.leader,
+                "start_date": today(), "end_date": add_days(today(), 30),
+            })
+            p.flags.name_set = True
+            p.insert(ignore_permissions=True)
+        other_task = frappe.get_doc({"doctype": "VT Task", "title": "x", "project": other})
+        other_task.flags.ignore_links = True
+        other_task.insert(ignore_permissions=True)
+        frappe.set_user(self.leader)
+        with self.assertRaises(frappe.ValidationError):
+            bulk_assign(PROJ, [other_task.name], self.member)

@@ -157,6 +157,27 @@ class TestDashboard(FrappeTestCase):
         card = project_detail(self.project)["open_tasks"][0]
         self.assertIn("start_date", card)
 
+    def test_project_detail_card_overdue_flag(self):
+        """overdue:bool is server-computed (site-tz) — drives the Fokus feed
+        Terlambat / Jatuh Tempo buckets. Compared via getdate(today()) both sides
+        so it never drifts with the browser timezone."""
+        frappe.set_user("Administrator")
+        today = frappe.utils.today()
+        self._make_task(self.user_a, frappe.utils.add_days(today, -2), title="late")
+        self._make_task(self.user_a, today, title="due today")
+        self._make_task(self.user_a, frappe.utils.add_days(today, 5), title="future")
+        frappe.set_user(self.user_a)
+        cards = {c["title"]: c for c in project_detail(self.project)["open_tasks"]}
+        self.assertIn("overdue", cards["late"])
+        self.assertTrue(cards["late"]["overdue"])
+        self.assertFalse(cards["due today"]["overdue"])  # due today is NOT overdue
+        self.assertFalse(cards["future"]["overdue"])
+        # due_today is server-computed (site-tz) too, so the feed bucket never
+        # drifts with the browser clock.
+        self.assertTrue(cards["due today"]["due_today"])
+        self.assertFalse(cards["late"]["due_today"])
+        self.assertFalse(cards["future"]["due_today"])
+
     def test_project_detail_forbidden(self):
         # A user with no access to the project must be rejected.
         outsider = _ensure_user("outsider-dash@test.local")
