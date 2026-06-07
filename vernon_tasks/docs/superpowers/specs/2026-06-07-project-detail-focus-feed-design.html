@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vernon Tasks — Project Detail "Fokus Feed" redesign</title>
+<link rel="stylesheet" href="../../assets/style.css" />
+<script defer src="../../assets/layout.js"></script>
+</head>
+<body data-root="../../" data-audience="dev">
+<div class="shell">
+
+<header class="hero">
+  <h1>Project Detail — "Fokus Feed" redesign</h1>
+  <div class="sub">Vernon Tasks documentation · tournament winner</div>
+  <div class="meta">
+    <span>Source: docs/superpowers/specs/2026-06-07-project-detail-focus-feed-design.html</span>
+  </div>
+</header>
+
+<h1 id="project-detail-focus-feed">Project Detail — "Fokus Feed" redesign</h1>
+<p><strong>Date:</strong> 2026-06-07
+<strong>Task size:</strong> L (new default panel + quick-capture + load lens + batch-assign; 2 backend touches; CSS; tests)
+<strong>App ownership:</strong> 100% <code>vernon_tasks</code> — no Frappe core files touched
+<strong>Base branch:</strong> <code>master</code>
+<strong>Selection:</strong> winner of a 4-candidate, 3-judge UX tournament (weighted rubric)</p>
+<hr />
+
+<h2 id="1-goal">1. Goal</h2>
+<p>Optimize <code>vt-project-detail</code> for a <strong>project leader's daily usage</strong>. Two
+explicit pains drive the redesign: (a) the #1 daily action — <em>create + triage tasks
+fast</em> — costs too many clicks/modals today; (b) <em>priorities are hard to spot</em>
+across 7 tabs. The redesign makes priority the page's information architecture and
+collapses the 7 tabs into a segmented switch with a new <strong>Fokus</strong> feed as the default.</p>
+
+<h3 id="11-tournament">1.1 Tournament result</h3>
+<table>
+  <tr><th>Rank</th><th>Candidate</th><th>Weighted score (3 judges, /100)</th></tr>
+  <tr><td>1 — winner</td><td><strong>Priority Radar (Focus Feed)</strong></td><td>88.7</td></tr>
+  <tr><td>2</td><td>Triage Cockpit</td><td>85.3</td></tr>
+  <tr><td>3</td><td>Two-Pane Leader Workbench</td><td>79.3</td></tr>
+  <tr><td>4</td><td>Enriched Board-First</td><td>~73</td></tr>
+</table>
+<p>Rubric weights: triage+create speed 30, priority visibility 25, leader oversight 20,
+ergonomics 15, implementation fit 10. The winner dominates the top-2 criteria (55% of
+score) and is the cheapest to ship (reuses the already-fetched board payload). The final
+design grafts the strongest ideas from the runners-up.</p>
+
+<h2 id="2-decisions">2. Approved decisions</h2>
+<ul>
+  <li><strong>Default landing view:</strong> Fokus feed (board reachable in one click via the <code>Papan</code> segment).</li>
+  <li><strong>Scope:</strong> full design — Fokus feed + sticky quick-capture + inline self-emptying triage + KEPADA load lens + batch bulk-assign + the two backend touches below.</li>
+</ul>
+
+<h2 id="3-layout">3. Layout</h2>
+<pre><code>┌──────────────────────────────────────────────────────────────┐
+│ Kampanye Lebaran      ●Berisiko   ▓▓▓▓▓▓░░░░ 58%    [+ Tugas]  │ ← HERO (sticky)
+│ 👤Budi · 1Mar–30Jun · Tahap DO · 🏃Sprint 4 (5h) · 32/55 ✅·⛔3 │
+├──────────────────────────────────────────────────────────────┤
+│ ⦿ Fokus   Papan   Kalender   Sprint   Milestone   Tim    ⋯    │ ← VIEW SWITCH (replaces 7 tabs)
+├──────────────────────────────────────────────────────────────┤
+│ ⚡Tambah: [Judul tugas…………] [👤▾][⚑▾][📅▾]            [Buat ↵] │ ← QUICK-CAPTURE (autofocus)
+├──────────────────────────────────────────────────────────────┤
+│ [🔍 cari…]  Prioritas:▾   ⚠ 12 perlu aksi                     │ ← TOOLBAR
+│ Tim:  Andi 12⚠  Budi 8  Sari 9  Rina 4  · Tanpa PIC 7         │ ← KEPADA load lens (click=filter)
+│                                                                │
+│ ▾ ⛔ TERLAMBAT (4)                          tenggat terlewat   │
+│  │ Desain banner utama        🔴Critical · 2h lalu            │
+│  │   📅14Mar   👤[ pilih ▾]                            ⋮       │ ← only MISSING chip shown
+│ ▾ 🚫 DIBLOKIR (3)                                              │
+│  │ Integrasi pembayaran  🔴Critical·Sari  [Buka blok →]  ⋮    │
+│ ▾ 👤 BELUM DITUGASKAN (5)        [☐ pilih semua]               │
+│  │ ☐ Riset kompetitor    ⚑—  👤[ pilih ▾]  📅[ set ]   ⋮     │
+│ ▸ ⚠ BERISIKO (2)                                               │
+│ ▸ 🗓 JATUH TEMPO HARI INI (3)                                  │
+│ ▸ ✅ Lainnya / terjadwal (38)                  (collapsed)     │
+│ ───────────────────────────────────────────────────────────── │
+│  ☑ 3 dipilih:  [👤 Tugaskan ke ▾]   [✕ batal]                 │ ← BULK BAR (on select)
+└──────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<h3 id="31-regions">3.1 Regions</h3>
+<table>
+  <tr><th>Region</th><th>Responsibility</th><th>Data / mutation</th></tr>
+  <tr><td>HERO (sticky)</td><td>title · risk chip · percent_done · meta (leader, dates, phase, sprint+days-left, done/total, blockers) · sticky <code>[+ Tugas]</code></td><td><code>project_detail.header/counts/blockers</code></td></tr>
+  <tr><td>VIEW SWITCH (sticky)</td><td>⦿Fokus (default) · Papan · Kalender · Sprint · Milestone · Tim · ⋯ (Gantt + Ringkasan)</td><td>segments lazy-render the EXISTING <code>render_*</code> fns verbatim</td></tr>
+  <tr><td>QUICK-CAPTURE (sticky)</td><td>autofocused title + 3 inline pickers [PIC][prioritas][tenggat] + Buat</td><td><code>create_task(project_id, title, column=first PDCA col, values)</code></td></tr>
+  <tr><td>TOOLBAR</td><td>client search + priority filter + live "⚠ N perlu aksi" counter</td><td>client-side over loaded board set</td></tr>
+  <tr><td>KEPADA load lens</td><td>per-member open-task count (overloaded bolded amber) + "Tanpa PIC (N)"; click = filter buckets</td><td><code>board.team</code> + client count; no API</td></tr>
+  <tr><td>FOKUS FEED</td><td>severity buckets, auto-expand non-empty, collapse empty; rows inline-editable + self-emptying</td><td>FLATTEN <code>project_board.columns</code> client-side; bucket = first-match</td></tr>
+  <tr><td>BULK BAR</td><td>slides up on ≥1 selection; assign whole stack to one PIC</td><td>new <code>board_mutations.bulk_assign</code> (see §5)</td></tr>
+  <tr><td>FULL EDIT</td><td>row title / ⋮ → existing full dialog for estimate/deps/schedule/override</td><td><code>get_task</code> → <code>update_task</code></td></tr>
+</table>
+
+<h2 id="4-behavior">4. Behavior</h2>
+
+<h3 id="41-priority-surface">4.1 Priority surface (the core)</h3>
+<p>Priority IS the IA, with redundant encoding so nothing actionable hides:</p>
+<ol>
+  <li><strong>Bucket order = ranking:</strong> Terlambat › Diblokir › Belum Ditugaskan › Berisiko › Jatuh Tempo Hari Ini › collapsed "Lainnya/terjadwal". A task lands in exactly <strong>one</strong> bucket (first match) so counts never double-add; its row still renders all its flag chips.</li>
+  <li><strong>Trouble-proportional render:</strong> non-empty action buckets auto-expand; empty ones collapse to a muted "0". A healthy project is mostly collapsed greens; a troubled one is a wall of red. The visual mass IS the signal.</li>
+  <li><strong>Global read:</strong> hero risk chip + "⛔N blocker" + toolbar "⚠N perlu aksi" (dedup union) give the total before any scroll.</li>
+  <li><strong>Card color:</strong> priority chips reuse existing <code>.vb-prio-*</code> tokens; rows keep server sort (Critical-first, earliest deadline).</li>
+  <li><strong>Date-correct overdue:</strong> Terlambat/Due-today use the new server <code>overdue:bool</code> (<code>getdate(today())</code>, site-tz) — NOT browser-local <code>Date</code>.</li>
+  <li><strong>Unassigned self-announces:</strong> the 👤 chip renders as an empty "[ pilih ▾]" — a to-do that is also its own fix.</li>
+</ol>
+
+<h3 id="42-triage-flow">4.2 Create + triage flow</h3>
+<ul>
+  <li><strong>Create (≤2 clicks, 0 modal):</strong> quick-capture title autofocused on load (<kbd>n</kbd> re-focuses) → type → Enter → <code>create_task</code> into the first PDCA column. To capture fully-triaged: pick priority/PIC/date via lightweight popovers (NOT a Dialog) → Enter. The slim 5-field Dialog (<code>[+ Tugas]</code>) stays for choosing a non-default column; "Detail lengkap…" escalates to the existing full <code>open_task_dialog</code>.</li>
+  <li><strong>Triage (1 click/field, inline, self-emptying):</strong> untriaged tasks auto-surface (<code>!assigned_to</code> → Belum Ditugaskan; overdue/no-deadline → Terlambat). Each row renders ONLY the empty chips. Click 👤 → dropdown of <code>board.team</code> → <code>patch_task('assigned_to')</code>; ⚑ → 4-item menu → <code>patch_task('priority')</code>; 📅 → native date → <code>patch_task('deadline')</code>. On success the row re-derives; when it matches no action bucket it animates out (work-down queue).</li>
+  <li><strong>Batch triage:</strong> Belum Ditugaskan header <code>[☐ pilih semua]</code> → bulk bar → <code>[Tugaskan ke ▾]</code> → <code>bulk_assign(project_id, ids, user)</code>.</li>
+  <li><strong>Unblock:</strong> a Diblokir row shows <code>[Buka blok →]</code> only when the target is in that card's <code>allowed_targets</code> → <code>move_task(id, target)</code>.</li>
+  <li><strong>Keyboard:</strong> <kbd>n</kbd> focus capture, <kbd>/</kbd> focus search, Enter submit, Esc closes popover / clears selection.</li>
+  <li><strong>Persistence:</strong> per-bucket collapse state in <code>localStorage["vt_pd_collapse_&lt;project_id&gt;"]</code>.</li>
+</ul>
+
+<h2 id="5-backend">5. Backend changes (minimal — judge-flagged)</h2>
+<table>
+  <tr><th>Change</th><th>File</th><th>Why</th></tr>
+  <tr><td><strong>Add <code>overdue:bool</code></strong> to each task row, computed <code>getdate(deadline) &lt; getdate(today())</code> (site-tz)</td><td><code>task/api/dashboard.py</code> <code>_map_task_row</code></td><td>Timezone-correct Terlambat / Jatuh Tempo buckets — kills the documented site-tz-vs-UTC footgun. ~2 lines.</td></tr>
+  <tr><td><strong>New guarded <code>bulk_assign(project_id, task_ids, user)</code></strong></td><td><code>task/api/board_mutations.py</code></td><td>Batch-assign. Runs <code>_assert_project_access</code> + per-id team-member check + rate-limit, then sets <code>assigned_to</code>. <em>Reason it's a new endpoint, not reusing <code>portal_projects.bulk_reassign</code>: that one has login-only authz + raw <code>db.set_value</code> bypassing the controller — unsafe to expose from the board.</em></td></tr>
+</table>
+<p>All other behavior (per-assignee counts, search, filter, sort, bucketing) is derived
+client-side from the already-fetched <code>project_board</code> payload — no other endpoints.
+New whitelist 404s until backend restart (<code>docker restart frappe-backend-1</code>).</p>
+
+<h2 id="6-vs-current">6. What changes vs current</h2>
+<ul>
+  <li><strong>Removed as tabs:</strong> 7-tab bar → 6-item segmented switch; <strong>Fokus</strong> is the new default. <strong>Ringkasan</strong> is subsumed by the Fokus feed (richer open-task surface); <strong>Gantt</strong> moves under "⋯".</li>
+  <li><strong>Kept (unchanged code):</strong> Papan (kanban), Kalender, Sprint, Milestone, Tim — their <code>render_*</code> fns render verbatim behind the segment switch.</li>
+  <li><strong>Added:</strong> Fokus feed, sticky quick-capture, KEPADA load lens, batch-assign bulk bar.</li>
+  <li><strong>Changed behavior:</strong> page opens to the attention feed, not the board (deliberate, aligned with leader-oversight thesis). First-run hint via <code>vt_render_empty_state</code> explains the new default.</li>
+</ul>
+
+<h2 id="7-implementation">7. Implementation</h2>
+<p>Single page file <code>task/page/vt_project_detail/vt_project_detail.js</code> (vanilla JS +
+jQuery + frappe.ui, no build) + styles appended to <code>public/css/vt_home.css</code> (reuse
+<code>--vh-*</code> / <code>.vh-chip-*</code> / <code>.vb-prio-*</code> tokens). The existing
+<code>load_page</code> already does <code>Promise.all(project_detail, project_board)</code> in
+<code>on_page_show</code> — the feed slots into <code>render_page</code>. Pure helpers (keep
+handlers logic-free, functions &lt; 40 lines, named constants for bucket keys/order/labels):</p>
+<ol>
+  <li><code>flatten_board(board)</code> → all cards.</li>
+  <li><code>bucketize(cards, today)</code> → ordered buckets via server <code>overdue</code> + <code>kanban_status</code> + <code>assigned_to</code> + <code>risk_flag</code> + deadline.</li>
+  <li><code>render_feed()</code> → collapsible sections; each row a template rendering only-missing chips.</li>
+  <li>inline chip handlers → <code>patch_task</code> then re-run <code>bucketize</code> + re-render in place (mirror existing <code>reload_board</code>).</li>
+  <li><code>assignee_load(cards, team)</code> → KEPADA counts.</li>
+  <li>quick-capture → one input + 3 popovers + <code>create_task</code>.</li>
+  <li>bulk bar → selection state + <code>bulk_assign</code>.</li>
+  <li>Papan/Kalender/Sprint/Milestone/Tim reuse existing <code>render_*</code> behind the segment switch (<code>LAZY_TABS</code> map already exists).</li>
+</ol>
+
+<h2 id="8-tests">8. Tests</h2>
+<ul>
+  <li><code>task/api/test_*</code>: <code>_map_task_row</code> returns <code>overdue</code> correct across site-tz boundary (use <code>getdate(today())</code> both sides, build dates via <code>add_days</code>); deadline today → <code>overdue=False</code>, yesterday → <code>True</code>, none → <code>False</code>.</li>
+  <li><code>test_board_mutations.py</code>: <code>bulk_assign</code> — happy path sets assignee on all ids; rejects a task_id outside the project (<code>_assert_project_access</code>); rejects a non-team assignee; honors rate-limit; permission denied for non-member caller.</li>
+  <li><code>test_vt_project_detail.py</code>: page still loads; segment list contains Fokus default; existing assertions preserved.</li>
+  <li>Bucketing/derivation are pure JS helpers — assert the contract via the backend <code>overdue</code> field; client helpers covered by the page smoke test + manual verification.</li>
+</ul>
+
+<h2 id="9-risks">9. Risks &amp; honest caps</h2>
+<ul>
+  <li><strong>200-task board cap</strong> (<code>DETAIL_TASK_LIMIT</code>): an overdue/unassigned task beyond the cap is missed (same as today's Ringkasan). Server-side pre-bucketing is the documented later add if a project exceeds 200 open tasks.</li>
+  <li><strong>Date correctness:</strong> Terlambat/Due-today MUST use the new server <code>overdue:bool</code>; browser-local <code>Date</code> would mis-bucket near midnight. The backend change is non-optional.</li>
+  <li><strong>bulk_reassign authz:</strong> never call <code>portal_projects.bulk_reassign</code> directly from the board — ship the guarded <code>bulk_assign</code> wrapper first.</li>
+  <li><strong>patch_task rate-limit</strong> (30/min): one-row-at-a-time bulk triage could brush it; the batch path mitigates; surface a 429 toast.</li>
+  <li><strong>risk_flag is async</strong> (stamped by <code>risk_evaluator</code>) — Berisiko is not a live recompute; a freshly-late task still shows under Terlambat.</li>
+  <li><strong>Single-bucket placement:</strong> a blocked+overdue task counts once (Diblokir); per-row chips partially compensate. Accepted to keep counts non-overlapping.</li>
+  <li><strong>Board demotion:</strong> behavior change for kanban-spatial users; mitigated by one-click Papan + first-run hint.</li>
+  <li><strong>Restart:</strong> new <code>bulk_assign</code> whitelist + <code>overdue</code> field need a backend restart (gunicorn imports modules once at worker start).</li>
+</ul>
+
+</div>
+</body>
+</html>
