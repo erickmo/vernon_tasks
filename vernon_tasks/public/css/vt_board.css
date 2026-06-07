@@ -2,7 +2,12 @@
    Scoped under .vt-detail (a .vt-home child) so it inherits the --vh-* tokens
    and never leaks into the rest of desk. Paired with vt_project_detail.js. */
 
-.vt-detail .vb-hero { margin: 20px 0 16px; width: 100%; box-sizing: border-box; overflow-x: hidden; }
+/* The page column must never exceed the viewport. If it sits inside a flex layout
+   (desk main), min-width:0 lets it shrink instead of growing to its widest child;
+   overflow-x:clip caps any residual bleed. The kanban board keeps its OWN
+   overflow-x:auto scroll container, so clipping here can't break it. */
+.vt-detail { min-width: 0; max-width: 100%; overflow-x: clip; }
+.vt-detail .vb-hero { margin: 20px 0 16px; width: 100%; box-sizing: border-box; }
 .vt-detail .vb-hero-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 .vt-detail .vb-hero-chips { display: flex; gap: 6px; }
 .vt-detail .vb-hero-bar { margin: 10px 0 6px; }
