@@ -1,33 +1,54 @@
 import math
 import statistics
-import frappe
-from frappe.utils import add_days, getdate, today
+from frappe.utils import add_days, date_diff, getdate, today
+from vernon_tasks.task.services import vt_item_tree as tree
 from vernon_tasks.task.services.velocity_service import get_velocity_trend
 
 _MIN_SPRINTS = 3
 _DEFAULT_SPRINT_DAYS = 14
+# On VT Item the legacy VT Task done phase ("DONE") is the unified completion
+# phase "CLOSED"; the legacy VT Sprint.status "Closed" is now sprint_state.
+_DONE_PHASE = "CLOSED"
+_CLOSED_STATUS = "Closed"
 
 
 def _remaining_hours(project: str) -> float:
-    row = frappe.db.sql("""
-        SELECT COALESCE(SUM(GREATEST(estimated_minutes - actual_minutes, 0)), 0) AS hrs
-        FROM `tabVT Task`
-        WHERE project = %(project)s
-          AND pdca_phase != 'DONE'
-    """, {"project": project}, as_dict=True)
-    return float(row[0]["hrs"])
+    """Sum of remaining work (estimated − actual, per-row clamped ≥ 0) across a
+    Project's not-yet-done Task nodes.
+
+    Replaces the legacy `VT Task WHERE project=… AND pdca_phase!='DONE'` scan:
+    Tasks are VT Item descendants of the Project node (spanning Sprints), so use
+    nested-set descendants; the done phase 'DONE' is now 'CLOSED'.
+    estimated_minutes/actual_minutes/pdca_phase keep their names.
+    """
+    tasks = tree.descendants(
+        project,
+        "Task",
+        filters={"pdca_phase": ["!=", _DONE_PHASE]},
+        fields=["estimated_minutes", "actual_minutes"],
+    )
+    return float(sum(max((t.estimated_minutes or 0) - (t.actual_minutes or 0), 0)
+        for t in tasks))
 
 
 def _median_sprint_length(project: str) -> int:
-    rows = frappe.db.sql("""
-        SELECT DATEDIFF(end_date, start_date) + 1 AS days
-        FROM `tabVT Sprint`
-        WHERE project = %(project)s
-          AND status = 'Closed'
-    """, {"project": project}, as_dict=True)
-    if not rows:
+    """Median duration (end − start + 1 days) of a Project's closed Sprints.
+
+    Replaces the legacy `VT Sprint WHERE project=… AND status='Closed'` scan:
+    Sprints are VT Item children of the Project node (status→sprint_state).
+    start_date/end_date keep their names. Falls back to the default length when
+    there are no closed sprints.
+    """
+    sprints = tree.children(
+        project,
+        "Sprint",
+        filters={"sprint_state": _CLOSED_STATUS},
+        fields=["start_date", "end_date"],
+    )
+    if not sprints:
         return _DEFAULT_SPRINT_DAYS
-    return int(statistics.median([int(r["days"]) for r in rows]))
+    days = [date_diff(s.end_date, s.start_date) + 1 for s in sprints]
+    return int(statistics.median(days))
 
 
 def _bucket_mean(values, pick):
