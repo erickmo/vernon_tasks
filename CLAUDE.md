@@ -25,6 +25,28 @@ The app is now desk-only: `/` redirects to `/app` (or `/login` for guests).
 - Shared first-run empty states use `public/js/vt_empty.js`
   (`window.vt_render_empty_state`).
 
+## Unified Hierarchy (VT Item) — P1
+
+`VT Item` (`task/doctype/vt_item/`) is the canonical OKR→Task tree: one
+Frappe nested-set doctype (`is_tree:1`, controller extends `NestedSet`)
+discriminated by `node_type` (OKR/KPI/Project/Sprint/Task), fat single
+doctype with per-type fields gated by `depends_on`. Controller owns
+per-type autoname (`OKR-`/`KPI-`/`PROJ-`/`SP-`/`TASK-`), parent-type
+validation (strict order + flexible skips: Task may skip Sprint, Project
+may skip OKR, KPI at root or under OKR), brand inheritance from nearest
+ancestor, and `percent_done` rollup up the chain. Measurement rows hang
+off nodes via NEW child doctypes `VT Item Key Result` (under OKR) and
+`VT Item KPI Entry` (under KPI) — the legacy standalone `Key Result` /
+`KPI Entry` doctypes are left untouched (converting them broke OKR; they
+are dropped with the rest of the legacy hierarchy in P4).
+
+**Status: P1 only (additive).** Legacy Objective / VT Project / VT Sprint
+/ VT Task / KPI Definition still exist — the fresh-start drop patch and
+all consumer rewrites (services → APIs → pages/reports) are P2–P4. Do not
+assume consumers read VT Item yet. Spec:
+`docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html`;
+P1 plan: `docs/superpowers/plans/2026-06-07-vt-item-p1-doctype.md`.
+
 ## Frappe Stack Skills
 
 Load when working on this project:
