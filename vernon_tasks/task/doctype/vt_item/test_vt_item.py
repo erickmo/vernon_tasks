@@ -66,3 +66,14 @@ class TestVTItem(FrappeTestCase):
 		okr = _make("OKR", "Branded OKR", brand=brand)
 		proj = _make("Project", "Child proj", parent=okr.name)  # no brand set
 		self.assertEqual(proj.brand, brand)
+
+	def test_percent_done_rolls_up(self):
+		# spec §5 — child percent_done propagates to ancestors (mean)
+		okr = _make("OKR", "Rollup OKR")
+		proj = _make("Project", "Rollup proj", parent=okr.name)
+		_make("Task", "t1", parent=proj.name, percent_done=100)
+		_make("Task", "t2", parent=proj.name, percent_done=0)
+		proj.reload()
+		self.assertEqual(proj.percent_done, 50)
+		okr.reload()
+		self.assertEqual(okr.percent_done, 50)

@@ -81,3 +81,26 @@ class VTItem(NestedSet):
 				self.brand = brand
 				return
 			ancestor = parent
+
+	def on_update(self) -> None:
+		"""Maintain nested set, then roll percent_done up the chain."""
+		super().on_update()  # NestedSet keeps lft/rgt consistent
+		self._rollup_ancestors()
+
+	def _rollup_ancestors(self) -> None:
+		"""Set each ancestor's percent_done to the mean of its direct
+		children (spec §5). Uses set_value (no save) to avoid recursion."""
+		ancestor = self.parent_vt_item
+		while ancestor:
+			children = frappe.get_all(
+				"VT Item",
+				filters={"parent_vt_item": ancestor},
+				pluck="percent_done",
+			)
+			avg = round(sum(children) / len(children), 2) if children else 0
+			frappe.db.set_value(
+				"VT Item", ancestor, "percent_done", avg, update_modified=False
+			)
+			ancestor = frappe.db.get_value(
+				"VT Item", ancestor, "parent_vt_item"
+			)
