@@ -149,7 +149,7 @@ def check_deadline_notifications() -> None:
 	tomorrow = add_days(today(), 1)
 	approaching = tree.nodes(
 		"Task",
-		filters={"deadline": tomorrow, "pdca_phase": ["not in", ["DONE"]], "owner_user": ["!=", ""]},
+		filters={"deadline": tomorrow, "pdca_phase": ["not in", ["CLOSED"]], "owner_user": ["!=", ""]},
 		fields=["name", "title", "owner_user"],
 	)
 	for task in approaching:

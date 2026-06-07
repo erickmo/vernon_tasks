@@ -33,6 +33,20 @@ ALLOWED_PARENTS = {
 	"Task": {"Project", "Sprint"},
 }
 
+# Task lifecycle (pdca_phase) → board column (kanban_status). Mirrors the
+# legacy VT Task state machine; the unified terminal phase is CLOSED (shared
+# with OKR/Project) and maps to the "Done" board column.
+PDCA_KANBAN_MAP = {
+	"BACKLOG": "Backlog",
+	"PLAN": "Scheduled",
+	"DO": "In Progress",
+	"CHECK": "In Review",
+	"ACT": "Revision",
+	"CLOSED": "Done",
+}
+# Orthogonal flag: overrides the PDCA-derived column when set directly.
+KANBAN_BLOCKED = "Blocked"
+
 
 class VTItem(NestedSet):
 	"""Single node in the OKR→Task tree, typed by `node_type`."""
@@ -52,6 +66,16 @@ class VTItem(NestedSet):
 		self._validate_parent_type()
 		self._inherit_brand()
 		self._sync_is_group()
+		self._sync_kanban_status()
+
+	def _sync_kanban_status(self) -> None:
+		"""Derive a Task node's board column from its pdca_phase (legacy VT Task
+		behavior). `Blocked` is orthogonal — set directly, never overwritten."""
+		if self.node_type != "Task" or self.kanban_status == KANBAN_BLOCKED:
+			return
+		mapped = PDCA_KANBAN_MAP.get(self.pdca_phase)
+		if mapped:
+			self.kanban_status = mapped
 
 	def _sync_is_group(self) -> None:
 		"""A node with children must be a group (NestedSet rejects a leaf that

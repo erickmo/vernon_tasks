@@ -150,7 +150,7 @@ def _kr_meta_for_project(project_id: str) -> dict[str, dict]:
 
 
 def _group_by_pdca(_p: str, tasks: list[dict]) -> list[dict]:
-	order = ["BACKLOG", "PLAN", "DO", "CHECK", "DONE", "ACT"]
+	order = ["BACKLOG", "PLAN", "DO", "CHECK", "ACT", "CLOSED"]
 	bucket_map = {phase: [] for phase in order}
 	for t in tasks:
 		bucket_map.setdefault(t["pdca_phase"] or "BACKLOG", []).append(_task_row(t))
