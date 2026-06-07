@@ -174,15 +174,17 @@
 .vt-detail .vb-bucket-selall { margin-left: auto; background: none; border: none; cursor: pointer; font-size: 11px; color: var(--vh-blue); }
 .vt-detail .vb-bucket-body { border-top: 1px solid var(--vh-border); }
 
-/* Feed rows */
-.vt-detail .vb-feed-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid #f1f5f9; }
+/* Feed rows — wrap on narrow widths so a dense row never forces page overflow */
+.vt-detail .vb-feed-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 8px 14px; border-bottom: 1px solid #f1f5f9; max-width: 100%; }
 .vt-detail .vb-feed-row:last-child { border-bottom: none; }
 .vt-detail .vb-feed-row:hover { background: #f8fafc; }
 .vt-detail .vb-row-sel { flex: 0 0 auto; }
-.vt-detail .vb-feed-title { flex: 1 1 auto; font-size: 13px; color: var(--vh-navy-2); cursor: pointer; min-width: 120px; }
+/* min-width:0 lets the title shrink + ellipsize instead of pushing the row wide */
+.vt-detail .vb-feed-title { flex: 1 1 160px; min-width: 0; font-size: 13px; color: var(--vh-navy-2); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-detail .vb-feed-title:hover { color: var(--vh-blue); }
-.vt-detail .vb-feed-flags { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
-.vt-detail .vb-feed-levers { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.vt-detail .vb-feed-flags { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; flex-wrap: wrap; }
+.vt-detail .vb-feed-levers { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; flex-wrap: wrap; }
 .vt-detail .vb-late { font-size: 11px; color: var(--vh-red); font-weight: 600; }
 .vt-detail .vb-chip.vb-set { background: #eef2f7; color: var(--vh-text-2); }
 
@@ -192,7 +194,10 @@
   padding: 3px 8px; font-size: 11px; color: var(--vh-text-2); cursor: pointer;
 }
 .vt-detail .vb-lever:hover { border-color: var(--vh-blue); color: var(--vh-blue); }
-.vt-detail .vb-lever-pic, .vt-detail .vb-lever-prio { border-style: solid; }
+.vt-detail .vb-lever-pic, .vt-detail .vb-lever-prio { border-style: solid; max-width: 130px; }
+.vt-detail .vb-lever-date { border-style: solid; white-space: nowrap; }
+/* the native date field only appears after the 📅 button is clicked */
+.vt-detail .vb-lever-dateinput { border: 1px solid var(--vh-blue); border-radius: 6px; padding: 2px 6px; font-size: 11px; }
 .vt-detail .vb-unblock { border-color: rgba(220,38,38,0.4); color: #b91c1c; border-style: solid; }
 .vt-detail .vb-more { border: none; font-size: 15px; color: var(--vh-text-3); padding: 0 4px; }
 .vt-detail .vb-more:hover { color: var(--vh-blue); }

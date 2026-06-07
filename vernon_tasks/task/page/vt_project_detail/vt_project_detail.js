@@ -464,11 +464,20 @@ function priority_lever(ctx, t) {
     return sel;
 }
 
+// A compact "📅 tenggat" button that reveals a native date input on click, so the
+// bare mm/dd/yyyy field only appears when the leader is actually setting a date.
 function deadline_lever(ctx, t) {
-    const input = $('<input type="date" class="vb-lever vb-lever-date" title="Tenggat"/>');
-    input.on("click", (e) => e.stopPropagation());
-    input.on("change", function () { if (this.value) patch_field(ctx, t.id, "deadline", this.value); });
-    return input;
+    const btn = $('<button class="vb-lever vb-lever-date">📅 tenggat</button>');
+    btn.on("click", (e) => {
+        e.stopPropagation();
+        const input = $('<input type="date" class="vb-lever vb-lever-dateinput" title="Tenggat"/>');
+        input.on("click", (ev) => ev.stopPropagation());
+        input.on("change", function () { if (this.value) patch_field(ctx, t.id, "deadline", this.value); });
+        btn.replaceWith(input);
+        input.trigger("focus");
+        if (input[0] && input[0].showPicker) { try { input[0].showPicker(); } catch (err) { /* unsupported */ } }
+    });
+    return btn;
 }
 
 function unblock_btn(ctx, t) {
