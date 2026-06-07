@@ -13,7 +13,7 @@
     "kpi_section","frequency","unit","target_value","allow_negative","formula","kpi_entries",
     "project_section","leader_user","health_score","health_history_json","blocked_days_threshold","slip_pct_threshold","capacity_pct_threshold","team_members","milestones","documentation",
     "sprint_section","goal","actual_velocity","burndown_actual_json","outcome","sprint_state",
-    "task_section","kanban_status","kanban_rank","priority","risk_flag","deadline","completion_date","estimated_minutes","actual_minutes","review_estimated_minutes","review_scheduled_date","weight","base_points","earned_points","leader_override_points","override_reason","rejection_note","revision_count","is_recurring","recurring_rule","next_occurrence","dependencies","schedule_entries",
+    "task_section","kanban_status","kanban_rank","priority","risk_flag","deadline","completion_date","estimated_minutes","actual_minutes","review_estimated_minutes","review_scheduled_date","weight","base_points","earned_points","leader_override_points","override_reason","rejection_note","revision_count","is_recurring","recurring_rule","next_occurrence","recurring_parent","dependencies","schedule_entries",
     "nsm_section","lft","rgt","old_parent"
   ],
   "fields": [
@@ -32,7 +32,7 @@
     {"fieldname": "period", "fieldtype": "Data", "label": "Period", "depends_on": "eval:doc.node_type=='OKR'"},
     {"fieldname": "period_start", "fieldtype": "Date", "label": "Period Start", "depends_on": "eval:doc.node_type=='OKR'"},
     {"fieldname": "period_end", "fieldtype": "Date", "label": "Period End", "depends_on": "eval:doc.node_type=='OKR'"},
-    {"fieldname": "pdca_phase", "fieldtype": "Select", "label": "PDCA Phase", "options": "PLAN\nDO\nCHECK\nACT\nCLOSED", "depends_on": "eval:['OKR','Project'].includes(doc.node_type)"},
+    {"fieldname": "pdca_phase", "fieldtype": "Select", "label": "PDCA Phase", "options": "\nBACKLOG\nPLAN\nDO\nCHECK\nACT\nCLOSED", "depends_on": "eval:['OKR','Project','Task'].includes(doc.node_type)"},
     {"fieldname": "health_status", "fieldtype": "Select", "label": "Health", "options": "Open\nOn Track\nAt Risk\nClosed", "depends_on": "eval:['OKR','Project'].includes(doc.node_type)"},
     {"fieldname": "key_results", "fieldtype": "Table", "label": "Key Results", "options": "VT Item Key Result", "depends_on": "eval:doc.node_type=='OKR'"},
 
@@ -83,6 +83,7 @@
     {"fieldname": "is_recurring", "fieldtype": "Check", "label": "Is Recurring", "default": "0", "depends_on": "eval:doc.node_type=='Task'"},
     {"fieldname": "recurring_rule", "fieldtype": "Link", "label": "Recurring Rule", "options": "Recurring Rule", "depends_on": "eval:doc.node_type=='Task'"},
     {"fieldname": "next_occurrence", "fieldtype": "Date", "label": "Next Occurrence", "depends_on": "eval:doc.node_type=='Task'"},
+    {"fieldname": "recurring_parent", "fieldtype": "Link", "label": "Recurring Parent", "options": "VT Item", "read_only": 1, "description": "Recurring template that spawned this Task instance (lineage, not tree position).", "depends_on": "eval:doc.node_type=='Task'"},
     {"fieldname": "dependencies", "fieldtype": "Table", "label": "Dependencies", "options": "Task Dependency", "depends_on": "eval:doc.node_type=='Task'"},
     {"fieldname": "schedule_entries", "fieldtype": "Table", "label": "Schedule Entries", "options": "Task Schedule Entry", "depends_on": "eval:doc.node_type=='Task'"},
 

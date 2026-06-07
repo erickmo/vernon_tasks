@@ -1,0 +1,1033 @@
+[
+  {
+    "service": "task/services/okr_rollup_service.py",
+    "legacy_doctypes": [
+      "Objective",
+      "Key Result"
+    ],
+    "queries": [
+      {
+        "current": "SELECT o.name, o.title, o.objective_owner, o.status, AVG(kr.progress_percent) AS progress, COUNT(kr.name) AS kr_count FROM `tabObjective` o LEFT JOIN `tabKey Result` kr ON kr.objective=o.name WHERE o.status != 'Closed' [AND o.period = ?] GROUP BY o.name ORDER BY progress DESC, o.title ASC",
+        "tree_equivalent": "1. Query VT Item with filters {node_type='OKR', health_status != 'Closed', [period=?]} 2. For each result, call child_table(okr_node, 'key_results') to fetch VT Item Key Result rows 3. Calculate progress = COALESCE(AVG(row.progress_percent for row in key_results), 0) 4. kr_count = len(key_results) 5. Sort by progress DESC, title ASC. Helper: get_descendants(okr_node, recursive=False, filters={node_type='VT Item Key Result'}) OR direct iteration over parent_vt_item via filtered VT Item query scoped by parent."
+      }
+    ],
+    "fields_referenced": [
+      "Objective.name",
+      "Objective.title",
+      "Objective.objective_owner",
+      "Objective.status",
+      "Objective.period",
+      "Key Result.progress_percent",
+      "Key Result.name"
+    ],
+    "helper_primitives_needed": [
+      "child_table(parent, table_fieldname)",
+      "descendants(node, node_type_filter)",
+      "get_all_with_parent_filter(parent_vt_item)"
+    ],
+    "complexity": "S",
+    "notes": "The okr_rollup_service.py contains a single function `get_okr_rollup(period)` that performs one query: JOIN Objective with Key Result, aggregate progress via AVG(progress_percent), and count Key Results per Objective. Under VT Item migration: (1) OKRs become VT Item nodes with node_type='OKR' carrying fields name (renamed to VT Item.name), title, owner_user (mapped from objective_owner), health_status (mapped from status), period. (2) Key Results become child-table rows in VT Item.key_results (doctype VT Item Key Result), each with fields metric, target_value, current_value, unit, progress_percent, confidence. (3) The LEFT JOIN logic remains: fetch OKR nodes, then for each, fetch its key_results child rows. The aggregation (AVG progress, COUNT kr) happens in-memory post-fetch. No nested-set traversal (lft/rgt) is needed—just parent Link navigation and child-table iteration. Note: status field maps to health_status ('Open' → 'Open', 'Closed' → 'Closed'); objective_owner maps to owner_user. The filtered get_all + child-row iteration can replace the SQL JOIN without requiring tree helpers (no parent-chain walk, no nested descendants query).",
+    "writes": false
+  },
+  {
+    "service": "task/services/velocity_service.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Sprint"
+    ],
+    "queries": [
+      {
+        "current": "SELECT COALESCE(SUM(actual_minutes), 0) FROM tabVT Task WHERE sprint = %(sprint)s AND pdca_phase = %(done)s",
+        "tree_equivalent": "descendants_by_node_type(sprint_vt_item, 'Task') filtered by pdca_phase='DONE', then sum their actual_minutes field"
+      },
+      {
+        "current": "SELECT name FROM tabVT Sprint WHERE project = %(project)s AND status = %(closed)s ORDER BY end_date DESC LIMIT %(n)s",
+        "tree_equivalent": "children_by_node_type(project_vt_item, 'Sprint') filtered by status='Closed', ordered by end_date DESC, limit n"
+      }
+    ],
+    "fields_referenced": [
+      "VT Task.actual_minutes",
+      "VT Task.pdca_phase",
+      "VT Task.sprint",
+      "VT Sprint.name",
+      "VT Sprint.project",
+      "VT Sprint.status",
+      "VT Sprint.end_date"
+    ],
+    "helper_primitives_needed": [
+      "descendants_by_node_type(parent_item, node_type_filter)",
+      "children_by_node_type(parent_item, node_type_filter)",
+      "sum_field_on_descendants(parent_item, node_type_filter, field_name, where_clause)"
+    ],
+    "complexity": "S",
+    "writes": false,
+    "notes": "Both functions are read-only. get_sprint_velocity aggregates Task nodes under a Sprint; get_velocity_trend filters Sprint nodes under a Project. The sprint relationship in VT Task becomes an ancestor traversal (Task's lft/rgt within Sprint's lft/rgt). Project relationship in VT Sprint similarly becomes ancestor traversal. No child-table references (Key Results or KPI Entries) are needed for this service."
+  },
+  {
+    "service": "task/services/personal_velocity_service.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Sprint",
+      "VT Project"
+    ],
+    "queries": [
+      {
+        "current": "get_personal_velocity: SELECT name FROM `tabVT Sprint` WHERE project = %(project)s AND status = %(closed)s ORDER BY end_date DESC LIMIT %(n)s — retrieves N recent closed sprints for a project",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'parent_vt_item': project_vt_item, 'node_type': 'Sprint', 'status': 'Closed'}, fields=['name', 'end_date'], order_by='end_date desc', limit=n) — descendants with lft/rgt within project's nested-set range, filtered by node_type='Sprint'"
+      },
+      {
+        "current": "_hours_in_sprint: SELECT COALESCE(SUM(actual_minutes), 0) AS hrs FROM `tabVT Task` WHERE sprint = %(sprint)s AND pdca_phase = %(done)s [AND assigned_to = %(user)s] — sums actual_minutes for tasks in a sprint, optionally filtered by assignee",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'parent_vt_item': sprint_vt_item, 'node_type': 'Task', 'pdca_phase': 'DONE', [optional: 'assigned_to': user]}, pluck='actual_minutes') then sum — descendants of sprint node with lft between sprint's lft/rgt, filtered by node_type='Task'"
+      },
+      {
+        "current": "_distinct_assignees: SELECT COUNT(DISTINCT assigned_to) AS n FROM `tabVT Task` WHERE sprint = %(sprint)s AND pdca_phase = %(done)s AND assigned_to IS NOT NULL AND assigned_to != '' — counts unique assignees on completed tasks in a sprint",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'parent_vt_item': sprint_vt_item, 'node_type': 'Task', 'pdca_phase': 'DONE', 'assigned_to': ['!=', '']}, pluck='assigned_to') then len(set(...)) — descendants of sprint with node_type='Task', aggregate distinct assigned_to"
+      }
+    ],
+    "fields_referenced": [
+      "VT Task.actual_minutes",
+      "VT Task.sprint",
+      "VT Task.pdca_phase",
+      "VT Task.assigned_to",
+      "VT Sprint.project",
+      "VT Sprint.status",
+      "VT Sprint.end_date",
+      "VT Sprint.name"
+    ],
+    "helper_primitives_needed": [
+      "child_tasks_of_sprint(sprint_vt_item: str) -> list[dict]",
+      "descendants_by_type(parent_vt_item: str, node_type: str) -> list[dict]",
+      "sum_field_for_descendants(parent_vt_item: str, node_type: str, field: str, filters: dict = None) -> float",
+      "distinct_values_for_descendants(parent_vt_item: str, node_type: str, field: str) -> set"
+    ],
+    "complexity": "M",
+    "notes": "This service performs velocity tracking by summing actual_minutes (work completed) across closed sprints in a project. Three core queries: (1) list recent closed sprints hierarchically under a project, (2) sum task minutes per sprint filtered by completion status and optionally by user, (3) count distinct assignees per sprint. On VT Item tree, sprints are child VT Items with node_type='Sprint' under a Project node; tasks are child VT Items with node_type='Task' under Sprint nodes (or Project if backlog). The service does NOT traverse OKR/KPI branches. Field preservation on node_type='Task' (actual_minutes, pdca_phase, assigned_to, sprint mapped to parent_vt_item) and on node_type='Sprint' (status, end_date) enables direct mapping. The main complexity is that legacy sprint filtering by project now requires tree traversal (get descendants with node_type='Sprint' where parent is the project VT Item). No aggregation helpers exist yet; the service would benefit from a child_tasks_of_sprint(sprint_name) and sum_field helper to avoid manual frappe.get_all + sum loops.",
+    "writes": false
+  },
+  {
+    "service": "task/services/burndown_service.py",
+    "legacy_doctypes": [
+      "VT Sprint",
+      "VT Task",
+      "VT Project"
+    ],
+    "queries": [
+      {
+        "current": "frappe.get_doc('VT Sprint', sprint) to fetch sprint_doc.start_date and sprint_doc.end_date",
+        "tree_equivalent": "parent_vt_item(sprint_node) walk to fetch ancestor VT Item node where node_type='Sprint', read lft/rgt bounds; start_date/end_date fields preserved on VT Item Sprint node"
+      },
+      {
+        "current": "frappe.db.sql() SELECT estimated_minutes, completion_date FROM `tabVT Task` WHERE sprint = %(sprint)s AND estimated_minutes > 0",
+        "tree_equivalent": "child_sprints(sprint_node, filter_type='Task') or descendant_tasks(sprint_node, filters={'estimated_minutes': {'>': 0}}); read estimated_minutes and completion_date fields preserved on each VT Item Task node"
+      },
+      {
+        "current": "frappe.db.count('VT Task', filters={'sprint': sprint, 'estimated_minutes': 0})",
+        "tree_equivalent": "descendant_tasks(sprint_node, filters={'estimated_minutes': 0}) -> len() or count via tree traversal (lft/rgt within sprint_node bounds, node_type='Task', estimated_minutes=0)"
+      }
+    ],
+    "fields_referenced": [
+      "VT Sprint.start_date",
+      "VT Sprint.end_date",
+      "VT Task.estimated_minutes",
+      "VT Task.completion_date",
+      "VT Task.sprint"
+    ],
+    "helper_primitives_needed": [
+      "parent_vt_item(node) - walk up parent chain to get ancestor node",
+      "child_sprints(sprint_node, filter_type='Task') - fetch child Task nodes within a sprint",
+      "descendant_tasks(sprint_node, filters) - fetch all Task descendants of a sprint node with optional filters (nested-set lft/rgt traversal)"
+    ],
+    "complexity": "M",
+    "writes": false,
+    "notes": "Service is read-only. Three distinct query patterns: (1) fetch single Sprint node by name to read date bounds; (2) fetch all Tasks in a Sprint with estimated_minutes > 0 to calculate burndown; (3) count Tasks in a Sprint with estimated_minutes = 0 for unestimated counter. All fields (start_date, end_date, estimated_minutes, completion_date) are preserved on VT Item nodes. Relationships transform from foreign keys (VT Task.sprint) to tree ancestry (VT Item Task has parent chain leading to VT Item Sprint). No child-table queries (Key Results, KPI Entries not used). Test fixture shows legacy doctype usage: VT Project, VT Sprint, VT Task all as separate doctypes."
+  },
+  {
+    "service": "task/services/forecast_service.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Sprint",
+      "VT Project"
+    ],
+    "queries": [
+      {
+        "current": "_remaining_hours(project): SELECT SUM(GREATEST(estimated_minutes - actual_minutes, 0)) FROM tabVT Task WHERE project = ? AND pdca_phase != 'DONE'",
+        "tree_equivalent": "For a given project node, traverse descendants where node_type='Task' AND pdca_phase!='DONE'. Sum the calculated field (estimated_minutes - actual_minutes), clamped to >= 0. Use helper: child_tasks_of_project(project_node, include_nested=True) to get all tasks under project across sprints, then filter by pdca_phase, then sum (estimated_minutes - actual_minutes)."
+      },
+      {
+        "current": "_median_sprint_length(project): SELECT DATEDIFF(end_date, start_date) + 1 AS days FROM tabVT Sprint WHERE project = ? AND status = 'Closed'",
+        "tree_equivalent": "For a given project node, traverse child VT Item nodes where node_type='Sprint' AND status='Closed'. Calculate day-difference for each: (end_date - start_date + 1). Return median. Use helper: child_sprints(project_node) to list immediate VT Item Sprint children, filter status='Closed', compute duration via date fields, return median."
+      },
+      {
+        "current": "get_velocity_trend (called from get_forecast, in velocity_service.py): SELECT name FROM tabVT Sprint WHERE project = ? AND status='Closed' ORDER BY end_date DESC LIMIT n",
+        "tree_equivalent": "For a given project node, query all child VT Item nodes where node_type='Sprint' AND status='Closed'. Sort by end_date DESC, limit to n. Use helper: child_sprints(project_node, status='Closed', order_by='end_date DESC', limit=n). Returns sprint node names for subsequent velocity calculation."
+      },
+      {
+        "current": "get_sprint_velocity (called from get_velocity_trend): SELECT SUM(actual_minutes) FROM tabVT Task WHERE sprint = ? AND pdca_phase='DONE'",
+        "tree_equivalent": "For a given sprint node (VT Item with node_type='Sprint'), traverse child VT Item nodes where node_type='Task' AND pdca_phase='DONE'. Sum actual_minutes field. Use helper: child_tasks_of_sprint(sprint_node) to get immediate task children, filter pdca_phase='DONE', sum actual_minutes."
+      }
+    ],
+    "fields_referenced": [
+      "estimated_minutes",
+      "actual_minutes",
+      "pdca_phase",
+      "status",
+      "start_date",
+      "end_date",
+      "project",
+      "sprint",
+      "node_type"
+    ],
+    "helper_primitives_needed": [
+      "child_tasks_of_project(project_node, include_nested=True)",
+      "child_tasks_of_sprint(sprint_node)",
+      "child_sprints(project_node, filters=dict, order_by=str, limit=int)"
+    ],
+    "complexity": "M",
+    "writes": false,
+    "notes": "forecast_service.py is read-only. It performs four distinct aggregation queries: (1) remaining hours across project tasks not yet DONE, (2) median sprint duration from closed sprints, (3) list of closed sprints ordered by end_date for trend analysis, and (4) sum of completed task minutes per sprint. All queries are filtered by node_type discrimination and tree ancestry. The service has no direct KPI/OKR/Key Result dependencies, but velocity_service.py (its callee) uses the same pattern. Field names (estimated_minutes, actual_minutes, pdca_phase, status, start_date, end_date) are preserved on VT Item nodes, enabling direct mapping. No writes, no child-table operations.\""
+  },
+  {
+    "service": "task/services/health_score_service.py",
+    "legacy_doctypes": [
+      "Objective",
+      "Key Result",
+      "VT Project",
+      "VT Sprint",
+      "VT Task"
+    ],
+    "queries": [
+      {
+        "current": "Query 1 (_okr_pct): SELECT AVG(kr.progress_percent) AS kr_avg FROM `tabObjective` o LEFT JOIN `tabKey Result` kr ON kr.objective = o.name WHERE o.status != 'Closed' [AND o.brand = ?] GROUP BY o.name; then AVG across results",
+        "tree_equivalent": "Query all VT Item nodes where node_type='OKR' and health_status!='Closed' [and brand=?]. For each OKR, read its child table key_results (rows from doctype 'VT Item Key Result'), average their progress_percent. Then average across all OKRs. Helper: get_all(\"VT Item\", filters={\"node_type\": \"OKR\", \"health_status\": [\"!=\", \"Closed\"], ...}); for each, read doc.key_results table and compute mean(progress_percent)"
+      },
+      {
+        "current": "Query 2 (_ontime_pct): SELECT COUNT(*) total, SUM(CASE WHEN deadline IS NULL OR completion_date <= deadline THEN 1 ELSE 0 END) ontime FROM `tabVT Task` WHERE pdca_phase = 'DONE' AND completion_date >= cutoff_date [AND project IN (SELECT name FROM `tabVT Project` WHERE brand = ?)]",
+        "tree_equivalent": "Query all VT Item nodes where node_type='Task' and pdca_phase='DONE' and completion_date >= cutoff [and brand=?]. Must filter by brand on the VT Item root (brand field inherited). Use tree ancestor walk: for each Task node, walk parent chain (parent_vt_item → parent_vt_item...) until hitting a Project node; check that Project's brand matches filter if brand-scoped. Helper: get_all(\"VT Item\", filters={\"node_type\": \"Task\", \"pdca_phase\": \"DONE\", \"completion_date\": [\">=\", cutoff], ...}); for each, conditionally validate ancestor brand via parent chain walk"
+      },
+      {
+        "current": "Query 3 (_velocity_health): SELECT name FROM `tabVT Project` WHERE status != 'Closed' [AND brand = ?]; for each project, call get_velocity_trend(project_name, n=6)",
+        "tree_equivalent": "Query all VT Item nodes where node_type='Project' and health_status!='Closed' [and brand=?]. For each Project, use get_velocity_trend() which now must: (a) find all child Sprint nodes (descendants via nested-set: lft BETWEEN parent.lft AND parent.rgt, or via get_all children). (b) filter Sprints where pdca_phase='CLOSED' or sprint_state='Closed', order by end_date DESC LIMIT 6. (c) for each Sprint, count completed Tasks as velocity. Helper: descendants(project_vt_item, node_type='Sprint') or child_sprints(project_vt_item)"
+      },
+      {
+        "current": "Query 4 (get_velocity_trend sub-query): SELECT name FROM `tabVT Sprint` WHERE project = ? AND status = 'Closed' ORDER BY end_date DESC LIMIT ?",
+        "tree_equivalent": "From a Project node, fetch all child Sprint descendants where sprint_state='Closed', ordered by end_date DESC. Uses nested-set lft/rgt to constrain children: get_all(\"VT Item\", filters={\"parent_vt_item\": project.name, \"node_type\": \"Sprint\", \"sprint_state\": \"Closed\"}, order_by=\"end_date desc\", limit=6). Helper: child_sprints(project_name, sprint_state='Closed')"
+      },
+      {
+        "current": "Query 5 (get_sprint_velocity sub-query): SELECT COALESCE(SUM(actual_minutes), 0) AS hours FROM `tabVT Task` WHERE sprint = ? AND pdca_phase = 'DONE'",
+        "tree_equivalent": "From a Sprint node, fetch all child Task descendants where pdca_phase='DONE', sum their actual_minutes. get_all(\"VT Item\", filters={\"parent_vt_item\": sprint.name, \"node_type\": \"Task\", \"pdca_phase\": \"DONE\"}, pluck=\"actual_minutes\"); sum(). Helper: child_tasks(sprint_name, pdca_phase='DONE', pluck='actual_minutes')"
+      },
+      {
+        "current": "Query 6 (list_brand_health_scores): SELECT name, brand_name FROM `tabVT Brand` ORDER BY brand_name ASC; for each brand, call get_health_score(brand=name)",
+        "tree_equivalent": "No change to legacy structure; VT Brand is unchanged. Iterate all VT Brand records, call get_health_score(brand_name) per record. Scoping in _okr_pct, _ontime_pct, _velocity_health already filters by brand field on VT Item nodes."
+      }
+    ],
+    "fields_referenced": [
+      "Objective.status",
+      "Objective.brand",
+      "Key Result.objective",
+      "Key Result.progress_percent",
+      "VT Project.status",
+      "VT Project.brand",
+      "VT Project.name",
+      "VT Sprint.project",
+      "VT Sprint.status",
+      "VT Sprint.end_date",
+      "VT Sprint.name",
+      "VT Task.project",
+      "VT Task.sprint",
+      "VT Task.pdca_phase",
+      "VT Task.completion_date",
+      "VT Task.deadline",
+      "VT Task.actual_minutes",
+      "VT Brand.name",
+      "VT Brand.brand_name"
+    ],
+    "helper_primitives_needed": [
+      "get_all(doctype, filters, pluck/order_by/limit)",
+      "frappe.db.get_value(doctype, name, fields)",
+      "frappe.db.set_value(doctype, name, field, value)",
+      "parent_chain_walk(vt_item_name)",
+      "child_sprints(project_vt_item_name, sprint_state=None)",
+      "child_tasks(parent_vt_item_name, pdca_phase=None, pluck=None)",
+      "descendants(parent_vt_item_name, node_type=None)",
+      "child_key_results(okr_vt_item_name, pluck='progress_percent')",
+      "child_kpi_entries(kpi_vt_item_name, pluck=None)"
+    ],
+    "complexity": "M",
+    "notes": "This service aggregates health metrics across three dimensions: (1) OKR progress via Key Result child rows, (2) Task on-time completion filtered by project brand, (3) Sprint velocity trend across closed sprints under each project. Migration requires tree-aware queries: OKR→Key Result becomes parent doc + child table read; Project→Task→Sprint becomes nested-set ancestor/descendant walks; brand scoping shifts from project filter to VT Item root-ancestor brand field. The three compute functions (_okr_pct, _ontime_pct, _velocity_health) are independent aggregations that do NOT need to be merged; they just need internal tree-aware refactoring. No writes to health scores occur here (health_score field on Project/VT Item is RO and set by external systems). Key insight: velocity_service.py is called as a dependency and also needs migration to tree queries for sprints/tasks."
+  },
+  {
+    "service": "task/services/kpi_trend_service.py",
+    "legacy_doctypes": [
+      "KPI Definition",
+      "KPI Entry"
+    ],
+    "queries": [
+      {
+        "current": "SELECT name, kpi_name, unit, frequency FROM `tabKPI Definition` ORDER BY kpi_name ASC (list_kpis function)",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'KPI'}, fields=['name', 'title', 'unit', 'frequency'], order_by='title asc') — queries all KPI nodes from the unified tree; 'title' replaces legacy 'kpi_name'"
+      },
+      {
+        "current": "frappe.db.exists('KPI Definition', kpi_definition) — existence check (get_kpi_trend function)",
+        "tree_equivalent": "frappe.db.exists('VT Item', {'name': kpi_definition, 'node_type': 'KPI'}) — verify the node exists AND is typed as KPI"
+      },
+      {
+        "current": "frappe.db.get_value('KPI Definition', kpi_definition, ['kpi_name', 'unit'], as_dict=True) — fetch metadata for a single KPI (get_kpi_trend function)",
+        "tree_equivalent": "frappe.db.get_value('VT Item', kpi_definition, ['title', 'unit'], as_dict=True) — fetch from the KPI node; 'title' is the field name on VT Item (replaces 'kpi_name')"
+      },
+      {
+        "current": "SELECT date, value FROM `tabKPI Entry` WHERE kpi_definition = %(kpi)s ORDER BY date DESC LIMIT %(n)s (get_kpi_trend function)",
+        "tree_equivalent": "frappe.db.sql(\"SELECT kpi_entries.date, kpi_entries.value FROM `tabVT Item KPI Entry` AS kpi_entries INNER JOIN `tabVT Item` AS kpi ON kpi_entries.parent = kpi.name WHERE kpi.name = %(kpi)s ORDER BY kpi_entries.date DESC LIMIT %(n)s\", {'kpi': kpi_definition, 'n': periods}, as_dict=True) — KPI Entries are now child rows on the VT Item (node_type='KPI') doc, stored in table 'VT Item KPI Entry' with parent pointing to the KPI node's name"
+      }
+    ],
+    "fields_referenced": [
+      "name",
+      "kpi_name",
+      "unit",
+      "frequency",
+      "date",
+      "value"
+    ],
+    "helper_primitives_needed": [
+      "frappe.get_all() for filtered tree queries",
+      "frappe.db.get_value() for single-node metadata fetch",
+      "frappe.db.exists() with node_type filter for strict doctype validation",
+      "tree_descendant_sql() or direct child-table join via parent field (VT Item KPI Entry child rows)"
+    ],
+    "complexity": "S",
+    "writes": false,
+    "notes": "The service is read-only (no writes). It performs two functions: (1) list_kpis() — fetch all KPI nodes (previously KPI Definition docs) with basic metadata, and (2) get_kpi_trend() — fetch a single KPI's recent entries (previously from KPI Entry child table). On VT Item tree, KPI nodes live at node_type='KPI' with field name mapping: kpi_name → title, and entries are child rows in a Table field 'kpi_entries' (doctype VT Item KPI Entry) with date/value. The existence check must explicitly verify node_type='KPI' to distinguish KPI nodes from other tree types. No tree navigation (ancestors/descendants/siblings) needed — only single-node metadata and direct child-table reads."
+  },
+  {
+    "service": "task/services/leaderboard_service.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "VT Sprint"
+    ],
+    "queries": [
+      {
+        "current": "SELECT assigned_to, SUM(earned_points), COUNT(*) FROM `tabVT Task` WHERE pdca_phase = %(done)s AND completion_date BETWEEN %(start)s AND %(end)s AND assigned_to IS NOT NULL AND assigned_to != '' [AND project IN %(projects)s] GROUP BY assigned_to ORDER BY SUM(earned_points) DESC, COUNT(*) DESC LIMIT %(limit)s",
+        "tree_equivalent": "Query VT Item nodes with node_type='Task' AND pdca_phase='DONE' AND completion_date BETWEEN [start,end] AND assigned_to IS NOT NULL. Ancestor chain for each task must include a Project node to verify project membership. Group by assigned_to, aggregate earned_points and task count, order by points DESC then count DESC, apply limit. Uses nested-set ancestor() or parent walk via parent_vt_item chain to validate project relationship."
+      }
+    ],
+    "fields_referenced": [
+      "assigned_to",
+      "earned_points",
+      "completion_date",
+      "pdca_phase",
+      "project"
+    ],
+    "helper_primitives_needed": [
+      "get_ancestors(task_node_id) -> list[VT Item]",
+      "get_children(parent_node_id, node_type=None) -> list[VT Item]",
+      "project_of(task_node_id) -> str (walks ancestor chain to first Project node)",
+      "tasks_in_project(project_node_id) -> list[VT Item] (uses nested-set lft/rgt to fetch all Task descendants)"
+    ],
+    "complexity": "M",
+    "writes": false,
+    "notes": "The leaderboard_service.py file contains a single function get_leaderboard(period, limit, project_filter) that executes ONE legacy SQL query against tabVT Task. The query aggregates earned_points by assigned_to for DONE tasks within a date window, optionally filtered by project_filter list. In the VT Item migration, Task nodes are identified by node_type='Task'. The pdca_phase, completion_date, earned_points, and assigned_to fields are PRESERVED on VT Item Task nodes. The key change: project relationship shifts from a denormalized Link field (project) to a TREE relationship via ancestor chain. A Task's project ancestor is found by walking parent_vt_item upward until a node_type='Project' is reached. The service needs a helper like project_of(task_id) to extract the project ID from the ancestor chain, and tasks_in_project(project_id) to efficiently fetch all Task descendants of a Project using the nested-set lft/rgt bounds. The period_window() helper function is domain logic (not a query) and does not change. Test fixtures create VT Project and VT Task; post-migration these will be VT Item nodes with node_type='Project' and node_type='Task' respectively.\""
+  },
+  {
+    "service": "task/services/point_calculator.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "VT Settings",
+      "Task Point Log"
+    ],
+    "queries": [
+      {
+        "current": "frappe.get_doc('VT Task', task_name) - fetch single VT Task document by name",
+        "tree_equivalent": "frappe.get_doc('VT Item', task_name) where node_type='Task'; same name preserved"
+      },
+      {
+        "current": "frappe.db.set_value('VT Task', task_name, {...}) - update VT Task fields (revision_count, pdca_phase, kanban_status, earned_points, base_points, leader_override_points, override_reason)",
+        "tree_equivalent": "frappe.db.set_value('VT Item', task_name, {...}) where node_type='Task'; all Task fields preserved on VT Item node"
+      },
+      {
+        "current": "frappe.get_all('VT Task', filters={...}, fields=[...]) - list VT Tasks with deadline/pdca_phase/assigned_to filters",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'deadline': [...], 'pdca_phase': [...], 'assigned_to': [...]}, fields=[...])"
+      },
+      {
+        "current": "frappe.db.get_value('VT Project', task.project, 'project_leader') - fetch project_leader from parent project",
+        "tree_equivalent": "Walk ancestors via parent_vt_item chain: ancestor = task.parent_vt_item; while ancestor: parent_data = frappe.db.get_value('VT Item', ancestor, ['node_type', 'leader_user', 'parent_vt_item']); if parent_data[0]=='Project': return parent_data[1]. Alternative: use descendants_of(task_name) with ancestor filter to find Project node containing task."
+      },
+      {
+        "current": "frappe.get_single('VT Settings') - fetch singleton settings",
+        "tree_equivalent": "frappe.get_single('VT Settings') - unchanged; not a VT Item"
+      },
+      {
+        "current": "frappe.get_doc({...doctype: 'Task Point Log'...}).insert() - create point transaction log",
+        "tree_equivalent": "frappe.get_doc({...doctype: 'Task Point Log'...}).insert() - unchanged; not a VT Item. The 'task' link field in Task Point Log becomes task='VT Item name where node_type=Task'"
+      },
+      {
+        "current": "frappe.db.get_value('VT Task', task.name, 'revision_count') - fetch single field from Task",
+        "tree_equivalent": "frappe.db.get_value('VT Item', task.name, 'revision_count') where node_type='Task'"
+      }
+    ],
+    "fields_referenced": [
+      "base_points",
+      "earned_points",
+      "leader_override_points",
+      "override_reason",
+      "revision_count",
+      "pdca_phase",
+      "kanban_status",
+      "assigned_to",
+      "weight",
+      "deadline",
+      "completion_date",
+      "title",
+      "project",
+      "project_leader",
+      "leader_user",
+      "rejection_note",
+      "node_type",
+      "parent_vt_item"
+    ],
+    "helper_primitives_needed": [
+      "ancestor_chain(task_name) - walk parent_vt_item chain upward to find Project ancestor",
+      "get_project_ancestor(task_name) - return VT Item node_type='Project' that is ancestor of task via parent chain",
+      "descendants_of(node_name) - returns all VT Item descendants by nested-set lft<rgt (Frappe NestedSet provides this)",
+      "node_type_check(name, expected_type) - verify node_type matches before operations"
+    ],
+    "complexity": "M",
+    "writes": true,
+    "notes": "This service writes to VT Task documents (via db_set and db.set_value) in calculate_points(), apply_revision_deduction(), and override_points(). After migration: all writes shift to VT Item with node_type='Task' filter. The key tree change is query 4 (check_overdue_tasks): currently fetches parent project directly via task.project Link field, but post-migration task.project reference is removed; must walk ancestors via parent_vt_item chain to find the Project node and extract leader_user. No KPI/Objective/Key Result queries present in this file. All field names are preserved on VT Item Task nodes per spec. Task Point Log doctype references tasks by name—no doctype migration needed there, just the name resolution changes to VT Item names."
+  },
+  {
+    "service": "task/services/project_task_grouper.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "Key Result"
+    ],
+    "queries": [
+      {
+        "current": "SELECT t.name, t.title, t.pdca_phase, t.assigned_to AS assignee, t.deadline AS due_date, COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0) AS points, t.kanban_status AS status, t.sprint, t.risk_flag FROM `tabVT Task` t WHERE t.project = %(p)s",
+        "tree_equivalent": "Get all Task nodes (node_type='Task') that are descendants of a Project node using nested-set: WHERE lft > project.lft AND rgt < project.rgt AND node_type='Task'. Filter by ancestor chain walk: project_of(task) returns the ancestor with node_type='Project'."
+      },
+      {
+        "current": "SELECT kr.name, kr.metric AS title, kr.target_value, kr.current_value, kr.progress_percent FROM `tabKey Result` kr JOIN `tabVT Project` p ON p.objective = kr.objective WHERE p.name = %(p)s",
+        "tree_equivalent": "Find the OKR ancestor of the Project node using parent_chain(project_node) until node_type='OKR'. Then query the child-table `VT Item Key Result` rows on that OKR node's `key_results` field (doctype VT Item, field key_results is Table of VT Item Key Result)."
+      }
+    ],
+    "fields_referenced": [
+      "VT Task.name",
+      "VT Task.title",
+      "VT Task.pdca_phase",
+      "VT Task.assigned_to",
+      "VT Task.deadline",
+      "VT Task.leader_override_points",
+      "VT Task.earned_points",
+      "VT Task.base_points",
+      "VT Task.kanban_status",
+      "VT Task.sprint",
+      "VT Task.risk_flag",
+      "VT Task.project",
+      "Key Result.name",
+      "Key Result.metric",
+      "Key Result.target_value",
+      "Key Result.current_value",
+      "Key Result.progress_percent",
+      "VT Project.objective",
+      "VT Project.name"
+    ],
+    "helper_primitives_needed": [
+      "project_of(task_node) — ancestor walk to find first node_type='Project' ancestor",
+      "parent_chain(node) — walk from node to root following parent_vt_item link",
+      "descendants_by_type(node, node_type) — nested-set query WHERE lft > node.lft AND rgt < node.rgt AND node_type = ?",
+      "child_table_rows(vt_item_node, 'key_results') — fetch rows from VT Item Key Result table on OKR node"
+    ],
+    "complexity": "M",
+    "notes": "The service has two core queries: (1) Load tasks for a project with field aliases — PRESERVED on VT Item Task nodes (pdca_phase, kanban_status, deadline, base_points, earned_points, leader_override_points, risk_flag all exist). Task discovery by project changes from direct tabVT Task WHERE project=X to nested-set descendants. (2) Load KRs for a project via Project.objective — the relationship chain Project→Objective→KR is replaced with: Project node has OKR ancestor, OKR node has child-table VT Item Key Result rows. Field names on KR rows PRESERVED: metric→title, target_value, current_value, progress_percent. The `_load_tasks` function queries columns in legacy aliases; on VT Item all fields keep their physical names (pdca_phase, assigned_to, deadline, kanban_status, base_points, earned_points, leader_override_points, risk_flag). The `sprint` field (string reference) remains on Task nodes. The service does NOT use nested-set LFT/RGT directly in queries — it can continue using direct parent links and ancestry walks, but MUST identify project/sprint ancestors via node_type filter and parent chain traversal instead of direct foreign keys.\""
+  },
+  {
+    "service": "task/services/push_sender.py",
+    "legacy_doctypes": [],
+    "queries": [
+      {
+        "current": "frappe.db.exists('Vernon Push Preference', {'user': user})",
+        "tree_equivalent": "Not applicable - Vernon Push Preference is not a legacy doctype being migrated. This is a user preferences document that exists independently."
+      },
+      {
+        "current": "frappe.db.get_value('Vernon Push Preference', name, ['event_assignment', 'event_mention', 'event_due', 'event_review'], as_dict=True)",
+        "tree_equivalent": "Not applicable - Vernon Push Preference is a standalone preference doctype unaffected by VT Item tree migration."
+      },
+      {
+        "current": "frappe.get_all('Vernon Push Subscription', filters={'user': user}, fields=['name', 'endpoint', 'p256dh', 'auth'])",
+        "tree_equivalent": "Not applicable - Vernon Push Subscription is a standalone subscription tracking doctype unaffected by VT Item tree migration."
+      },
+      {
+        "current": "doc.get('document_type') == 'VT Task' conditional check in send_push_for_notification(doc) hook",
+        "tree_equivalent": "After migration: Check doc.get('document_type') == 'VT Item' AND verify node_type='Task' on the VT Item record. The document_name field remains the same (VT Item.name)."
+      },
+      {
+        "current": "frappe.db.delete('Vernon Push Subscription', s['name'], ignore_permissions=True)",
+        "tree_equivalent": "Not applicable - Vernon Push Subscription is not a legacy doctype."
+      }
+    ],
+    "fields_referenced": [
+      "document_type",
+      "document_name",
+      "subject",
+      "name",
+      "for_user",
+      "type",
+      "endpoint",
+      "p256dh",
+      "auth",
+      "event_assignment",
+      "event_mention",
+      "event_due",
+      "event_review"
+    ],
+    "helper_primitives_needed": [],
+    "complexity": "S",
+    "notes": "CRITICAL FINDING: This service does NOT directly query the legacy doctypes mentioned in the migration spec (Objective, Key Result, KPI Definition, KPI Entry, VT Project, VT Sprint, VT Task). Instead, it is a hook-based push notification service that: (1) Listens to Notification Log.after_insert events (Frappe standard doctype, not migrated), (2) Reads user preferences from Vernon Push Preference (custom, non-legacy doctype), (3) Reads push subscriptions from Vernon Push Subscription (custom, non-legacy doctype), (4) ONLY conditionally references 'VT Task' via doc.get('document_type') == 'VT Task' checks in 4 locations (lines 26, 45, 51, 128). Post-migration, these checks must be updated to: doc.get('document_type') == 'VT Item' AND frappe.get_value(..., 'node_type') == 'Task'. No tree helpers are needed. The Notification Log hook parameter 'doc' always contains string fields 'document_type' and 'document_name' that reference the entity that triggered the notification. After migration, document_type will be 'VT Item' and you must inspect the node_type field to distinguish Task nodes. The service is READ-ONLY for all databases queries except delete (cleanup of dead push subscriptions). No VT Item tree traversal required.",
+    "writes": true
+  },
+  {
+    "service": "task/services/risk_evaluator.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "VT Sprint"
+    ],
+    "queries": [
+      {
+        "current": "SELECT name, title, assigned_to, modified FROM `tabVT Task` WHERE project = %(project)s AND kanban_status = %(blocked)s AND pdca_phase != %(done)s",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'parent_vt_item': PROJECT_SPRINT_IDS, 'kanban_status': 'Blocked', 'pdca_phase': ['!=', 'DONE']}, fields=['name', 'title', 'assigned_to', 'modified', 'lft', 'rgt']). PROJECT_SPRINT_IDS are descendants_of(PROJECT_ID, node_type in ['Sprint', 'Project']). Use nested-set ancestry: all Tasks with lft > project.lft AND rgt < project.rgt AND node_type='Task'"
+      },
+      {
+        "current": "SELECT COALESCE(SUM(GREATEST(estimated_minutes - actual_minutes, 0)), 0) AS hrs FROM `tabVT Task` WHERE project = %(project)s AND pdca_phase != %(done)s AND assigned_to IS NOT NULL GROUP BY assigned_to",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'lft': ['>', project.lft], 'rgt': ['<', project.rgt], 'pdca_phase': ['!=', 'DONE'], 'assigned_to': ['is', 'set']}, group_by='assigned_to', fields=['assigned_to', 'SUM(GREATEST(estimated_minutes - actual_minutes, 0)) as hrs']). Alternative: walk descendants_of(project_id) filtered by node_type='Task', pdca_phase!='DONE', accumulate by assigned_to"
+      },
+      {
+        "current": "SELECT DATEDIFF(end_date, start_date) + 1 AS days FROM `tabVT Sprint` WHERE project = %(project)s AND status = 'Closed' ORDER BY end_date DESC LIMIT %(n)s",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Sprint', 'parent_vt_item': project_id, 'sprint_state': 'Closed'}, order_by='end_date desc', limit_page_length=n, fields=['name', 'start_date', 'end_date']). Equivalent to: children_of(project_id, node_type='Sprint', sprint_state='Closed') ordered desc by end_date"
+      },
+      {
+        "current": "SELECT COALESCE(SUM(GREATEST(estimated_minutes - actual_minutes, 0)), 0) AS hrs FROM `tabVT Task` WHERE project = %(project)s AND pdca_phase != 'DONE'",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'lft': ['>', project.lft], 'rgt': ['<', project.rgt], 'pdca_phase': ['!=', 'DONE']}, fields=['SUM(GREATEST(estimated_minutes - actual_minutes, 0)) as hrs']). Use nested-set ancestry: all Tasks within project subtree"
+      },
+      {
+        "current": "SELECT COALESCE(SUM(actual_minutes), 0) AS hours FROM `tabVT Task` WHERE sprint = %(sprint)s AND pdca_phase = 'DONE'",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'parent_vt_item': sprint_id, 'pdca_phase': 'DONE'}, fields=['SUM(actual_minutes) as hours']). Direct children of Sprint node with pdca_phase='DONE'"
+      },
+      {
+        "current": "frappe.get_doc('VT Project', project) + frappe.db.get_value('VT Project', project, field_name)",
+        "tree_equivalent": "frappe.get_doc('VT Item', project_id) where node_type='Project'. All fields preserved: start_date, end_date, blocked_days_threshold, slip_pct_threshold, capacity_pct_threshold"
+      }
+    ],
+    "fields_referenced": [
+      "name",
+      "title",
+      "assigned_to",
+      "modified",
+      "kanban_status",
+      "pdca_phase",
+      "estimated_minutes",
+      "actual_minutes",
+      "end_date",
+      "start_date",
+      "sprint_state",
+      "blocked_days_threshold",
+      "slip_pct_threshold",
+      "capacity_pct_threshold",
+      "lft",
+      "rgt"
+    ],
+    "helper_primitives_needed": [
+      "descendants_of(parent_id, node_type_filter)",
+      "children_of(parent_id, node_type_filter)",
+      "get_ancestor_chain(node_id)",
+      "sum_descendant_field(parent_id, node_type, field_name, where_clause)",
+      "frappe.get_all with nested-set filters (lft/rgt boundary checks)"
+    ],
+    "complexity": "M",
+    "writes": false,
+    "notes": "risk_evaluator.py is a READ-ONLY analytics service. It queries three independent risk dimensions: (1) blocked tasks via kanban_status='Blocked' + age threshold, (2) schedule slip via forecast_service which calls velocity_service (which queries Sprint.status='Closed' for velocity trend), (3) capacity via task effort grouping. The service retrieves VT Project and VT Sprint documents by ID to read thresholds and dates. Field names are PRESERVED on VT Item (all risk fields exist as-is). The PRIMARY migration challenge is the nested-set ancestry queries: three separate SQL queries become frappe.get_all filters with lft/rgt boundary checks OR calls to tree-helper functions. The velocity_service also needs migration (queries VT Sprint by project + status='Closed'). Dependencies on VT Project lookup fields remain simple: frappe.get_doc('VT Item', id) where node_type='Project'."
+  },
+  {
+    "service": "task/services/scheduling_engine.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "Task Schedule Entry"
+    ],
+    "queries": [
+      {
+        "current": "check_capacity_conflict() line 38-43: SELECT SUM(Task Schedule Entry.allocated_minutes) from tabTask Schedule Entry joined with tabVT Task WHERE VT Task.assigned_to = user AND Task Schedule Entry.date = day AND VT Task.docstatus < 2",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'owner_user': user, 'docstatus': ['<', 2]}, pluck='name') to get task ids, then for each task: sum(row.allocated_minutes for row in task.schedule_entries if row.date == day). Nested-set structure not required; uses child-table schedule_entries rows directly."
+      },
+      {
+        "current": "distribute_task_schedule() line 48: frappe.get_doc('VT Task', task_name) — fetch single VT Task with all fields including start_date, deadline, assigned_to, estimated_minutes, schedule_entries child table",
+        "tree_equivalent": "frappe.get_doc('VT Item', task_name) with node_type='Task' — all fields are preserved on VT Item Task nodes. schedule_entries is a child table (Table fieldtype='Task Schedule Entry') identical to legacy structure."
+      },
+      {
+        "current": "override_schedule_entry() line 75: frappe.get_doc('VT Task', task_name) — fetch single VT Task to read/modify schedule_entries child rows and estimated_minutes field",
+        "tree_equivalent": "frappe.get_doc('VT Item', task_name) with node_type='Task' — schedule_entries child table and estimated_minutes field both exist on VT Item Task nodes."
+      },
+      {
+        "current": "generate_recurring_tasks() line 98-102: frappe.get_all('VT Task', filters={'is_recurring': 1, 'next_occurrence': ['<=', today_date], 'docstatus': ['<', 2]}, fields=['name', 'recurring_rule', 'next_occurrence']) — query for recurring task headers",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'is_recurring': 1, 'next_occurrence': ['<=', today_date], 'docstatus': ['<', 2]}, fields=['name', 'recurring_rule', 'next_occurrence'])"
+      },
+      {
+        "current": "generate_recurring_tasks() line 104: frappe.get_doc('VT Task', rec.name) — fetch single recurring task by name",
+        "tree_equivalent": "frappe.get_doc('VT Item', rec.name) with node_type='Task'"
+      },
+      {
+        "current": "generate_recurring_tasks() line 105: frappe.db.count('VT Task', {'parent_task': task.name}) — count child tasks where parent_task field equals given task",
+        "tree_equivalent": "frappe.db.count('VT Item', {'parent_vt_item': task.name, 'node_type': 'Task'}) — in VT Item tree, task parent-child relations are expressed via parent_vt_item (nested-set Link field), not a separate parent_task field. Must filter by node_type='Task' to exclude other node types from count."
+      },
+      {
+        "current": "generate_recurring_tasks() line 109-121: frappe.copy_doc(task) then modify fields (pdca_phase, kanban_status, parent_task, is_recurring, next_occurrence, completion_date, earned_points, base_points, leader_override_points, revision_count, schedule_entries) and insert",
+        "tree_equivalent": "frappe.copy_doc(task) then modify fields identically — all field names are preserved on VT Item Task nodes. parent_task becomes parent_vt_item (the nested-set Link field)."
+      },
+      {
+        "current": "generate_recurring_tasks() line 107, 123: frappe.db.set_value('VT Task', task.name, 'is_recurring', 0) and frappe.db.set_value('VT Task', task.name, 'next_occurrence', next_occ) — update scalar fields",
+        "tree_equivalent": "frappe.db.set_value('VT Item', task.name, 'is_recurring', 0) and frappe.db.set_value('VT Item', task.name, 'next_occurrence', next_occ) — field names identical, only doctype changes."
+      },
+      {
+        "current": "check_deadline_notifications() line 133-137: frappe.get_all('VT Task', filters={'deadline': tomorrow, 'pdca_phase': ['not in', ['DONE']], 'assigned_to': ['!=', '']}, fields=['name', 'title', 'assigned_to', 'project']) — query for task headers",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'deadline': tomorrow, 'pdca_phase': ['not in', ['DONE']], 'owner_user': ['!=', '']}, fields=['name', 'title', 'owner_user', 'parent_vt_item']). Note: 'assigned_to' field on legacy VT Task becomes 'owner_user' on VT Item Task node (role change). 'project' is parent_vt_item (the ancestor of type 'Project' along the parent chain)."
+      }
+    ],
+    "fields_referenced": [
+      "estimated_minutes",
+      "start_date",
+      "deadline",
+      "assigned_to",
+      "schedule_entries",
+      "allocated_minutes",
+      "date",
+      "is_override",
+      "is_recurring",
+      "next_occurrence",
+      "recurring_rule",
+      "docstatus",
+      "parent_task",
+      "pdca_phase",
+      "kanban_status",
+      "completion_date",
+      "earned_points",
+      "base_points",
+      "leader_override_points",
+      "revision_count",
+      "title",
+      "project"
+    ],
+    "helper_primitives_needed": [
+      "get_task_by_id(task_name)",
+      "get_all_tasks(filters)",
+      "count_tasks(filters)",
+      "update_task_field(task_name, field, value)",
+      "walk_parent_chain_to_find_ancestor_of_type(item_name, node_type)",
+      "get_all_schedule_entries_for_task(task_name)"
+    ],
+    "complexity": "M",
+    "notes": "This service uses VT Task as a mostly-flat doctype with a child table (Task Schedule Entry) for time allocations. Key changes on migration: (1) VT Task → VT Item with node_type='Task' filter; (2) parent_task field → parent_vt_item nested-set Link (tasks become nodes in the tree with Project/Sprint ancestors); (3) assigned_to field → owner_user on Task nodes; (4) 'project' field reference → must walk parent_vt_item chain to find ancestor with node_type='Project'; (5) Task Schedule Entry child table is preserved as-is on VT Item; (6) All time/point fields (estimated_minutes, base_points, earned_points, etc.) are field-for-field preserved on VT Item Task nodes. No queries require cross-doctype joins beyond the child-table relationship which is handled by frappe.get_doc(). The db.count() on line 105 requires node_type='Task' filter to avoid counting non-task items.\""
+  },
+  {
+    "service": "task/services/streak_service.py",
+    "legacy_doctypes": [
+      "VT Sprint",
+      "VT Task"
+    ],
+    "queries": [
+      {
+        "current": "SELECT name FROM `tabVT Sprint` WHERE project = %(project)s AND status = %(closed)s ORDER BY end_date DESC",
+        "tree_equivalent": "descendants(project_item, node_type='Sprint') filtered by status='Closed', ordered by end_date DESC. Use tree helper: sprints_of_project(project_vt_item, status_filter='Closed', order_by='end_date DESC')"
+      },
+      {
+        "current": "SELECT COALESCE(SUM(actual_minutes), 0) AS hrs FROM `tabVT Task` WHERE sprint = %(sprint)s AND assigned_to = %(user)s AND pdca_phase = %(done)s",
+        "tree_equivalent": "descendants(sprint_item, node_type='Task') filtered by assigned_to=user AND pdca_phase='DONE', aggregating actual_minutes. Use tree helper: tasks_in_sprint(sprint_vt_item, assigned_to=user, pdca_phase_filter='DONE') then sum(actual_minutes)"
+      }
+    ],
+    "fields_referenced": [
+      "VT Sprint.name",
+      "VT Sprint.project",
+      "VT Sprint.status",
+      "VT Sprint.end_date",
+      "VT Task.name",
+      "VT Task.sprint",
+      "VT Task.assigned_to",
+      "VT Task.actual_minutes",
+      "VT Task.pdca_phase"
+    ],
+    "helper_primitives_needed": [
+      "sprints_of_project(project_vt_item, status_filter, order_by)",
+      "tasks_in_sprint(sprint_vt_item, assigned_to_filter, pdca_phase_filter)"
+    ],
+    "complexity": "S",
+    "writes": false,
+    "notes": "The streak_service.py computes a user's task completion streak across closed sprints in a project. It performs two sequential query patterns: (1) fetch all closed sprints for a project ordered by recency, (2) for each sprint, sum actual_minutes for tasks assigned to the user with pdca_phase='DONE'. In VT Item tree, both VT Sprint and VT Task become node_type discriminators on VT Item. Sprints are child descendants of the Project node; Tasks are descendants of Sprint nodes. The ancestry relationship (project->sprint->task) maps to nested-set lft/rgt containment. Key preserved fields: status, end_date, assigned_to, actual_minutes, pdca_phase all exist on VT Item nodes. No writes occur. Helper primitives should support filtering by node_type and field values, plus ordering on numeric fields."
+  },
+  {
+    "service": "task/services/threshold.py",
+    "legacy_doctypes": [
+      "VT Project",
+      "VT Settings"
+    ],
+    "queries": [
+      {
+        "current": "frappe.db.get_value('VT Project', project, blocked_days_threshold | slip_pct_threshold | capacity_pct_threshold)",
+        "tree_equivalent": "frappe.get_doc('VT Item', project) then access field directly (fields preserved on VT Item node_type='Project'); no tree traversal needed"
+      },
+      {
+        "current": "frappe.get_single('VT Settings') then read default_blocked_days_threshold | default_slip_pct_threshold | default_capacity_pct_threshold",
+        "tree_equivalent": "No change — VT Settings remains singleton doctype outside tree"
+      }
+    ],
+    "fields_referenced": [
+      "VT Project.blocked_days_threshold",
+      "VT Project.slip_pct_threshold",
+      "VT Project.capacity_pct_threshold",
+      "VT Settings.default_blocked_days_threshold",
+      "VT Settings.default_slip_pct_threshold",
+      "VT Settings.default_capacity_pct_threshold"
+    ],
+    "helper_primitives_needed": [],
+    "complexity": "S",
+    "writes": false,
+    "notes": "Read-only service with three-tier fallback (project field → settings defaults → hardcoded constants). No tree traversal required; direct node lookup replaces legacy query. Field names preserved on VT Item Task/Project/Sprint/OKR/KPI nodes so migration is mechanical."
+  },
+  {
+    "service": "task/services/worksheet_aggregator.py",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "Key Result",
+      "Task Schedule Entry",
+      "Work Profile"
+    ],
+    "queries": [
+      {
+        "current": "_load_entries: frappe.db.sql JOIN Task Schedule Entry (se) → VT Task (t) → VT Project (p) → Key Result (kr) WHERE se.parenttype='VT Task' AND (se.owner_user=user OR (se.owner_user IS NULL AND t.assigned_to=user)) AND se.date BETWEEN start AND end",
+        "tree_equivalent": "1. Find VT Item nodes with node_type='Task' WHERE (assigned_to=user OR owner_user=user). 2. For each Task, walk parent chain (lft/rgt) to find ancestor VT Item with node_type='Project' (immediate parent_vt_item or via sprint). 3. For each Project ancestor, find sibling VT Item with node_type='OKR' (via common ancestor or parent chain). 4. For each OKR, query child table 'key_results' on that VT Item node. 5. Access schedule_entries child table on the Task VT Item node, filter by date. Use helper: ancestor_of_type(task_vt_item, node_type='Project') → project_vt_item; ancestor_of_type(project_vt_item, node_type='OKR') → okr_vt_item"
+      },
+      {
+        "current": "_get_capacity: frappe.db.get_value(Work Profile, {user}, daily_target_hours)",
+        "tree_equivalent": "Query Work Profile doctype unchanged (not part of VT Item migration; external reference). No tree helper needed."
+      },
+      {
+        "current": "_load_unscheduled: frappe.db.sql FROM VT Task (t) LEFT JOIN VT Project (p) ON p.name=t.project LEFT JOIN Key Result (kr) ON kr.objective=p.objective WHERE t.assigned_to=user AND t.pdca_phase IN (PLAN, DO, CHECK) AND t.name NOT IN scheduled_task_ids",
+        "tree_equivalent": "1. Find VT Item nodes with node_type='Task' AND assigned_to=user AND pdca_phase IN ('PLAN','DO','CHECK'). 2. For each Task, walk parent chain (parent_vt_item chain / nested-set) to find ancestor with node_type='Project'. 3. For each Project ancestor, walk up further to find ancestor with node_type='OKR' (or project may be at root). 4. Access child table 'key_results' on OKR VT Item node. Use helper: ancestor_of_type(task_vt_item, node_type='Project') → project_vt_item; ancestor_of_type(project_vt_item, node_type='OKR') → okr_vt_item or None"
+      }
+    ],
+    "fields_referenced": [
+      "name",
+      "title",
+      "pdca_phase",
+      "assigned_to",
+      "owner_user",
+      "parent (VT Task.project)",
+      "deadline (VT Task.deadline)",
+      "base_points",
+      "earned_points",
+      "leader_override_points",
+      "date (Task Schedule Entry.date)",
+      "minutes_planned",
+      "allocated_minutes",
+      "hour_start (Task Schedule Entry.hour_start)",
+      "objective (Key Result.objective)",
+      "daily_target_hours (Work Profile)"
+    ],
+    "helper_primitives_needed": [
+      "ancestor_of_type(vt_item_name: str, node_type: str) -> str | None",
+      "walk_ancestor_chain(vt_item_name: str) -> list[tuple[str, str]]",
+      "project_of(task_vt_item: str) -> str | None",
+      "okr_of(task_or_project_vt_item: str) -> str | None",
+      "get_child_table_rows(vt_item_name: str, child_table_name: str) -> list[dict]"
+    ],
+    "complexity": "M",
+    "writes": false,
+    "notes": "The worksheet_aggregator.py service performs two main SQL queries that join VT Task → VT Project → Key Result tables. Both queries must be refactored to navigate the VT Item nested-set tree. Key changes: (1) Tasks are now VT Item nodes with node_type='Task'; (2) Projects are VT Item ancestors (parent_vt_item chain / nested-set lft/rgt); (3) Key Results are child rows on OKR VT Item nodes (doctype 'VT Item Key Result'), not separate docs; (4) Task Schedule Entries remain child rows on Task VT Items (doctype 'Task Schedule Entry') — this relationship is preserved. Field names on VT Item Task/Project/OKR nodes are preserved (pdca_phase, assigned_to, base_points, earned_points, leader_override_points, deadline). The _get_capacity query references Work Profile, which is not part of the VT Item migration. Five helper primitives are needed to abstract ancestor traversal and child-table access, enabling both queries to work against the tree structure without explicit nested-set SQL.\""
+  },
+  {
+    "service": "task/services/dashboard_aggregator.py",
+    "legacy_doctypes": [
+      "VT Project",
+      "VT Sprint",
+      "VT Task",
+      "Objective",
+      "Key Result",
+      "Project Team Member",
+      "Task Point Log"
+    ],
+    "queries": [
+      {
+        "current": "User's projects (scope='team'): JOIN tabVT Project p with tabProject Team Member m on parent=p.name, filter by project_owner/project_leader/team_members AND status != 'Closed'",
+        "tree_equivalent": "VT Item tree: Query all VT Item nodes with node_type='Project' where is_closed=false AND (created_by=user OR custom_leader=user OR exists child in VT Item Project Team Member table with user=user). Use descendants_of(root) or child_table query on Project node type. Requires helper: project_of(item) to walk ancestor chain for ownership check if needed."
+      },
+      {
+        "current": "User's projects (scope='self'): SELECT from tabVT Project where project_owner=user OR project_leader=user AND status != 'Closed'",
+        "tree_equivalent": "VT Item tree: Query VT Item nodes with node_type='Project' where is_closed=false AND (created_by=user OR custom_leader=user). Direct filter on node_type and boolean. Helper: ancestors_of(task_node) to validate parent chain if denormalizing."
+      },
+      {
+        "current": "Get project title: frappe.db.get_value('VT Project', project_id, 'title')",
+        "tree_equivalent": "VT Item tree: VT Item.name, VT Item.title (field preserved on Project nodes)"
+      },
+      {
+        "current": "Evaluate risks per project via evaluate_risks(project_id) - delegates to risk_evaluator service",
+        "tree_equivalent": "Tree-aware: Pass project VT Item node (or node_name) to risk_evaluator; service internally traverses descendants to find Tasks. Uses helper: descendant_tasks(project_node)."
+      },
+      {
+        "current": "Active sprints with assigned tasks: JOIN tabVT Sprint s with tabVT Task t ON t.sprint=s.name WHERE t.assigned_to=user AND s.status='Active'",
+        "tree_equivalent": "VT Item tree: Query VT Item nodes with node_type='Sprint' where status='Active'. Then query VT Item Task nodes where assigned_to=user AND parent_vt_item chain includes the sprint (parent walk: is_ancestor(sprint_node, task_node)). Helper: descendant_tasks(sprint_node) filtered by assigned_to."
+      },
+      {
+        "current": "Sprint percent_done: COUNT tasks with pdca_phase='DONE' / COUNT total tasks WHERE sprint=sprint_id",
+        "tree_equivalent": "VT Item tree: Query descendants of Sprint node (node_type='Task' only) filtered by pdca_phase='DONE', divide by total descendants. Helper: descendant_tasks(sprint_node) with optional phase filter."
+      },
+      {
+        "current": "User's projects with details (owner/leader/member): JOIN tabVT Project p LEFT JOIN tabProject Team Member m WHERE status != 'Closed' AND (project_owner=user OR project_leader=user OR m.user=user)",
+        "tree_equivalent": "VT Item tree: Query VT Item nodes with node_type='Project' where is_closed=false AND user appears as owner (created_by), leader (custom_leader), or in child_table VT Item Project Team Member. Selects: name, title, created_by, custom_leader, end_date, health_score (all preserved). Helper: child_team_members(project_node) to query team member child table."
+      },
+      {
+        "current": "Project blocked task count: frappe.db.count('VT Task', {'project': project_id, 'kanban_status': 'Blocked'})",
+        "tree_equivalent": "VT Item tree: Query descendant_tasks(project_node) with kanban_status='Blocked'. Count result. Helper: descendant_tasks(project_node, filter={'kanban_status': 'Blocked'})."
+      },
+      {
+        "current": "On-time rate: Count tasks WHERE assigned_to=user AND pdca_phase='DONE' AND completion_date >= 7 days ago, divide by completion_date <= deadline",
+        "tree_equivalent": "VT Item tree: Query VT Item Task nodes where assigned_to=user AND pdca_phase='DONE' AND completion_date >= DATE_SUB(CURDATE(), 7 days). For each, check completion_date <= deadline. Helper: filter could be pushed to query or post-processed. No tree structure needed, just date range + status filter."
+      },
+      {
+        "current": "Blocked task count: frappe.db.count('VT Task', {'assigned_to': user, 'kanban_status': 'Blocked'})",
+        "tree_equivalent": "VT Item tree: Query VT Item Task nodes where assigned_to=user AND kanban_status='Blocked'. Count. No tree traversal needed, direct node_type filter."
+      },
+      {
+        "current": "OKR confidence delta: AVG(confidence - confidence_last_week) on Key Result WHERE project.project_owner OR project.project_leader; JOIN Key Result kr → Objective o → VT Project p",
+        "tree_equivalent": "VT Item tree: Query VT Item nodes with node_type='OKR' (Objective role) for projects owned/led by user. Then query child_table VT Item Key Result rows (KRs are child rows on OKR node, not separate doctypes). Compute AVG(confidence - confidence_last_week). No ancestor walk; KRs are direct children. Helper: child_key_results(okr_node)."
+      },
+      {
+        "current": "Next deadline: SELECT name, title, deadline FROM tabVT Task WHERE assigned_to=user AND pdca_phase != 'DONE' AND deadline IS NOT NULL ORDER BY deadline ASC LIMIT 1",
+        "tree_equivalent": "VT Item tree: Query VT Item Task nodes where assigned_to=user AND pdca_phase != 'DONE' AND deadline IS NOT NULL, order by deadline ASC, limit 1. Direct node filters, no tree walk."
+      },
+      {
+        "current": "PDCA queue counts: SELECT pdca_phase, COUNT(*) FROM tabVT Task WHERE assigned_to=user AND pdca_phase != 'DONE' GROUP BY pdca_phase",
+        "tree_equivalent": "VT Item tree: Query VT Item Task nodes where assigned_to=user AND pdca_phase != 'DONE', group by pdca_phase, count. No tree structure needed."
+      },
+      {
+        "current": "Points earned this week: SUM(amount) FROM tabTask Point Log WHERE user=user AND log_timestamp >= 7 days ago",
+        "tree_equivalent": "Separate doctype Task Point Log (not VT Item related). No change needed; query Task Point Log directly by user + date range."
+      },
+      {
+        "current": "Streak days: Loop counting VT Task rows WHERE assigned_to=user AND pdca_phase='DONE' AND completion_date=each day back until gap",
+        "tree_equivalent": "VT Item tree: For each day in lookback loop, query VT Item Task nodes where assigned_to=user AND pdca_phase='DONE' AND completion_date=date. Count > 0 per day. No tree walk, just date-based task count per day."
+      },
+      {
+        "current": "Capacity used: SUM(GREATEST(estimated_minutes - actual_minutes, 0)) FROM tabVT Task WHERE assigned_to=user AND pdca_phase != 'DONE'",
+        "tree_equivalent": "VT Item tree: Query VT Item Task nodes where assigned_to=user AND pdca_phase != 'DONE', sum GREATEST(estimated_minutes - actual_minutes, 0). Direct node filter, no tree traversal."
+      },
+      {
+        "current": "Project OKR progress: AVG(current_value / target_value) on Key Result for project's linked Objective; JOIN Key Result kr → Objective o → VT Project p WHERE p.name=project_id",
+        "tree_equivalent": "VT Item tree: Get VT Item Project node, then walk ancestor chain to find associated OKR node (or query OKR by project foreign key if denormalized), then query child_table VT Item Key Result rows. Compute AVG(current_value / NULLIF(target_value, 0)). Helper: child_key_results(okr_node) and possibly find_project_okr(project_node) to map Project → OKR."
+      },
+      {
+        "current": "User role in project: Check project_owner == user (owner) -> project_leader == user (leader) -> lookup Project Team Member child table WHERE parent=project_id AND user=user (role) -> else 'member'",
+        "tree_equivalent": "VT Item tree: Check VT Item Project node created_by (owner) and custom_leader (leader), then query child_table VT Item Project Team Member where user=user to get role, else 'member'. Helper: child_team_members(project_node) with user filter."
+      }
+    ],
+    "fields_referenced": [
+      "VT Project.project_owner",
+      "VT Project.project_leader",
+      "VT Project.title",
+      "VT Project.status",
+      "VT Project.end_date",
+      "VT Project.health_score",
+      "VT Project.objective",
+      "VT Sprint.name",
+      "VT Sprint.sprint_title",
+      "VT Sprint.start_date",
+      "VT Sprint.end_date",
+      "VT Sprint.status",
+      "VT Task.name",
+      "VT Task.title",
+      "VT Task.assigned_to",
+      "VT Task.sprint",
+      "VT Task.project",
+      "VT Task.pdca_phase",
+      "VT Task.completion_date",
+      "VT Task.deadline",
+      "VT Task.kanban_status",
+      "VT Task.estimated_minutes",
+      "VT Task.actual_minutes",
+      "Objective.name",
+      "Key Result.objective",
+      "Key Result.confidence",
+      "Key Result.confidence_last_week",
+      "Key Result.current_value",
+      "Key Result.target_value",
+      "Project Team Member.user",
+      "Project Team Member.role",
+      "Task Point Log.user",
+      "Task Point Log.amount",
+      "Task Point Log.log_timestamp"
+    ],
+    "helper_primitives_needed": [
+      "descendant_tasks(project_or_sprint_node, filter_dict=None)",
+      "child_key_results(okr_node)",
+      "child_team_members(project_node, user=None)",
+      "find_project_okr(project_node)",
+      "is_ancestor(potential_ancestor_node, potential_descendant_node)",
+      "ancestors_of(node)"
+    ],
+    "complexity": "M",
+    "notes": "The service is role-aware dashboard aggregator composing multiple analytics queries. 18 distinct legacy query patterns identified: 9 use tree/hierarchy (project ancestry, sprint-task relationships, OKR-KR parent-child), 9 are node-level filters (task status, assignment, dates). Most complex: (1) OKR confidence delta and project OKR progress require joining legacy Project→Objective→KeyResult linked chain; in VT Item these become: Project node with foreign key to OKR node (or OKR discovered via ancestor), then KRs as child_table rows on OKR. (2) Project membership spans owner link field, leader link field, AND child_table team members—requires multi-source union. (3) Evaluate_risks() delegates to external service; needs to pass VT Item Project node and service internally uses descendant_tasks(). Key field preservation: estimated_minutes, actual_minutes, pdca_phase, kanban_status, completion_date, deadline, health_score all exist on VT Item Task/Project nodes. Task Point Log is separate (not VT Item). No KPI Definition or KPI Entry queries in this service (those are in health_score_service and risk_evaluator delegated calls).",
+    "writes": false
+  },
+  {
+    "service": "task/services/reports/okr_pacing.py",
+    "legacy_doctypes": [
+      "Objective",
+      "Key Result"
+    ],
+    "queries": [
+      {
+        "current": "JOIN tabKey Result kr ON kr.objective JOIN tabObjective o ON o.name = kr.objective; SELECT o.name, o.title, o.period_start, o.period_end, kr.name, kr.metric, kr.target_value, kr.current_value",
+        "tree_equivalent": "get_all('VT Item', filters={'node_type': 'OKR'}, fields=['name', 'title', 'period_start', 'period_end']); then for each OKR, iterate child rows in doc.key_results table (VT Item Key Result) to extract metric, target_value, current_value"
+      }
+    ],
+    "fields_referenced": [
+      "name",
+      "title",
+      "period_start",
+      "period_end",
+      "metric",
+      "target_value",
+      "current_value"
+    ],
+    "helper_primitives_needed": [
+      "get_okr_nodes_by_type",
+      "get_child_key_results_for_okr"
+    ],
+    "complexity": "S",
+    "writes": false,
+    "notes": "The okr_pacing report joins tabObjective and tabKey Result to compute OKR pacing metrics (progress % vs elapsed time %). In the VT Item tree: (1) OKR nodes are VT Item records with node_type='OKR'; (2) Key Results are no longer a separate doctype but are rows in the child table 'VT Item Key Result' attached to the OKR node; (3) the join pattern becomes a direct traversal: fetch OKR node, read doc.key_results array. The report reads only legacy fields that map 1:1 to VT Item tree: Objective.name→VT Item.name, Objective.title→VT Item.title, Objective.period_start/period_end (both preserved on OKR-type nodes), and from Key Result rows: metric, target_value, current_value (all preserved in VT Item Key Result child table schema). No aggregation, no complex parent-child logic needed—just direct row reads. The report is read-only (no write). Migration is trivial: replace frappe.db.sql() with frappe.get_all('VT Item', {'node_type': 'OKR'}) + iterate doc.key_results on each result."
+  },
+  {
+    "service": "task/services/reports/project_burndown_archive.py",
+    "legacy_doctypes": [
+      "VT Sprint",
+      "VT Project",
+      "VT Task"
+    ],
+    "queries": [
+      {
+        "current": "SELECT s.name, p.title, s.outcome, s.status, s.actual_velocity, s.burndown_actual_json FROM tabVT Sprint s JOIN tabVT Project p ON p.name = s.project WHERE s.status = 'Closed' ORDER BY s.end_date DESC LIMIT 50",
+        "tree_equivalent": "Query VT Item nodes where node_type='Sprint' AND sprint_state='Closed', ordered by end_date DESC, LIMIT 50. For each Sprint, walk ancestor chain (parent_vt_item loop) to find parent Project node (node_type='Project'). Alternative: nested-set range query — for each Sprint node with (lft, rgt), find Project ancestors using WHERE lft < sprint.lft AND rgt > sprint.rgt AND node_type='Project'"
+      },
+      {
+        "current": "SELECT SUM(COALESCE(t.leader_override_points, t.earned_points, t.base_points, 0)) FROM tabVT Task t WHERE t.sprint = s.name AND t.kanban_status = 'Done'",
+        "tree_equivalent": "For a given Sprint node, find all descendant Task nodes (node_type='Task') using nested-set range query: WHERE lft > sprint.lft AND rgt < sprint.rgt AND node_type='Task' AND kanban_status='Done'. Aggregate leader_override_points, earned_points, base_points in priority order using COALESCE in SQL or conditional logic in Python. Helper primitive: descendants_of_type(sprint_node, node_type='Task', filters={'kanban_status': 'Done'})"
+      }
+    ],
+    "fields_referenced": [
+      "name",
+      "title",
+      "outcome",
+      "status",
+      "actual_velocity",
+      "burndown_actual_json",
+      "leader_override_points",
+      "earned_points",
+      "base_points",
+      "kanban_status",
+      "sprint_state",
+      "end_date",
+      "project"
+    ],
+    "helper_primitives_needed": [
+      "descendants_of_type(node, node_type, filters=None)",
+      "walk_ancestors(node, node_type=None)",
+      "get_ancestor_of_type(node, target_node_type)",
+      "nested_set_range_query(node, lft_col, rgt_col, additional_filters=None)"
+    ],
+    "complexity": "M",
+    "writes": false,
+    "notes": "The service performs two main legacy queries: (1) Fetch closed sprints with their associated projects, (2) Aggregate earned velocity from tasks within each sprint. In the VT Item tree, both relationships flip from foreign-key joins to ancestor/descendant tree traversal. The JOIN on VT Project becomes a parent walk (typically 1 step up). The Task aggregation becomes a descendant query filtered by kanban_status='Done'. The derived field actual_velocity uses a COALESCE cascade (leader_override_points > earned_points > base_points); this logic and field priority are preserved on Task nodes in VT Item. No writes occur; this is read-only report generation."
+  },
+  {
+    "service": "task/services/reports/project_health.py",
+    "legacy_doctypes": [
+      "VT Project"
+    ],
+    "queries": [
+      {
+        "current": "SELECT p.name, p.title, p.status, p.health_score, p.health_history_json FROM `tabVT Project` p WHERE p.status != 'Closed'",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Project', 'health_status': ['!=', 'Closed']}, fields=['name', 'title', 'health_status', 'health_score', 'health_history_json'])\n\nAlternatively with NestedSet conditions:\nfrappe.db.sql(\"SELECT name, title, health_status, health_score, health_history_json FROM `tabVT Item` WHERE node_type = 'Project' AND health_status != 'Closed'\")\n\nNote: 'status' field on VT Project maps to 'health_status' field on VT Item (node_type='Project'); 'Closed' status same in both"
+      }
+    ],
+    "fields_referenced": [
+      "name",
+      "title",
+      "status/health_status",
+      "health_score",
+      "health_history_json"
+    ],
+    "helper_primitives_needed": [
+      "filters on node_type='Project'",
+      "filters on health_status field",
+      "frappe.get_all() or frappe.db.sql() for flat Project node reads"
+    ],
+    "complexity": "S",
+    "notes": "Single flat query with no joins or nested queries. project_health.py reads all non-Closed VT Project records, extracts health_score and health_history_json (JSON array), computes a trend from the history, and formats a 8-week heatmap. No parent/child traversal or complex tree operations needed. VT Item migration: all fields (title, health_score, health_history_json) are PRESERVED on VT Item when node_type='Project'. The 'status' field on VT Project becomes 'health_status' on VT Item. Run() function has error handling for missing health_history_json (parses as empty list, falls back to current health_score or STATUS_SCORE mapping). No child tables (team_members, milestones, documentation) are read by this report. Query is read-only, suitable for frappe.get_all() without permissions escalation. No aggregation across multiple Projects; processing is independent per row. Migration path: replace frappe.db.sql(...`tabVT Project`...) with frappe.get_all('VT Item', filters={'node_type': 'Project', 'health_status': ['!=', 'Closed']}, fields=[...]) or equivalent db.sql with VT Item table and node_type='Project' filter. No tree helper primitives required (no ancestor/descendant walks, no parent chain).\"",
+    "writes": false
+  },
+  {
+    "service": "task/services/reports/risk_log.py",
+    "legacy_doctypes": [
+      "Risk Event",
+      "VT Project"
+    ],
+    "queries": [
+      {
+        "current": "SELECT r.detected_at, COALESCE(p.title, r.project), r.reason, r.severity FROM `tabRisk Event` r LEFT JOIN `tabVT Project` p ON p.name = r.project WHERE r.detected_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) ORDER BY r.detected_at DESC LIMIT 200",
+        "tree_equivalent": "Query Risk Event doctype (which itself is unchanged—stays as a standalone doctype, not part of VT Item tree). The LEFT JOIN to VT Project can be replaced by: (1) Get all Risk Event docs in rolling 30-day window; (2) For each r.project, fetch VT Item node with node_type='Project' AND name=r.project, extract .title field. Alternatively: pre-load all Project nodes (node_type='Project') into a dict by name for O(1) title lookup. Risk Event retains its doctype and field names; VT Project is replaced by VT Item nodes with node_type='Project', preserving the 'title' field."
+      }
+    ],
+    "fields_referenced": [
+      "Risk Event.detected_at",
+      "Risk Event.project",
+      "Risk Event.reason",
+      "Risk Event.severity",
+      "VT Project.title"
+    ],
+    "helper_primitives_needed": [
+      "frappe.get_all(doctype='VT Item', filters={'node_type': 'Project'}, fields=['name', 'title'])",
+      "build_project_title_lookup(projects: list[str]) -> dict[str, str]"
+    ],
+    "complexity": "S",
+    "writes": false,
+    "notes": "Risk Event doctype is NOT part of the VT Item tree migration—it remains a standalone doctype. The only change is the LEFT JOIN to VT Project, which becomes a lookup against VT Item nodes filtered by node_type='Project'. The risk_log.py service is a pure read-only report that pulls Risk Event documents and enriches them with project titles. No nested-set traversal (lft/rgt) is needed. The service queries over a rolling 30-day window on Risk Event.detected_at, then joins to project titles. Migration path: (1) Risk Event stays as-is; (2) Replace VT Project lookup with VT Item query where node_type='Project'; (3) Preserve all Risk Event fields and output column mapping.\""
+  },
+  {
+    "service": "task/services/reports/team_throughput.py",
+    "legacy_doctypes": [
+      "VT Task"
+    ],
+    "fields_referenced": [
+      "completion_date",
+      "leader_override_points",
+      "earned_points",
+      "base_points",
+      "kanban_status",
+      "start_date"
+    ],
+    "queries": [
+      {
+        "current": "SELECT completion_date, SUM(COALESCE(leader_override_points, earned_points, base_points, 0)) as velocity, AVG(TIMESTAMPDIFF(HOUR, start_date, completion_date)) as cycle_hours FROM tabVT Task WHERE kanban_status='Done' AND completion_date IS NOT NULL AND completion_date >= DATE_SUB(CURDATE(), INTERVAL 12 WEEK) GROUP BY DATE_FORMAT(completion_date, '%x-W%v')",
+        "tree_equivalent": "Get all VT Item nodes with node_type='Task', filter by kanban_status='Done' and completion_date within last 12 weeks, resolve points field via precedence chain (leader_override_points > earned_points > base_points), group by week using DATE_FORMAT on completion_date, aggregate SUM(points) and AVG(TIMESTAMPDIFF(start_date, completion_date)). No tree parent/ancestor navigation needed — all fields exist on Task node itself."
+      }
+    ],
+    "helper_primitives_needed": [
+      "get_descendants(node, node_type='Task')",
+      "get_field_with_fallback(node, ['leader_override_points', 'earned_points', 'base_points'])"
+    ],
+    "writes": false,
+    "complexity": "S",
+    "notes": "Single direct SQL query with no joins or cross-doctype lookups. All 6 fields are preserved on VT Item Task nodes. Migration path: replace frappe.db.sql() with frappe.db.get_list('VT Item', filters=[...]) and move COALESCE precedence logic to application layer. No parent chain / ancestor traversal needed."
+  }
+]
