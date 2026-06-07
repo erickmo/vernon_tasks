@@ -2,13 +2,13 @@
    Scoped under .vt-detail (a .vt-home child) so it inherits the --vh-* tokens
    and never leaks into the rest of desk. Paired with vt_project_detail.js. */
 
-.vt-detail .vb-hero { margin: 20px 0 16px; }
-.vt-detail .vb-hero-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.vt-detail .vb-hero { margin: 20px 0 16px; width: 100%; box-sizing: border-box; overflow-x: hidden; }
+.vt-detail .vb-hero-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 .vt-detail .vb-hero-chips { display: flex; gap: 6px; }
 .vt-detail .vb-hero-bar { margin: 10px 0 6px; }
 
 /* ── hero meta row (between title and progress) ── */
-.vt-detail .vb-hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.vt-detail .vb-hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; max-width: 100%; min-width: 0; }
 .vt-detail .vb-meta-chip {
   font-size: 12px; color: var(--vh-text-2); background: #f1f5f9;
   border-radius: 12px; padding: 3px 10px; line-height: 1.4;
