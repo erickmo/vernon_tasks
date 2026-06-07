@@ -34,7 +34,7 @@
     {"fieldname": "period_end", "fieldtype": "Date", "label": "Period End", "depends_on": "eval:doc.node_type=='OKR'"},
     {"fieldname": "pdca_phase", "fieldtype": "Select", "label": "PDCA Phase", "options": "PLAN\nDO\nCHECK\nACT\nCLOSED", "depends_on": "eval:['OKR','Project'].includes(doc.node_type)"},
     {"fieldname": "health_status", "fieldtype": "Select", "label": "Health", "options": "Open\nOn Track\nAt Risk\nClosed", "depends_on": "eval:['OKR','Project'].includes(doc.node_type)"},
-    {"fieldname": "key_results", "fieldtype": "Table", "label": "Key Results", "options": "Key Result", "depends_on": "eval:doc.node_type=='OKR'"},
+    {"fieldname": "key_results", "fieldtype": "Table", "label": "Key Results", "options": "VT Item Key Result", "depends_on": "eval:doc.node_type=='OKR'"},
 
     {"fieldname": "kpi_section", "fieldtype": "Section Break", "label": "KPI", "depends_on": "eval:doc.node_type=='KPI'"},
     {"fieldname": "frequency", "fieldtype": "Select", "label": "Frequency", "options": "Daily\nWeekly\nMonthly", "depends_on": "eval:doc.node_type=='KPI'"},
@@ -42,7 +42,7 @@
     {"fieldname": "target_value", "fieldtype": "Float", "label": "Target Value", "depends_on": "eval:doc.node_type=='KPI'"},
     {"fieldname": "allow_negative", "fieldtype": "Check", "label": "Allow Negative", "default": "0", "depends_on": "eval:doc.node_type=='KPI'"},
     {"fieldname": "formula", "fieldtype": "Long Text", "label": "Formula", "depends_on": "eval:doc.node_type=='KPI'"},
-    {"fieldname": "kpi_entries", "fieldtype": "Table", "label": "KPI Entries", "options": "KPI Entry", "depends_on": "eval:doc.node_type=='KPI'"},
+    {"fieldname": "kpi_entries", "fieldtype": "Table", "label": "KPI Entries", "options": "VT Item KPI Entry", "depends_on": "eval:doc.node_type=='KPI'"},
 
     {"fieldname": "project_section", "fieldtype": "Section Break", "label": "Project", "depends_on": "eval:doc.node_type=='Project'"},
     {"fieldname": "leader_user", "fieldtype": "Link", "label": "Leader", "options": "User", "depends_on": "eval:doc.node_type=='Project'"},

@@ -34,8 +34,11 @@ doctype with per-type fields gated by `depends_on`. Controller owns
 per-type autoname (`OKR-`/`KPI-`/`PROJ-`/`SP-`/`TASK-`), parent-type
 validation (strict order + flexible skips: Task may skip Sprint, Project
 may skip OKR, KPI at root or under OKR), brand inheritance from nearest
-ancestor, and `percent_done` rollup up the chain. Key Result + KPI Entry
-are now `istable:1` child tables hanging off OKR/KPI nodes.
+ancestor, and `percent_done` rollup up the chain. Measurement rows hang
+off nodes via NEW child doctypes `VT Item Key Result` (under OKR) and
+`VT Item KPI Entry` (under KPI) — the legacy standalone `Key Result` /
+`KPI Entry` doctypes are left untouched (converting them broke OKR; they
+are dropped with the rest of the legacy hierarchy in P4).
 
 **Status: P1 only (additive).** Legacy Objective / VT Project / VT Sprint
 / VT Task / KPI Definition still exist — the fresh-start drop patch and
