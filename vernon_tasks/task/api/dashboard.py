@@ -496,8 +496,18 @@ def _detail_header(project_id: str, card: dict, ref: datetime.date) -> dict:
     }
 
 
-def _map_task_row(r: dict) -> dict:
-    """Map a raw VT Task row to the card dict used by the detail list + board."""
+def _map_task_row(r: dict, ref: datetime.date | None = None) -> dict:
+    """Map a raw VT Task row to the card dict used by the detail list + board.
+
+    `overdue` is computed server-side (site-tz) so the Fokus feed Terlambat /
+    Jatuh Tempo buckets never drift with the browser clock — `getdate` on both
+    sides, comparing against `ref` (today in the site timezone). Callers pass a
+    single `ref` so we don't recompute today() per row; default keeps it correct
+    when called standalone. A task due *today* is NOT overdue (strict `<`).
+    """
+    if ref is None:
+        ref = getdate(today())
+    deadline = getdate(r["deadline"]) if r.get("deadline") else None
     return {
         "id": r["name"],
         "title": r.get("title"),
@@ -505,7 +515,9 @@ def _map_task_row(r: dict) -> dict:
         "pdca_phase": r.get("pdca_phase"),
         "priority": r.get("priority"),
         "start_date": str(r["start_date"]) if r.get("start_date") else None,
-        "deadline": str(r["deadline"]) if r.get("deadline") else None,
+        "deadline": str(deadline) if deadline else None,
+        "overdue": bool(deadline and deadline < ref),
+        "due_today": bool(deadline and deadline == ref),
         "risk_flag": bool(r.get("risk_flag")),
         "assigned_to": r.get("assigned_to"),
     }
@@ -527,7 +539,8 @@ def _project_tasks(project_id: str, *, include_closed: bool) -> list[dict]:
         order_by="deadline asc",
         limit_page_length=DETAIL_TASK_LIMIT,
     )
-    return [_map_task_row(r) for r in rows]
+    ref = getdate(today())  # one site-tz "today" for all card overdue flags
+    return [_map_task_row(r, ref) for r in rows]
 
 
 def _detail_open_tasks(project_id: str) -> list[dict]:
@@ -720,9 +733,10 @@ def project_sprints(project_id: str) -> dict:
         order_by="deadline asc", limit_page_length=DETAIL_TASK_LIMIT,
     )
     unassigned: list[dict] = []
+    ref = getdate(today())  # one site-tz "today" for all card overdue flags
     for r in rows:
         bucket = by_id.get(r.get("sprint"))
-        (bucket["tasks"] if bucket else unassigned).append(_map_task_row(r))
+        (bucket["tasks"] if bucket else unassigned).append(_map_task_row(r, ref))
     return {"sprints": list(by_id.values()), "unassigned": unassigned}
 
 

@@ -46,6 +46,32 @@ const PRIORITY_COLORS = { Critical: "#ef4444", High: "#f59e0b", Medium: "#3b82f6
 const SORTABLE_GROUP = "vt-board";
 const TASK_DOCTYPE = "VT Task";
 
+// ── Fokus feed (default view) ────────────────────────────────────────────────
+const PATCH_API = "vernon_tasks.task.api.board_mutations.patch_task";
+const BULK_ASSIGN_API = "vernon_tasks.task.api.board_mutations.bulk_assign";
+const BLOCKED_STATUS = "Blocked";
+const CLOSED_STATUSES = ["Done", "Cancelled"];
+const OVERLOAD_THRESHOLD = 8;          // KEPADA lens bolds a member's count past this
+const COLLAPSE_KEY = "vt_pd_collapse_"; // + project_id → localStorage bucket state
+const NO_PIC = "__none__";             // KEPADA lens sentinel: filter to unassigned
+
+// Severity buckets in render order (most urgent first). A task lands in the FIRST
+// bucket whose match() returns true, so counts never double-add. `action` buckets
+// auto-expand when non-empty; the terminal "lainnya" bucket stays collapsed.
+const FEED_BUCKETS = [
+    { key: "terlambat", label: "Terlambat", icon: "⛔", note: "tenggat terlewat", action: true,
+      match: (t) => !is_closed(t) && t.overdue && t.kanban_status !== BLOCKED_STATUS },
+    { key: "diblokir", label: "Diblokir", icon: "🚫", action: true,
+      match: (t) => t.kanban_status === BLOCKED_STATUS },
+    { key: "unassigned", label: "Belum Ditugaskan", icon: "👤", action: true, selectable: true,
+      match: (t) => !is_closed(t) && !t.assigned_to },
+    { key: "berisiko", label: "Berisiko", icon: "⚠", action: true,
+      match: (t) => !is_closed(t) && t.risk_flag },
+    { key: "due_today", label: "Jatuh Tempo Hari Ini", icon: "🗓", action: true,
+      match: (t) => !is_closed(t) && t.due_today },
+    { key: "lainnya", label: "Lainnya / terjadwal", icon: "✅", action: false, match: () => true },
+];
+
 // Tabs that render a heavy view lazily on first open (libs/data loaded on
 // demand). Sprint pulls its own data; calendar/gantt also load their libs.
 const LAZY_TABS = { calendar: render_calendar, gantt: render_gantt, sprint: render_sprints };
@@ -125,20 +151,24 @@ function render_page(ctx) {
     ctx.root.append(hero_card(ctx.detail));
     ctx.root.append(tabs_bar(ctx));
     const panels = $('<div class="vb-panels"></div>');
-    panels.append($('<div class="vb-panel" data-panel="kanban"></div>').append(kanban_body(ctx)));
+    // Fokus is the default landing (visible); every other panel starts hidden.
+    panels.append($('<div class="vb-panel" data-panel="fokus"></div>').append(focus_body(ctx)));
+    panels.append($('<div class="vb-panel" data-panel="kanban" hidden></div>').append(kanban_body(ctx)));
     panels.append($('<div class="vb-panel" data-panel="calendar" hidden><div class="vb-calendar"></div></div>'));
     panels.append($('<div class="vb-panel" data-panel="gantt" hidden><div class="vb-gantt-wrap"><svg class="vb-gantt"></svg></div></div>'));
     panels.append($('<div class="vb-panel" data-panel="sprint" hidden></div>'));
     panels.append($('<div class="vb-panel" data-panel="milestone" hidden></div>').append(milestones_section(ctx.detail.milestones || [])));
     panels.append($('<div class="vb-panel" data-panel="tim" hidden></div>').append(team_section(ctx.detail.team_members || [])));
-    panels.append($('<div class="vb-panel" data-panel="ringkasan" hidden></div>').append(open_tasks_section(ctx.detail.open_tasks || [])));
     ctx.root.append(panels);
+    // Autofocus the quick-capture input so the leader can type a task immediately.
+    setTimeout(() => ctx.root.find(".vb-qc-title").trigger("focus"), 0);
 }
 
+// Fokus replaces the old Ringkasan tab (it is a richer open-task surface) and is
+// the default; Kanban is relabelled "Papan". Gantt stays as a trailing segment.
 const TABS = [
-    ["kanban", "Kanban"], ["calendar", "Kalender"], ["gantt", "Gantt"],
-    ["sprint", "Sprint"], ["milestone", "Milestone"], ["tim", "Tim"],
-    ["ringkasan", "Ringkasan"],
+    ["fokus", "Fokus"], ["kanban", "Papan"], ["calendar", "Kalender"],
+    ["sprint", "Sprint"], ["milestone", "Milestone"], ["tim", "Tim"], ["gantt", "Gantt"],
 ];
 
 function tabs_bar(ctx) {
@@ -208,6 +238,297 @@ function card_meta_html(task, ctx) {
 function assignee_name(ctx, user) {
     const m = (ctx.board.team || []).find((x) => x.user === user);
     return m ? m.full_name : user;
+}
+
+// ── Fokus feed: severity buckets + inline triage (default view) ──────────────
+
+function is_closed(t) { return CLOSED_STATUSES.includes(t.kanban_status); }
+
+// Transient per-render UI state: toolbar filters + the batch-select id set.
+function focus_state(ctx) {
+    if (!ctx.focus) ctx.focus = { search: "", priority: "", assignee: "", selected: new Set() };
+    return ctx.focus;
+}
+
+// All board cards after applying the toolbar filters (title search + priority +
+// KEPADA assignee pick; "__none__" = unassigned).
+function filtered_cards(ctx) {
+    const f = focus_state(ctx);
+    const q = f.search.trim().toLowerCase();
+    return all_board_tasks(ctx).filter((t) => {
+        if (q && !(t.title || "").toLowerCase().includes(q)) return false;
+        if (f.priority && t.priority !== f.priority) return false;
+        if (f.assignee === NO_PIC) return !t.assigned_to;
+        if (f.assignee && t.assigned_to !== f.assignee) return false;
+        return true;
+    });
+}
+
+// Place each card in the FIRST bucket it matches (no double-counting).
+function bucketize(cards) {
+    const buckets = FEED_BUCKETS.map((b) => Object.assign({}, b, { tasks: [] }));
+    cards.forEach((t) => { const b = buckets.find((x) => x.match(t)); if (b) b.tasks.push(t); });
+    return buckets;
+}
+
+function focus_body(ctx) {
+    focus_state(ctx).selected = new Set();  // selection resets on a fresh build
+    const wrap = $('<div class="vb-focus"></div>');
+    wrap.append(quick_capture_bar(ctx));
+    wrap.append(focus_toolbar(ctx));
+    wrap.append('<div class="vb-kepada"></div>');
+    wrap.append('<div class="vb-feed"></div>');
+    wrap.append('<div class="vb-bulkbar" hidden></div>');
+    refresh_focus_view(ctx, wrap);  // wrap is detached; jQuery .find still resolves
+    return wrap;
+}
+
+// Recompute lens + counter + feed from the current board + filters, leaving the
+// quick-capture and toolbar inputs untouched so the search box keeps focus.
+function refresh_focus_view(ctx, wrap) {
+    const root = wrap || ctx.root.find('[data-panel="fokus"] .vb-focus');
+    const buckets = bucketize(filtered_cards(ctx));
+    const need = buckets.filter((b) => b.action).reduce((n, b) => n + b.tasks.length, 0);
+    root.find(".vb-need-count").text(need);
+    root.find(".vb-kepada").replaceWith(kepada_lens(ctx, all_board_tasks(ctx)));
+    const feed = root.find(".vb-feed").empty();
+    buckets.forEach((b) => feed.append(bucket_section(ctx, b)));
+    update_bulk_bar(ctx, root);
+}
+
+function quick_capture_bar(ctx) {
+    const opts = (list, ph) => `<option value="">${ph}</option>` + list;
+    const prio = (ctx.board.priorities || []).map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+    const team = (ctx.board.team || []).map((m) => `<option value="${esc(m.user)}">${esc(m.full_name || m.user)}</option>`).join("");
+    const bar = $(`<div class="vb-qc">
+        <span class="vb-qc-lead">⚡ Tambah</span>
+        <input class="vb-qc-title" type="text" placeholder="Judul tugas…" />
+        <select class="vb-qc-prio" title="Prioritas">${opts(prio, "⚑ Prioritas")}</select>
+        <select class="vb-qc-pic" title="Assignee">${opts(team, "👤 Assignee")}</select>
+        <input class="vb-qc-date" type="date" title="Tenggat" />
+        <button class="vb-qc-go btn btn-primary btn-xs">Buat</button>
+        <button class="vb-qc-more" title="Detail lengkap…">⋯</button></div>`);
+    const submit = () => do_quick_create(ctx, bar);
+    bar.find(".vb-qc-go").on("click", submit);
+    bar.find(".vb-qc-title").on("keydown", (e) => { if (e.key === "Enter") submit(); });
+    bar.find(".vb-qc-more").on("click", () => open_task_dialog(ctx, { prefill: qc_values(bar) }));
+    return bar;
+}
+
+function qc_values(bar) {
+    return {
+        title: (bar.find(".vb-qc-title").val() || "").trim(),
+        priority: bar.find(".vb-qc-prio").val() || undefined,
+        assigned_to: bar.find(".vb-qc-pic").val() || undefined,
+        deadline: bar.find(".vb-qc-date").val() || undefined,
+    };
+}
+
+function do_quick_create(ctx, bar) {
+    const v = qc_values(bar);
+    if (!v.title) { frappe.show_alert({ message: "Judul tugas wajib diisi", indicator: "orange" }); return; }
+    const cols = quick_add_columns(ctx);
+    if (!cols.length) { frappe.msgprint("Tidak ada kolom papan untuk membuat task."); return; }
+    const values = { priority: v.priority, assigned_to: v.assigned_to, deadline: v.deadline };
+    frappe.call(CREATE_API, { project_id: ctx.project_id, title: v.title, column: cols[0], values })
+        .then((r) => { if (r && !r.exc) reload_board(ctx); });
+}
+
+function focus_toolbar(ctx) {
+    const f = focus_state(ctx);
+    const prio = (ctx.board.priorities || [])
+        .map((p) => `<option value="${esc(p)}"${p === f.priority ? " selected" : ""}>${esc(p)}</option>`).join("");
+    const bar = $(`<div class="vb-feed-toolbar">
+        <input class="vb-feed-search" type="text" placeholder="🔍 cari…" value="${esc(f.search)}" />
+        <select class="vb-feed-prio"><option value="">Prioritas: semua</option>${prio}</select>
+        <span class="vb-need">⚠ <b class="vb-need-count">0</b> perlu aksi</span></div>`);
+    bar.find(".vb-feed-search").on("input", function () { f.search = this.value; refresh_focus_view(ctx); });
+    bar.find(".vb-feed-prio").on("change", function () { f.priority = this.value; refresh_focus_view(ctx); });
+    return bar;
+}
+
+// Per-member open-task counts (overloaded bolded) + "Tanpa PIC"; click = filter.
+function kepada_lens(ctx, cards) {
+    const f = focus_state(ctx);
+    const counts = {};
+    let no_pic = 0;
+    cards.filter((t) => !is_closed(t)).forEach((t) => {
+        if (t.assigned_to) counts[t.assigned_to] = (counts[t.assigned_to] || 0) + 1;
+        else no_pic += 1;
+    });
+    const lens = $('<div class="vb-kepada"><span class="vb-kepada-lead">Tim:</span></div>');
+    (ctx.board.team || []).forEach((m) => lens.append(load_chip(ctx, m.user, m.full_name || m.user, counts[m.user] || 0)));
+    lens.append(load_chip(ctx, NO_PIC, "Tanpa PIC", no_pic, true));
+    return lens;
+}
+
+function load_chip(ctx, key, label, n, nopic) {
+    const f = focus_state(ctx);
+    const hot = !nopic && n >= OVERLOAD_THRESHOLD ? " vb-load-hot" : "";
+    const on = f.assignee === key ? " vb-load-on" : "";
+    const chip = $(`<button class="vb-load${nopic ? " vb-load-nopic" : ""}${hot}${on}">${esc(label)} <b>${n}</b></button>`);
+    chip.on("click", () => { f.assignee = (f.assignee === key ? "" : key); refresh_focus_view(ctx); });
+    return chip;
+}
+
+function bucket_section(ctx, b) {
+    const collapsed = bucket_collapsed(ctx, b);
+    const selall = b.selectable && b.tasks.length ? '<button class="vb-bucket-selall">☐ pilih semua</button>' : "";
+    const note = b.note ? `<span class="vb-bucket-note">${esc(b.note)}</span>` : "";
+    const sec = $(`<div class="vb-bucket vb-bucket-${b.key}${b.tasks.length ? "" : " vb-bucket-empty"}">
+        <div class="vb-bucket-head">
+            <span class="vb-bucket-caret">${collapsed ? "▸" : "▾"}</span>
+            <span class="vb-bucket-label">${b.icon} ${esc(b.label.toUpperCase())} (${b.tasks.length})</span>
+            ${note}${selall}</div>
+        <div class="vb-bucket-body"${collapsed ? " hidden" : ""}></div></div>`);
+    const body = sec.find(".vb-bucket-body");
+    b.tasks.forEach((t) => body.append(feed_row(ctx, t, b)));
+    sec.find(".vb-bucket-head").on("click", (e) => {
+        if (!$(e.target).is(".vb-bucket-selall")) toggle_bucket(ctx, b, sec);
+    });
+    sec.find(".vb-bucket-selall").on("click", () => select_all_bucket(ctx, b));
+    return sec;
+}
+
+function bucket_collapsed(ctx, b) {
+    const saved = load_collapse(ctx);
+    if (b.key in saved) return !!saved[b.key];
+    return !b.action || b.tasks.length === 0;  // default: terminal/empty collapsed
+}
+
+function load_collapse(ctx) {
+    try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY + ctx.project_id)) || {}; }
+    catch (e) { return {}; }
+}
+
+function toggle_bucket(ctx, b, sec) {
+    const body = sec.find(".vb-bucket-body");
+    const collapse = !body.attr("hidden");  // currently visible → collapse it
+    body.attr("hidden", collapse ? true : null);
+    sec.find(".vb-bucket-caret").text(collapse ? "▸" : "▾");
+    const map = load_collapse(ctx);
+    map[b.key] = collapse;
+    try { localStorage.setItem(COLLAPSE_KEY + ctx.project_id, JSON.stringify(map)); } catch (e) {}
+}
+
+function feed_row(ctx, t, b) {
+    const row = $(`<div class="vb-feed-row" data-id="${esc(t.id)}"></div>`);
+    if (b.selectable) row.append(select_box(ctx, t));
+    const title = $(`<span class="vb-feed-title">${esc(t.title || t.id)}</span>`);
+    title.on("click", () => open_task_dialog(ctx, { task: t }));
+    row.append(title).append(row_flags(ctx, t)).append(row_levers(ctx, t, b));
+    return row;
+}
+
+function select_box(ctx, t) {
+    const cb = $(`<input type="checkbox" class="vb-row-sel"${focus_state(ctx).selected.has(t.id) ? " checked" : ""}/>`);
+    cb.on("change", function () { toggle_select(ctx, t.id, this.checked); });
+    return cb;
+}
+
+// Read-only signal chips: priority, overdue label, blocked tag.
+function row_flags(ctx, t) {
+    const flags = $('<span class="vb-feed-flags"></span>');
+    if (t.priority) flags.append(`<span class="vb-chip vb-prio-${esc(t.priority)}">${esc(t.priority)}</span>`);
+    if (t.overdue && t.deadline) flags.append(`<span class="vb-late">📅 ${esc(t.deadline)} lewat</span>`);
+    if (t.kanban_status === BLOCKED_STATUS) flags.append('<span class="vh-chip vh-chip-behind">Blokir</span>');
+    return flags;
+}
+
+// Editable levers — render ONLY the triage controls still missing, so a row reads
+// as a to-do that is its own fix and leaves the feed once all are set.
+function row_levers(ctx, t, b) {
+    const levers = $('<span class="vb-feed-levers"></span>');
+    if (t.assigned_to) levers.append(`<span class="vb-chip vb-set">👤 ${esc(assignee_name(ctx, t.assigned_to))}</span>`);
+    else levers.append(assignee_lever(ctx, t));
+    if (!t.priority) levers.append(priority_lever(ctx, t));
+    if (!t.deadline) levers.append(deadline_lever(ctx, t));
+    if (b.key === "diblokir") levers.append(unblock_btn(ctx, t));
+    levers.append(more_btn(ctx, t));
+    return levers;
+}
+
+function assignee_lever(ctx, t) {
+    const team = (ctx.board.team || []).map((m) => `<option value="${esc(m.user)}">${esc(m.full_name || m.user)}</option>`).join("");
+    const sel = $(`<select class="vb-lever vb-lever-pic"><option value="">👤 pilih</option>${team}</select>`);
+    sel.on("click", (e) => e.stopPropagation());
+    sel.on("change", function () { if (this.value) patch_field(ctx, t.id, "assigned_to", this.value); });
+    return sel;
+}
+
+function priority_lever(ctx, t) {
+    const prio = (ctx.board.priorities || []).map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join("");
+    const sel = $(`<select class="vb-lever vb-lever-prio"><option value="">⚑ prioritas</option>${prio}</select>`);
+    sel.on("click", (e) => e.stopPropagation());
+    sel.on("change", function () { if (this.value) patch_field(ctx, t.id, "priority", this.value); });
+    return sel;
+}
+
+function deadline_lever(ctx, t) {
+    const input = $('<input type="date" class="vb-lever vb-lever-date" title="Tenggat"/>');
+    input.on("click", (e) => e.stopPropagation());
+    input.on("change", function () { if (this.value) patch_field(ctx, t.id, "deadline", this.value); });
+    return input;
+}
+
+function unblock_btn(ctx, t) {
+    const target = (t.allowed_targets || []).find((c) => c !== BLOCKED_STATUS);
+    if (!target) return $();
+    const btn = $('<button class="vb-lever vb-unblock">Buka blok →</button>');
+    btn.on("click", (e) => {
+        e.stopPropagation();
+        frappe.call(MOVE_API, { task_id: t.id, to_column: target }).then((r) => { if (r && !r.exc) reload_board(ctx); });
+    });
+    return btn;
+}
+
+function more_btn(ctx, t) {
+    const btn = $('<button class="vb-lever vb-more" title="Detail lengkap">⋮</button>');
+    btn.on("click", (e) => { e.stopPropagation(); open_task_dialog(ctx, { task: t }); });
+    return btn;
+}
+
+function patch_field(ctx, task_id, field, value) {
+    frappe.call(PATCH_API, { task_id, field, value }).then((r) => { if (r && !r.exc) reload_board(ctx); });
+}
+
+function toggle_select(ctx, id, on) {
+    const sel = focus_state(ctx).selected;
+    if (on) sel.add(id); else sel.delete(id);
+    update_bulk_bar(ctx);
+}
+
+function select_all_bucket(ctx, b) {
+    const sel = focus_state(ctx).selected;
+    b.tasks.forEach((t) => sel.add(t.id));
+    const panel = ctx.root.find('[data-panel="fokus"] .vb-focus');
+    panel.find(`.vb-bucket-${b.key} .vb-row-sel`).prop("checked", true);
+    update_bulk_bar(ctx);
+}
+
+function update_bulk_bar(ctx, root) {
+    const panel = root || ctx.root.find('[data-panel="fokus"] .vb-focus');
+    const sel = focus_state(ctx).selected;
+    const bar = panel.find(".vb-bulkbar");
+    if (!sel.size) { bar.attr("hidden", true).empty(); return; }
+    bar.removeAttr("hidden").empty().append(bulk_bar_inner(ctx, sel));
+}
+
+function bulk_bar_inner(ctx, sel) {
+    const team = (ctx.board.team || []).map((m) => `<option value="${esc(m.user)}">${esc(m.full_name || m.user)}</option>`).join("");
+    const box = $(`<div class="vb-bulk-inner"><span class="vb-bulk-count">☑ ${sel.size} dipilih</span>
+        <select class="vb-bulk-pic"><option value="">👤 Tugaskan ke…</option>${team}</select>
+        <button class="vb-bulk-cancel">✕ batal</button></div>`);
+    box.find(".vb-bulk-pic").on("change", function () { if (this.value) do_bulk_assign(ctx, this.value); });
+    box.find(".vb-bulk-cancel").on("click", () => { focus_state(ctx).selected.clear(); reload_board(ctx); });
+    return box;
+}
+
+function do_bulk_assign(ctx, user) {
+    const ids = Array.from(focus_state(ctx).selected);
+    if (!ids.length) return;
+    frappe.call(BULK_ASSIGN_API, { project_id: ctx.project_id, task_ids: ids, user })
+        .then((r) => { if (r && !r.exc) { focus_state(ctx).selected.clear(); reload_board(ctx); } });
 }
 
 // ── task create / edit dialog ───────────────────────────────────────────────
@@ -407,6 +728,8 @@ function reload_board(ctx) {
     frappe.call(BOARD_API, { project_id: ctx.project_id }).then((r) => {
         ctx.board = (r && r.message) || { columns: [], team: [], priorities: [] };
         ctx.root.find('[data-panel="kanban"]').empty().append(kanban_body(ctx));
+        // Fokus feed derives from the same board payload — keep it in sync.
+        ctx.root.find('[data-panel="fokus"]').empty().append(focus_body(ctx));
         // Lazy views hold a stale snapshot — re-render the one currently open.
         const active = ctx.root.find(".vb-tab-active").data("tab");
         if (LAZY_TABS[active]) LAZY_TABS[active](ctx);
@@ -577,20 +900,6 @@ function hero_card(detail) {
 
 function section_shell(title) {
     return $(`<div class="vh-section"><div class="vh-section-title">${title}</div></div>`);
-}
-
-function open_tasks_section(tasks) {
-    const sec = section_shell("Task Terbuka");
-    if (!tasks.length) return sec.append('<div class="vh-empty">Tidak ada task terbuka.</div>');
-    tasks.forEach((t) => sec.append(task_row(t)));
-    return sec;
-}
-
-function task_row(t) {
-    const meta = [t.kanban_status, t.priority, t.deadline].filter(Boolean).map(esc).join(" · ");
-    const flag = t.risk_flag ? '<span class="vh-chip vh-chip-behind">Berisiko</span>' : "";
-    return $(`<div class="vh-item"><span class="vh-item-title">${esc(t.title || t.id)}</span>
-        <span class="vh-item-meta">${meta}</span>${flag}</div>`);
 }
 
 function team_section(members) {

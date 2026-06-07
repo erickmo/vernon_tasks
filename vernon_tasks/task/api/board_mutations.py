@@ -263,3 +263,34 @@ def patch_task(task_id: str, field: str, value=None) -> dict:
     doc.set(field, value or None)
     doc.save(ignore_permissions=True)
     return {"ok": True}
+
+
+@frappe.whitelist()
+def bulk_assign(project_id: str, task_ids, user: str) -> dict:
+    """Assign many of a project's tasks to one user in a single call.
+
+    Powers the Fokus feed's batch triage (clear the whole "Belum Ditugaskan"
+    stack at once). Deliberately a NEW endpoint rather than reusing
+    ``portal_projects.bulk_reassign``: that one runs ``require_login`` only and
+    writes via ``db.set_value``, bypassing both the board's project-access
+    contract and the VT Task controller. Here we assert project access + that the
+    target is a team member ONCE, then save each task through the controller so
+    ``validate()`` stays authoritative. Each id is re-checked to belong to
+    ``project_id`` so a caller can't smuggle in another project's task.
+    """
+    rate_limit("bulk_assign", 30)
+    project_id = max_str(project_id, 140)
+    user = max_str(user, 140)
+    if isinstance(task_ids, str):
+        task_ids = frappe.parse_json(task_ids)
+    _assert_project_access(project_id, frappe.session.user)
+    _assert_team_member(project_id, user)
+    updated = []
+    for task_id in task_ids or []:
+        doc = _get_board_task(max_str(task_id, 140))
+        if doc.project != project_id:
+            frappe.throw("Task di luar proyek ini", frappe.ValidationError)
+        doc.assigned_to = user
+        doc.save(ignore_permissions=True)
+        updated.append(doc.name)
+    return {"ok": True, "updated": updated}
