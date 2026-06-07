@@ -68,5 +68,16 @@ class VTItem(NestedSet):
 			)
 
 	def _inherit_brand(self) -> None:
-		"""Brand inheritance — implemented in the next task."""
-		return
+		"""Fill blank `brand` from the nearest ancestor that has one (spec §4)."""
+		if self.brand or not self.parent_vt_item:
+			return
+		ancestor = self.parent_vt_item
+		# Walk up the parent chain; first non-empty brand wins.
+		while ancestor:
+			brand, parent = frappe.db.get_value(
+				"VT Item", ancestor, ["brand", "parent_vt_item"]
+			) or (None, None)
+			if brand:
+				self.brand = brand
+				return
+			ancestor = parent

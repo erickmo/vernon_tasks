@@ -51,3 +51,18 @@ class TestVTItem(FrappeTestCase):
 		okr = _make("OKR", "O2")
 		kpi_child = _make("KPI", "Churn", parent=okr.name)
 		self.assertEqual(kpi_child.parent_vt_item, okr.name)
+
+	def _ensure_brand(self):
+		name = "Test Brand VT Item"
+		if not frappe.db.exists("VT Brand", name):
+			frappe.get_doc(
+				{"doctype": "VT Brand", "brand_name": name}
+			).insert(ignore_permissions=True)
+		return name
+
+	def test_brand_inherits_from_ancestor(self):
+		# spec §4 — blank brand resolves from nearest ancestor
+		brand = self._ensure_brand()
+		okr = _make("OKR", "Branded OKR", brand=brand)
+		proj = _make("Project", "Child proj", parent=okr.name)  # no brand set
+		self.assertEqual(proj.brand, brand)
