@@ -12,7 +12,6 @@ app_include_js = [
     "/assets/vernon_tasks/js/page_nav.js",
     "/assets/vernon_tasks/js/vt_empty.js",
     "/assets/vernon_tasks/js/vt_navbar.js",
-    "/assets/vernon_tasks/js/vt_project_redirect.js",
     "/assets/vernon_tasks/js/vt_page_style.js",
     "/assets/vernon_tasks/js/vt_focus_panel.js",
 ]

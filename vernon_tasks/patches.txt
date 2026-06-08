@@ -2,3 +2,4 @@ vernon_tasks.patches.v1_x.flatten_saya_leader_nav
 vernon_tasks.patches.v1_x.promote_brand_nav_toplevel
 vernon_tasks.patches.v1_x.retire_my_work_page
 vernon_tasks.patches.v1_x.drop_legacy_hierarchy_doctypes
+vernon_tasks.patches.v1_x.repoint_workspace_legacy_links
