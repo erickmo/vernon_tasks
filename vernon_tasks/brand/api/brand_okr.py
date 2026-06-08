@@ -19,11 +19,24 @@ import frappe
 from frappe.utils import getdate, today
 
 from vernon_tasks.brand.api.portal_brands import brand_execution
-from vernon_tasks.okr.doctype.objective.objective import aggregate_kr_progress
 from vernon_tasks.task.api.security import max_str, require_login
 from vernon_tasks.task.services import vt_item_tree as tree
 
 BRAND_DOCTYPE = "VT Brand"
+
+
+def aggregate_kr_progress(pairs: list[tuple[float, float]]) -> float:
+	"""Mean of min(current/target, 1.0) * 100 over (current, target) pairs with
+	target > 0, rounded 2dp. Canonical OKR progress scalar; clamps over-
+	performance at 100%; returns 0.0 when no pair has a positive target.
+	(Relocated from the dropped legacy Objective controller — it is a pure
+	helper with no DB access; brand_okr is its only caller.)"""
+	valid = [(c, t) for (c, t) in pairs if t and t > 0]
+	if not valid:
+		return 0.0
+	total = sum(min((c or 0) / t, 1.0) for (c, t) in valid)
+	return round((total / len(valid)) * 100, 2)
+
 # Unified hierarchy: Objective/Project/KPI are VT Item nodes (typed by node_type);
 # Key Result / KPI Entry are child rows on the OKR / KPI node. All node reads,
 # child-row reads and permission gating go through VT Item.
