@@ -25,7 +25,7 @@ The app is now desk-only: `/` redirects to `/app` (or `/login` for guests).
 - Shared first-run empty states use `public/js/vt_empty.js`
   (`window.vt_render_empty_state`).
 
-## Unified Hierarchy (VT Item) — P1 + P2 done
+## Unified Hierarchy (VT Item) — P1 + P2 + P3 done
 
 `VT Item` (`task/doctype/vt_item/`) is the canonical OKR→Task tree: one
 Frappe nested-set doctype (`is_tree:1`, controller extends `NestedSet`)
@@ -34,8 +34,12 @@ doctype with per-type fields gated by `depends_on`. Controller owns
 per-type autoname (`OKR-`/`KPI-`/`PROJ-`/`SP-`/`TASK-`), parent-type
 validation (strict order + flexible skips: Task may skip Sprint, Project
 may skip OKR, KPI at root or under OKR), brand inheritance from nearest
-ancestor, `percent_done` rollup, `is_group` auto-promote, and Task
-`kanban_status` sync from `pdca_phase` (`PDCA_KANBAN_MAP`). Measurement
+ancestor, `percent_done` rollup, `is_group` auto-promote, and the full Task
+lifecycle (ported P3): `kanban_status` sync from `pdca_phase`
+(`PDCA_KANBAN_MAP`), `VALID_PDCA_TRANSITIONS` Deming-cycle guard (gated on
+existing-node phase change; new nodes seed any phase), Task defaults
+(pdca→BACKLOG, weight→1), `_validate_task_fields` (weight>0, override_reason,
+recurring_rule), and `_stamp_completion` (CLOSED→completion_date). Measurement
 rows hang off nodes via child doctypes `VT Item Key Result` (under OKR) and
 `VT Item KPI Entry` (under KPI) — the legacy standalone `Key Result` /
 `KPI Entry` are left untouched (dropped with the rest of the legacy
@@ -49,17 +53,28 @@ parent (a Task may not be a tree-child of a Task).
 **P2 (services):** all `task/services/*` read the tree via the foundation
 `task/services/vt_item_tree.py` (`nodes`/`children`/`descendants`/
 `ancestor_of_type`/`project_of`/`child_table_rows`) instead of legacy
-doctypes. `Task Point Log.task` Link repointed VT Task→VT Item. Per-service
-query map: `docs/superpowers/plans/2026-06-07-vt-item-p2-service-map.json`.
+doctypes. Per-service query map:
+`docs/superpowers/plans/2026-06-07-vt-item-p2-service-map.json`.
 
-**Status: P1 + P2 merged (additive).** Legacy Objective / VT Project /
+**P3 (APIs):** all 12 hierarchy APIs (`brand/api/*`, `task/api/*`) read AND
+write `VT Item` EXCLUSIVELY (no dual-write, no legacy back-compat). Mutation
+APIs keep legacy JSON response keys (`assigned_to`, `sprint`) backed by
+`owner_user` / tree parent via aliases. `complete()` bypasses the transition
+guard (`flags.ignore_validate`); board drag-drop enforces it. Child-table
+Links repointed VT Task→VT Item: `Task Point Log.task` (P2),
+`Task Dependency.blocked_by` (P3). Per-API map:
+`docs/superpowers/plans/2026-06-07-vt-item-p3-api-map.json`.
+
+**Status: P1 + P2 + P3 merged (additive).** Legacy Objective / VT Project /
 VT Sprint / VT Task / KPI Definition still exist and `hooks.py` still wires
-some events to them; the app is NOT functional end-to-end yet. Remaining:
-**P3** APIs (`brand/api/*`, `task/api/*`), **P4** pages + reports + `vt-tree`
-page + the fresh-start drop patch. Spec:
+some events to them; live legacy data is invisible to migrated code — the app
+is NOT functional end-to-end until **P4**: pages + reports + `vt-tree` page +
+the fresh-start drop patch + reseed. **P4 carry-overs:** repoint
+`onboarding.py` step `route_target` "VT Task"→VT Item create flow; repoint
+`risk_event` (project/task) + `sprint_task`/`leader_review_schedule` Links or
+drop; rewire `hooks.py` off legacy. Spec:
 `docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html`;
-plans: `docs/superpowers/plans/2026-06-07-vt-item-p1-doctype.md`,
-`…-p2-services.md`.
+plans: `…-p1-doctype.md`, `…-p2-services.md`, `…-p3-apis.md`.
 
 ## Frappe Stack Skills
 
