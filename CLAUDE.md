@@ -25,7 +25,7 @@ The app is now desk-only: `/` redirects to `/app` (or `/login` for guests).
 - Shared first-run empty states use `public/js/vt_empty.js`
   (`window.vt_render_empty_state`).
 
-## Unified Hierarchy (VT Item) — P1 + P2 + P3 done
+## Unified Hierarchy (VT Item) — MIGRATION COMPLETE (P1–P4)
 
 `VT Item` (`task/doctype/vt_item/`) is the canonical OKR→Task tree: one
 Frappe nested-set doctype (`is_tree:1`, controller extends `NestedSet`)
@@ -65,16 +65,22 @@ Links repointed VT Task→VT Item: `Task Point Log.task` (P2),
 `Task Dependency.blocked_by` (P3). Per-API map:
 `docs/superpowers/plans/2026-06-07-vt-item-p3-api-map.json`.
 
-**Status: P1 + P2 + P3 merged (additive).** Legacy Objective / VT Project /
-VT Sprint / VT Task / KPI Definition still exist and `hooks.py` still wires
-some events to them; live legacy data is invisible to migrated code — the app
-is NOT functional end-to-end until **P4**: pages + reports + `vt-tree` page +
-the fresh-start drop patch + reseed. **P4 carry-overs:** repoint
-`onboarding.py` step `route_target` "VT Task"→VT Item create flow; repoint
-`risk_event` (project/task) + `sprint_task`/`leader_review_schedule` Links or
-drop; rewire `hooks.py` off legacy. Spec:
-`docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html`;
-plans: `…-p1-doctype.md`, `…-p2-services.md`, `…-p3-apis.md`.
+**P4 (pages/reports/hooks/drop):** all 17 consumers (7 reports + 10 pages incl
+desk JS) read VT Item; new `vt-tree` navigator page (`task/page/vt_tree/`);
+`hooks.py` `doc_events` collapsed to one node-aware `VT Item` block
+(`calculate_points` fires once on the live CLOSED transition, `invalidate_project_cache`
+resolves project via `tree.project_of`); controller `_validate_children` invokes
+child-row validate; carry-over Links repointed to VT Item (`Task Dependency`,
+`risk_event`, aux controllers); `demo_data`/`onboarding_seed`/onboarding_step +
+workspace nav all create/point at VT Item. The legacy doctypes
+(Objective / Key Result / KPI Definition / KPI Entry / VT Project / VT Sprint /
+VT Task / Sprint Task) are **DROPPED** (patch `drop_legacy_hierarchy_doctypes`;
+code dirs deleted). `aggregate_kr_progress` relocated to `brand_okr.py`.
+
+**Status: MIGRATION COMPLETE — the app runs on `VT Item` only.** No legacy
+hierarchy doctype remains in code or DB. Full suite green (584 tests).
+Spec: `docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html`;
+plans: `…-p1-doctype.md`, `…-p2-services.md`, `…-p3-apis.md`, `…-p4-finalize.md`.
 
 ## Frappe Stack Skills
 
