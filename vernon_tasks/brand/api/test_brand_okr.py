@@ -247,14 +247,6 @@ class TestBrandOkrFlowZones(FrappeTestCase):
 			"brand": FLOW_BRAND, "parent_vt_item": self.obj.name,
 			"owner_user": "Administrator", "health_status": "Open",
 			"start_date": today(), "end_date": add_days(today(), 7)}).insert(ignore_permissions=True)
-		# Legacy VT Project -> feeds the not-yet-migrated brand_execution rollup.
-		# Its `objective` Link must resolve to a legacy Objective record sharing the
-		# OKR node's name so the execution chip's title resolves from obj_title_map.
-		self._legacy_objective_shim(self.obj.name)
-		self.legacy_project = frappe.get_doc({
-			"doctype": "VT Project", "title": "Flow Project", "brand": FLOW_BRAND,
-			"project_owner": "Administrator", "objective": self.obj.name,
-			"start_date": today(), "end_date": add_days(today(), 7)}).insert(ignore_permissions=True)
 		# KPI Definition -> VT Item node_type="KPI" (kpi_name -> title).
 		self.kpi = frappe.get_doc({
 			"doctype": VT_ITEM, "node_type": "KPI", "title": "Flow KPI Z",
@@ -265,19 +257,6 @@ class TestBrandOkrFlowZones(FrappeTestCase):
 		self.kpi.append("kpi_entries", {"date": today(), "value": 60})
 		self.kpi.save(ignore_permissions=True)
 
-	def _legacy_objective_shim(self, name: str) -> None:
-		"""Create a legacy Objective named `name` so a legacy VT Project may Link to
-		it. brand_execution (portal_brands) is not yet migrated and still reads the
-		legacy VT Project.objective Link; aligning its name to the OKR node lets the
-		execution chip's objective_title resolve from brand_okr's OKR title map.
-		"""
-		if frappe.db.exists("Objective", name):
-			return
-		stub = frappe.get_doc({
-			"doctype": "Objective", "title": "Flow Obj", "brand": FLOW_BRAND,
-			"period": "2026-Q2", "objective_owner": "Administrator"}).insert(
-			ignore_permissions=True)
-		frappe.rename_doc("Objective", stub.name, name, force=True)
 
 	def tearDown(self):
 		self._cleanup()
@@ -311,7 +290,7 @@ class TestBrandOkrFlowZones(FrappeTestCase):
 
 	def test_execution_projects_have_objective_title(self):
 		res = brand_okr.get_brand_okr(FLOW_BRAND)
-		proj = next(p for p in res["execution"]["projects"] if p["id"] == self.legacy_project.name)
+		proj = next(p for p in res["execution"]["projects"] if p["id"] == self.project_node.name)
 		self.assertEqual(proj["objective_title"], "Flow Obj")
 
 	def test_kpi_without_target_has_none_progress(self):

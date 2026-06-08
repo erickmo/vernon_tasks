@@ -255,6 +255,10 @@ class TestPortalProjectsExtended(FrappeTestCase):
 	def test_bulk_phase_shift_done_maps_to_closed(self):
 		project = _make_project()
 		task = _make_task(project.name)
+		# bulk_phase_shift enforces the Deming cycle (legacy save()-path); a
+		# task must be in CHECK before it can legally move to CLOSED. Seed the
+		# pre-state directly (db_set bypasses the transition guard).
+		frappe.db.set_value("VT Item", task.name, "pdca_phase", "CHECK")
 		result = portal_projects.bulk_phase_shift(
 			task_ids=[task.name], new_phase="DONE"
 		)

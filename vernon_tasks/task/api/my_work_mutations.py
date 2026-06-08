@@ -29,9 +29,14 @@ def complete(task_id: str) -> dict:
 	doc = _check_access(task_id)
 	if doc.pdca_phase == DONE_PHASE:
 		return {"ok": True, "idempotent": True}
-	# Controller derives kanban_status from pdca_phase (CLOSED → "Done").
+	# Completion is a direct shortcut, NOT a Deming-cycle move — it skips the
+	# PDCA transition guard (legacy used doc.flags.ignore_validate), so a task
+	# in any phase can be marked done. With validate bypassed we set the derived
+	# kanban column + completion_date explicitly.
 	doc.pdca_phase = DONE_PHASE
+	doc.kanban_status = "Done"
 	doc.completion_date = today()
+	doc.flags.ignore_validate = True
 	# Ownership is authorized in _check_access(); VT Member lacks a doctype-level
 	# write grant on VT Item, so persist with ignore_permissions (legacy VT Task
 	# granted owner write via if_owner — that gate now lives in _check_access).
