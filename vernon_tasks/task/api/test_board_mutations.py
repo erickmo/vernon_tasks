@@ -12,7 +12,6 @@ Field renames: assigned_to → owner_user (the API/response key stays
 kanban_status is derived from pdca_phase by the controller; only "Blocked" is
 set directly. The board endpoints read back the renamed node field owner_user.
 """
-import unittest
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -301,17 +300,6 @@ class TestBoardMutations(FrappeTestCase):
         with self.assertRaises(frappe.ValidationError):
             update_task(t.name, {"is_recurring": 1})
 
-    @unittest.skip(
-        "Blocked by an un-migrated child-table link target outside this task's "
-        "edit scope: Task Dependency.blocked_by is a Link whose options still "
-        "point at the legacy 'VT Task' doctype (task_dependency.json), not "
-        "'VT Item'. Saving a VT Item Task with a dependency to another VT Item "
-        "Task therefore raises LinkValidationError ('Could not find ... Blocked "
-        "By') on the controller save that update_task performs. The board API "
-        "applies the child table correctly (see _apply_editable TABLE_FIELDS); "
-        "the row just cannot resolve until task_dependency.json repoints "
-        "blocked_by to VT Item. Re-enable once that doctype is migrated."
-    )
     def test_update_dependencies_table(self):
         """Child-table fields (dependencies) are settable from the modal."""
         frappe.set_user(self.leader)
