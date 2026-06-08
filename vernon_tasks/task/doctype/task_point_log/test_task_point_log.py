@@ -25,14 +25,18 @@ def _ensure_brand():
 
 
 def _ensure_project() -> str:
-	existing = frappe.db.get_value("VT Project", {"title": TEST_PROJECT_TITLE}, "name")
+	existing = frappe.db.get_value(
+		"VT Item", {"node_type": "Project", "title": TEST_PROJECT_TITLE}, "name"
+	)
 	if existing:
 		return existing
 	return frappe.get_doc({
-		"doctype": "VT Project",
+		"doctype": "VT Item",
+		"node_type": "Project",
+		"parent_vt_item": None,
 		"title": TEST_PROJECT_TITLE,
 		"brand": TEST_BRAND,
-		"project_owner": "Administrator",
+		"owner_user": "Administrator",
 		"start_date": "2026-01-01",
 		"end_date": "2026-12-31",
 	}).insert(ignore_permissions=True).name
@@ -44,14 +48,15 @@ class _PLBase(FrappeTestCase):
 		_ensure_brand()
 		self.project = _ensure_project()
 		self.task = frappe.get_doc({
-			"doctype": "VT Task", "title": "PL Test Task",
-			"project": self.project, "weight": 1.0,
+			"doctype": "VT Item", "node_type": "Task", "title": "PL Test Task",
+			"parent_vt_item": self.project, "owner_user": TEST_USER, "weight": 1.0,
 		}).insert(ignore_permissions=True)
 
 	def tearDown(self):
 		for log in frappe.get_all("Task Point Log", filters={"task": self.task.name}, pluck="name"):
 			frappe.delete_doc("Task Point Log", log, force=True, ignore_permissions=True)
-		frappe.delete_doc("VT Task", self.task.name, force=True, ignore_permissions=True)
+		# Delete leaf Task before its parent Project (nested-set: deepest lft first).
+		frappe.delete_doc("VT Item", self.task.name, force=True, ignore_permissions=True)
 
 	def _make(self, **overrides):
 		base = {
