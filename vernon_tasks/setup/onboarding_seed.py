@@ -15,9 +15,9 @@ _ONBOARDING_NAME = "Vernon Tasks Onboarding"
 _ALLOWED_ROLE = "System Manager"
 _STEPS = [
     {"title": "Buat brand", "action": "Go to Page", "path": "/app/vt-brands"},
-    {"title": "Buat proyek pertama", "action": "Create Entry", "reference_document": "VT Project"},
+    {"title": "Buat proyek pertama", "action": "Create Entry", "reference_document": "VT Item"},
     {"title": "Tambah anggota tim", "action": "Go to Page", "path": "/app/vt-team"},
-    {"title": "Buat task pertama", "action": "Create Entry", "reference_document": "VT Task"},
+    {"title": "Buat task pertama", "action": "Create Entry", "reference_document": "VT Item"},
 ]
 
 
