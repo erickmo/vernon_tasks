@@ -80,7 +80,7 @@ class TestProjectTaskGrouperSeeded(FrappeTestCase):
 			pdca_phase="PLAN", owner_user="Administrator",
 			deadline=add_days(today(), -3), kanban_status="In Progress",
 			base_points=3, earned_points=5, leader_override_points=7,
-			risk_flag="late",
+			override_reason="demo override", risk_flag="late",
 		)
 		# Task nested under the sprint, unassigned, DO phase, no deadline.
 		# Only base_points is set; earned/override default to 0 (Int columns),

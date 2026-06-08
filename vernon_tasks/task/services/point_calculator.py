@@ -72,7 +72,10 @@ def calculate_points(doc, method) -> None:
 	if not doc.owner_user:
 		return
 	before = doc.get_doc_before_save()
-	if before and before.pdca_phase == _DONE_PHASE:
+	# Fire ONLY on the live transition into CLOSED of an existing task. A task
+	# created/imported already-CLOSED (no `before`) keeps its given points and
+	# is not re-scored; a re-save of an already-CLOSED task is a no-op.
+	if not before or before.pdca_phase == _DONE_PHASE:
 		return
 
 	result = compute_points(
