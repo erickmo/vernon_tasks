@@ -26,7 +26,7 @@ frappe.pages["leader-review"].on_page_load = function (wrapper) {
     const esc = (s) => frappe.utils.escape_html(String(s || ""));
 
     function task_link(name, title) {
-        return `<a href="/app/vt-task/${esc(name)}" target="_blank">${esc(title)}</a>`;
+        return `<a href="/app/vt-item/${esc(name)}" target="_blank">${esc(title)}</a>`;
     }
 
     function status_pill(label) {
