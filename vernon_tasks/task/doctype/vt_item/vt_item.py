@@ -11,6 +11,7 @@ docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html
 import frappe
 from frappe import _
 from frappe.model.naming import make_autoname
+from frappe.utils import today
 from frappe.utils.nestedset import NestedSet
 
 # Per-type naming series. Single source for the `autoname()` switch.
@@ -47,6 +48,23 @@ PDCA_KANBAN_MAP = {
 # Orthogonal flag: overrides the PDCA-derived column when set directly.
 KANBAN_BLOCKED = "Blocked"
 
+# Legal PDCA transitions for Task nodes (Deming cycle). Terminal = CLOSED.
+# Ported from the legacy VT Task state machine (DONE → CLOSED). New nodes
+# (is_new) may start at any phase; only changes on an existing node are gated.
+VALID_PDCA_TRANSITIONS = {
+	"BACKLOG": ["PLAN"],
+	"PLAN": ["DO"],
+	"DO": ["CHECK"],
+	"CHECK": ["ACT", "CLOSED", "DO"],
+	"ACT": ["DO"],
+	"CLOSED": [],
+}
+
+# Legacy VT Task field defaults — applied to Task nodes so direct creates and
+# test seeds need not specify them.
+TASK_DEFAULT_PHASE = "BACKLOG"
+TASK_DEFAULT_WEIGHT = 1
+
 
 class VTItem(NestedSet):
 	"""Single node in the OKR→Task tree, typed by `node_type`."""
@@ -63,10 +81,65 @@ class VTItem(NestedSet):
 
 	def validate(self) -> None:
 		"""Field + tree invariants on every save."""
+		self._apply_task_defaults()
 		self._validate_parent_type()
 		self._inherit_brand()
 		self._sync_is_group()
+		self._validate_task_fields()
+		self._validate_pdca_transition()
 		self._sync_kanban_status()
+		self._stamp_completion()
+
+	def _apply_task_defaults(self) -> None:
+		"""Seed Task lifecycle defaults (legacy VT Task field defaults) so direct
+		creates / test seeds need not specify them. Task-scoped — OKR/Project
+		nodes keep their own pdca terminal CLOSED and have no weight."""
+		if self.node_type != "Task":
+			return
+		if not self.pdca_phase:
+			self.pdca_phase = TASK_DEFAULT_PHASE
+		if not self.weight:
+			self.weight = TASK_DEFAULT_WEIGHT
+
+	def _validate_task_fields(self) -> None:
+		"""Task numeric + governance invariants (ported from VT Task)."""
+		if self.node_type != "Task":
+			return
+		if (self.weight or 0) <= 0:
+			frappe.throw(_("Weight harus lebih besar dari 0"))
+		for fieldname in ("estimated_minutes", "actual_minutes", "review_estimated_minutes"):
+			value = getattr(self, fieldname, None)
+			if value is not None and value < 0:
+				frappe.throw(_("{0} tidak boleh negatif").format(fieldname))
+		if self.leader_override_points and not (self.override_reason or "").strip():
+			frappe.throw(_("Override Reason wajib diisi jika Leader Override Points diatur"))
+		if self.is_recurring and not self.recurring_rule:
+			frappe.throw(_("Recurring Rule wajib diisi saat Is Recurring aktif"))
+
+	def _validate_pdca_transition(self) -> None:
+		"""Reject illegal PDCA moves on an existing Task's phase change."""
+		if self.node_type != "Task" or self.is_new():
+			return
+		old_phase = frappe.db.get_value("VT Item", self.name, "pdca_phase")
+		if not old_phase or old_phase == self.pdca_phase:
+			return
+		allowed = VALID_PDCA_TRANSITIONS.get(old_phase, [])
+		if self.pdca_phase not in allowed:
+			frappe.throw(
+				_("Transisi PDCA tidak valid: {0} → {1}. Yang diperbolehkan: {2}").format(
+					old_phase, self.pdca_phase, ", ".join(allowed) or _("(tidak ada)")
+				)
+			)
+
+	def _stamp_completion(self) -> None:
+		"""Stamp completion_date when a Task reaches CLOSED. VT Item is not
+		submittable, so this replaces the legacy on_submit stamping."""
+		if (
+			self.node_type == "Task"
+			and self.pdca_phase == "CLOSED"
+			and not self.completion_date
+		):
+			self.completion_date = today()
 
 	def _sync_kanban_status(self) -> None:
 		"""Derive a Task node's board column from its pdca_phase (legacy VT Task
