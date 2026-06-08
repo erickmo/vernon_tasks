@@ -61,7 +61,7 @@ class ProjectMilestone(Document):
 		if not self.parent:
 			return
 		proj_dates = frappe.db.get_value(
-			"VT Project", self.parent, ["start_date", "end_date"]
+			"VT Item", self.parent, ["start_date", "end_date"]
 		)
 		if not proj_dates:
 			return

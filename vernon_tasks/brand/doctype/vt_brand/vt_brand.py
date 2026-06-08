@@ -25,9 +25,9 @@ import frappe
 from frappe.model.document import Document
 
 # --- Cross-doctype FK target ----------------------------------------------
-# Brand is referenced by VT Project via the `brand` link field. on_trash
-# must block when any project still points here (ADR-022).
-LINKED_PROJECT_DOCTYPE = "VT Project"
+# Brand is referenced by VT Item nodes (OKR/KPI/Project) via the `brand` link
+# field. on_trash must block when any node still points here (ADR-022).
+LINKED_PROJECT_DOCTYPE = "VT Item"
 LINKED_PROJECT_FK = "brand"
 
 # --- Validation caps ------------------------------------------------------
