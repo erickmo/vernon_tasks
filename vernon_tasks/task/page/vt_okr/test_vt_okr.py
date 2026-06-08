@@ -1,12 +1,22 @@
-"""Tests for vt-okr page API: list_objectives, update_key_result."""
+"""Tests for vt-okr page API: list_objectives, update_key_result.
+
+Unified hierarchy: Objective -> VT Item node_type="OKR"; Key Result ->
+"VT Item Key Result" child rows on the OKR node's `key_results` table. The
+tests seed VT Item nodes directly and append KR rows to the parent; KR rows
+are deleted with their parent OKR (child-table semantics — no standalone
+delete).
+"""
 import frappe
 import unittest
 
+_VT_ITEM_DOCTYPE = "VT Item"
+_OKR_NODE_TYPE = "OKR"
+_KEY_RESULTS_TABLE = "key_results"
 _FIXTURE_BRAND = "TEST-OKR-BRAND"
 
 
 def _ensure_brand():
-    """Create a VT Brand fixture if it doesn't exist. Objective.brand is mandatory."""
+    """Create a VT Brand fixture if it doesn't exist (used by the brand filter)."""
     if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
         frappe.get_doc({
             "doctype": "VT Brand",
@@ -21,48 +31,47 @@ class TestOkrAPI(unittest.TestCase):
     def setUpClass(cls):
         frappe.set_user("Administrator")
         cls._objectives = []
-        cls._key_results = []
         cls._brand = _ensure_brand()
 
     @classmethod
     def tearDownClass(cls):
-        for kr in cls._key_results:
-            if frappe.db.exists("Key Result", kr):
-                frappe.delete_doc("Key Result", kr, force=True)
+        # Key Results are child rows of the OKR node; deleting the parent VT Item
+        # removes them too (no standalone Key Result delete).
         for obj in cls._objectives:
-            if frappe.db.exists("Objective", obj):
-                frappe.delete_doc("Objective", obj, force=True)
+            if frappe.db.exists(_VT_ITEM_DOCTYPE, obj):
+                frappe.delete_doc(_VT_ITEM_DOCTYPE, obj, force=True)
         frappe.db.commit()
 
     def _make_objective(self, title="Test OKR Obj", period="2026-Q2"):
-        # Omit period_start/period_end — Objective controller auto-fills them
-        # from the period string (e.g. 2026-Q2 → 2026-04-01 .. 2026-06-30).
-        # Passing today() would fail when today() falls outside the quarter's range.
+        # Objective -> VT Item node_type="OKR". VT Item no longer auto-fills
+        # period_start/period_end from the period string; the page filters on the
+        # `period` Data field, so the date range is not needed for these tests.
         doc = frappe.get_doc({
-            "doctype": "Objective",
+            "doctype": _VT_ITEM_DOCTYPE,
+            "node_type": _OKR_NODE_TYPE,
             "title": title,
             "brand": self.__class__._brand,
             "period": period,
-            "objective_owner": "Administrator",
-            "status": "Open",
+            "owner_user": "Administrator",
+            "health_status": "Open",
             "pdca_phase": "DO",
         }).insert(ignore_permissions=True)
         self.__class__._objectives.append(doc.name)
         return doc
 
     def _make_key_result(self, objective_name, metric="Revenue", target=100.0, current=0.0):
-        doc = frappe.get_doc({
-            "doctype": "Key Result",
-            "objective": objective_name,
+        # Key Result -> child row appended to the OKR node's `key_results` table.
+        node = frappe.get_doc(_VT_ITEM_DOCTYPE, objective_name)
+        row = node.append(_KEY_RESULTS_TABLE, {
             "metric": metric,
             "target_value": target,
             "current_value": current,
             "unit": "IDR",
             "progress_percent": (current / target * 100) if target else 0,
             "confidence": 50.0,
-        }).insert(ignore_permissions=True)
-        self.__class__._key_results.append(doc.name)
-        return doc
+        })
+        node.save(ignore_permissions=True)
+        return row
 
     def test_list_objectives_includes_key_results(self):
         """list_objectives returns each objective with its key_results array."""
