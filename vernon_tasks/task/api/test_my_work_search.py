@@ -3,6 +3,12 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import today, add_days
 from vernon_tasks.task.api.my_work import search
 
+# VT Item tree migration (P4): the legacy VT Project / VT Task seeds are now
+# VT Item nodes (node_type Project / Task). A task's "project" is its nearest
+# Project ancestor (tree.project_of), so tasks are hung directly under the
+# project node via parent_vt_item. project_owner -> owner_user; assigned_to ->
+# owner_user; VT Task.project Link -> parent_vt_item.
+# Spec: docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html
 
 _FIXTURE_BRAND = "TEST-SEARCH-BRAND"
 
@@ -27,30 +33,59 @@ class TestMyWorkSearch(FrappeTestCase):
                 "roles": [{"role": "VT Member"}],
             }).insert(ignore_permissions=True)
         brand = _ensure_brand()
-        for proj_name, proj_title in [("TEST-P1B-PROJ-A", "Search Test A"), ("TEST-P1B-PROJ-B", "Search Test B")]:
-            if not frappe.db.exists("VT Project", proj_name):
-                p = frappe.get_doc({
-                    "doctype": "VT Project",
-                    "name": proj_name,
-                    "title": proj_title,
-                    "brand": brand,
-                    "project_owner": "Administrator",
-                    "start_date": today(),
-                    "end_date": add_days(today(), 30),
-                })
-                p.flags.name_set = True
-                p.insert(ignore_permissions=True)
+        # VT Project -> VT Item node_type="Project" (root of the tree); fixed
+        # names are gone (autonamed series), so capture the generated node names.
+        cls.proj_a = cls._make_project(brand, "Search Test A")
+        cls.proj_b = cls._make_project(brand, "Search Test B")
+
+    @classmethod
+    def _make_project(cls, brand, title):
+        return frappe.get_doc({
+            "doctype": "VT Item",
+            "node_type": "Project",
+            "parent_vt_item": None,
+            "title": title,
+            "brand": brand,
+            "owner_user": "Administrator",
+            "start_date": today(),
+            "end_date": add_days(today(), 30),
+        }).insert(ignore_permissions=True).name
+
+    @classmethod
+    def tearDownClass(cls):
+        # Per-test task nodes are rolled back by FrappeTestCase; only the two
+        # class-level Project nodes persist. Delete deepest-first (lft desc) so
+        # NestedSet never sees a parent removed before a stray child.
+        for proj in (getattr(cls, "proj_b", None), getattr(cls, "proj_a", None)):
+            if proj and frappe.db.exists("VT Item", proj):
+                bounds = frappe.db.get_value(
+                    "VT Item", proj, ["lft", "rgt"], as_dict=True
+                )
+                kids = frappe.get_all(
+                    "VT Item",
+                    filters={"lft": [">", bounds.lft], "rgt": ["<", bounds.rgt]},
+                    fields=["name"], order_by="lft desc",
+                )
+                for k in kids:
+                    frappe.delete_doc("VT Item", k["name"], force=True, ignore_permissions=True)
+                frappe.delete_doc("VT Item", proj, force=True, ignore_permissions=True)
+        super().tearDownClass()
 
     def tearDown(self):
         frappe.set_user("Administrator")
 
-    def _make_task(self, title, project="TEST-P1B-PROJ-A", priority="Medium", deadline=None):
+    def _make_task(self, title, project=None, priority="Medium", deadline=None):
+        # VT Task -> VT Item node_type="Task"; assigned_to -> owner_user;
+        # project Link -> parent_vt_item (Task hung under its Project node).
+        # owner_user is required for the task to surface in search (filtered by
+        # owner_user). pdca defaults (BACKLOG) + weight are auto-applied.
         doc = frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": "VT Item",
+            "node_type": "Task",
+            "parent_vt_item": project or self.proj_a,
             "title": title,
             "deadline": deadline or today(),
-            "assigned_to": self.user,
-            "project": project,
+            "owner_user": self.user,
             "priority": priority,
         })
         doc.flags.ignore_links = True
@@ -76,11 +111,11 @@ class TestMyWorkSearch(FrappeTestCase):
 
     def test_project_filter(self):
         frappe.set_user(self.user)
-        self._make_task("X", project="TEST-P1B-PROJ-A")
-        self._make_task("Y", project="TEST-P1B-PROJ-B")
-        r = search(project="TEST-P1B-PROJ-A")
+        self._make_task("X", project=self.proj_a)
+        self._make_task("Y", project=self.proj_b)
+        r = search(project=self.proj_a)
         projs = {x["project"] for x in r["results"]}
-        self.assertEqual(projs, {"TEST-P1B-PROJ-A"})
+        self.assertEqual(projs, {self.proj_a})
 
     def test_due_range_today(self):
         frappe.set_user(self.user)
