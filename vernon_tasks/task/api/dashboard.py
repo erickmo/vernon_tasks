@@ -1,6 +1,27 @@
 """Mobile mix-view dashboard API.
 
 Spec: docs/superpowers/specs/2026-05-22-dashboard-mix-view-design.html
+
+VT Item tree model (unified hierarchy):
+- Project / Sprint / Task are `node_type` values on the single `VT Item`
+  nested-set tree; all reads go through `vt_item_tree`.
+- Legacy flat Link relations are gone: a Task's project is its nearest Project
+  ancestor (tree.project_of); a Task's sprint is its direct parent when that
+  parent is a Sprint node; a Sprint/Task belongs to its Project via the nested
+  set (descendants), not a `project` column.
+- Field renames: assigned_to / project_owner → owner_user, project_leader →
+  leader_user, Project status → health_status, Sprint status → sprint_state,
+  Sprint sprint_title → title. Data field names preserved (pdca_phase, deadline,
+  start_date, end_date, base_points, earned_points, revision_count,
+  completion_date, estimated_minutes, actual_minutes, priority, risk_flag).
+- The terminal task phase is CLOSED (legacy "DONE"); kanban_status is derived
+  from pdca_phase by the controller, except "Blocked" which is set directly.
+- Team members / milestones remain child tables on the Project VT Item node
+  (parenttype 'VT Item'). Task Dependency is the `dependencies` child table on
+  the Task node. Task Point Log + Vernon Meeting are not part of the merge.
+
+Source of truth:
+docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html
 """
 from __future__ import annotations
 
@@ -12,22 +33,47 @@ import frappe
 from frappe.utils import add_days, getdate, today
 
 from vernon_tasks.task.api.security import require_login
-from vernon_tasks.task.doctype.vt_task.vt_task import (
-    BOARD_COLUMNS,
+from vernon_tasks.task.doctype.vt_item.vt_item import (
     KANBAN_BLOCKED,
-    KANBAN_PDCA_MAP,
     PDCA_KANBAN_MAP,
     VALID_PDCA_TRANSITIONS,
 )
+from vernon_tasks.task.services import vt_item_tree as tree
 
-TASK_DOCTYPE = "VT Task"
-PROJECT_DOCTYPE = "VT Project"
-SPRINT_DOCTYPE = "VT Sprint"
+# All Project / Sprint / Task reads target the unified VT Item tree doctype.
+ITEM_DOCTYPE = "VT Item"
+# node_type discriminators on the VT Item tree.
+PROJECT_NODE_TYPE = "Project"
+SPRINT_NODE_TYPE = "Sprint"
+TASK_NODE_TYPE = "Task"
+
+# Permission checks still operate on the VT Item doctype name.
+TASK_DOCTYPE = ITEM_DOCTYPE
+PROJECT_DOCTYPE = ITEM_DOCTYPE
+SPRINT_DOCTYPE = ITEM_DOCTYPE
+
+# Renamed field used everywhere the legacy code said assigned_to/project_owner.
+OWNER_FIELD = "owner_user"
+LEADER_FIELD = "leader_user"
+# Project status → health_status; the closed/archived value is "Closed".
+PROJECT_CLOSED_STATUS = "Closed"
+# Sprint status → sprint_state; the active value is "Active".
+SPRINT_ACTIVE_STATE = "Active"
+# Unified terminal task phase (legacy VT Task "DONE").
+DONE_PHASE = "CLOSED"
+
+# Board column ↔ PDCA phase, derived from the unified map (terminal = CLOSED).
+KANBAN_PDCA_MAP = {v: k for k, v in PDCA_KANBAN_MAP.items()}
+BOARD_COLUMNS = tuple(PDCA_KANBAN_MAP.values()) + (KANBAN_BLOCKED,)
+# VALID_PDCA_TRANSITIONS is imported from the VT Item controller (single source
+# of truth). Here it drives the board's drag-target UX hints only; the server
+# re-validates every move via the controller on save.
 
 # Card field set shared by the detail open-task list and the project board.
+# assigned_to → owner_user on VT Item Task nodes.
 _BOARD_TASK_FIELDS = (
     "name", "title", "kanban_status", "pdca_phase",
-    "priority", "start_date", "deadline", "risk_flag", "assigned_to",
+    "priority", "start_date", "deadline", "risk_flag", "owner_user",
 )
 # Priority sort weight (Critical first) for in-column ordering.
 _PRIORITY_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
@@ -81,15 +127,14 @@ def _elapsed_pct(start: datetime.date, end: datetime.date, ref: datetime.date) -
 
 def _velocity_buckets(user: str, ref: datetime.date) -> tuple[list[dict], int]:
     window_start = add_days(ref, -7 * VELOCITY_WEEKS)
-    rows = frappe.get_all(
-        TASK_DOCTYPE,
-        filters=[
-            ["assigned_to", "=", user],
-            ["kanban_status", "=", "Done"],
-            ["completion_date", ">=", window_start],
-        ],
+    rows = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={
+            OWNER_FIELD: user,
+            "pdca_phase": DONE_PHASE,
+            "completion_date": [">=", window_start],
+        },
         fields=["completion_date"],
-        limit_page_length=0,
     )
     by_week: dict[str, int] = defaultdict(int)
     for r in rows:
@@ -108,39 +153,37 @@ def _velocity_buckets(user: str, ref: datetime.date) -> tuple[list[dict], int]:
 
 
 def _active_sprint_for_user(user: str, ref: datetime.date) -> dict | None:
-    sprints = frappe.get_all(
-        SPRINT_DOCTYPE,
-        filters=[
-            ["status", "=", "Active"],
-            ["start_date", "<=", ref],
-            ["end_date", ">=", ref],
-        ],
-        fields=["name", "sprint_title", "project", "start_date", "end_date"],
+    sprints = tree.nodes(
+        SPRINT_NODE_TYPE,
+        filters={
+            "sprint_state": SPRINT_ACTIVE_STATE,
+            "start_date": ["<=", ref],
+            "end_date": [">=", ref],
+        },
+        fields=["name", "title AS sprint_title", "start_date", "end_date"],
         order_by="end_date asc",
-        limit_page_length=20,
+        limit=20,
     )
     for s in sprints:
-        task_count = frappe.db.count(
-            TASK_DOCTYPE,
-            filters={"sprint": s["name"], "assigned_to": user},
+        # A Sprint's tasks are its tree children (was VT Task.sprint=s.name).
+        mine = tree.children(
+            s["name"], TASK_NODE_TYPE, filters={OWNER_FIELD: user}, fields=["name"]
         )
-        if task_count > 0:
+        if mine:
             return s
     return None
 
 
 def _sprint_summary(sprint: dict, user: str, ref: datetime.date) -> dict:
-    rows = frappe.get_all(
-        TASK_DOCTYPE,
-        filters={"sprint": sprint["name"], "assigned_to": user},
-        fields=["base_points", "kanban_status"],
-        limit_page_length=0,
+    rows = tree.children(
+        sprint["name"], TASK_NODE_TYPE, filters={OWNER_FIELD: user},
+        fields=["base_points", "pdca_phase"],
     )
     committed = sum(int(r.get("base_points") or 0) for r in rows)
     done = sum(
         int(r.get("base_points") or 0)
         for r in rows
-        if r.get("kanban_status") == "Done"
+        if r.get("pdca_phase") == DONE_PHASE
     )
     progress = (done / committed * 100.0) if committed else 0.0
     elapsed = _elapsed_pct(getdate(sprint["start_date"]), getdate(sprint["end_date"]), ref)
@@ -157,14 +200,10 @@ def _sprint_summary(sprint: dict, user: str, ref: datetime.date) -> dict:
 
 def _workload(user: str, ref: datetime.date) -> dict:
     soon_cap = add_days(ref, DUE_SOON_DAYS)
-    rows = frappe.get_all(
-        TASK_DOCTYPE,
-        filters=[
-            ["assigned_to", "=", user],
-            ["kanban_status", "not in", ("Done", "Cancelled")],
-        ],
+    rows = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={OWNER_FIELD: user, "pdca_phase": ["!=", DONE_PHASE]},
         fields=["deadline"],
-        limit_page_length=0,
     )
     open_n = overdue = due_soon = 0
     for r in rows:
@@ -181,14 +220,11 @@ def _workload(user: str, ref: datetime.date) -> dict:
 
 
 def _next_actions(user: str) -> list[dict]:
-    rows = frappe.get_all(
-        TASK_DOCTYPE,
-        filters=[
-            ["assigned_to", "=", user],
-            ["kanban_status", "not in", ("Done", "Cancelled")],
-        ],
-        fields=["name", "title", "project", "deadline", "priority"],
-        limit_page_length=200,
+    rows = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={OWNER_FIELD: user, "pdca_phase": ["!=", DONE_PHASE]},
+        fields=["name", "title", "deadline", "priority"],
+        limit=200,
     )
     rows.sort(
         key=lambda r: (
@@ -200,7 +236,8 @@ def _next_actions(user: str) -> list[dict]:
         {
             "id": r["name"],
             "title": r.get("title"),
-            "project": r.get("project"),
+            # A Task's project is its nearest Project ancestor in the tree.
+            "project": tree.project_of(r["name"]),
             "deadline": str(r["deadline"]) if r.get("deadline") else None,
             "priority": r.get("priority"),
         }
@@ -231,20 +268,21 @@ def me_progress() -> dict[str, Any]:
 
 
 def _user_project_ids(user: str) -> tuple[set[str], set[str]]:
-    led_rows = frappe.get_all(
-        PROJECT_DOCTYPE,
-        filters=[["project_leader", "=", user]],
-        fields=["name"],
-        limit_page_length=0,
+    # Projects the user leads: VT Project.project_leader → Project node
+    # leader_user (Link → User) on the VT Item tree.
+    led_rows = tree.nodes(
+        PROJECT_NODE_TYPE, filters={LEADER_FIELD: user}, fields=["name"]
     )
     led = {r["name"] for r in led_rows}
 
+    # Team membership: `Project Team Member` is now a child table on the Project
+    # VT Item node (parenttype 'VT Item', was 'VT Project').
     member_rows = frappe.db.sql(
         """
         SELECT DISTINCT parent FROM `tabProject Team Member`
         WHERE user = %s AND parenttype = %s
         """,
-        (user, PROJECT_DOCTYPE),
+        (user, ITEM_DOCTYPE),
         as_dict=True,
     )
     member = {r["parent"] for r in member_rows} - led
@@ -252,17 +290,18 @@ def _user_project_ids(user: str) -> tuple[set[str], set[str]]:
 
 
 def _project_active_sprint(project_id: str, ref: datetime.date) -> dict | None:
-    rows = frappe.get_all(
-        SPRINT_DOCTYPE,
-        filters=[
-            ["project", "=", project_id],
-            ["status", "=", "Active"],
-            ["start_date", "<=", ref],
-            ["end_date", ">=", ref],
-        ],
-        fields=["name", "sprint_title", "start_date", "end_date"],
+    # A Sprint is a direct child of its Project (was VT Sprint.project=P).
+    rows = tree.children(
+        project_id,
+        SPRINT_NODE_TYPE,
+        filters={
+            "sprint_state": SPRINT_ACTIVE_STATE,
+            "start_date": ["<=", ref],
+            "end_date": [">=", ref],
+        },
+        fields=["name", "title AS sprint_title", "start_date", "end_date"],
         order_by="end_date asc",
-        limit_page_length=1,
+        limit=1,
     )
     return rows[0] if rows else None
 
@@ -271,13 +310,11 @@ def _burndown(sprint: dict, ref: datetime.date) -> tuple[list[float], list[float
     start = getdate(sprint["start_date"])
     end = getdate(sprint["end_date"])
     days = max(1, (end - start).days)
+    # A Sprint's tasks are its tree children (was VT Task.sprint=sprint name).
     total_points = sum(
         int(r.get("base_points") or 0)
-        for r in frappe.get_all(
-            TASK_DOCTYPE,
-            filters={"sprint": sprint["name"]},
-            fields=["base_points"],
-            limit_page_length=0,
+        for r in tree.children(
+            sprint["name"], TASK_NODE_TYPE, fields=["base_points"]
         )
     )
     horizon = min(7, days + 1)
@@ -286,15 +323,11 @@ def _burndown(sprint: dict, ref: datetime.date) -> tuple[list[float], list[float
         for i in range(horizon)
     ]
     done_by_day = defaultdict(int)
-    rows = frappe.get_all(
-        TASK_DOCTYPE,
-        filters=[
-            ["sprint", "=", sprint["name"]],
-            ["kanban_status", "=", "Done"],
-            ["completion_date", "is", "set"],
-        ],
+    rows = tree.children(
+        sprint["name"],
+        TASK_NODE_TYPE,
+        filters={"pdca_phase": DONE_PHASE, "completion_date": ["is", "set"]},
         fields=["completion_date", "base_points"],
-        limit_page_length=0,
     )
     for r in rows:
         d = getdate(r["completion_date"])
@@ -311,10 +344,11 @@ def _burndown(sprint: dict, ref: datetime.date) -> tuple[list[float], list[float
 
 
 def _project_card(project_id: str, ref: datetime.date) -> dict:
+    # Project status → health_status; surfaced under the legacy "status" key.
     proj = frappe.get_value(
         PROJECT_DOCTYPE,
         project_id,
-        ["title", "status", "percent_done"],
+        ["title", "health_status AS status", "percent_done"],
         as_dict=True,
     ) or {}
     sprint = _project_active_sprint(project_id, ref)
@@ -329,11 +363,12 @@ def _project_card(project_id: str, ref: datetime.date) -> dict:
             "burndown_actual": actual,
         }
 
-    task_rows = frappe.get_all(
-        TASK_DOCTYPE,
-        filters={"project": project_id},
+    # All of the project's tasks are its nested-set descendants (spanning any
+    # Sprint level); was VT Task.project=project_id.
+    task_rows = tree.descendants(
+        project_id,
+        TASK_NODE_TYPE,
         fields=["kanban_status", "risk_flag", "deadline"],
-        limit_page_length=0,
     )
     open_tasks = sum(1 for r in task_rows if r.get("kanban_status") not in ("Done", "Cancelled"))
     blockers = sum(1 for r in task_rows if r.get("risk_flag"))
@@ -354,16 +389,14 @@ def _project_card(project_id: str, ref: datetime.date) -> dict:
     )
     risk = "on_track"
     if sprint_block:
+        # A Sprint's tasks are its tree children (was VT Task.sprint=name).
         committed = sum(int(r.get("base_points") or 0)
-                        for r in frappe.get_all(TASK_DOCTYPE,
-                                                filters={"sprint": sprint["name"]},
-                                                fields=["base_points"],
-                                                limit_page_length=0))
+                        for r in tree.children(sprint["name"], TASK_NODE_TYPE,
+                                               fields=["base_points"]))
         done = sum(int(r.get("base_points") or 0)
-                   for r in frappe.get_all(TASK_DOCTYPE,
-                                           filters={"sprint": sprint["name"], "kanban_status": "Done"},
-                                           fields=["base_points"],
-                                           limit_page_length=0))
+                   for r in tree.children(sprint["name"], TASK_NODE_TYPE,
+                                          filters={"pdca_phase": DONE_PHASE},
+                                          fields=["base_points"]))
         progress = (done / committed * 100.0) if committed else 0.0
         elapsed = _elapsed_pct(getdate(sprint["start_date"]), getdate(sprint["end_date"]), ref)
         risk = _calc_risk(progress, elapsed)
@@ -390,25 +423,22 @@ def _project_row(project_id: str, user: str) -> dict:
         ["title", "percent_done"],
         as_dict=True,
     ) or {}
-    milestones = frappe.get_all(
-        "Project Milestone",
-        filters=[
-            ["parent", "=", project_id],
-            ["status", "!=", "Done"],
-        ],
-        fields=["due_date"],
-        order_by="due_date asc",
-        limit_page_length=1,
-    )
-    next_ms = str(milestones[0]["due_date"]) if milestones and milestones[0].get("due_date") else None
-    my_open = frappe.db.count(
-        TASK_DOCTYPE,
-        filters=[
-            ["project", "=", project_id],
-            ["assigned_to", "=", user],
-            ["kanban_status", "not in", ("Done", "Cancelled")],
-        ],
-    )
+    # Milestones are a child table (`milestones`) on the Project VT Item node;
+    # pick the earliest still-open one (status != Done).
+    open_ms = [
+        m for m in tree.child_table_rows(project_id, "milestones")
+        if m.get("status") != "Done" and m.get("due_date")
+    ]
+    open_ms.sort(key=lambda m: m["due_date"])
+    next_ms = str(open_ms[0]["due_date"]) if open_ms else None
+    # The user's open tasks anywhere in the project subtree (spans Sprint level);
+    # was VT Task WHERE project=… AND assigned_to=user AND open.
+    my_open = len(tree.descendants(
+        project_id,
+        TASK_NODE_TYPE,
+        filters={OWNER_FIELD: user, "pdca_phase": ["!=", DONE_PHASE]},
+        fields=["name"],
+    ))
     return {
         "id": project_id,
         "name": proj.get("title") or project_id,
@@ -426,20 +456,17 @@ def my_projects(filter: str = "all") -> dict[str, Any]:
     is_admin = _is_admin()
 
     if is_admin:
-        all_rows = frappe.get_all(
-            PROJECT_DOCTYPE,
-            filters=[["status", "!=", "Archived"]],
+        # Project status → health_status; "Archived" maps to the closed value.
+        all_rows = tree.nodes(
+            PROJECT_NODE_TYPE,
+            filters={"health_status": ["!=", PROJECT_CLOSED_STATUS]},
             fields=["name"],
-            limit_page_length=0,
         )
         led_ids = {r["name"] for r in all_rows}
         member_ids: set[str] = set()
         if filter == "led":
-            led_rows = frappe.get_all(
-                PROJECT_DOCTYPE,
-                filters=[["project_leader", "=", user]],
-                fields=["name"],
-                limit_page_length=0,
+            led_rows = tree.nodes(
+                PROJECT_NODE_TYPE, filters={LEADER_FIELD: user}, fields=["name"]
             )
             led_ids = {r["name"] for r in led_rows}
     else:
@@ -475,11 +502,12 @@ def _assert_project_access(project_id: str, user: str) -> None:
 
 
 def _detail_header(project_id: str, card: dict, ref: datetime.date) -> dict:
+    # Project renames: status → health_status, project_leader → leader_user.
     proj = frappe.get_value(
         PROJECT_DOCTYPE,
         project_id,
-        ["title", "status", "pdca_phase", "percent_done",
-         "project_leader", "start_date", "end_date"],
+        ["title", "health_status AS status", "pdca_phase", "percent_done",
+         "leader_user AS project_leader", "start_date", "end_date"],
         as_dict=True,
     ) or {}
     return {
@@ -519,7 +547,8 @@ def _map_task_row(r: dict, ref: datetime.date | None = None) -> dict:
         "overdue": bool(deadline and deadline < ref),
         "due_today": bool(deadline and deadline == ref),
         "risk_flag": bool(r.get("risk_flag")),
-        "assigned_to": r.get("assigned_to"),
+        # Response key preserved; sourced from the renamed owner_user field.
+        "assigned_to": r.get("owner_user"),
     }
 
 
@@ -529,16 +558,19 @@ def _project_tasks(project_id: str, *, include_closed: bool) -> list[dict]:
     Shared by `_detail_open_tasks` (open only) and `project_board` (all tasks)
     so the card shape and query stay in one place.
     """
-    filters = [["project", "=", project_id]]
+    filters: dict = {}
     if not include_closed:
-        filters.append(["kanban_status", "not in", CLOSED_STATUSES])
-    rows = frappe.get_all(
-        TASK_DOCTYPE,
+        filters["kanban_status"] = ["not in", CLOSED_STATUSES]
+    # A project's tasks are its nested-set descendants (spanning any Sprint
+    # level); was VT Task.project=project_id. descendants() has no limit arg, so
+    # cap the card list to DETAIL_TASK_LIMIT after the (deadline-ordered) fetch.
+    rows = tree.descendants(
+        project_id,
+        TASK_NODE_TYPE,
         filters=filters,
         fields=list(_BOARD_TASK_FIELDS),
         order_by="deadline asc",
-        limit_page_length=DETAIL_TASK_LIMIT,
-    )
+    )[:DETAIL_TASK_LIMIT]
     ref = getdate(today())  # one site-tz "today" for all card overdue flags
     return [_map_task_row(r, ref) for r in rows]
 
@@ -555,12 +587,15 @@ def _detail_counts(project_id: str) -> dict[str, int]:
     the board's CLOSED_STATUSES contract, so ``open + done`` may be < ``total``
     when there are Cancelled tasks (the remainder is intentionally not shown).
     """
-    base = {"project": project_id}
-    total = frappe.db.count(TASK_DOCTYPE, base)
-    done = frappe.db.count(TASK_DOCTYPE, {**base, "kanban_status": DONE_STATUS})
-    open_count = frappe.db.count(
-        TASK_DOCTYPE, [["project", "=", project_id],
-                       ["kanban_status", "not in", CLOSED_STATUSES]])
+    # Tallies over the project's nested-set Task descendants (was db.count on
+    # VT Task WHERE project=project_id). done = kanban "Done" column.
+    total = len(tree.descendants(project_id, TASK_NODE_TYPE, fields=["name"]))
+    done = len(tree.descendants(
+        project_id, TASK_NODE_TYPE,
+        filters={"kanban_status": DONE_STATUS}, fields=["name"]))
+    open_count = len(tree.descendants(
+        project_id, TASK_NODE_TYPE,
+        filters={"kanban_status": ["not in", CLOSED_STATUSES]}, fields=["name"]))
     return {"total": total, "open": open_count, "done": done}
 
 
@@ -658,8 +693,9 @@ def _group_board_columns(tasks: list[dict]) -> list[dict]:
 def _board_team(doc) -> list[dict]:
     """Project roster (+leader) for the assignee inline-edit dropdown."""
     users = {m.user for m in (doc.team_members or []) if getattr(m, "user", None)}
-    if doc.project_leader:
-        users.add(doc.project_leader)
+    # project_leader → leader_user on the Project VT Item node.
+    if doc.leader_user:
+        users.add(doc.leader_user)
     if not users:
         return []
     rows = frappe.get_all(
@@ -690,15 +726,16 @@ def project_board(project_id: str) -> dict:
 # ── 2c. project_sprints (sprint tab) ─────────────────────────────────────────
 
 
-# Sprint header fields surfaced on the project detail Sprint tab.
+# Sprint header fields surfaced on the project detail Sprint tab. Renames:
+# sprint_title → title, status → sprint_state (aliased back to legacy keys).
 _SPRINT_FIELDS = (
-    "name", "sprint_title", "start_date", "end_date",
-    "status", "percent_done", "goal",
+    "name", "title AS sprint_title", "start_date", "end_date",
+    "sprint_state AS status", "percent_done", "goal",
 )
 
 
 def _map_sprint_row(r: dict) -> dict:
-    """Map a raw VT Sprint row to the sprint-card dict used by the Sprint tab."""
+    """Map a raw Sprint VT Item row to the sprint-card dict used by the tab."""
     return {
         "id": r["name"],
         "title": r.get("sprint_title") or r["name"],
@@ -721,21 +758,24 @@ def project_sprints(project_id: str) -> dict:
     """
     require_login()
     _assert_project_access(project_id, frappe.session.user)
-    sprints = frappe.get_all(
-        SPRINT_DOCTYPE, filters={"project": project_id},
+    # Sprints are the project's direct Sprint children (was VT Sprint.project=P).
+    sprints = tree.children(
+        project_id, SPRINT_NODE_TYPE,
         fields=list(_SPRINT_FIELDS), order_by="start_date desc",
-        limit_page_length=0,
     )
     by_id = {s["name"]: _map_sprint_row(s) for s in sprints}
-    rows = frappe.get_all(
-        TASK_DOCTYPE, filters=[["project", "=", project_id]],
-        fields=list(_BOARD_TASK_FIELDS) + ["sprint"],
-        order_by="deadline asc", limit_page_length=DETAIL_TASK_LIMIT,
-    )
+    # Every project task is a nested-set descendant; a task's sprint is its tree
+    # parent when that parent is one of this project's Sprint nodes (was
+    # VT Task.sprint). Tasks with no sprint parent fall into `unassigned`.
+    rows = tree.descendants(
+        project_id, TASK_NODE_TYPE,
+        fields=list(_BOARD_TASK_FIELDS) + ["parent_vt_item"],
+        order_by="deadline asc",
+    )[:DETAIL_TASK_LIMIT]
     unassigned: list[dict] = []
     ref = getdate(today())  # one site-tz "today" for all card overdue flags
     for r in rows:
-        bucket = by_id.get(r.get("sprint"))
+        bucket = by_id.get(r.get("parent_vt_item"))
         (bucket["tasks"] if bucket else unassigned).append(_map_task_row(r, ref))
     return {"sprints": list(by_id.values()), "unassigned": unassigned}
 
@@ -744,22 +784,23 @@ def project_sprints(project_id: str) -> dict:
 
 
 def _task_agenda_items(user: str, start: datetime.date, end: datetime.date) -> list[dict]:
-    rows = frappe.get_all(
-        TASK_DOCTYPE,
-        filters=[
-            ["assigned_to", "=", user],
-            ["kanban_status", "not in", ("Done", "Cancelled")],
-            ["deadline", "between", [start, end]],
-        ],
-        fields=["name", "title", "project", "deadline", "priority"],
-        limit_page_length=500,
+    rows = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={
+            OWNER_FIELD: user,
+            "pdca_phase": ["!=", DONE_PHASE],
+            "deadline": ["between", [start, end]],
+        },
+        fields=["name", "title", "deadline", "priority"],
+        limit=500,
     )
     return [
         {
             "type": "task",
             "id": r["name"],
             "title": r.get("title"),
-            "project": r.get("project"),
+            # A Task's project is its nearest Project ancestor in the tree.
+            "project": tree.project_of(r["name"]),
             "date": str(r["deadline"]),
             "time": None,
             "priority": r.get("priority"),
@@ -770,23 +811,25 @@ def _task_agenda_items(user: str, start: datetime.date, end: datetime.date) -> l
 
 
 def _sprint_agenda_items(user: str, start: datetime.date, end: datetime.date) -> list[dict]:
-    user_sprints = frappe.db.sql(
-        """
-        SELECT DISTINCT t.sprint
-        FROM `tabVT Task` t
-        WHERE t.assigned_to = %s AND t.sprint IS NOT NULL AND t.sprint != ''
-        """,
-        (user,),
-        as_dict=True,
+    # The user's sprints are the parents of their Task nodes when that parent is
+    # a Sprint (was DISTINCT VT Task.sprint WHERE assigned_to=user).
+    user_tasks = tree.nodes(
+        TASK_NODE_TYPE, filters={OWNER_FIELD: user}, fields=["parent_vt_item"]
     )
-    sprint_ids = [r["sprint"] for r in user_sprints]
+    parents = {t["parent_vt_item"] for t in user_tasks if t.get("parent_vt_item")}
+    sprint_ids = [
+        p for p in parents
+        if frappe.db.get_value(ITEM_DOCTYPE, p, "node_type") == SPRINT_NODE_TYPE
+    ]
     if not sprint_ids:
         return []
-    rows = frappe.get_all(
-        SPRINT_DOCTYPE,
-        filters=[["name", "in", sprint_ids]],
-        fields=["name", "sprint_title", "project", "start_date", "end_date"],
-        limit_page_length=200,
+    rows = tree.nodes(
+        SPRINT_NODE_TYPE,
+        filters={"name": ["in", sprint_ids]},
+        # sprint_title → title; a Sprint's project is its direct parent.
+        fields=["name", "title AS sprint_title", "parent_vt_item AS project",
+                "start_date", "end_date"],
+        limit=200,
     )
     items: list[dict] = []
     for s in rows:
@@ -900,9 +943,10 @@ def schedule_agenda(include: str = "") -> dict[str, Any]:
 #  Self-scoped to frappe.session.user; feeds the Beranda tab of vt-home.
 # ──────────────────────────────────────────────────────────────────────────
 
-DONE_PHASE = "DONE"
-# Phases that count as "finished" — excluded from active/blocked/overdue queries.
-CLOSED_PHASES = ("DONE", "ACT")
+# Phases that count as "finished" — excluded from active/blocked/overdue
+# queries. Legacy "DONE" is the unified terminal phase "CLOSED". (DONE_PHASE is
+# defined once near the top of the module as "CLOSED".)
+CLOSED_PHASES = (DONE_PHASE, "ACT")
 DAILY_COMPLETION_DAYS = 7
 MINUTES_PER_HOUR = 60.0
 
@@ -914,39 +958,32 @@ def personal_stats() -> dict[str, Any]:
     Self-scoped. Migrated from my_dashboard.get_employee_stats. (PRD-dashboard-merge)"""
     require_login()
     user = frappe.session.user
-    _today = today()
+    ref = getdate(today())
+    ref_year, ref_week, _ = ref.isocalendar()
 
-    done_today = frappe.db.sql(
-        """SELECT COUNT(*) FROM `tabVT Task`
-           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
-             AND completion_date = %(today)s""",
-        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
-    )[0][0]
+    # The user's completed (CLOSED) Task nodes; bucket today/this-week/this-month
+    # in Python (was YEARWEEK / YEAR / MONTH SQL on tabVT Task).
+    done_rows = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={OWNER_FIELD: user, "pdca_phase": DONE_PHASE},
+        fields=["completion_date", "earned_points"],
+    )
+    done_today = done_week = 0
+    points_month = 0.0
+    for r in done_rows:
+        cd = r.get("completion_date")
+        if not cd:
+            continue
+        cd = getdate(cd)
+        if cd == ref:
+            done_today += 1
+        y, w, _ = cd.isocalendar()
+        if (y, w) == (ref_year, ref_week):
+            done_week += 1
+        if cd.year == ref.year and cd.month == ref.month:
+            points_month += float(r.get("earned_points") or 0)
 
-    done_week = frappe.db.sql(
-        """SELECT COUNT(*) FROM `tabVT Task`
-           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
-             AND YEARWEEK(completion_date, 1) = YEARWEEK(%(today)s, 1)""",
-        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
-    )[0][0]
-
-    points_month = frappe.db.sql(
-        """SELECT COALESCE(SUM(earned_points), 0) FROM `tabVT Task`
-           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
-             AND YEAR(completion_date) = YEAR(%(today)s)
-             AND MONTH(completion_date) = MONTH(%(today)s)""",
-        {"user": user, "done": DONE_PHASE, "today": _today}, as_list=True,
-    )[0][0]
-
-    blocked = frappe.db.sql(
-        """SELECT COUNT(DISTINCT t.name) FROM `tabVT Task` t
-           INNER JOIN `tabTask Dependency` td ON td.parent = t.name
-           INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by
-           WHERE t.assigned_to = %(user)s
-             AND t.pdca_phase NOT IN %(closed)s
-             AND bt.pdca_phase NOT IN %(closed)s""",
-        {"user": user, "closed": CLOSED_PHASES}, as_list=True,
-    )[0][0]
+    blocked = _blocked_task_count(user)
 
     return {
         "done_today": int(done_today),
@@ -954,6 +991,29 @@ def personal_stats() -> dict[str, Any]:
         "points_month": float(points_month),
         "blocked": int(blocked),
     }
+
+
+def _blocked_task_count(user: str) -> int:
+    """Count the user's open Task nodes that have at least one still-open
+    blocker, via the `dependencies` child table (was a join on
+    tabTask Dependency + tabVT Task). A task and its blocker both count only
+    while NOT in a finished phase (CLOSED_PHASES)."""
+    open_tasks = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={OWNER_FIELD: user, "pdca_phase": ["not in", CLOSED_PHASES]},
+        fields=["name"],
+    )
+    blocked = 0
+    for t in open_tasks:
+        for dep in tree.child_table_rows(t["name"], "dependencies"):
+            blocker = dep.get("blocked_by")
+            if not blocker:
+                continue
+            phase = frappe.db.get_value(ITEM_DOCTYPE, blocker, "pdca_phase")
+            if phase not in CLOSED_PHASES:
+                blocked += 1
+                break
+    return blocked
 
 
 @frappe.whitelist()
@@ -965,17 +1025,23 @@ def daily_completions() -> list[dict[str, Any]]:
     user = frappe.session.user
     start = add_days(today(), -(DAILY_COMPLETION_DAYS - 1))
 
-    rows = frappe.db.sql(
-        """SELECT completion_date AS date, COUNT(*) AS count
-           FROM `tabVT Task`
-           WHERE assigned_to = %(user)s AND pdca_phase = %(done)s
-             AND completion_date >= %(start)s AND completion_date <= %(today)s
-           GROUP BY completion_date""",
-        {"user": user, "done": DONE_PHASE, "start": start, "today": today()},
-        as_dict=True,
+    # The user's CLOSED Task nodes completed in the window; group by day in
+    # Python (was GROUP BY completion_date on tabVT Task).
+    rows = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={
+            OWNER_FIELD: user,
+            "pdca_phase": DONE_PHASE,
+            "completion_date": ["between", [start, today()]],
+        },
+        fields=["completion_date"],
     )
 
-    counts_by_date = {str(r["date"]): r["count"] for r in rows}
+    counts_by_date: dict[str, int] = defaultdict(int)
+    for r in rows:
+        cd = r.get("completion_date")
+        if cd:
+            counts_by_date[str(getdate(cd))] += 1
     out: list[dict[str, Any]] = []
     for i in range(DAILY_COMPLETION_DAYS):
         d = str(add_days(today(), -(DAILY_COMPLETION_DAYS - 1 - i)))
@@ -992,16 +1058,15 @@ def hours_summary() -> dict[str, Any]:
     require_login()
     user = frappe.session.user
 
-    row = frappe.db.sql(
-        """SELECT COALESCE(SUM(actual_minutes), 0) AS actual_minutes,
-                  COALESCE(SUM(estimated_minutes), 0) AS estimated_minutes
-           FROM `tabVT Task`
-           WHERE assigned_to = %(user)s AND pdca_phase NOT IN %(closed)s""",
-        {"user": user, "closed": CLOSED_PHASES}, as_dict=True,
+    # The user's active (non-finished) Task nodes; sum effort in Python (was
+    # SUM(actual_minutes)/SUM(estimated_minutes) on tabVT Task).
+    rows = tree.nodes(
+        TASK_NODE_TYPE,
+        filters={OWNER_FIELD: user, "pdca_phase": ["not in", CLOSED_PHASES]},
+        fields=["actual_minutes", "estimated_minutes"],
     )
-
-    actual = float(row[0]["actual_minutes"])
-    estimated = float(row[0]["estimated_minutes"])
+    actual = float(sum(int(r.get("actual_minutes") or 0) for r in rows))
+    estimated = float(sum(int(r.get("estimated_minutes") or 0) for r in rows))
     remaining = max(0.0, estimated - actual)
     return {
         "logged_hours": round(actual / MINUTES_PER_HOUR, 1),
@@ -1033,15 +1098,30 @@ def _resolve_team_scope(user: str) -> tuple[str, set[str] | None]:
     frappe.throw("Not authorized", frappe.PermissionError)
 
 
-def _scope_clause(scope: str, led_ids: set[str] | None, column: str) -> tuple[str, dict[str, Any]]:
-    """Build the optional ' AND <column> IN %(projects)s' fragment + params that
-    restrict a team query to led projects; ('', {}) for global scope so one query
-    string serves both. `column` is the project column ('project' unaliased,
-    't.project' when the task table is aliased). pymysql renders the tuple as a
-    SQL list, so led_ids must be non-empty (guaranteed in 'led' scope)."""
-    if scope == "led":
-        return f" AND {column} IN %(projects)s", {"projects": tuple(led_ids)}
-    return "", {}
+# PDCA phase display order for the team phase-distribution chart (terminal phase
+# is the unified CLOSED). Was an SQL FIELD() ordering on tabVT Task.
+_PHASE_ORDER = ("BACKLOG", "PLAN", "DO", "CHECK", "ACT", "CLOSED")
+
+
+def _scoped_task_rows(
+    scope: str, led_ids: set[str] | None, fields: list[str],
+    extra_filters: dict | None = None,
+) -> list[dict]:
+    """Task node rows in the caller's team scope (was the ' AND project IN (...)'
+    SQL clause on tabVT Task). Global scope reads every Task node; led scope
+    unions each led project's Task descendants (a task belongs to a project via
+    the nested set, not a `project` column), de-duplicated by node name."""
+    filters = dict(extra_filters or {})
+    if scope != "led":
+        filters["node_type"] = TASK_NODE_TYPE
+        return frappe.get_all(ITEM_DOCTYPE, filters=filters, fields=fields,
+            limit_page_length=0)
+    by_name: dict[str, dict] = {}
+    for project_id in (led_ids or set()):
+        for r in tree.descendants(project_id, TASK_NODE_TYPE,
+                filters=dict(extra_filters or {}), fields=fields):
+            by_name[r["name"]] = r
+    return list(by_name.values())
 
 
 @frappe.whitelist()
@@ -1061,85 +1141,106 @@ def team_tab_state() -> dict[str, Any]:
 
 def _team_stats(scope: str, led_ids: set[str] | None) -> dict[str, Any]:
     """Pending-review count, first-try approval rate %, and points earned this
-    month, restricted to `scope`. approval_rate = DONE-this-month with
-    revision_count=0 over all DONE-this-month."""
-    _today = today()
-    clause, extra = _scope_clause(scope, led_ids, "project")
+    month, restricted to `scope`. approval_rate = CLOSED-this-month with
+    revision_count=0 over all CLOSED-this-month."""
+    ref = getdate(today())
 
-    pending_review = frappe.db.sql(
-        f"""SELECT COUNT(*) FROM `tabVT Task`
-            WHERE kanban_status = %(in_review)s AND pdca_phase = %(check)s{clause}""",
-        {"in_review": IN_REVIEW_STATUS, "check": CHECK_PHASE, **extra}, as_list=True,
-    )[0][0]
+    pending_review = len(_scoped_task_rows(
+        scope, led_ids, ["name"],
+        {"kanban_status": IN_REVIEW_STATUS, "pdca_phase": CHECK_PHASE},
+    ))
 
-    agg = frappe.db.sql(
-        f"""SELECT COUNT(*) AS month_done,
-                   SUM(CASE WHEN revision_count = 0 THEN 1 ELSE 0 END) AS approved,
-                   COALESCE(SUM(earned_points), 0) AS team_points
-            FROM `tabVT Task`
-            WHERE pdca_phase = %(done)s
-              AND YEAR(completion_date) = YEAR(%(today)s)
-              AND MONTH(completion_date) = MONTH(%(today)s){clause}""",
-        {"done": DONE_PHASE, "today": _today, **extra}, as_dict=True,
-    )[0]
+    done_rows = _scoped_task_rows(
+        scope, led_ids, ["name", "completion_date", "revision_count", "earned_points"],
+        {"pdca_phase": DONE_PHASE},
+    )
+    month_done = approved = 0
+    team_points = 0.0
+    for r in done_rows:
+        cd = r.get("completion_date")
+        if not cd:
+            continue
+        cd = getdate(cd)
+        if cd.year == ref.year and cd.month == ref.month:
+            month_done += 1
+            if int(r.get("revision_count") or 0) == 0:
+                approved += 1
+            team_points += float(r.get("earned_points") or 0)
 
-    month_done = int(agg["month_done"] or 0)
-    approved = int(agg["approved"] or 0)
     rate = round(approved / month_done * 100, 1) if month_done > 0 else 0.0
     return {
         "pending_review": int(pending_review),
         "approval_rate": float(rate),
-        "team_points_month": float(agg["team_points"] or 0),
+        "team_points_month": float(team_points),
     }
 
 
 def _team_phase_distribution(scope: str, led_ids: set[str] | None) -> list[dict[str, Any]]:
-    """Task counts grouped by PDCA phase (BACKLOG→DONE order), restricted to scope."""
-    clause, extra = _scope_clause(scope, led_ids, "project")
-    rows = frappe.db.sql(
-        f"""SELECT pdca_phase AS phase, COUNT(*) AS count FROM `tabVT Task`
-            WHERE 1=1{clause}
-            GROUP BY pdca_phase
-            ORDER BY FIELD(pdca_phase, 'BACKLOG','PLAN','DO','CHECK','ACT','DONE')""",
-        extra, as_dict=True,
-    )
-    return [{"phase": r["phase"], "count": int(r["count"])} for r in rows]
+    """Task counts grouped by PDCA phase (BACKLOG→CLOSED order), restricted to
+    scope. Was GROUP BY pdca_phase + FIELD() ordering on tabVT Task."""
+    rows = _scoped_task_rows(scope, led_ids, ["name", "pdca_phase"])
+    counts: dict[str, int] = defaultdict(int)
+    for r in rows:
+        counts[r.get("pdca_phase")] += 1
+    out: list[dict[str, Any]] = []
+    for phase in _PHASE_ORDER:
+        if phase in counts:
+            out.append({"phase": phase, "count": int(counts[phase])})
+    # Defensive: surface any unexpected phase value not in the canonical order.
+    for phase, count in counts.items():
+        if phase not in _PHASE_ORDER:
+            out.append({"phase": phase, "count": int(count)})
+    return out
 
 
 def _team_leaderboard(scope: str, led_ids: set[str] | None) -> list[dict[str, Any]]:
-    """Top members by points earned this month, restricted to scope."""
-    clause, extra = _scope_clause(scope, led_ids, "project")
-    rows = frappe.db.sql(
-        f"""SELECT assigned_to AS member, COALESCE(SUM(earned_points), 0) AS points
-            FROM `tabVT Task`
-            WHERE pdca_phase = %(done)s
-              AND YEAR(completion_date) = YEAR(%(today)s)
-              AND MONTH(completion_date) = MONTH(%(today)s){clause}
-            GROUP BY assigned_to ORDER BY points DESC LIMIT {LEADERBOARD_LIMIT}""",
-        {"done": DONE_PHASE, "today": today(), **extra}, as_dict=True,
+    """Top members by points earned this month, restricted to scope. Was
+    GROUP BY assigned_to (→ owner_user) on tabVT Task; aggregated in Python."""
+    ref = getdate(today())
+    rows = _scoped_task_rows(
+        scope, led_ids, ["name", OWNER_FIELD, "completion_date", "earned_points"],
+        {"pdca_phase": DONE_PHASE},
     )
-    return [{"member": r["member"], "points": float(r["points"])} for r in rows]
+    points_by_member: dict[str, float] = defaultdict(float)
+    for r in rows:
+        cd = r.get("completion_date")
+        if not cd:
+            continue
+        cd = getdate(cd)
+        if cd.year == ref.year and cd.month == ref.month:
+            points_by_member[r.get(OWNER_FIELD)] += float(r.get("earned_points") or 0)
+    ranked = sorted(points_by_member.items(), key=lambda kv: kv[1], reverse=True)
+    return [
+        {"member": member, "points": float(points)}
+        for member, points in ranked[:LEADERBOARD_LIMIT]
+    ]
 
 
 def _team_overdue(scope: str, led_ids: set[str] | None) -> list[dict[str, Any]]:
-    """Open (non-DONE/ACT) tasks past deadline, most-overdue first, scope-restricted."""
-    clause, extra = _scope_clause(scope, led_ids, "t.project")
-    rows = frappe.db.sql(
-        f"""SELECT t.name AS task_name, t.title AS task_title, t.assigned_to AS member,
-                   t.deadline, t.pdca_phase AS phase,
-                   DATEDIFF(%(today)s, t.deadline) AS days_overdue
-            FROM `tabVT Task` t
-            WHERE t.deadline < %(today)s
-              AND t.pdca_phase NOT IN %(closed)s{clause}
-            ORDER BY days_overdue DESC""",
-        {"today": today(), "closed": CLOSED_PHASES, **extra}, as_dict=True,
+    """Open (non-CLOSED/ACT) tasks past deadline, most-overdue first,
+    scope-restricted. assigned_to → owner_user; was a tabVT Task scan."""
+    ref = getdate(today())
+    rows = _scoped_task_rows(
+        scope, led_ids,
+        ["name", "title", OWNER_FIELD, "deadline", "pdca_phase"],
+        {"pdca_phase": ["not in", CLOSED_PHASES], "deadline": ["<", today()]},
     )
-    return [
-        {"task_name": r["task_name"], "task_title": r["task_title"],
-         "member": r["member"], "deadline": str(r["deadline"]),
-         "phase": r["phase"], "days_overdue": int(r["days_overdue"])}
-        for r in rows
-    ]
+    out = []
+    for r in rows:
+        deadline = r.get("deadline")
+        if not deadline:
+            continue
+        days_overdue = (ref - getdate(deadline)).days
+        out.append({
+            "task_name": r["name"],
+            "task_title": r.get("title"),
+            "member": r.get(OWNER_FIELD),
+            "deadline": str(deadline),
+            "phase": r.get("pdca_phase"),
+            "days_overdue": int(days_overdue),
+        })
+    out.sort(key=lambda x: x["days_overdue"], reverse=True)
+    return out
 
 
 @frappe.whitelist()

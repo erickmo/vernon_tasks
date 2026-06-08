@@ -1,4 +1,13 @@
-"""Portal Brands endpoints — list, search, create, update, delete VT Brand."""
+"""Portal Brands endpoints — list, search, create, update, delete VT Brand.
+
+VT Brand itself is independent of the unified VT Item hierarchy and is read/written
+as-is. The per-brand execution rollup, however, walks the VT Item tree: Projects ->
+node_type="Project", Sprints -> node_type="Sprint", Tasks -> node_type="Task"
+(legacy VT Project / VT Sprint / VT Task are dead to this API). A Project's OKR link
+is its tree parent (parent_vt_item); a Sprint/Task's project is its tree ancestor.
+Renamed fields: VT Project.status -> health_status, VT Sprint.status -> sprint_state,
+VT Sprint.sprint_title -> VT Item.title. All node reads go through vt_item_tree.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -6,11 +15,14 @@ from typing import Any
 import frappe
 
 from vernon_tasks.task.api.security import max_str, require_login
+from vernon_tasks.task.services import vt_item_tree as tree
 
 BRAND_DOCTYPE = "VT Brand"
-PROJECT_DOCTYPE = "VT Project"
-SPRINT_DOCTYPE = "VT Sprint"
-TASK_DOCTYPE = "VT Task"
+# Project / Sprint / Task are typed VT Item nodes in the unified hierarchy.
+VT_ITEM_DOCTYPE = "VT Item"
+PROJECT_NODE_TYPE = "Project"
+SPRINT_NODE_TYPE = "Sprint"
+TASK_NODE_TYPE = "Task"
 EDITABLE_BRAND_FIELDS = ("brand_name", "logo", "description")
 REQUIRED_CREATE_FIELDS = ("brand_name",)
 BRAND_SEARCH_LIMIT = 20
@@ -23,9 +35,10 @@ BRAND_SEARCH_LIMIT = 20
 # values MUST stay in sync with that module's kanban_status contract.
 DONE_KANBAN_STATUS = "Done"
 CANCELLED_KANBAN_STATUS = "Cancelled"
-ACTIVE_SPRINT_STATUS = "Active"
-# VT Task is submittable; a cancelled doc keeps its last pdca_phase/kanban_status,
-# so cancelled rows must be dropped at the DB layer too (docstatus 2 = Cancelled).
+# VT Item.sprint_state (renamed from VT Sprint.status): "Active" = running sprint.
+ACTIVE_SPRINT_STATE = "Active"
+# A cancelled task keeps its last kanban_status, so cancelled rows must be dropped
+# at the DB layer too (docstatus 2 = Cancelled).
 DOCSTATUS_CANCELLED = 2
 PERCENT_FACTOR = 100
 
@@ -85,74 +98,77 @@ def _zero_task_agg() -> dict:
 
 
 def _project_brand_map() -> dict[str, str]:
-    """Map every brand-linked VT Project name -> its brand (orphans dropped)."""
-    rows = frappe.get_all(
-        PROJECT_DOCTYPE, fields=["name", "brand"], filters={"brand": ["is", "set"]}
+    """Map every brand-linked Project node name -> its brand (orphans dropped)."""
+    rows = tree.nodes(
+        PROJECT_NODE_TYPE, filters={"brand": ["is", "set"]}, fields=["name", "brand"]
     )
     return {r["name"]: r["brand"] for r in rows if r.get("brand")}
 
 
 def _task_aggregates(proj_to_brand: dict[str, str]) -> dict[str, dict]:
-    """Sum estimated minutes + open-task counts per brand from one bulk query.
+    """Sum estimated minutes + open-task counts per brand from each Project subtree.
 
-    Counts only non-cancelled tasks on brand-linked projects. ``remaining`` =
-    tasks whose kanban_status is not Done; ``total`` includes done but excludes
-    Cancelled, so progress = (total - remaining) / total stays consistent.
+    Counts only non-cancelled Task nodes under brand-linked Project nodes. A
+    Project's Tasks are read via the nested-set subtree (spans any Sprint level),
+    so a task sitting under a Sprint still rolls up to its Project's brand.
+    ``remaining`` = tasks whose kanban_status is not Done; ``total`` includes done
+    but excludes Cancelled, so progress = (total - remaining) / total stays
+    consistent.
     """
     agg: dict[str, dict] = {}
-    project_ids = list(proj_to_brand)
-    if not project_ids:
+    if not proj_to_brand:
         return agg
-    tasks = frappe.get_all(
-        TASK_DOCTYPE,
-        fields=["project", "kanban_status", "estimated_minutes"],
-        filters={"project": ["in", project_ids],
-                 "docstatus": ["<", DOCSTATUS_CANCELLED]},
-        limit_page_length=0,
-    )
-    for t in tasks:
-        status = t.get("kanban_status")
-        brand = proj_to_brand.get(t.get("project"))
-        # Skip cancelled (defensive — docstatus filter usually drops these) and
-        # tasks whose project has no resolvable brand.
-        if not brand or status == CANCELLED_KANBAN_STATUS:
+    for project, brand in proj_to_brand.items():
+        if not brand:
             continue
-        minutes = int(t.get("estimated_minutes") or 0)
-        bucket = agg.setdefault(brand, _zero_task_agg())
-        bucket["total_minutes"] += minutes
-        bucket["total_tasks"] += 1
-        if status == DONE_KANBAN_STATUS:
-            bucket["done_tasks"] += 1
-        else:
-            bucket["remaining_minutes"] += minutes
-            bucket["remaining_tasks"] += 1
+        tasks = tree.descendants(
+            project, TASK_NODE_TYPE,
+            filters={"docstatus": ["<", DOCSTATUS_CANCELLED]},
+            fields=["name", "kanban_status", "estimated_minutes"],
+        )
+        for t in tasks:
+            status = t.get("kanban_status")
+            # Skip cancelled (defensive — docstatus filter usually drops these).
+            if status == CANCELLED_KANBAN_STATUS:
+                continue
+            minutes = int(t.get("estimated_minutes") or 0)
+            bucket = agg.setdefault(brand, _zero_task_agg())
+            bucket["total_minutes"] += minutes
+            bucket["total_tasks"] += 1
+            if status == DONE_KANBAN_STATUS:
+                bucket["done_tasks"] += 1
+            else:
+                bucket["remaining_minutes"] += minutes
+                bucket["remaining_tasks"] += 1
     return agg
 
 
 def _active_sprints(proj_to_brand: dict[str, str]) -> dict[str, dict]:
     """Count active sprints per brand + the newest active sprint title.
 
-    Scoped to the given projects at the DB layer (mirrors _task_aggregates) so a
-    single-brand caller does not load every active sprint site-wide.
+    Scoped to the given Project nodes at the DB layer (mirrors _task_aggregates)
+    so a single-brand caller does not load every active sprint site-wide. A Sprint
+    is a direct child of its Project (parent_vt_item); sprint_state replaces the
+    legacy status and the sprint title now lives on VT Item.title.
     """
     out: dict[str, dict] = {}
     if not proj_to_brand:
         return out
-    rows = frappe.get_all(
-        SPRINT_DOCTYPE,
-        fields=["project", "sprint_title"],
-        filters={"status": ACTIVE_SPRINT_STATUS, "project": ["in", list(proj_to_brand)]},
+    rows = tree.nodes(
+        SPRINT_NODE_TYPE,
+        filters={"sprint_state": ACTIVE_SPRINT_STATE,
+                 "parent_vt_item": ["in", list(proj_to_brand)]},
+        fields=["parent_vt_item", "title"],
         order_by="creation desc",  # deterministic "first" title across reloads
-        limit_page_length=0,
     )
     for s in rows:
-        brand = proj_to_brand.get(s.get("project"))
+        brand = proj_to_brand.get(s.get("parent_vt_item"))
         if not brand:
             continue
         info = out.setdefault(brand, {"count": 0, "title": None})
         info["count"] += 1
         if info["title"] is None:
-            info["title"] = s.get("sprint_title")
+            info["title"] = s.get("title")
     return out
 
 
@@ -204,18 +220,18 @@ def brand_execution(brand_id: str) -> dict:
 
     Reuses the SAME primitives as the brand-list cards (_task_aggregates /
     _active_sprints / _progress_pct) so detail-page numbers cannot drift from the
-    list. Per-project progress is read from VT Project.percent_done (the project's
-    own computed field) — no task re-aggregation. Read-only; safe for the detail
-    page's single get_brand_okr call. spec: 2026-06-06-brand-detail-informative.
+    list. Per-project progress is read from the Project node's percent_done (its own
+    computed field) — no task re-aggregation. Read-only; safe for the detail page's
+    single get_brand_okr call. spec: 2026-06-06-brand-detail-informative.
     """
-    projects = frappe.get_all(
-        PROJECT_DOCTYPE,
-        # `objective` carries the Project→OKR link so the detail page can show an
-        # objective chip per project; title resolution is done by the caller.
-        fields=["name", "title", "percent_done", "objective"],
+    projects = tree.nodes(
+        PROJECT_NODE_TYPE,
+        # `parent_vt_item` carries the Project→OKR link (a Project is parented to its
+        # objective node), so the detail page can show an objective chip per project;
+        # title resolution is done by the caller.
+        fields=["name", "title", "percent_done", "parent_vt_item"],
         filters={"brand": brand_id},
         order_by="title asc",
-        limit_page_length=0,
     )
     proj_to_brand = {p["name"]: brand_id for p in projects}
     agg = _task_aggregates(proj_to_brand).get(brand_id) or _zero_task_agg()
@@ -231,7 +247,7 @@ def brand_execution(brand_id: str) -> dict:
         "projects": [
             {"id": p["name"], "name": p.get("title") or p["name"],
              "progress": round(p.get("percent_done") or 0),
-             "objective": p.get("objective")}
+             "objective": p.get("parent_vt_item")}
             for p in projects
         ],
     }
@@ -347,8 +363,9 @@ def delete_brand(brand_id: str) -> dict:
     brand_id = max_str(brand_id, 140)
     if not frappe.has_permission(BRAND_DOCTYPE, "delete", doc=brand_id):
         raise frappe.PermissionError
-    # Block delete if linked by any VT Project
-    in_use = frappe.db.count("VT Project", {"brand": brand_id})
+    # Block delete if linked by any Project node in the VT Item tree.
+    in_use = len(tree.nodes(PROJECT_NODE_TYPE, filters={"brand": brand_id},
+                            fields=["name"]))
     if in_use:
         raise frappe.ValidationError(
             f"Brand is linked to {in_use} project(s); reassign before deleting"

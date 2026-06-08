@@ -109,8 +109,19 @@ class TestVTItem(FrappeTestCase):
 			pdca_phase="DO", kanban_status="Blocked")
 		self.assertEqual(task.kanban_status, "Blocked")
 
-	def test_empty_pdca_keeps_explicit_kanban(self):
-		# P2 — unknown/empty pdca_phase must not clobber an explicit kanban_status
+	def test_task_defaults_phase_and_weight(self):
+		# P3 — a Task with no pdca_phase/weight gets legacy defaults
+		# (pdca BACKLOG → kanban Backlog, weight 1)
 		proj = _make("Project", "Exp proj")
-		task = _make("Task", "exp t", parent=proj.name, kanban_status="In Progress")
-		self.assertEqual(task.kanban_status, "In Progress")
+		task = _make("Task", "exp t", parent=proj.name)
+		self.assertEqual(task.pdca_phase, "BACKLOG")
+		self.assertEqual(task.kanban_status, "Backlog")
+		self.assertEqual(task.weight, 1)
+
+	def test_illegal_pdca_transition_rejected(self):
+		# P3 — Deming cycle enforced on phase change (DO → CLOSED illegal)
+		proj = _make("Project", "Trans proj")
+		task = _make("Task", "trans t", parent=proj.name, pdca_phase="DO")
+		task.pdca_phase = "CLOSED"
+		with self.assertRaises(frappe.ValidationError):
+			task.save(ignore_permissions=True)

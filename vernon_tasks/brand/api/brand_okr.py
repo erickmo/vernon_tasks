@@ -2,7 +2,12 @@
 
 Layer: HTTP entrypoint (Layer 2, Priority 5 per vernon-dev Frappe Hooks-First).
 Read-only aggregation; all write paths live in brand_okr_mutations.py and delegate
-to the Objective / Key Result controllers.
+to the VT Item controller.
+
+Unified hierarchy (VT Item tree): Objective -> node_type="OKR", VT Project ->
+node_type="Project", KPI Definition -> node_type="KPI"; Key Result / KPI Entry are
+child rows on the OKR / KPI node. Reads go through task.services.vt_item_tree.
+The execution rollup is delegated to portal_brands.brand_execution.
 
 Source of truth: docs/superpowers/specs/2026-06-04-brand-detail-okr-design.html
 """
@@ -16,21 +21,22 @@ from frappe.utils import getdate, today
 from vernon_tasks.brand.api.portal_brands import brand_execution
 from vernon_tasks.okr.doctype.objective.objective import aggregate_kr_progress
 from vernon_tasks.task.api.security import max_str, require_login
+from vernon_tasks.task.services import vt_item_tree as tree
 
 BRAND_DOCTYPE = "VT Brand"
-OBJECTIVE_DOCTYPE = "Objective"
-KEY_RESULT_DOCTYPE = "Key Result"
-PROJECT_DOCTYPE = "VT Project"
-KPI_DEFINITION_DOCTYPE = "KPI Definition"
-KPI_ENTRY_DOCTYPE = "KPI Entry"
+# Unified hierarchy: Objective/Project/KPI are VT Item nodes (typed by node_type);
+# Key Result / KPI Entry are child rows on the OKR / KPI node. All node reads,
+# child-row reads and permission gating go through VT Item.
+VT_ITEM_DOCTYPE = "VT Item"
+OKR_NODE_TYPE = "OKR"
+PROJECT_NODE_TYPE = "Project"
+KPI_NODE_TYPE = "KPI"
+KEY_RESULTS_TABLE = "key_results"
+KPI_ENTRIES_TABLE = "kpi_entries"
 NO_PERIOD_LABEL = "Tanpa Period"
 OBJECTIVE_FETCH_LIMIT = 500
-KEY_RESULT_FETCH_LIMIT = 1000
 PROJECT_FETCH_LIMIT = 500
 KPI_FETCH_LIMIT = 500
-# KPI Entry history can be large (Daily KPIs × years). We only need the latest
-# two per definition, but read in one batched query and slice in Python.
-KPI_ENTRY_FETCH_LIMIT = 5000
 USER_DOCTYPE = "User"
 DEFAULT_STATUS = "Open"
 AT_RISK_STATUS = "At Risk"
@@ -86,55 +92,72 @@ def get_brand_okr(brand_id: str) -> dict:
 
 
 def _affordances() -> dict:
-    """Per-doctype create/edit/read gating for the page's affordances.
+    """Create/edit/read gating for the page's affordances.
 
-    Objective, Key Result and KPI Definition are separate doctypes with
-    independent permissions; each affordance is hidden unless the user holds the
-    matching grant. Read-only for KPI — KPIs are managed on their native forms.
+    In the unified hierarchy Objective/Key Result/KPI all live on VT Item nodes
+    (KPI = KPI-type node; Key Result = child row whose mutations require write on
+    the OKR node — see brand_okr_mutations). All affordances therefore key off the
+    VT Item grant: an affordance is hidden unless the user holds the matching
+    VT Item permission. Read-only for KPI — KPIs are managed on their native forms.
     """
     return {
-        "can_create_objective": bool(frappe.has_permission(OBJECTIVE_DOCTYPE, "create")),
-        "can_edit_objective": bool(frappe.has_permission(OBJECTIVE_DOCTYPE, "write")),
-        "can_create_kr": bool(frappe.has_permission(KEY_RESULT_DOCTYPE, "create")),
-        "can_edit_kr": bool(frappe.has_permission(KEY_RESULT_DOCTYPE, "write")),
-        "can_read_kpi": bool(frappe.has_permission(KPI_DEFINITION_DOCTYPE, "read")),
+        "can_create_objective": bool(frappe.has_permission(VT_ITEM_DOCTYPE, "create")),
+        "can_edit_objective": bool(frappe.has_permission(VT_ITEM_DOCTYPE, "write")),
+        "can_create_kr": bool(frappe.has_permission(VT_ITEM_DOCTYPE, "create")),
+        "can_edit_kr": bool(frappe.has_permission(VT_ITEM_DOCTYPE, "write")),
+        "can_read_kpi": bool(frappe.has_permission(VT_ITEM_DOCTYPE, "read")),
     }
 
 
 def _read_objectives(brand_id: str) -> list[dict]:
-    """All objectives for a brand, pre-sorted newest-period first."""
-    return frappe.get_all(
-        OBJECTIVE_DOCTYPE,
+    """All objectives for a brand, pre-sorted newest-period first.
+
+    Objective -> VT Item node_type="OKR". Reads the renamed fields
+    (health_status, owner_user) and re-keys them to the legacy names
+    (status, objective_owner) the rest of this module consumes — keeping the
+    grouping/summary helpers and the JSON shape unchanged.
+    """
+    rows = tree.nodes(
+        OKR_NODE_TYPE,
         filters={"brand": brand_id},
-        fields=["name", "title", "status", "pdca_phase", "objective_owner",
+        fields=["name", "title", "health_status", "pdca_phase", "owner_user",
                 "period", "period_start", "period_end"],
         order_by="period_start desc, title asc",
-        limit_page_length=OBJECTIVE_FETCH_LIMIT,
+        limit=OBJECTIVE_FETCH_LIMIT,
     )
+    return [{
+        "name": r["name"],
+        "title": r.get("title"),
+        "status": r.get("health_status"),
+        "pdca_phase": r.get("pdca_phase"),
+        "objective_owner": r.get("owner_user"),
+        "period": r.get("period"),
+        "period_start": r.get("period_start"),
+        "period_end": r.get("period_end"),
+    } for r in rows]
 
 
 def _read_key_results(objective_ids: list[str]) -> dict[str, list[dict]]:
-    """Batch-load Key Results for all objectives at once — avoids N+1."""
+    """Load Key Results for all objectives — now "VT Item Key Result" child rows.
+
+    Key Result -> child rows on the OKR node's `key_results` table. Read per OKR
+    node via the tree helper (the legacy single-query JOIN has no child-table
+    equivalent), keyed by objective id to preserve the grouped shape.
+    """
     grouped: dict[str, list[dict]] = {}
     if not objective_ids:
         return grouped
-    rows = frappe.get_all(
-        KEY_RESULT_DOCTYPE,
-        filters={"objective": ["in", objective_ids]},
-        fields=["name", "objective", "metric", "target_value", "current_value",
-                "unit", "progress_percent", "confidence"],
-        limit_page_length=KEY_RESULT_FETCH_LIMIT,
-    )
-    for r in rows:
-        grouped.setdefault(r["objective"], []).append({
-            "id": r["name"],
-            "metric": r.get("metric"),
-            "target": float(r.get("target_value") or 0),
-            "current": float(r.get("current_value") or 0),
-            "unit": r.get("unit"),
-            "progress_percent": float(r.get("progress_percent") or 0),
-            "confidence": float(r.get("confidence") or 0),
-        })
+    for objective in objective_ids:
+        for r in tree.child_table_rows(objective, KEY_RESULTS_TABLE):
+            grouped.setdefault(objective, []).append({
+                "id": r["name"],
+                "metric": r.get("metric"),
+                "target": float(r.get("target_value") or 0),
+                "current": float(r.get("current_value") or 0),
+                "unit": r.get("unit"),
+                "progress_percent": float(r.get("progress_percent") or 0),
+                "confidence": float(r.get("confidence") or 0),
+            })
     return grouped
 
 
@@ -149,18 +172,21 @@ def _read_objective_projects(brand_id: str, objective_ids: list[str]) -> dict[st
     grouped: dict[str, list[dict]] = {}
     if not objective_ids:
         return grouped
-    rows = frappe.get_all(
-        PROJECT_DOCTYPE,
-        filters={"brand": brand_id, "objective": ["in", objective_ids]},
-        fields=["name", "title", "status", "percent_done", "objective"],
+    # VT Project -> VT Item node_type="Project"; the project's OKR link is now its
+    # tree parent (parent_vt_item). The brand filter still guards against a Project
+    # node parented to another brand's OKR (no controller cross-brand guard).
+    rows = tree.nodes(
+        PROJECT_NODE_TYPE,
+        filters={"brand": brand_id, "parent_vt_item": ["in", objective_ids]},
+        fields=["name", "title", "health_status", "percent_done", "parent_vt_item"],
         order_by="modified desc",
-        limit_page_length=PROJECT_FETCH_LIMIT,
+        limit=PROJECT_FETCH_LIMIT,
     )
     for r in rows:
-        grouped.setdefault(r["objective"], []).append({
+        grouped.setdefault(r["parent_vt_item"], []).append({
             "id": r["name"],
             "title": r.get("title") or r["name"],
-            "status": r.get("status"),
+            "status": r.get("health_status"),
             "progress": round(r.get("percent_done") or 0),
         })
     return grouped
@@ -174,13 +200,24 @@ def _read_brand_kpis(brand_id: str, obj_title_map: dict[str, str]) -> list[dict]
     a KPI may simply be tracked). `objective_title` is resolved from the shared
     map (no extra Objective query).
     """
-    defs = frappe.get_all(
-        KPI_DEFINITION_DOCTYPE,
+    # KPI Definition -> VT Item node_type="KPI"; kpi_name -> title, the KPI's
+    # owning objective is its tree parent (parent_vt_item). Re-key to the legacy
+    # field names this function consumes (kpi_name / objective).
+    nodes = tree.nodes(
+        KPI_NODE_TYPE,
         filters={"brand": brand_id},
-        fields=["name", "kpi_name", "unit", "frequency", "objective", "target_value"],
-        order_by="kpi_name asc",
-        limit_page_length=KPI_FETCH_LIMIT,
+        fields=["name", "title", "unit", "frequency", "parent_vt_item", "target_value"],
+        order_by="title asc",
+        limit=KPI_FETCH_LIMIT,
     )
+    defs = [{
+        "name": n["name"],
+        "kpi_name": n.get("title"),
+        "unit": n.get("unit"),
+        "frequency": n.get("frequency"),
+        "objective": n.get("parent_vt_item"),
+        "target_value": n.get("target_value"),
+    } for n in nodes]
     if not defs:
         return []
     history = _latest_kpi_entries([d["name"] for d in defs])
@@ -210,25 +247,25 @@ def _read_brand_kpis(brand_id: str, obj_title_map: dict[str, str]) -> list[dict]
 
 
 def _latest_kpi_entries(def_ids: list[str]) -> dict[str, list[dict]]:
-    """Latest + previous KPI Entry per definition in ONE batched query (no N+1).
+    """Latest + previous KPI Entry per definition.
 
-    Rows arrive globally date-desc; the first KPI_HISTORY_KEEP seen for each
-    definition are therefore its most recent observations.
+    KPI Entry -> "VT Item KPI Entry" child rows on the KPI node's `kpi_entries`
+    table. Read per KPI node, sort that node's rows date-desc, and keep the first
+    KPI_HISTORY_KEEP (most recent observations) — yielding the same latest/previous
+    pair the legacy global-ordered query produced.
     """
     grouped: dict[str, list[dict]] = {}
     if not def_ids:
         return grouped
-    rows = frappe.get_all(
-        KPI_ENTRY_DOCTYPE,
-        filters={"kpi_definition": ["in", def_ids]},
-        fields=["kpi_definition", "date", "value"],
-        order_by="date desc",
-        limit_page_length=KPI_ENTRY_FETCH_LIMIT,
-    )
-    for r in rows:
-        bucket = grouped.setdefault(r["kpi_definition"], [])
-        if len(bucket) < KPI_HISTORY_KEEP:
-            bucket.append({"date": r["date"], "value": float(r.get("value") or 0)})
+    for kpi_id in def_ids:
+        rows = sorted(
+            tree.child_table_rows(kpi_id, KPI_ENTRIES_TABLE),
+            key=lambda r: r.get("date") or "", reverse=True,
+        )
+        grouped[kpi_id] = [
+            {"date": r["date"], "value": float(r.get("value") or 0)}
+            for r in rows[:KPI_HISTORY_KEEP]
+        ]
     return grouped
 
 

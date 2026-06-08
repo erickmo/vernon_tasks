@@ -2,7 +2,7 @@
   "actions": [], "creation": "2026-05-07 00:00:00.000000", "doctype": "DocType", "engine": "InnoDB",
   "field_order": ["blocked_by","dependency_type"],
   "fields": [
-    {"fieldname": "blocked_by", "fieldtype": "Link", "label": "Blocked By", "options": "VT Task", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "blocked_by", "fieldtype": "Link", "label": "Blocked By", "options": "VT Item", "reqd": 1, "in_list_view": 1},
     {"fieldname": "dependency_type", "fieldtype": "Select", "label": "Type", "options": "Finish-to-Start\nStart-to-Start", "default": "Finish-to-Start", "in_list_view": 1}
   ],
   "istable": 1, "modified": "2026-05-07 00:00:00.000000", "modified_by": "Administrator",
