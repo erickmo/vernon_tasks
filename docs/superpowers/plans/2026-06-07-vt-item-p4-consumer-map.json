@@ -1,0 +1,666 @@
+[
+  {
+    "unit": "okr/report/kpi_achievement",
+    "kind": "report",
+    "legacy_doctypes": [
+      "KPI Definition",
+      "KPI Entry"
+    ],
+    "direct_queries": [
+      {
+        "where": "kpi_achievement.py:24-29",
+        "current": "frappe.db.sql(SELECT... FROM `tabKPI Entry` ke INNER JOIN `tabKPI Definition` kd ON kd.name=ke.kpi_definition)",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'KPI', 'name': filters.get('kpi_definition')}, fields=['name', 'title', 'unit', 'frequency']); then frappe.db.sql(SELECT date, value FROM `tabVT Item KPI Entry` WHERE parent = %(kpi)s AND parenttype = 'VT Item') with date/value filters applied. Use kpi_trend_service.get_kpi_trend(kpi_id, periods) or construct the query against child table 'kpi_entries' on the KPI node."
+      },
+      {
+        "where": "kpi_achievement.js:3",
+        "current": "Filter options: 'KPI Definition' doctype link",
+        "tree_equivalent": "Change filter options to 'VT Item' with additional where clause node_type='KPI' (or populate dynamically via an API call to list_kpis from kpi_trend_service or direct frappe.get_all('VT Item', {node_type: 'KPI'}))"
+      }
+    ],
+    "route_or_label_strings": [
+      "kpi_achievement.py:7 — column options: 'KPI Definition' (only used as Link fieldtype label)",
+      "kpi_achievement.js:3 — filter options: 'KPI Definition' (only used as filter definition)"
+    ],
+    "api_calls": [],
+    "migration": "**Step 1: Update columns (line 7)**\nChange column definition:\n- OLD: `{\"fieldname\": \"kpi\", \"label\": \"KPI\", \"fieldtype\": \"Link\", \"options\": \"KPI Definition\", ...}`\n- NEW: `{\"fieldname\": \"kpi\", \"label\": \"KPI\", \"fieldtype\": \"Link\", \"options\": \"VT Item\", ...}` (VT Item doctype with node_type filter applied at query time)\n\n**Step 2: Rewrite data query (lines 24-29)**\nReplace raw SQL against tabKPI Entry/tabKPI Definition with:\n```python\n# Get the KPI node (replaces legacy KPI Definition lookup)\nkpi_node = None\nif filters.get(\"kpi_definition\"):\n    kpi_rows = frappe.get_all(\"VT Item\", \n        filters={\"name\": filters[\"kpi_definition\"], \"node_type\": \"KPI\"},\n        fields=[\"name\", \"title\", \"unit\", \"frequency\"], limit=1)\n    kpi_node = kpi_rows[0] if kpi_rows else None\n\n# Query KPI Entries from child table instead of legacy table\ndata = []\nif kpi_node:\n    entries = frappe.db.sql(\"\"\"\n        SELECT date, value, notes, %(freq)s as frequency, %(unit)s as unit, %(kpi)s as kpi\n        FROM `tabVT Item KPI Entry`\n        WHERE parent = %(kpi)s AND parenttype = 'VT Item'\n        {date_cond}\n        ORDER BY date DESC\n    \"\"\".format(date_cond=(\n        \" AND date >= %(from_date)s\" if filters.get(\"from_date\") else \"\"\n    ) + (\" AND date <= %(to_date)s\" if filters.get(\"to_date\") else \"\")),\n    {\n        \"kpi\": kpi_node[\"name\"],\n        \"freq\": kpi_node[\"frequency\"],\n        \"unit\": kpi_node[\"unit\"],\n        \"from_date\": filters.get(\"from_date\"),\n        \"to_date\": filters.get(\"to_date\"),\n    }, as_dict=True)\n    data = entries\n```\n\n**Step 3: Update filter (kpi_achievement.js:3)**\nChange filter definition:\n- OLD: `{fieldname: \"kpi_definition\", label: \"KPI\", fieldtype: \"Link\", options: \"KPI Definition\"}`\n- NEW: `{fieldname: \"kpi_definition\", label: \"KPI\", fieldtype: \"Link\", options: \"VT Item\"}` \n\nOR use dynamic filter (recommended) via API call to list_kpis():\n```javascript\nfilters: [\n    {fieldname: \"kpi_definition\", label: \"KPI\", fieldtype: \"Link\", options: \"VT Item\", \n     depends_on: \"node_type='KPI'\"},\n    ...\n]\n```\n\n**Field name mapping:**\n- KPI Definition.kpi_name → VT Item.title (both now on KPI node)\n- KPI Definition.frequency → VT Item.frequency\n- KPI Definition.unit → VT Item.unit\n- KPI Entry → child table rows in VT Item.kpi_entries (doctype VT Item KPI Entry)\n- KPI Entry.date → VT Item KPI Entry.date\n- KPI Entry.value → VT Item KPI Entry.value\n- KPI Entry.notes → VT Item KPI Entry.notes\n- KPI Entry.kpi_definition → parent VT Item.name (implicit via parent link)",
+    "complexity": "M",
+    "has_test": false,
+    "notes": "The report has a straightforward 1:1 migration. Two direct data queries: (1) a joined SQL query across legacy KPI Definition and KPI Entry tables (lines 24-29), and (2) a filter Link option to KPI Definition (line 3 in JS). The VT Item model collapses both doctypes into one KPI node with a child table kpi_entries. The service layer (kpi_trend_service.py) already shows the correct pattern: query VT Item with node_type='KPI', then read child table rows via frappe.db.sql on `tabVT Item KPI Entry`. No API calls are active in this unit (it does not call task/api/* or brand/api/*), so all migration work is local to the report execute() method and filter definition. Column output shape (kpi, frequency, date, value, unit, notes) maps directly to VT Item fields + child table fields; no column rename needed."
+  },
+  {
+    "unit": "project/report/sprint_velocity",
+    "kind": "report",
+    "legacy_doctypes": [
+      "VT Sprint",
+      "VT Task",
+      "VT Project",
+      "Sprint Task"
+    ],
+    "direct_queries": [
+      {
+        "where": "sprint_velocity.py:20-28",
+        "current": "frappe.db.sql(f\"\"\"\n        SELECT s.name AS sprint, s.sprint_title, s.project, s.start_date, s.end_date,\n               COALESCE(SUM(t.weight),0) AS total_weight,\n               COALESCE(SUM(CASE WHEN t.pdca_phase='DONE' THEN t.weight ELSE 0 END),0) AS done_weight\n        FROM `tabVT Sprint` s\n        LEFT JOIN `tabSprint Task` st ON st.parent=s.name\n        LEFT JOIN `tabVT Task` t ON t.name=st.task {cond}\n        GROUP BY s.name ORDER BY s.start_date DESC\n    \"\"\", vals, as_dict=True)",
+        "tree_equivalent": "Use vt_item_tree.nodes('Sprint', filters={'parent_vt_item': <project_id>} if filtering, fields=['name','title','start_date','end_date','parent_vt_item']) with a child loop via tree.children(sprint_name, 'Task', fields=['weight','pdca_phase']). Aggregate total_weight=sum of all child task weights; done_weight=sum of child task weights where pdca_phase='CLOSED'. Rename s.sprint_title→s.title, t.pdca_phase='DONE'→t.pdca_phase='CLOSED' (terminal phase in VT Item), and resolve s.project to parent_project=tree.ancestor_of_type(sprint_name, 'Project')."
+      }
+    ],
+    "route_or_label_strings": [
+      "sprint_velocity.py:7 'VT Sprint' in column options",
+      "sprint_velocity.py:9 'VT Project' in column options",
+      "sprint_velocity.js:3 'VT Project' in filter options",
+      "sprint_velocity.json:11 ref_doctype='VT Sprint'"
+    ],
+    "api_calls": [],
+    "migration": "REWRITE execute() in sprint_velocity.py: (1) Replace the SQL join with vt_item_tree.nodes('Sprint', ...) to fetch all Sprint nodes (optionally filtered by ancestor Project if user selects a project); (2) For each Sprint, call tree.children(sprint_name, 'Task', fields=['weight','pdca_phase']) to get tasks; (3) Sum task weights → total_weight; count/sum tasks where pdca_phase='CLOSED' → done_weight (note: 'DONE' in legacy is 'CLOSED' in VT Item); (4) Rename the JOIN-fetched s.sprint_title→s.title, and resolve s.project from tree.ancestor_of_type(sprint, 'Project') since VT Item uses parent_vt_item hierarchy instead of a flat project Link; (5) Keep the SAME column/row shape (sprint, sprint_title, project, start_date, end_date, total_weight, done_weight, velocity_pct). UPDATE column options in execute() and sprint_velocity.js: change 'VT Sprint'→'VT Item' with node_type='Sprint' filter in UI, change 'VT Project'→'VT Item' with node_type='Project' filter. UPDATE sprint_velocity.json ref_doctype from 'VT Sprint' to 'VT Item'.",
+    "complexity": "M",
+    "has_test": false,
+    "notes": "The report is a Script Report (ref_doctype='VT Sprint' in .json) that queries legacy nested tables to compute sprint velocity (% of tasks completed by weight). In VT Item, Sprints and Tasks are both node_type values on a single nested-set tree. The migration requires: (a) Replacing the SQL join with calls to vt_item_tree helpers to walk the tree hierarchy; (b) Field renames: sprint_title→title, pdca_phase='DONE'→'CLOSED'; (c) project resolution via tree.ancestor_of_type() instead of s.project Link column; (d) Updating the column fieldtype options and ref_doctype metadata to VT Item. The report output shape (columns/data) stays the same; only the data source and transformation logic changes.\""
+  },
+  {
+    "unit": "project/report/project_progress_vs_okr",
+    "kind": "report",
+    "legacy_doctypes": [
+      "VT Project",
+      "VT Task",
+      "Objective"
+    ],
+    "direct_queries": [
+      {
+        "where": "project_progress_vs_okr.py:15",
+        "current": "frappe.get_all(\"VT Project\", fields=[\"name\",\"title\",\"pdca_phase\",\"objective\"], order_by=\"start_date DESC\")",
+        "tree_equivalent": "Use vt_item_tree.nodes(\"Project\", filters=None, fields=[\"name\",\"title\",\"pdca_phase\"], order_by=\"start_date DESC\") to query VT Item rows where node_type='Project'. The \"objective\" field no longer exists on the Project node itself; instead, use vt_item_tree.ancestor_of_type(project_id, \"OKR\") to find the linked OKR if any."
+      },
+      {
+        "where": "project_progress_vs_okr.py:18",
+        "current": "frappe.db.count(\"VT Task\", {\"project\": proj.name})",
+        "tree_equivalent": "Use vt_item_tree.descendants(proj.name, node_type=\"Task\") to fetch all Task descendants of the Project node, then len() the result list. This replaces the flat VT Task.project filter with nested-set queries."
+      },
+      {
+        "where": "project_progress_vs_okr.py:19",
+        "current": "frappe.db.count(\"VT Task\", {\"project\": proj.name, \"pdca_phase\": \"DONE\"})",
+        "tree_equivalent": "Use vt_item_tree.descendants(proj.name, node_type=\"Task\", filters={\"pdca_phase\": \"DONE\"}) and len() the result. Note: Task completion check should verify pdca_phase=='CLOSED', not 'DONE' (the old field; see field renames)."
+      },
+      {
+        "where": "project_progress_vs_okr.py:23-24",
+        "current": "from vernon_tasks.okr.doctype.objective.objective import get_objective_progress",
+        "tree_equivalent": "The function get_objective_progress(objective_name) still reads legacy Key Result doctype directly (frappe.get_all(\"Key Result\", filters={\"objective\": objective_name}, fields=[\"target_value\", \"current_value\"])). For VT Item migration, this must be rewritten to read the \"key_results\" child table from the OKR node: kr_rows = vt_item_tree.child_table_rows(objective_id, \"key_results\"), then aggregate from child rows (each row has target_value, current_value). Alternatively, call a new migrated API endpoint task/api/okr.py:get_for_project(project_id) which returns {objective, key_results} with pre-computed progress."
+      },
+      {
+        "where": "project_progress_vs_okr.py:15",
+        "current": "frappe.get_all(\"VT Project\", ...)",
+        "tree_equivalent": "The report's ref_doctype is still \"VT Project\" in the Report config (project_progress_vs_okr.json:ref_doctype). After migration, this should be \"VT Item\" to align the report driver with the unified model, though the report logic stays the same (query Projects by node_type filter)."
+      }
+    ],
+    "route_or_label_strings": [
+      "project_progress_vs_okr.json:ref_doctype=\"VT Project\""
+    ],
+    "api_calls": [
+      "task/api/okr.py:get_for_project (already migrated; can replace the Objective legacy query and get_objective_progress call)"
+    ],
+    "migration": "1. In project_progress_vs_okr.py line 15: Replace frappe.get_all(\\\"VT Project\\\", ...) with vt_item_tree.nodes(\\\"Project\\\", fields=[\\\"name\\\",\\\"title\\\",\\\"pdca_phase\\\"], order_by=\\\"start_date DESC\\\"). Remove the \\\"objective\\\" field from the query and fetch it separately via vt_item_tree.ancestor_of_type(proj_name, \\\"OKR\\\") for each project. 2. Lines 18-19: Replace frappe.db.count(\\\"VT Task\\\", {\\\"project\\\": ...}) calls with len(vt_item_tree.descendants(proj_name, node_type=\\\"Task\\\")) and len(vt_item_tree.descendants(proj_name, node_type=\\\"Task\\\", filters={\\\"pdca_phase\\\": \\\"CLOSED\\\"})) respectively. 3. Lines 23-24: Instead of importing get_objective_progress from legacy Objective module, call task/api/okr.py:get_for_project(proj_name) if objective exists, which returns {objective, key_results} with pre-computed progress; extract okr_progress from the response. Alternatively, if get_objective_progress is refactored to use vt_item_tree.child_table_rows(objective_id, \\\"key_results\\\"), update the import and call. 4. Update project_progress_vs_okr.json: Change ref_doctype from \\\"VT Project\\\" to \\\"VT Item\\\" to align with the unified model driver. 5. Update imports: Add from vernon_tasks.task.services import vt_item_tree as tree and use tree.nodes(), tree.descendants(), tree.ancestor_of_type(), tree.child_table_rows() throughout. No column shape change (execute() returns same columns/data structure).",
+    "complexity": "M",
+    "has_test": false,
+    "notes": "The report currently performs 2 legacy direct-query antipatterns: (1) querying VT Project as a flat doctype and reading objective field off the project row (should traverse the OKR ancestor chain instead), (2) counting VT Task rows by filtering project field (should use nested-set descendants with lft/rgt bounds). The get_objective_progress call in line 23-24 imports a legacy function that still reads Key Result doctype directly. All three must be rewritten to use vt_item_tree query helpers or the migrated task/api/okr.py endpoint. The report.json ref_doctype is cosmetic and should be updated for consistency. No tests exist for this report; a test_project_progress_vs_okr.py should be created to verify the migrated data retrieval logic after changes."
+  },
+  {
+    "unit": "task/report/blocked_tasks_escalation",
+    "kind": "report",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "Task Dependency"
+    ],
+    "direct_queries": [
+      {
+        "where": "blocked_tasks_escalation.py:15-24",
+        "current": "frappe.db.sql() with FROM `tabVT Task` t INNER JOIN `tabTask Dependency` td ON td.parent = t.name INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by WHERE t.pdca_phase NOT IN ('DONE') AND bt.pdca_phase NOT IN ('DONE')",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'pdca_phase': ['!=', 'CLOSED']}, fields=['name', 'title', 'owner_user', 'parent_vt_item', 'deadline', 'modified']) combined with loop over dependencies child-table via vt_item_tree.child_table_rows(task_name, 'dependencies') to get blocked_by references, then nested frappe.get_doc('VT Item', blocked_by_name) to retrieve blocker details (title, pdca_phase)"
+      }
+    ],
+    "route_or_label_strings": [
+      "blocked_tasks_escalation.py:6 - fieldtype Link options='VT Task'",
+      "blocked_tasks_escalation.py:9 - fieldtype Link options='VT Project'",
+      "blocked_tasks_escalation.py:11 - fieldtype Link options='VT Task'"
+    ],
+    "api_calls": [],
+    "migration": "Replace frappe.db.sql() raw SQL with VT Item queries: (1) Query all VT Item nodes with node_type='Task' and pdca_phase != 'CLOSED' using frappe.get_all('VT Item', filters={...}, fields=[...]); (2) For each Task, use vt_item_tree.child_table_rows(task_name, 'dependencies') to retrieve Task Dependency rows (Task Dependency.blocked_by now references VT Item, not legacy VT Task); (3) For each blocker, fetch the VT Item to get title and pdca_phase; (4) Calculate days_blocked from modified timestamp. Update column options: 'VT Task' -> 'VT Item' (add hidden field node_type='Task' for link filters); 'VT Project' -> 'VT Item' (add hidden field node_type='Project'). Map fields: assigned_to -> owner_user; project -> ancestor_of_type(task, 'Project') via vt_item_tree.project_of(); pdca_phase='DONE' -> pdca_phase='CLOSED'. Preserve column order and names (task, title, assigned_to, project, deadline, blocked_by, blocked_by_title, days_blocked).",
+    "complexity": "M",
+    "has_test": false,
+    "notes": "Task Dependency is a child table now stored on VT Item (node_type='Task', field 'dependencies') with blocked_by linking to VT Item (not legacy VT Task). The report queries blocks between tasks. Key field renames: VT Task.assigned_to -> VT Item.owner_user; VT Task.project -> ancestor via vt_item_tree.project_of(node) or vt_item_tree.ancestor_of_type(node, 'Project'); VT Task.pdca_phase='DONE' -> VT Item.pdca_phase='CLOSED'. The execute() function must keep same return shape (columns, data). No test file exists."
+  },
+  {
+    "unit": "task/report/leader_review_schedule",
+    "kind": "report",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project"
+    ],
+    "direct_queries": [
+      {
+        "where": "leader_review_schedule.py:74-84",
+        "current": "frappe.db.sql(f\"\"\"SELECT name, title, project, assigned_to, review_scheduled_date, review_estimated_minutes, deadline FROM `tabVT Task` {conditions} ORDER BY review_scheduled_date ASC\"\"\", values, as_dict=True)",
+        "tree_equivalent": "Use vt_item_tree.nodes('Task', filters={...fields...}, fields=['name', 'title', 'parent_vt_item', 'owner_user', 'review_scheduled_date', 'review_estimated_minutes', 'deadline']) with WHERE pdca_phase='CHECK' AND review_scheduled_date BETWEEN from_date AND to_date. For project_of(), use vt_item_tree.project_of(task_name) to find ancestor project. Map assigned_to→owner_user in result set."
+      },
+      {
+        "where": "test_leader_review_schedule.py:12-16",
+        "current": "frappe.db.exists('VT Brand', _FIXTURE_BRAND)",
+        "tree_equivalent": "No change needed — VT Brand is not part of the migration; it is an independent doctype."
+      },
+      {
+        "where": "test_leader_review_schedule.py:38-50",
+        "current": "frappe.get_doc({\"doctype\": \"VT Project\", ...}).insert(ignore_permissions=True)",
+        "tree_equivalent": "frappe.get_doc({\"doctype\": \"VT Item\", \"node_type\": \"Project\", \"title\": \"LRS Test Project\", \"brand\": ..., \"owner_user\": OWNER (was project_owner), \"leader_user\": LEADER (was project_leader), ...}).insert(ignore_permissions=True). Note: pdca_phase, status→health_status field rename."
+      },
+      {
+        "where": "test_leader_review_schedule.py:54-70",
+        "current": "frappe.get_doc({\"doctype\": \"VT Task\", \"project\": proj.name, \"assigned_to\": MEMBER, ...}).insert(ignore_permissions=True)",
+        "tree_equivalent": "frappe.get_doc({\"doctype\": \"VT Item\", \"node_type\": \"Task\", \"title\": ..., \"parent_vt_item\": proj.name (direct child of project), \"owner_user\": MEMBER (was assigned_to), ...}).insert(ignore_permissions=True). All Task fields like deadline, review_scheduled_date, review_estimated_minutes carry over unchanged."
+      }
+    ],
+    "route_or_label_strings": [
+      "leader_review_schedule.py:18 — \"options\": \"VT Task\" → repoint to \"VT Item\" with node_type=\"Task\" filter in report logic",
+      "leader_review_schedule.py:31 — \"options\": \"VT Project\" → repoint to \"VT Item\" with node_type=\"Project\" filter",
+      "leader_review_schedule.json:11 — \"ref_doctype\": \"VT Task\" → \"VT Item\"",
+      "leader_review_schedule.json:37 — \"options\": \"VT Project\" → \"VT Item\" (filter by node_type='Project' in form logic)"
+    ],
+    "api_calls": [],
+    "migration": "**Step 1: Update report.py (leader_review_schedule.py)**\n- Line 18: Change column option from \\\"VT Task\\\" to \\\"VT Item\\\" (cosmetic — Link field will be filtered by report logic)\n- Line 31: Change column option from \\\"VT Project\\\" to \\\"VT Item\\\" (cosmetic)\n- Lines 74–84: Rewrite the SQL query:\n  * Query `VT Item` table instead of `tabVT Task`\n  * Add filter `node_type = 'Task'` to WHERE clause\n  * Change `assigned_to` column to `owner_user` in both SELECT and filters\n  * For project linking: instead of reading `project` field from task row, call `vt_item_tree.project_of(task_name)` for each row (or use a JOIN to ancestor via nested-set bounds)\n  * All other fields (title, review_scheduled_date, review_estimated_minutes, deadline, pdca_phase) remain the same\n  * Keep same column shape for report output (map owner_user back to assigned_to in result dict if required by callers)\n\n**Step 2: Update report.json (leader_review_schedule.json)**\n- Line 11: Change `\\\"ref_doctype\\\": \\\"VT Task\\\"` to `\\\"ref_doctype\\\": \\\"VT Item\\\"`\n- Line 37: Change filter option `\\\"options\\\": \\\"VT Project\\\"` to `\\\"options\\\": \\\"VT Item\\\"` (client-side form will filter by node_type)\n\n**Step 3: Update test file (test_leader_review_schedule.py)**\n- Lines 38–50: In _make_project(), change doctype from \\\"VT Project\\\" to \\\"VT Item\\\" with node_type=\\\"Project\\\"; rename fields:\n  * project_owner → owner_user\n  * project_leader → leader_user\n  * status → health_status\n  * Add parent_vt_item=None (top-level project)\n  * Preserve pdca_phase, brand, start_date, end_date, team_members\n- Lines 54–70: In _make_task(), change doctype from \\\"VT Task\\\" to \\\"VT Item\\\" with node_type=\\\"Task\\\"; rename fields:\n  * assigned_to → owner_user\n  * project field: instead of passing project name, set parent_vt_item=proj.name (direct task under project)\n  * All Task fields (deadline, review_scheduled_date, review_estimated_minutes, kanban_status, pdca_phase, priority, start_date, estimated_minutes) remain unchanged\n\n**Step 4: Verify field mappings**\n- pdca_phase (OKR/Project/Task/Sprint only) → no change; still filters pdca_phase = 'CHECK'\n- health_status replaces Objective/Project \\\"status\\\" field (not used in this report)\n- sprint_state replaces Sprint \\\"status\\\" field (not applicable here)\n- Task completion: pdca_phase == 'CLOSED' (or check kanban_status == 'Done')\n",
+    "complexity": "M",
+    "has_test": true,
+    "notes": "**Key insights:**\n1. This is a pure read-only report that queries tasks in CHECK phase within a date range, optionally filtered by project.\n2. The main migration work is in the SQL query: swap VT Task → VT Item with node_type='Task', and assigned_to → owner_user.\n3. The \\\"project\\\" field in VT Task becomes a tree relation: a task's project is its nearest Project ancestor (via vt_item_tree.project_of()). The report can either:\n   * Call vt_item_tree.project_of(task_name) for each row after the query (simple, but N+1 if many tasks)\n   * Use a self-join on the nested-set bounds to fetch the ancestor project in one SQL pass (efficient)\n4. Column shape (name, title, project, assigned_to, ...) must remain the same for backward compatibility. Map owner_user back to assigned_to in the final result dict if needed.\n5. The test file creates fixtures using the OLD doctype constructors; all test setup calls must change to VT Item with node_type and field renames.\n6. No API calls are made; this is a self-contained report that reads directly from the database."
+  },
+  {
+    "unit": "task/report/point_override_audit",
+    "kind": "report",
+    "legacy_doctypes": [
+      "VT Task"
+    ],
+    "direct_queries": [
+      {
+        "where": "point_override_audit.py:32",
+        "current": "INNER JOIN `tabVT Task` t ON t.name = tpl.task",
+        "tree_equivalent": "INNER JOIN `tabVT Item` t ON t.name = tpl.task AND t.node_type = 'Task'"
+      }
+    ],
+    "route_or_label_strings": [
+      "point_override_audit.py:7 — column options='VT Task' should be 'VT Item'"
+    ],
+    "api_calls": [],
+    "migration": "Change column definition at line 7 from options='VT Task' to options='VT Item'. Modify SQL JOIN at line 32 from `INNER JOIN \\`tabVT Task\\` t ON t.name = tpl.task` to `INNER JOIN \\`tabVT Item\\` t ON t.name = tpl.task AND t.node_type = 'Task'`. Task Point Log remains unchanged (not part of VT Item merge); its task field already links to VT Item.",
+    "complexity": "S",
+    "has_test": false,
+    "notes": "Task Point Log is an append-only ledger doctype separate from VT Item merge (per dashboard.py line 21). Its task field already references VT Item (task_point_log.json line 9). The report queries a leader_override transaction audit trail and returns columns: task (link to VT Item), task_title, user, original_amount, override_delta, overridden_by, reason, date. No filters beyond UI-bound date range and user filter; no API calls."
+  },
+  {
+    "unit": "workforce/report/team_workload_overview",
+    "kind": "report",
+    "legacy_doctypes": [
+      "VT Task"
+    ],
+    "direct_queries": [
+      {
+        "where": "team_workload_overview.py:22-27",
+        "current": "SELECT COALESCE(SUM(se.allocated_minutes), 0) FROM `tabTask Schedule Entry` se INNER JOIN `tabVT Task` t ON t.name = se.parent WHERE t.assigned_to = %(user)s AND se.date = %(date)s AND t.docstatus < 2",
+        "tree_equivalent": "SELECT COALESCE(SUM(se.allocated_minutes), 0) FROM `tabTask Schedule Entry` se INNER JOIN `tabVT Item` t ON t.name = se.parent AND t.node_type='Task' WHERE t.owner_user = %(user)s AND se.date = %(date)s AND t.docstatus < 2"
+      },
+      {
+        "where": "team_workload_overview.py:28-34",
+        "current": "SELECT COUNT(DISTINCT t.name) FROM `tabVT Task` t INNER JOIN `tabTask Dependency` td ON td.parent = t.name INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by WHERE t.assigned_to = %(user)s AND t.pdca_phase NOT IN ('DONE') AND bt.pdca_phase NOT IN ('DONE')",
+        "tree_equivalent": "SELECT COUNT(DISTINCT t.name) FROM `tabVT Item` t INNER JOIN `tabTask Dependency` td ON td.parent = t.name INNER JOIN `tabVT Item` bt ON bt.name = td.blocked_by AND bt.node_type='Task' WHERE t.owner_user = %(user)s AND t.pdca_phase NOT IN ('CLOSED') AND t.node_type='Task' AND bt.pdca_phase NOT IN ('CLOSED')"
+      }
+    ],
+    "route_or_label_strings": [],
+    "api_calls": [],
+    "migration": "\nReplace legacy VT Task references with VT Item (node_type='Task') in two raw SQL queries:\n(1) scheduled_hours query (lines 22-27): Change `tabVT Task` t → `tabVT Item` t + AND node_type='Task'; rename assigned_to → owner_user.\n(2) blocked_tasks query (lines 28-34): Change both VT Task joins to VT Item + node_type='Task' filters; rename assigned_to → owner_user; change DONE → CLOSED.\nTask Schedule Entry and Task Dependency remain child tables (parenttype now 'VT Item' instead of 'VT Task').\nWork Profile (line 16) is orthogonal config—keep unchanged.\nReport output shape unchanged (returns columns: user, target_hours, scheduled_hours, utilization_pct, status, blocked_tasks).\n",
+    "complexity": "M",
+    "has_test": false,
+    "notes": "Report computes team member utilization by summing scheduled hours from child-table entries and counting blocked tasks via dependency joins. No test file exists. Work Profile remains a separate config doctype (not part of VT Item). The report's returned data shape stays the same; only the underlying data sources (legacy VT Task doctypes) are replaced with VT Item node filtering."
+  },
+  {
+    "unit": "task/page/leader_review",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Project",
+      "VT Task",
+      "VT Sprint",
+      "Project Team Member",
+      "Task Dependency",
+      "VT Settings"
+    ],
+    "direct_queries": [
+      {
+        "where": "leader_review.py:5-12",
+        "current": "SELECT p.name FROM `tabVT Project` p WHERE p.project_leader = %(user)s UNION SELECT ptm.parent FROM `tabProject Team Member` ptm WHERE ptm.user = %(user)s AND ptm.role = 'Leader'",
+        "tree_equivalent": "Use vt_item_tree.nodes('Project', filters={'leader_user': user}) to find Project nodes where current user is leader_user, then iterate results with vt_item_tree.children to get direct children if needed for team member role checks. The legacy 'project_leader' field is now 'leader_user' on Project node_type VT Items."
+      },
+      {
+        "where": "leader_review.py:16",
+        "current": "frappe.db.get_value(\"VT Project\", project, \"project_leader\")",
+        "tree_equivalent": "frappe.db.get_value(\"VT Item\", project, \"leader_user\") — the project_leader field was renamed to leader_user on Project node_type VT Items."
+      },
+      {
+        "where": "leader_review.py:19-22",
+        "current": "frappe.db.exists('Project Team Member', {'parent': project, 'user': user, 'role': 'Leader'})",
+        "tree_equivalent": "Query the team_members child table on the VT Item Project node: doc = frappe.get_doc('VT Item', project); check if any row in doc.team_members has user=user and role='Leader'. Or use vt_item_tree.child_table_rows(project, 'team_members') to fetch as dicts and filter."
+      },
+      {
+        "where": "leader_review.py:32-42",
+        "current": "SELECT t.name, t.title, t.project, t.priority, t.deadline, t.assigned_to, t.pdca_phase, t.kanban_status, t.estimated_minutes, t.review_scheduled_date FROM `tabVT Task` t WHERE t.pdca_phase = 'CHECK' AND t.project IN (...) ORDER BY FIELD(t.priority, ...), t.deadline ASC",
+        "tree_equivalent": "Use vt_item_tree.descendants(project_name, node_type='Task', filters={'pdca_phase': 'CHECK'}) for each project (or pass all project names via loop), fetching fields=['name', 'title', 'priority', 'deadline', 'owner_user', 'pdca_phase', 'kanban_status', 'estimated_minutes', 'review_scheduled_date']. Note: assigned_to→owner_user; the project field on a Task node is implicit (nearest Project ancestor via vt_item_tree.project_of). Sort in Python or via order_by='deadline'."
+      },
+      {
+        "where": "leader_review.py:52-61",
+        "current": "SELECT t.assigned_to, COALESCE(SUM(t.estimated_minutes), 0) AS total_minutes FROM `tabVT Task` t WHERE t.pdca_phase NOT IN ('DONE', 'BACKLOG') AND t.project IN (...) AND t.assigned_to IS NOT NULL AND t.assigned_to != '' GROUP BY t.assigned_to ORDER BY total_minutes DESC",
+        "tree_equivalent": "For each project, use vt_item_tree.descendants(project_name, node_type='Task', filters={'pdca_phase': ['NOT IN', ['BACKLOG', 'CLOSED']]}) and fetch owner_user, estimated_minutes. Group by owner_user in Python, sum estimated_minutes per user. Note: DONE→CLOSED; assigned_to→owner_user; filter out empty/null owner_user."
+      },
+      {
+        "where": "leader_review.py:76-91",
+        "current": "SELECT t.name, t.title, t.project, t.priority, t.deadline, t.assigned_to, t.pdca_phase, t.kanban_status, td.blocked_by, bt.title, bt.assigned_to, DATEDIFF(CURDATE(), t.start_date) AS days_blocked FROM `tabVT Task` t INNER JOIN `tabTask Dependency` td ON td.parent = t.name INNER JOIN `tabVT Task` bt ON bt.name = td.blocked_by WHERE t.pdca_phase NOT IN ('DONE') AND bt.pdca_phase != 'DONE' AND t.project IN (...) ORDER BY days_blocked DESC",
+        "tree_equivalent": "For each project, use vt_item_tree.descendants(project_name, node_type='Task', filters={'pdca_phase': ['NOT IN', ['CLOSED']]}) and fetch dependencies child table via vt_item_tree.child_table_rows(task_name, 'dependencies'). For each dependency with blocked_by, fetch the blocking task as a VT Item and gather its title, owner_user, pdca_phase. Calculate days_blocked as DATEDIFF(CURDATE(), start_date) in Python. Filter out rows where blocker is CLOSED."
+      },
+      {
+        "where": "leader_review.py:98-100",
+        "current": "SELECT name, pdca_phase, project, kanban_status FROM `tabVT Task` WHERE name=%s FOR UPDATE",
+        "tree_equivalent": "frappe.db.get_value('VT Item', task_name, ['name', 'pdca_phase', 'kanban_status', 'parent_vt_item'], as_dict=True) — the project field is implicit (use vt_item_tree.project_of(task_name) separately if needed for the authorization check). The FOR UPDATE lock pattern must be handled by the database/ORM; frappe.db may not support it directly on VT Item, so consider wrapping in a transaction or using a separate validation before the full doc fetch."
+      },
+      {
+        "where": "leader_review.py:112",
+        "current": "frappe.get_doc('VT Task', task_name)",
+        "tree_equivalent": "frappe.get_doc('VT Item', task_name) — fetch the Task node from the unified VT Item tree."
+      },
+      {
+        "where": "leader_review.py:124",
+        "current": "frappe.get_doc('VT Task', task_name)",
+        "tree_equivalent": "frappe.get_doc('VT Item', task_name) — fetch the Task node from the unified VT Item tree."
+      },
+      {
+        "where": "leader_review.py:132",
+        "current": "frappe.db.get_value('VT Task', task_name, 'revision_count') or 0",
+        "tree_equivalent": "frappe.db.get_value('VT Item', task_name, 'revision_count') or 0 — the field name is unchanged; only the doctype name changes to VT Item."
+      },
+      {
+        "where": "leader_review.py:133-138",
+        "current": "frappe.db.set_value('VT Task', task_name, {'pdca_phase': 'DO', 'kanban_status': 'In Progress', 'rejection_note': reason.strip(), 'revision_count': current_revisions + 1})",
+        "tree_equivalent": "frappe.db.set_value('VT Item', task_name, {'pdca_phase': 'DO', 'kanban_status': 'In Progress', 'rejection_note': reason.strip(), 'revision_count': current_revisions + 1}) — only doctype name changes; field names remain the same."
+      },
+      {
+        "where": "leader_review.py:152-162",
+        "current": "SELECT name, title, start_date, end_date, status FROM `tabVT Sprint` WHERE project = %s ORDER BY start_date DESC LIMIT 1",
+        "tree_equivalent": "Use vt_item_tree.descendants(project_name, node_type='Sprint', order_by='start_date desc', limit=1) and fetch fields=['name', 'title', 'start_date', 'end_date']. Note: status→sprint_state (renamed field on Sprint nodes)."
+      }
+    ],
+    "route_or_label_strings": [
+      "leader-review page route (leader_review.json:6)",
+      "task link route /app/vt-task/ (leader_review.js:29) — should be /app/vt-item/ with node_type=Task filter; or keep /app/vt-task/ if aliased",
+      "test fixture doctypes: 'VT Brand', 'User', 'VT Project', 'VT Task' in test_leader_review.py"
+    ],
+    "api_calls": [
+      "vernon_tasks.task.page.leader_review.leader_review.get_review_queue",
+      "vernon_tasks.task.page.leader_review.leader_review.get_team_workload",
+      "vernon_tasks.task.page.leader_review.leader_review.get_team_blocked_tasks",
+      "vernon_tasks.task.page.leader_review.leader_review.approve_task",
+      "vernon_tasks.task.page.leader_review.leader_review.reject_task",
+      "vernon_tasks.task.page.leader_review.leader_review.get_my_led_projects",
+      "vernon_tasks.task.page.leader_review.leader_review.get_latest_sprint"
+    ],
+    "migration": "\nReplace all VT Project / VT Task / VT Sprint references with VT Item node_type filters. Key steps:\n\n1. **_leader_project_names (line 4-12)**: Replace raw SQL with vt_item_tree.nodes('Project', filters={'leader_user': user}). Optionally check team_members child table for Leader role if that distinction is needed (currently the query UNIONs two sources; confirm with product if both are required post-migration).\n\n2. **_is_leader_of_project (line 15-22)**: Change frappe.db.get_value('VT Project', ..., 'project_leader') → frappe.db.get_value('VT Item', ..., 'leader_user'). Replace frappe.db.exists('Project Team Member', ...) with a doc fetch + child table query using vt_item_tree.child_table_rows('team_members').\n\n3. **get_review_queue (line 26-42)**: Replace raw SQL: iterate project names from _leader_project_names, then for each project call vt_item_tree.descendants(project_name, node_type='Task', filters={'pdca_phase': 'CHECK'}, fields=[...]) and collect results. Map assigned_to → owner_user. Sort in Python or adjust order_by.\n\n4. **get_team_workload (line 46-66)**: Replace raw SQL: similar to get_review_queue, fetch Tasks with pdca_phase NOT IN ['BACKLOG', 'CLOSED'], group by owner_user in Python, sum estimated_minutes. Check VT Settings for default capacity (unchanged).\n\n5. **get_team_blocked_tasks (line 70-91)**: Replace raw SQL: for each project, fetch Tasks with descendants; for each task, use vt_item_tree.child_table_rows(task_name, 'dependencies') to get blockers; fetch blocker task as VT Item; check its pdca_phase. Compute days_blocked in Python.\n\n6. **approve_task (line 95-116)**: Change frappe.get_doc('VT Task', ...) → frappe.get_doc('VT Item', ...). The project field will need vt_item_tree.project_of(task_name) if you need to validate project authorization. Update method must use the VT Item doctype.\n\n7. **reject_task (line 120-139)**: Change frappe.get_doc('VT Task', ...) → frappe.get_doc('VT Item', ...). Change frappe.db.set_value('VT Task', ...) → frappe.db.set_value('VT Item', ...). All field names stay the same.\n\n8. **get_latest_sprint (line 148-163)**: Replace raw SQL: use vt_item_tree.descendants(project_name, node_type='Sprint', order_by='start_date desc', limit=1). Map status → sprint_state.\n\n9. **Test fixture updates (test_leader_review.py)**: Update all _make_project and _make_task to create VT Item nodes instead. Set node_type='Project'/'Task'/'Sprint', set parent_vt_item for hierarchy. Update all frappe.get_doc('VT Task'/'VT Project') calls to frappe.get_doc('VT Item'). Update delete calls similarly.\n\n10. **JavaScript frontend (leader_review.js)**: Update task_link route from /app/vt-task/... to /app/vt-item/... or add a route alias if one exists. No other JS changes needed if the backend API returns the same field shape (columns and data match current output).\n",
+    "complexity": "M",
+    "has_test": true,
+    "notes": "The leader_review page is a desk Page (not a report) with 7 whitelisted Python methods (get_review_queue, get_team_workload, get_team_blocked_tasks, approve_task, reject_task, get_my_led_projects, get_latest_sprint) and one JS file. All direct database access is in the Python methods using raw SQL or frappe.db calls against legacy doctypes. The test suite (test_leader_review.py) has 11 test cases covering read and write operations, using fixtures for VT Project and VT Task. Key field renames: project_leader→leader_user, assigned_to→owner_user, status (Project)→health_status, status (Sprint)→sprint_state, DONE→CLOSED. The project field on Task is a FK in the legacy schema; post-migration it is implicit (nearest Project ancestor). Team members and task dependencies remain child tables. The page must continue to return the same column shapes to avoid breaking the frontend; only the data source changes from legacy doctypes to VT Item tree queries."
+  },
+  {
+    "unit": "task/page/vt_okr",
+    "kind": "page",
+    "legacy_doctypes": [
+      "Objective",
+      "Key Result"
+    ],
+    "direct_queries": [
+      {
+        "where": "vt_okr.py:35-41",
+        "current": "frappe.get_all('Objective', filters={...}, fields=[...])",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'OKR', ...}, fields=[...]). Field mapping: objective_owner→owner_user (may not apply if field doesn't exist yet on VT Item), status→health_status, pdca_phase (kept). Objective.period_start/period_end are now period_start/period_end on VT Item."
+      },
+      {
+        "where": "vt_okr.py:44-49",
+        "current": "frappe.get_all('Key Result', filters={'objective': ('in', objective_names)}, fields=[...])",
+        "tree_equivalent": "Use tree.child_table_rows(objective_id, 'key_results') for each objective, or iterate descendants and filter node_type='KPI'. Alternative: frappe.get_all('VT Item', filters={'node_type': 'KRI', ...}) if Key Results are migrated to top-level nodes; otherwise access via parent OKR's key_results child table. Field mapping: metric→metric (kept), target_value→target_value, current_value→current_value, progress_percent→progress_percent, confidence→confidence, unit→unit (all kept)."
+      },
+      {
+        "where": "vt_okr.py:76",
+        "current": "frappe.get_doc('Key Result', key_result)",
+        "tree_equivalent": "Fetch the parent VT Item (node_type='OKR'), retrieve child table row from key_results by name, update it, and save the parent. E.g., doc = frappe.get_doc('VT Item', parent_okr_id); kr_row = next((r for r in doc.key_results if r.name == key_result), None); kr_row.current_value = ...; doc.save()"
+      },
+      {
+        "where": "test_vt_okr.py:10",
+        "current": "frappe.db.exists('VT Brand', _FIXTURE_BRAND)",
+        "tree_equivalent": "Keep as-is; VT Brand is NOT a legacy doctype (not being migrated)."
+      },
+      {
+        "where": "test_vt_okr.py:30-31",
+        "current": "frappe.db.exists('Key Result', kr) and frappe.delete_doc('Key Result', kr, force=True)",
+        "tree_equivalent": "Remove these deletion calls; Key Results are child-table rows of VT Item (node_type='OKR'), deleted when the OKR parent is deleted or via row.clear() from parent.key_results."
+      },
+      {
+        "where": "test_vt_okr.py:33-34",
+        "current": "frappe.db.exists('Objective', obj) and frappe.delete_doc('Objective', obj, force=True)",
+        "tree_equivalent": "frappe.delete_doc('VT Item', obj, force=True) where obj is the VT Item name with node_type='OKR'. Use vt_item_tree helpers or tree.nodes('OKR', {'name': obj}) to confirm node_type before deletion."
+      },
+      {
+        "where": "test_vt_okr.py:42-49",
+        "current": "frappe.get_doc({'doctype': 'Objective', 'title': ..., 'brand': ..., 'period': ..., 'objective_owner': ..., 'status': ..., 'pdca_phase': ...}).insert(...)",
+        "tree_equivalent": "frappe.get_doc({'doctype': 'VT Item', 'node_type': 'OKR', 'title': ..., 'owner_user': ... (was objective_owner), 'health_status': ... (was status), 'pdca_phase': ..., 'period_start': ..., 'period_end': ...}).insert(...). Period string (e.g., '2026-Q2') no longer auto-fills period_start/period_end; caller must compute or provide them. Dropped 'brand' field; VT Item has no brand filter (OKR is global or managed via different means)."
+      },
+      {
+        "where": "test_vt_okr.py:54-63",
+        "current": "frappe.get_doc({'doctype': 'Key Result', 'objective': objective_name, 'metric': ..., 'target_value': ..., 'current_value': ..., 'unit': ..., 'progress_percent': ..., 'confidence': ...}).insert(...)",
+        "tree_equivalent": "Fetch parent OKR (VT Item node_type='OKR'), append to key_results child table: doc.append('key_results', {'metric': ..., 'target_value': ..., 'current_value': ..., 'unit': ..., 'confidence': ...}); doc.save(). progress_percent is auto-calculated on save if not provided (logic in VT Item.validate or key_results child-table default)."
+      }
+    ],
+    "route_or_label_strings": [
+      "vt_okr.py:12: _OBJ_DOCTYPE = 'Objective'",
+      "vt_okr.py:13: _KR_DOCTYPE = 'Key Result'",
+      "vt_okr.js:15: const OKR_DOCTYPE = 'Objective'",
+      "vt_okr.js:50: frappe.new_doc(OKR_DOCTYPE)",
+      "vt_okr.js:142: frappe.set_route('Form', OKR_DOCTYPE, obj.name)"
+    ],
+    "api_calls": [],
+    "migration": "1. Replace Python doctype constants: Change _OBJ_DOCTYPE from 'Objective' to 'VT Item' and remove _KR_DOCTYPE (Key Results are child-table rows, not a top-level doctype). 2. Update frappe.get_all('Objective', ...) calls to frappe.get_all('VT Item', filters={'node_type': 'OKR', ...}). Map field names: status→health_status, objective_owner→owner_user (confirm if field exists on VT Item). 3. Replace frappe.get_all('Key Result', ...) with calls to tree.child_table_rows(objective_id, 'key_results') for each OKR, looping through results. Alternatively, if KRs are not nodes, fetch from the child table on the OKR parent. 4. Replace frappe.get_doc('Key Result', key_result) with logic to fetch the parent VT Item, locate the KR row in key_results by name, update it, and save parent. 5. In tests: remove frappe.delete_doc('Key Result', ...) calls; instead, delete parent OKRs only (NestedSet constraint). Replace frappe.get_doc('Objective', ...).insert() with frappe.get_doc({'doctype': 'VT Item', 'node_type': 'OKR', ...}).insert(). Replace frappe.get_doc('Key Result', ...).insert() with doc.append('key_results', {...}); doc.save() on the parent OKR. 6. JavaScript: change OKR_DOCTYPE from 'Objective' to 'VT Item'; update frappe.new_doc() and frappe.set_route() to pass node_type='OKR' preset (e.g., frappe.new_doc('VT Item', {'node_type': 'OKR'})). 7. Backend API (list_objectives, update_key_result): refactor to use VT Item queries and tree helpers; maintain same output shape to preserve frontend compatibility.",
+    "complexity": "M",
+    "has_test": true,
+    "notes": "This page is the OKR management UI for Leaders and Managers. It provides list_objectives (with KRs embedded) and inline update_key_result. The legacy model uses two separate doctypes (Objective and Key Result); the migrated model merges them into VT Item hierarchy (OKR nodes with key_results child table). The page output shape (columns, card structure) must remain compatible with the UI; only the data sources (frappe.get_all queries, child-table access) change. The test file heavily exercises both direct inserts and deletes; particular care needed to ensure child-table semantics (no orphan KR deletes) are reflected in test teardown. Period string handling (e.g., '2026-Q2' → date range) is no longer automatic; controller or service layer may need to compute period_start/period_end. Brand filtering is removed (OKRs no longer have a brand field); this may affect the filter UI if brand=brand_field.get_value() was a functional requirement."
+  },
+  {
+    "unit": "task/page/vt_scorecard",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "Task Point Log",
+      "User Point Summary"
+    ],
+    "direct_queries": [
+      {
+        "where": "vt_scorecard.py:40",
+        "current": "frappe.get_all(_TASK_DOCTYPE, filters={\"project\": project}, pluck=\"name\")",
+        "tree_equivalent": "frappe.get_all('VT Item', filters={'node_type': 'Task', 'lft': ['>', project_lft], 'rgt': ['<', project_rgt]}, pluck='name') where project_lft/rgt are fetched from VT Item lookup for the Project node. Alternatively: from vernon_tasks.task.services import vt_item_tree as tree; tree.descendants(project, node_type='Task', fields=['name'])"
+      },
+      {
+        "where": "vt_scorecard.py:45-53",
+        "current": "frappe.get_all(_LOG_DOCTYPE, filters=filters, fields=[...], order_by=..., limit=..., start=...)",
+        "tree_equivalent": "No change: Task Point Log is not being migrated; it already links to VT Item (task fieldname options changed from 'VT Task' to 'VT Item' in task_point_log.json:9). The frappe.get_all call can remain as-is since the underlying doctype and data structure are unchanged."
+      },
+      {
+        "where": "vt_scorecard.py:59",
+        "current": "frappe.db.get_value(_TASK_DOCTYPE, task, \"title\") or task",
+        "tree_equivalent": "frappe.db.get_value('VT Item', task, 'title') or task (just rename doctype from VT Task to VT Item; field name and behavior are identical)"
+      },
+      {
+        "where": "vt_scorecard.py:70-77",
+        "current": "frappe.get_all(_SUMMARY_DOCTYPE, filters=filters, fields=[...], order_by=..., limit=...)",
+        "tree_equivalent": "No change: User Point Summary is not being migrated; it remains a standalone doctype. The frappe.get_all call can remain as-is."
+      },
+      {
+        "where": "vt_scorecard.js:38",
+        "current": "fieldtype: 'Link', options: 'VT Project'",
+        "tree_equivalent": "Change to options: 'VT Item' and add a filter or documentation note that the user must select a node where node_type='Project'. Alternatively, keep as cosmetic route_or_label_string since the JS only passes the value to the API."
+      }
+    ],
+    "route_or_label_strings": [
+      "vt_scorecard.js:38 — Link field options='VT Project'"
+    ],
+    "api_calls": [],
+    "migration": "MIGRATION STEPS FOR task/page/vt_scorecard:\\n\\n1. vt_scorecard.py constants (lines 12-14):\\n   - Change _TASK_DOCTYPE = \\\"VT Task\\\" to _TASK_DOCTYPE = \\\"VT Item\\\"\\n   - Leave _LOG_DOCTYPE = \\\"Task Point Log\\\" (unchanged)\\n   - Leave _SUMMARY_DOCTYPE = \\\"User Point Summary\\\" (unchanged)\\n\\n2. vt_scorecard.py line 40 (get_point_log project filter):\\n   Replace: frappe.get_all(_TASK_DOCTYPE, filters={\\\"project\\\": project}, pluck=\\\"name\\\")\\n   With: Use vt_item_tree helper to find all Tasks under a Project:\\n     from vernon_tasks.task.services import vt_item_tree as tree\\n     task_names = [t['name'] for t in tree.descendants(project, node_type='Task', fields=['name'])]\\n   This converts the flat foreign-key lookup (VT Task.project=project) into a nested-set descendants query.\\n\\n3. vt_scorecard.py line 59 (task title lookup):\\n   Replace: frappe.db.get_value(_TASK_DOCTYPE, task, \\\"title\\\") or task\\n   With: frappe.db.get_value('VT Item', task, 'title') or task\\n   (Only the doctype name changes; field name and signature are identical.)\\n\\n4. vt_scorecard.js line 38 (project field options):\\n   Replace: options: \\\"VT Project\\\"\\n   With: options: \\\"VT Item\\\" and add filters={'node_type': 'Project'}\\n   OR treat as cosmetic (keep old reference) since the field value is just passed to the API, which doesn't validate doctype name.\\n\\n5. test_vt_scorecard.py:\\n   - Line 11, 12, 14: Change frappe.db.get_value(\\\"VT Project\\\", ...) and frappe.get_doc(\\\"VT Project\\\", ...) to use \\\"VT Item\\\" with node_type='Project' filter\\n   - Line 21-29: In _make_project(), create a VT Item with node_type='Project' instead of VT Project doctype\\n   - Line 34-43: In _make_task(), create a VT Item with node_type='Task', set parent_vt_item=project (instead of project field)\\n   - Line 60, 63: frappe.delete_doc(\\\"Task Point Log\\\", ...) and frappe.delete_doc(\\\"User Point Summary\\\", ...) remain unchanged\\n   - Line 65, 67: Change frappe.delete_doc(\\\"VT Task\\\", ...) and frappe.delete_doc(\\\"VT Project\\\", ...) to frappe.delete_doc(\\\"VT Item\\\", ...)\\n\\nKey insight: Task Point Log and User Point Summary are NOT being migrated; they remain as independent doctypes. The only breaking change is that Task Point Log already links to VT Item (not VT Task), so the page's frappe.get_all(\\\"Task Point Log\\\", ...) calls work unchanged. The scorecard page queries Task Point Log and User Point Summary only, plus fetches VT Task/Project metadata for enrichment (title, project filter). Both metadata sources move to VT Item.\\n",
+    "complexity": "M",
+    "has_test": true,
+    "notes": "CRITICAL CONTEXT:\\n\\n1. This is a PAGE (desk UI), not a report. It shows a gamification scorecard (monthly points bar chart + paginated transaction log) for users.\\n\\n2. The page API (vt_scorecard.py) exposes two whitelisted functions:\\n   - get_point_log(user, project, limit, offset) → queries Task Point Log (unchanged doctype)\\n   - get_monthly_summary(user, months) → queries User Point Summary (unchanged doctype)\\n\\n3. Task Point Log has ALREADY been migrated (task_point_log.json line 9: task field now links to VT Item, not VT Task). User Point Summary is NOT being migrated (it's in workforce module, outside the VT Item hierarchy).\\n\\n4. Direct data flows:\\n   - get_point_log: (user, project) → filters Task Point Log → enriches with VT Task.title → returns rows to JS\\n   - get_monthly_summary: (user) → filters User Point Summary → returns rows to JS\\n   - JS renders a bar chart (monthly net_points) and a transaction table (task_title, type, amount, note, timestamp)\\n\\n5. The only NEW migrations in vt_scorecard:\\n   - VT Task references (line 40, 59) → VT Item with node_type='Task' filter\\n   - VT Project references (line 40 filter param) → use vt_item_tree.descendants(project, node_type='Task')\\n   - JS field options (line 38) → cosmetic, either stay as VT Project (users selecting old form) or change to VT Item + filter\\n   - Test setup (lines 9-43) → create VT Item nodes instead of legacy doctypes\\n\\n6. NO API_CALLS detected: This page does NOT call any existing task/api/* or brand/api/* endpoints. It implements its own whitelist functions and reads task Point Log / User Point Summary directly. This is intentional (points system is separate from OKR/project/task APIs).\\n\\n7. Field name changes relevant here: VT Item.owner_user (was VT Task.assigned_to). However, scorecard does NOT read task assignee; it only reads task.title for enrichment. So assigned_to → owner_user migration is irrelevant to this page.\\n\\n8. Test cleanup: The tearDownClass (lines 57-68) must iterate over VT Item deletions (not VT Task/VT Project) because the new nodes are VT Item type. Task Point Log and User Point Summary rows must still be deleted normally.\\n\\n9. Migration complexity is MEDIUM (M) because: (a) two of four direct_queries are read-only and trivial (doctype rename only), (b) one requires tree traversal helper (project filter), (c) test restructuring needs vt_item_tree understanding, (d) no business logic changes (same columns/shape returned to UI).\""
+  },
+  {
+    "unit": "task/page/vt_team",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project"
+    ],
+    "direct_queries": [
+      {
+        "where": "vt_team.py:55-59",
+        "current": "frappe.get_all(_TASK_DOCTYPE, filters=task_filters, fields=[...]) where _TASK_DOCTYPE='VT Task' and filters include assigned_to, kanban_status",
+        "tree_equivalent": "from vernon_tasks.task.services.vt_item_tree import descendants; descendants(project_item, node_type='Task', filters={'owner_user': user, 'kanban_status': [...]}); note: assigned_to renamed to owner_user in VT Item; kanban_status field is unchanged"
+      },
+      {
+        "where": "test_vt_team.py:20",
+        "current": "frappe.db.get_value('VT Project', {'title': 'Test Team Capacity Project'}, 'name')",
+        "tree_equivalent": "from vernon_tasks.task.services.vt_item_tree import nodes; nodes('Project', filters={'title': 'Test Team Capacity Project'}, fields=['name'])[0]['name'] if exists"
+      },
+      {
+        "where": "test_vt_team.py:36",
+        "current": "frappe.get_doc({'doctype': 'VT Project', 'title': '...', 'brand': brand, 'project_owner': 'Administrator', ...}).insert(...)",
+        "tree_equivalent": "frappe.get_doc({'doctype': 'VT Item', 'node_type': 'Project', 'title': '...', 'brand': brand, 'owner_user': 'Administrator', ...}).insert(...); note: project_owner renamed to owner_user"
+      },
+      {
+        "where": "test_vt_team.py:50-51",
+        "current": "frappe.db.exists('VT Task', t); frappe.delete_doc('VT Task', t, force=True)",
+        "tree_equivalent": "frappe.db.exists('VT Item', t); frappe.delete_doc('VT Item', t, force=True)"
+      },
+      {
+        "where": "test_vt_team.py:53-54",
+        "current": "frappe.db.exists('VT Project', p); frappe.delete_doc('VT Project', p, force=True)",
+        "tree_equivalent": "frappe.db.exists('VT Item', p); frappe.delete_doc('VT Item', p, force=True)"
+      },
+      {
+        "where": "test_vt_team.py:78",
+        "current": "frappe.get_doc({'doctype': 'VT Task', 'title': '...', 'project': self._project_name, 'assigned_to': user, 'pdca_phase': 'DO', 'kanban_status': 'In Progress', ...}).insert(...)",
+        "tree_equivalent": "frappe.get_doc({'doctype': 'VT Item', 'node_type': 'Task', 'title': '...', 'parent_vt_item': project_item.name, 'owner_user': user, 'pdca_phase': 'DO', 'kanban_status': 'In Progress', ...}).insert(...); note: project renamed to parent_vt_item (set to project VT Item's name); assigned_to renamed to owner_user"
+      }
+    ],
+    "route_or_label_strings": [
+      "vt_team.js:37 — fieldtype: 'Link', options: 'VT Project' (project field selection; repoint to 'VT Item' with node_type='Project' filter)"
+    ],
+    "api_calls": [],
+    "migration": "vt_team is a desk Page showing per-member utilization computed from Work Profile (legacy; unchanged) vs active Task workload. Migration steps: (1) vt_team.py line 55-59: Replace frappe.get_all('VT Task', filters) with vt_item_tree.descendants(project, node_type='Task', filters) where project=project_item found via ancestors. Filter fields: assigned_to→owner_user, kanban_status unchanged. (2) test_vt_team.py line 20: Replace get_value('VT Project') with nodes('Project')[0]['name']. (3) test_vt_team.py lines 36, 50-51, 53-54, 78: Replace doctype 'VT Task'/'VT Project' with 'VT Item', add node_type field, rename project→parent_vt_item, project_owner→owner_user, assigned_to→owner_user. (4) vt_team.js line 37: Change Link options from 'VT Project' to 'VT Item' and add node_type filter. Fields kanban_status, estimated_minutes, deadline remain unchanged in VT Item (Task node_type only). Output shape (columns, task list) remains identical.",
+    "complexity": "M",
+    "has_test": true,
+    "notes": "This page was not migrated during the initial VT Item cutover. The business logic is straightforward: it fetches Work Profiles, sums active task estimated_minutes per user, and computes utilization percentage. The page has a test suite that creates test VT Task/VT Project fixtures. Key data paths: vt_team.py has 3 frappe.get_all calls (Work Profile, User batch-fetch, VT Task); test has 5 frappe.db/frappe.get_doc calls creating/deleting test VT Task and VT Project docs. The JS field is cosmetic (Link picker). All legacy refs are direct_queries except the project Link field (route_or_label_string). No API calls to migrated endpoints — this page directly queries legacy doctypes. Work Profile is unaffected by VT Item migration."
+  },
+  {
+    "unit": "task/page/leader_analytics",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Project",
+      "VT Sprint"
+    ],
+    "direct_queries": [],
+    "route_or_label_strings": [
+      "leader_analytics.js:24 — options: 'VT Project' (Link field for project selector)",
+      "leader_analytics.js:35 — options: 'VT Sprint' (Link field for sprint selector)"
+    ],
+    "api_calls": [
+      "vernon_tasks.task.api.analytics.get_burndown",
+      "vernon_tasks.task.api.analytics.get_velocity_trend",
+      "vernon_tasks.task.api.analytics.get_forecast",
+      "vernon_tasks.task.api.analytics.get_risks"
+    ],
+    "migration": "{\n  \"summary\": \"The leader_analytics page is already FULLY MIGRATED. The page itself only references legacy doctype names in Link field options (route_or_label_strings), which are cosmetic UI references. All actual data access is delegated to the task/api/analytics endpoints, which call already-migrated service layer functions that use vt_item_tree helpers.\",\n  \"action_needed\": [\n    {\n      \"type\": \"cosmetic_repoint\",\n      \"location\": \"leader_analytics.js:24\",\n      \"current\": \"options: 'VT Project'\",\n      \"migration\": \"Change to options: 'VT Item' with a filter on node_type='Project' in the get_query callback. Update get_query from `() => ({ filters: { project: state.project } })` to `() => ({ filters: { node_type: 'Project', parent: null } })` to show root Project nodes.\"\n    },\n    {\n      \"type\": \"cosmetic_repoint\",\n      \"location\": \"leader_analytics.js:35\",\n      \"current\": \"options: 'VT Sprint'\",\n      \"migration\": \"Change to options: 'VT Item' with a filter on node_type='Sprint' in the get_query callback. The existing get_query callback `() => ({ filters: { project: state.project } })` remains valid once you add node_type='Sprint' — this will correctly show Sprint nodes whose parent is the selected Project node.\"\n    }\n  ],\n  \"notes\": \"All service layer functions (burndown_service, velocity_service, forecast_service, risk_evaluator) already use vt_item_tree helpers (tree.children, tree.descendants) and frappe.get_doc('VT Item', ...) — zero legacy doctype queries. The analytics API (task/api/analytics.py) delegates to these services and adds role-based guarding + caching. The page UI layer (leader_analytics.py, leader_analytics.js) simply enforces role access and calls the API endpoints. No breaking schema changes — all column/field names remain consistent.\"\n}",
+    "complexity": "S",
+    "has_test": true,
+    "test_module": "task/api/test_analytics.py (API-level role guarding tests; comprehensive service tests exist in task/services/test_burndown_service.py)",
+    "notes": "FULLY MIGRATED. The page and API are already using VT Item data exclusively through the service layer. Only cosmetic UI changes needed: repoint Link field options from 'VT Project'/'VT Sprint' to 'VT Item' with node_type filters. All data access patterns (frappe.get_doc('VT Item', ...) and vt_item_tree tree queries) are correct. The test file (test_analytics.py) only tests API-level role guards; comprehensive data flow tests are in test_burndown_service.py."
+  },
+  {
+    "unit": "task/page/my_analytics",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Project"
+    ],
+    "direct_queries": [],
+    "route_or_label_strings": [
+      "my_analytics.js:33 — options: 'VT Project' (Link field type; repoint to 'VT Item')"
+    ],
+    "api_calls": [
+      "vernon_tasks.task.api.ic_analytics.get_personal_velocity",
+      "vernon_tasks.task.api.ic_analytics.get_streak",
+      "vernon_tasks.task.api.ic_analytics.get_leaderboard"
+    ],
+    "migration": "'VT Project' reference in my_analytics.js:33 is a Link field options value (cosmetic label). Backend APIs and service layer (personal_velocity_service.py, streak_service.py, leaderboard_service.py) are already migrated to VT Item with node_type filters and vt_item_tree helpers. Update: (1) my_analytics.js line 33: change options from 'VT Project' to 'VT Item'. (2) No JavaScript logic changes needed—the selected value is already a VT Item node name passed to the backend, which uses tree.children/descendants to handle ancestry queries. The field will naturally select a node with node_type='Project'.'",
+    "complexity": "S",
+    "has_test": false,
+    "notes": "This page is a thin frontend wrapper around three already-migrated service functions exposed via the ic_analytics API (get_personal_velocity, get_streak, get_leaderboard in task/api/ic_analytics.py). All data reads delegate to the backend. The only legacy doctype reference is a cosmetic UI label. No direct frappe.db queries, frappe.call to legacy doctypes, or SQL in this unit. No tests exist.\""
+  },
+  {
+    "unit": "task/page/vt_brand_detail",
+    "kind": "page",
+    "legacy_doctypes": [
+      "Objective",
+      "Key Result"
+    ],
+    "direct_queries": [
+      {
+        "where": "vt_brand_detail.js:436",
+        "current": "frappe.set_route(\"Form\", OBJECTIVE_DOCTYPE, o.id)",
+        "tree_equivalent": "frappe.set_route(\"Form\", \"VT Item\", o.id) — but Objective is still a native doctype used via quick entry, so no VT Item repoint needed; this is a route-only string reference used for opening the Frappe native full form. The Objective controller will be kept and routed through its own form. This is CORRECT AS-IS."
+      },
+      {
+        "where": "vt_brand_detail.js:492-502",
+        "current": "frappe.ui.form.make_quick_entry(OBJECTIVE_DOCTYPE, ...) — calls native Frappe quick entry for Objective doctype",
+        "tree_equivalent": "Objective remains a native doctype (not migrated to VT Item) and uses Frappe native quick entry. This is the intended design per 2026-06-07-objective-native-quick-entry-design.html §2. NO CHANGE NEEDED — the page is correctly using native flows. The Objective doctype JSON already has quick_entry:1 set."
+      }
+    ],
+    "route_or_label_strings": [
+      "vt_brand_detail.js:20 — const OBJECTIVE_DOCTYPE = \"Objective\" (doctype name literal used in native Frappe set_route and make_quick_entry)",
+      "vt_brand_detail.js:24 — const BRAND_FIELD = \"brand\" (field literal, not a doctype reference)"
+    ],
+    "api_calls": [
+      "vt_brand_detail.js:14 — const READ_API = \"vernon_tasks.brand.api.brand_okr.get_brand_okr\" (already migrated to VT Item)",
+      "vt_brand_detail.js:15 — const CREATE_KR_API = \"vernon_tasks.brand.api.brand_okr_mutations.create_key_result\" (already migrated to VT Item)",
+      "vt_brand_detail.js:16 — const UPDATE_KR_API = \"vernon_tasks.brand.api.brand_okr_mutations.update_key_result\" (already migrated to VT Item)",
+      "vt_brand_detail.js:17 — const GET_KR_API = \"vernon_tasks.brand.api.brand_okr_mutations.get_key_result\" (already migrated to VT Item)"
+    ],
+    "migration": "# vt_brand_detail Page — VT Item Migration Status\n\n## Summary\nThe vt_brand_detail page is **ALREADY COMPLIANT** with the VT Item unified hierarchy migration. The page correctly routes Objective create/edit through Frappe native flows (quick entry + full form), and all data reads/writes (Key Result mutations, brand OKR aggregation) go through the already-migrated brand_okr APIs that consume VT Item tree nodes and child rows.\n\n## What's Already Correct\n1. **Objective create**: Uses `frappe.ui.form.make_quick_entry(\"Objective\", ...)` — native Frappe flow, **correct by design** (see 2026-06-07-objective-native-quick-entry-design.html).\n2. **Objective edit**: Uses `frappe.set_route(\"Form\", \"Objective\", id)` — opens native Objective form, **correct by design**.\n3. **Key Result CRUD**: All four KR endpoints (create_key_result, update_key_result, get_key_result, and read via get_brand_okr) are **already refactored** in brand/api/brand_okr_mutations.py to use VT Item controller + child tables (key_results). No Page JS changes needed.\n4. **Brand OKR read API** (brand/api/brand_okr.py): **Already fully migrated** — reads OKR/Project/KPI nodes via vt_item_tree.nodes() + child_table_rows(), re-keys legacy field names (health_status→status, owner_user→objective_owner) for backward-compat JSON shape. Uses `tree.nodes(OKR_NODE_TYPE, ...)`, `tree.child_table_rows(...)`, and `tree.ancestor_of_type(...)` helpers.\n\n## Field Name Mapping (Already Applied in brand_okr.py)\n- `Objective.health_status` → JSON `status` (lines 131, 189)\n- `Objective.owner_user` → JSON `objective_owner` (line 133, 339)\n- `Objective.pdca_phase` → JSON `pdca_phase` (line 132)\n- `VT Project.health_status` → JSON `status` (line 189)\n- `VT Project.percent_done` → JSON `progress` (line 190)\n- Key Result rows loaded from VT Item.key_results child table (lines 151–160)\n- KPI Definition nodes have `parent_vt_item` = owning Objective (line 218)\n- KPI Entry rows loaded from VT Item.kpi_entries child table (lines 261–268)\n\n## Code Location Reference\n- Page JS: `/Users/erickmo/Desktop/Project/frappe/apps/vernon_tasks/vernon_tasks/task/page/vt_brand_detail/vt_brand_detail.js`\n- Test: `/Users/erickmo/Desktop/Project/frappe/apps/vernon_tasks/vernon_tasks/task/page/vt_brand_detail/test_vt_brand_detail.py`\n- Backend APIs: `/Users/erickmo/Desktop/Project/frappe/apps/vernon_tasks/vernon_tasks/brand/api/brand_okr.py` (read, **migrated**), `brand_okr_mutations.py` (KR mutations, **migrated**)\n\n## Objective Doctype Status\nObjective **remains a native doctype** (not merged into VT Item). This is intentional per the 2026-06-07 objective-native-quick-entry-design specification. The Objective JSON (okr/doctype/objective/objective.json) has:\n- `quick_entry: 1` ✓\n- `status` field with `allow_in_quick_entry: 1` ✓\n- `description` field with `allow_in_quick_entry: 1` ✓\n- Period field description updated to format hint ✓\n\n## Migration Conclusion\n**NO CHANGES REQUIRED.** This page and its backing APIs are already full VT Item-compliant. All legacy doctype references (Objective, Key Result) are correctly handled:\n1. Objective stays native (by design) — use native Frappe flows.\n2. Key Result reads/writes go through VT Item child-table APIs (already done).\n3. Brand OKR aggregation reads VT Item nodes with re-keyed field names (already done).\n\nVerify the backend APIs are deployed and the Objective doctype has the quick_entry migration applied before pushing to production.",
+    "complexity": "S",
+    "has_test": true,
+    "notes": "The vt_brand_detail page is a desk Page that surfaces per-brand OKR + KPI summary with inline Key Result CRUD. It was already migrated as part of the VT Item unified hierarchy rollout. The Objective doctype is intentionally kept as a native doctype (not merged into VT Item) to leverage Frappe's built-in quick-entry + full-form UX. All data flows are already compliant: OKR read via brand_okr.get_brand_okr (uses tree.nodes/child_table_rows), KR mutations via brand_okr_mutations (uses VT Item controller + child tables), Objective create/edit via native Frappe (frappe.ui.form.make_quick_entry / frappe.set_route)."
+  },
+  {
+    "unit": "task/page/vt_home",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "VT Sprint"
+    ],
+    "direct_queries": [
+      {
+        "where": "vt_home.js:273-277",
+        "current": "frappe.db.insert({ doctype: PROJECT_DOCTYPE, title: v.title, brand: v.brand, project_owner: frappe.session.user, project_leader: frappe.session.user, start_date: frappe.datetime.get_today(), end_date: frappe.datetime.add_days(frappe.datetime.get_today(), 30) })",
+        "tree_equivalent": "frappe.db.insert({ doctype: 'VT Item', node_type: 'Project', title: v.title, brand: v.brand, owner_user: frappe.session.user, leader_user: frappe.session.user, start_date: frappe.datetime.get_today(), end_date: frappe.datetime.add_days(frappe.datetime.get_today(), 30) })"
+      },
+      {
+        "where": "onboarding.py:23",
+        "current": "frappe.new_doc('VT Task') - legacy doctype in route_target for buat_task step",
+        "tree_equivalent": "frappe.new_doc('VT Item', {node_type: 'Task'}) - must pass node_type='Task' to preset the type when opening new doc form"
+      }
+    ],
+    "route_or_label_strings": [
+      "vt_home.js:28 - 'List/VT Task'",
+      "vt_home.js:29 - 'vt-task/new'",
+      "vt_home.js:30 - 'List/VT Project'",
+      "vt_home.js:31 - 'List/VT Sprint'",
+      "vt_home.js:33 - PROJECT_DOCTYPE = 'VT Project'"
+    ],
+    "api_calls": [
+      "vernon_tasks.task.api.dashboard.me_progress",
+      "vernon_tasks.task.api.dashboard.personal_stats",
+      "vernon_tasks.task.api.dashboard.my_projects",
+      "vernon_tasks.task.api.dashboard.daily_completions",
+      "vernon_tasks.task.api.dashboard.hours_summary",
+      "vernon_tasks.task.api.dashboard.schedule_agenda",
+      "vernon_tasks.task.api.dashboard.team_tab_state",
+      "vernon_tasks.task.api.dashboard.team_overview",
+      "vernon_tasks.task.api.onboarding.get_onboarding_state",
+      "vernon_tasks.task.api.onboarding.dismiss_onboarding",
+      "vernon_tasks.task.api.onboarding.load_demo",
+      "vernon_tasks.task.api.onboarding.clear_demo"
+    ],
+    "migration": "(1) In vt_home.js line 273-277: Change frappe.db.insert({ doctype: PROJECT_DOCTYPE, ... }) to change doctype to 'VT Item' and add node_type: 'Project'; rename field project_owner → owner_user, project_leader → leader_user. (2) In vt_home.js lines 28-31: QUICK_LINKS array references List/VT Task, List/VT Project, List/VT Sprint — these must be updated to call the migrated list routes (likely tree views or custom pages filtering VT Item by node_type). (3) In vt_home.js line 33: Remove PROJECT_DOCTYPE constant or redefine as 'VT Item'. (4) In onboarding.py line 23: Change route_target from 'VT Task' to 'VT Item' with node_type='Task' preset (this will require a custom route handler in vt-task or the onboarding API to pass the node_type when creating a new Task node).",
+    "complexity": "M",
+    "has_test": true,
+    "test_module": "task/page/vt_home/test_vt_home.py",
+    "notes": "The vt-home dashboard Page is a desk Page (not a Report) that renders a personal+team dashboard with multiple tabs (Beranda/Personal, Tugas Saya/Focus, Tim/Team). The JS is a pure presentation layer that calls 12 already-migrated APIs in vernon_tasks.task.api.dashboard and vernon_tasks.task.api.onboarding. The dashboard.py API (main data source) is already fully migrated to VT Item with proper field renames (owner_user, leader_user, health_status, sprint_state, CLOSED phase). The page tests (test_vt_home.py) only verify Page existence and role permissions — they do not test business logic. Direct queries (frappe.db.insert, frappe.new_doc calls with legacy doctypes) occur in: (a) vt_quick_create_project() JS function (line 273) — a quick-create dialog that directly inserts a VT Project doc, must change to VT Item with node_type='Project' and rename fields; (b) onboarding.py's _ONBOARDING_STEPS catalog (line 23) — hard-coded 'VT Task' string in the 'buat_task' step, must change to 'VT Item'. The QUICK_LINKS array (lines 28-31) contains route strings pointing to List/VT Task, List/VT Project, List/VT Sprint — these are cosmetic labels but must be updated to route to the correct VT Item list views or custom filtered pages (the migration likely provides vt-task, vt-project, vt-sprint pages or uses VT Item tree list view with node_type filters)."
+  },
+  {
+    "unit": "task/page/vt_project_detail",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Task",
+      "VT Project",
+      "VT Sprint",
+      "Task Dependency",
+      "Task Schedule Entry",
+      "Recurring Rule"
+    ],
+    "direct_queries": [],
+    "route_or_label_strings": [
+      "vt_project_detail.js:47 — const TASK_DOCTYPE = \"VT Task\"; → change to \"VT Item\"",
+      "vt_project_detail.js:115 — frappe.set_route(\"Form\", \"VT Project\", ...) → change to frappe.set_route(\"Form\", \"VT Item\", ...) with ?node_type=Project",
+      "vt_project_detail.js:33 — options: \"VT Task\" in DEPENDENCY_GRID_FIELDS → change to \"VT Item\"",
+      "vt_project_detail.js:576 — options: \"VT Sprint\" in dialog_fields → change to \"VT Item\"",
+      "vt_project_detail.js:626 — options: \"Task Dependency\" → KEEP AS-IS (retained child table)",
+      "vt_project_detail.js:630 — options: \"Task Schedule Entry\" → KEEP AS-IS (retained child table)",
+      "vt_project_detail.js:611 — options: \"Recurring Rule\" → KEEP AS-IS (framework doctype, not legacy VT)",
+      "vt_project_detail.js:765 — frappe.set_route(\"Form\", TASK_DOCTYPE, ev.id) → auto-fixes when TASK_DOCTYPE constant updated",
+      "vt_project_detail.js:802 — frappe.set_route(\"Form\", TASK_DOCTYPE, t.id) → auto-fixes when TASK_DOCTYPE constant updated"
+    ],
+    "api_calls": [
+      "vernon_tasks.task.api.dashboard.project_detail",
+      "vernon_tasks.task.api.dashboard.project_board",
+      "vernon_tasks.task.api.dashboard.project_sprints",
+      "vernon_tasks.task.api.board_mutations.move_task",
+      "vernon_tasks.task.api.board_mutations.create_task",
+      "vernon_tasks.task.api.board_mutations.update_task",
+      "vernon_tasks.task.api.board_mutations.get_task",
+      "vernon_tasks.task.api.board_mutations.patch_task",
+      "vernon_tasks.task.api.board_mutations.bulk_assign"
+    ],
+    "migration": "This desk Page is 95% complete for migration. All API calls (9 endpoints) already target migrated endpoints internally using VT Item tree queries. Remaining work is purely UI cosmetics: 4 doctype name references in frappe.set_route() calls and dialog field option definitions. The page makes ZERO direct frappe.db queries — all data access is via the 9 already-migrated APIs. Change: (1) const TASK_DOCTYPE = \"VT Item\" (line 47); (2) frappe.set_route(\"Form\", \"VT Item\", ...) with ?node_type=Project (line 115); (3) options: \"VT Item\" in DEPENDENCY_GRID_FIELDS Link picker (line 33); (4) options: \"VT Item\" in dialog_fields Sprint Link picker (line 576); keep Task Dependency, Task Schedule Entry, Recurring Rule as-is (lines 626, 630, 611) — they are retained child tables and framework doctypes.",
+    "complexity": "S",
+    "has_test": true,
+    "test_module": "test_vt_project_detail.py",
+    "notes": "Page is pure-JS desk page with no Python controller logic. All backend logic lives in 9 migrated API endpoints (dashboard.py + board_mutations.py) which internally use vt_item_tree helpers exclusively. Test file only validates Page doctype existence/role config — unaffected by migration. __init__.py is empty."
+  },
+  {
+    "unit": "task/page/vt_projects",
+    "kind": "page",
+    "legacy_doctypes": [
+      "VT Project"
+    ],
+    "direct_queries": [
+      {
+        "where": "vt_projects.js:32",
+        "current": "frappe.call(PROJ_API) where PROJ_API='vernon_tasks.task.api.dashboard.my_projects'",
+        "tree_equivalent": "Already migrated API call — calls dashboard.my_projects() which has already been rewritten to use vt_item_tree and VT Item (node_type='Project'). No change needed; this is a client-side API call to a migrated endpoint."
+      },
+      {
+        "where": "test_vt_projects.py:15,19",
+        "current": "frappe.get_doc('Page', PAGE_NAME)",
+        "tree_equivalent": "Metadata read on the Page doctype itself (not a legacy VT Task/Project data read). No change needed — Page is a system doctype unaffected by the migration."
+      },
+      {
+        "where": "test_vt_projects.py:27",
+        "current": "frappe.db.exists('DocType', PROJECT_DOCTYPE) where PROJECT_DOCTYPE='VT Project'",
+        "tree_equivalent": "Metadata check that VT Project doctype exists. This test verifies the form-create target exists. Must be updated to check VT Item exists instead, and preferably verify that the page can create VT Item with node_type='Project'."
+      }
+    ],
+    "route_or_label_strings": [
+      "vt_projects.js:12 — const PROJECT_DOCTYPE='VT Project' (used in frappe.new_doc on lines 24, 44)",
+      "test_vt_projects.py:6 — PROJECT_DOCTYPE='VT Project' constant (used in doctype-exists assertion line 27)"
+    ],
+    "api_calls": [
+      "vernon_tasks.task.api.dashboard.my_projects (called at vt_projects.js:11 / line 32)"
+    ],
+    "migration": "\nVERYMINOR: This page is nearly fully migrated.\n\n1. **vt_projects.js line 12 & 24, 44**: Change `const PROJECT_DOCTYPE = \"VT Project\"` to `const PROJECT_DOCTYPE = \"VT Item\"`. The frappe.new_doc() calls (lines 24, 44) create a new form; Frappe will render the VT Item form (the merged doctype) instead of the deleted VT Project form. Users create projects via the same VT Item form that handles Sprint/Task, with node_type='Project' preset by the form UI or a quickfill hook if needed.\n\n2. **test_vt_projects.py line 6 & 27**: Update `PROJECT_DOCTYPE = \"VT Project\"` constant to `PROJECT_DOCTYPE = \"VT Item\"`. Change the assertion on line 27 from checking doctype existence to checking that VT Item doctype exists. Optionally, if you want to future-proof, add a check that the form can create VT Item nodes with node_type='Project' (verify via schema or a smoke test).\n\n**Status**: The actual data fetching is already delegated to the migrated `dashboard.my_projects()` API (line 32 of vt_projects.js), which internally uses vt_item_tree and node_type='Project' queries. The page itself is a thin presentation layer that only references the legacy doctype name as a string literal for UI routing — no actual data read/write against VT Project occurs in this file.\n",
+    "complexity": "S",
+    "has_test": true,
+    "notes": "\n- **vt_projects.js** is a desk Page script (IIFE wrapper, runs in global scope) that calls the already-migrated API endpoint `dashboard.my_projects()` to fetch project cards. All the heavy lifting (tree traversal, filtering by node_type='Project') is done server-side in the API. The page itself holds only cosmetic references to \"VT Project\".\n- **test_vt_projects.py** has 4 tests: page existence, page_name, role gating, and doctype-exists assertion. Only the last one (test_create_dialog_doctype_exists) references VT Project directly and needs updating.\n- **__init__.py** is empty (single newline).\n- The page calls frappe.new_doc(PROJECT_DOCTYPE) to launch the Frappe form for creating a project. After migration, this will open the VT Item form instead of the deleted VT Project form; Frappe's form controller will handle the new doctype seamlessly.\n- No SQL, frappe.db.get_list, frappe.db.sql, or direct VT Task/Sprint/Objective/KRI references occur in this unit.\n"
+  }
+]
