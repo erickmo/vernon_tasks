@@ -4,7 +4,7 @@ import frappe
 def execute(filters=None):
     filters = filters or {}
     columns = [
-        {"fieldname": "task", "label": "Task", "fieldtype": "Link", "options": "VT Task", "width": 180},
+        {"fieldname": "task", "label": "Task", "fieldtype": "Link", "options": "VT Item", "width": 180},
         {"fieldname": "task_title", "label": "Task Title", "fieldtype": "Data", "width": 220},
         {"fieldname": "user", "label": "User", "fieldtype": "Link", "options": "User", "width": 150},
         {"fieldname": "original_amount", "label": "Original Points", "fieldtype": "Float", "width": 120},
@@ -29,7 +29,7 @@ def execute(filters=None):
                tpl.original_amount, tpl.amount, tpl.overridden_by,
                tpl.note, tpl.log_timestamp
         FROM `tabTask Point Log` tpl
-        INNER JOIN `tabVT Task` t ON t.name = tpl.task
+        INNER JOIN `tabVT Item` t ON t.name = tpl.task AND t.node_type = 'Task'
         {conditions} ORDER BY tpl.log_timestamp DESC
     """, values, as_dict=True)
     return columns, data
