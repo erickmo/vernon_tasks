@@ -8,7 +8,7 @@
   "module": "Task",
   "name": "Leader Review Schedule",
   "owner": "Administrator",
-  "ref_doctype": "VT Task",
+  "ref_doctype": "VT Item",
   "report_name": "Leader Review Schedule",
   "report_type": "Script Report",
   "roles": [
@@ -34,7 +34,7 @@
       "fieldname": "project",
       "label": "Project",
       "fieldtype": "Link",
-      "options": "VT Project",
+      "options": "VT Item",
       "reqd": 0
     }
   ]

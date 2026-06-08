@@ -35,16 +35,19 @@ def _setup_users():
 
 
 def _make_project():
+    # Project is a VT Item node (node_type="Project"); project_owner/
+    # project_leader renamed to owner_user/leader_user, status -> health_status.
     proj = frappe.get_doc({
-        "doctype": "VT Project",
+        "doctype": "VT Item",
+        "node_type": "Project",
         "title": "LRS Test Project",
         "brand": _ensure_brand(),
-        "project_owner": OWNER,
-        "project_leader": LEADER,
+        "owner_user": OWNER,
+        "leader_user": LEADER,
         "start_date": "2026-05-01",
         "end_date": "2026-05-31",
         "pdca_phase": "PLAN",
-        "status": "Open",
+        "health_status": "Open",
         "team_members": [{"user": MEMBER, "role": "Member"}],
     })
     proj.insert(ignore_permissions=True)
@@ -52,11 +55,14 @@ def _make_project():
 
 
 def _make_task(proj, review_date, review_hours, phase="CHECK"):
+    # Task is a VT Item node (node_type="Task") sitting directly under its
+    # project via parent_vt_item; assigned_to renamed to owner_user.
     task = frappe.get_doc({
-        "doctype": "VT Task",
+        "doctype": "VT Item",
+        "node_type": "Task",
         "title": f"LRS Task {review_date}",
-        "project": proj.name,
-        "assigned_to": MEMBER,
+        "parent_vt_item": proj.name,
+        "owner_user": MEMBER,
         "priority": "Medium",
         "pdca_phase": phase,
         "kanban_status": "In Progress",
@@ -118,6 +124,14 @@ class TestLeaderReviewSchedule(FrappeTestCase):
         names = [r.get("name") for r in data if r.get("name")]
         self.assertIn(self.task_a.name, names)
         self.assertNotIn(other_task.name, names)
+
+    def test_resolves_project_from_tree(self):
+        columns, data = execute({"from_date": "2026-05-12", "to_date": "2026-05-15"})
+
+        row_a = next((r for r in data if r.get("name") == self.task_a.name), None)
+        self.assertIsNotNone(row_a)
+        self.assertEqual(row_a["project"], self.proj.name)
+        self.assertEqual(row_a["assigned_to"], MEMBER)
 
     def test_empty_result_returns_empty_list(self):
         columns, data = execute({"from_date": "2020-01-01", "to_date": "2020-01-07"})
