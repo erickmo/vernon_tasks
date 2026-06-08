@@ -7,8 +7,13 @@ records (seeded separately) mirror this catalog for the Workspace surface only.
 """
 import frappe
 from vernon_tasks.setup import demo_data
+from vernon_tasks.task.services import vt_item_tree as tree
 
 _DISMISS_KEY = "vt_onboarding_dismissed"
+# Project team membership lives in the `team_members` child table on the
+# Project VT Item node; its rows carry parenttype 'VT Item' (was 'VT Project').
+_TEAM_TABLE = "tabProject Team Member"
+_VT_ITEM = "VT Item"
 
 # Canonical step catalog. `route_kind`/`route_target` tell the client how to act.
 _ONBOARDING_STEPS = [
@@ -19,14 +24,32 @@ _ONBOARDING_STEPS = [
 ]
 
 
+def _member_project_names(user):
+    """Project node names where `user` appears in the team_members child table.
+
+    Replaces the legacy `Project Team Member WHERE parenttype='VT Project'`
+    lookup: team_members is now a child table on the Project VT Item node
+    (parenttype 'VT Item')."""
+    try:
+        rows = frappe.db.sql(
+            """
+            SELECT DISTINCT parent FROM `{table}`
+             WHERE parenttype = %(pt)s AND user = %(u)s
+            """.format(table=_TEAM_TABLE),
+            {"pt": _VT_ITEM, "u": user},
+            as_dict=True,
+        )
+    except (frappe.db.OperationalError, frappe.db.ProgrammingError):
+        return set()
+    return {r["parent"] for r in rows}
+
+
 def _user_project_names(user):
-    """Names of projects the user owns, leads, or is a team member of."""
-    owned = frappe.get_all("VT Project", filters={"project_owner": user}, pluck="name")
-    led = frappe.get_all("VT Project", filters={"project_leader": user}, pluck="name")
-    member = frappe.get_all(
-        "Project Team Member", filters={"user": user, "parenttype": "VT Project"}, pluck="parent"
-    )
-    return set(owned) | set(led) | set(member)
+    """Names of Project nodes the user owns, leads, or is a team member of."""
+    owned = tree.nodes("Project", filters={"owner_user": user}, fields=["name"])
+    led = tree.nodes("Project", filters={"leader_user": user}, fields=["name"])
+    names = {r["name"] for r in owned} | {r["name"] for r in led}
+    return names | _member_project_names(user)
 
 
 def _is_complete(key, user, project_names):
@@ -40,12 +63,12 @@ def _is_complete(key, user, project_names):
             return False
         return bool(frappe.db.exists(
             "Project Team Member",
-            {"parent": ["in", list(project_names)], "parenttype": "VT Project"},
+            {"parent": ["in", list(project_names)], "parenttype": _VT_ITEM},
         ))
     if key == "buat_task":
         return bool(
-            frappe.db.exists("VT Task", {"assigned_to": user})
-            or frappe.db.exists("VT Task", {"owner": user})
+            tree.nodes("Task", filters={"owner_user": user}, limit=1)
+            or tree.nodes("Task", filters={"owner": user}, limit=1)
         )
     return False
 
