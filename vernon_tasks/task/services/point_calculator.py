@@ -60,7 +60,22 @@ def compute_points(weight: float, deadline: str, completion_date: str, revision_
 
 
 def calculate_points(doc, method) -> None:
+	# Wired to VT Item on_update (VT Item is not submittable, unlike legacy
+	# VT Task). Only Task nodes earn points, and only once — on the transition
+	# INTO the terminal CLOSED phase (a later save of an already-CLOSED task
+	# must not re-log points).
+	if getattr(doc, "node_type", None) != "Task":
+		return
 	if doc.pdca_phase != _DONE_PHASE or not doc.completion_date:
+		return
+	# No assignee → no one to credit (Task Point Log.user is mandatory).
+	if not doc.owner_user:
+		return
+	before = doc.get_doc_before_save()
+	# Fire ONLY on the live transition into CLOSED of an existing task. A task
+	# created/imported already-CLOSED (no `before`) keeps its given points and
+	# is not re-scored; a re-save of an already-CLOSED task is a no-op.
+	if not before or before.pdca_phase == _DONE_PHASE:
 		return
 
 	result = compute_points(

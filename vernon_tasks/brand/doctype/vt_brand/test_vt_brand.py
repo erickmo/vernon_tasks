@@ -25,9 +25,14 @@ from vernon_tasks.brand.doctype.vt_brand.vt_brand import (
 
 def _cleanup(brand_name: str) -> None:
 	"""Best-effort teardown — delete brand if it exists (ignore FK guard)."""
-	# Detach any test projects so on_trash does not block the brand teardown.
-	for proj in frappe.get_all("VT Project", filters={"brand": brand_name}, pluck="name"):
-		frappe.delete_doc("VT Project", proj, force=True, ignore_permissions=True)
+	# Detach any test project nodes (VT Item, node_type='Project') so on_trash
+	# does not block the brand teardown. These test nodes are leaf Projects
+	# (no Sprint/Task children), so a flat delete is safe — no nested-set
+	# NestedSetChildExistsError to worry about here.
+	for proj in frappe.get_all(
+		"VT Item", filters={"node_type": "Project", "brand": brand_name}, pluck="name"
+	):
+		frappe.delete_doc("VT Item", proj, force=True, ignore_permissions=True)
 	if frappe.db.exists("VT Brand", brand_name):
 		frappe.delete_doc("VT Brand", brand_name, force=True, ignore_permissions=True)
 
@@ -204,14 +209,20 @@ class TestVTBrandFKGuard(unittest.TestCase):
 		_cleanup("TEST-BRAND-DELETABLE")
 
 	def test_on_trash_blocks_when_linked_by_project(self):
-		"""Delete must raise when ≥1 VT Project still references the brand."""
+		"""Delete must raise when ≥1 project node still references the brand.
+
+		A project is now a VT Item node (node_type='Project') carrying the
+		`brand` Link. Field renames on seed: project_owner -> owner_user.
+		"""
 		frappe.get_doc({"doctype": "VT Brand", "brand_name": self.brand_name}).insert()
 		frappe.get_doc(
 			{
-				"doctype": "VT Project",
+				"doctype": "VT Item",
+				"node_type": "Project",
+				"parent_vt_item": None,
 				"title": self.project_title,
 				"brand": self.brand_name,
-				"project_owner": "Administrator",
+				"owner_user": "Administrator",
 				"start_date": "2026-01-01",
 				"end_date": "2026-12-31",
 			}

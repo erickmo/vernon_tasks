@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"type\":\"onboarding\",\"data\":{\"onboarding_name\":\"Vernon Tasks Onboarding\",\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VT Task\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VT Project\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VT Sprint\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Objective\",\"col\":3}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>OKR & KPI</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"OKR\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Projects & Sprints</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Projects\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Tasks</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Tasks\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Workforce</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Workforce\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Reports</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Manager Reports\",\"col\":4}},{\"type\":\"card\",\"data\":{\"card_name\":\"User Reports\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Settings</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":4}}]",
+ "content": "[{\"type\":\"onboarding\",\"data\":{\"onboarding_name\":\"Vernon Tasks Onboarding\",\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Shortcuts</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"VT Item\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Projects\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"OKR\",\"col\":3}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>OKR & KPI</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"OKR\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Projects & Sprints</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Projects\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Tasks</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Tasks\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Workforce</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Workforce\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Reports</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Manager Reports\",\"col\":4}},{\"type\":\"card\",\"data\":{\"card_name\":\"User Reports\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Settings</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":4}}]",
  "creation": "2026-05-08 00:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -25,44 +25,11 @@
    "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
-   "label": "Objective",
+   "label": "OKR & KPI",
    "link_count": 0,
-   "link_to": "Objective",
-   "link_type": "DocType",
+   "link_to": "vt-okr",
+   "link_type": "Page",
    "onboard": 1,
-   "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Key Result",
-   "link_count": 0,
-   "link_to": "Key Result",
-   "link_type": "DocType",
-   "onboard": 1,
-   "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "KPI Definition",
-   "link_count": 0,
-   "link_to": "KPI Definition",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "KPI Entry",
-   "link_count": 0,
-   "link_to": "KPI Entry",
-   "link_type": "DocType",
-   "onboard": 0,
    "type": "Link"
   },
   {
@@ -78,21 +45,10 @@
    "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
-   "label": "VT Project",
+   "label": "Projects & Sprints",
    "link_count": 0,
-   "link_to": "VT Project",
-   "link_type": "DocType",
-   "onboard": 1,
-   "type": "Link"
-  },
-  {
-   "dependencies": "",
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "VT Sprint",
-   "link_count": 0,
-   "link_to": "VT Sprint",
-   "link_type": "DocType",
+   "link_to": "vt-projects",
+   "link_type": "Page",
    "onboard": 1,
    "type": "Link"
   },
@@ -109,9 +65,9 @@
    "dependencies": "",
    "hidden": 0,
    "is_query_report": 0,
-   "label": "VT Task",
+   "label": "VT Item",
    "link_count": 0,
-   "link_to": "VT Task",
+   "link_to": "VT Item",
    "link_type": "DocType",
    "onboard": 1,
    "type": "Link"
@@ -298,35 +254,27 @@
  "shortcuts": [
   {
    "color": "Blue",
-   "doc_view": "List",
+   "doc_view": "Tree",
    "is_query_report": 0,
-   "label": "VT Task",
-   "link_to": "VT Task",
+   "label": "VT Item",
+   "link_to": "VT Item",
    "type": "DocType"
   },
   {
    "color": "Green",
-   "doc_view": "List",
+   "doc_view": "",
    "is_query_report": 0,
-   "label": "VT Project",
-   "link_to": "VT Project",
-   "type": "DocType"
-  },
-  {
-   "color": "Orange",
-   "doc_view": "List",
-   "is_query_report": 0,
-   "label": "VT Sprint",
-   "link_to": "VT Sprint",
-   "type": "DocType"
+   "label": "Projects",
+   "link_to": "vt-projects",
+   "type": "Page"
   },
   {
    "color": "Purple",
-   "doc_view": "List",
+   "doc_view": "",
    "is_query_report": 0,
-   "label": "Objective",
-   "link_to": "Objective",
-   "type": "DocType"
+   "label": "OKR",
+   "link_to": "vt-okr",
+   "type": "Page"
   },
   {
    "color": "Blue",

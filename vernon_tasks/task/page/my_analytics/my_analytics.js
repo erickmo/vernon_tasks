@@ -30,7 +30,8 @@ frappe.pages['my-analytics'].on_page_load = function(wrapper) {
     fieldname: 'project',
     label: __('Project'),
     fieldtype: 'Link',
-    options: 'VT Project',
+    options: 'VT Item',
+    get_query: () => ({ filters: { node_type: 'Project' } }),
     change: () => {
       state.project = project_field.get_value();
       render_velocity();

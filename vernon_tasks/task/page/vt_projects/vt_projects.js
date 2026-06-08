@@ -9,7 +9,10 @@
    Reuses vernon_tasks.task.api.dashboard.my_projects. Presentation only. */
 
 const PROJ_API = "vernon_tasks.task.api.dashboard.my_projects";
-const PROJECT_DOCTYPE = "VT Project";
+// Projects are VT Item nodes (node_type="Project") after the VT Item tree merge.
+const PROJECT_DOCTYPE = "VT Item";
+const NODE_TYPE_FIELD = "node_type";
+const PROJECT_NODE_TYPE = "Project";
 const PROJ_RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
 
 frappe.pages["vt-projects"].on_page_load = function (wrapper) {
@@ -20,8 +23,12 @@ frappe.pages["vt-projects"].on_page_load = function (wrapper) {
         title: "Proyek",
         single_column: true,
     });
-    // Buat Proyek opens the original VT Project form instead of a quick-create dialog.
-    page.set_primary_action(__("Buat Proyek"), () => frappe.new_doc(PROJECT_DOCTYPE), "add");
+    // Buat Proyek opens the native VT Item form with node_type="Project" preset.
+    page.set_primary_action(
+        __("Buat Proyek"),
+        () => frappe.new_doc(PROJECT_DOCTYPE, { [NODE_TYPE_FIELD]: PROJECT_NODE_TYPE }),
+        "add"
+    );
     page.add_button(__("Refresh"), () => render_projects(page), { icon: "refresh" });
     render_projects(page);
 };
@@ -41,7 +48,7 @@ function paint_projects(c, data) {
             title: "Belum ada proyek",
             message: "Mulai dengan membuat proyek pertama Anda.",
             cta_label: "Buat Proyek pertama Anda",
-            on_cta: () => frappe.new_doc(PROJECT_DOCTYPE),
+            on_cta: () => frappe.new_doc(PROJECT_DOCTYPE, { [NODE_TYPE_FIELD]: PROJECT_NODE_TYPE }),
         }));
         return;
     }

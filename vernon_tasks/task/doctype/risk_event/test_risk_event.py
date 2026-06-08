@@ -6,6 +6,10 @@ from frappe.tests.utils import FrappeTestCase
 
 from vernon_tasks.task.doctype.risk_event.risk_event import REASON_MAX_LEN
 
+# Risk Event.project / .task are now Link -> VT Item: a project is a VT Item
+# node (node_type='Project') and a task is a VT Item node (node_type='Task')
+# parented under that project via parent_vt_item (the old VT Task.project Link
+# is now the tree relation). Field renames on seed: project_owner -> owner_user.
 TEST_BRAND = "Test Risk Brand"
 TEST_PROJECT_TITLE = "Test Risk Project"
 TEST_PROJECT_TITLE_ALT = "Test Risk Project Alt"
@@ -17,14 +21,16 @@ def _ensure_brand():
 
 
 def _ensure_project(title: str) -> str:
-	existing = frappe.db.get_value("VT Project", {"title": title}, "name")
+	existing = frappe.db.get_value("VT Item", {"title": title, "node_type": "Project"}, "name")
 	if existing:
 		return existing
 	return frappe.get_doc({
-		"doctype": "VT Project",
+		"doctype": "VT Item",
+		"node_type": "Project",
+		"parent_vt_item": None,
 		"title": title,
 		"brand": TEST_BRAND,
-		"project_owner": "Administrator",
+		"owner_user": "Administrator",
 		"start_date": "2026-01-01",
 		"end_date": "2026-12-31",
 	}).insert(ignore_permissions=True).name
@@ -35,15 +41,17 @@ class _RiskBase(FrappeTestCase):
 		_ensure_brand()
 		self.project = _ensure_project(TEST_PROJECT_TITLE)
 		self.project_alt = _ensure_project(TEST_PROJECT_TITLE_ALT)
+		# Task is a VT Item child of the project node; weight 1 (default).
 		self.task = frappe.get_doc({
-			"doctype": "VT Task", "title": "Risk Task",
-			"project": self.project, "weight": 1.0,
+			"doctype": "VT Item", "node_type": "Task", "title": "Risk Task",
+			"parent_vt_item": self.project, "weight": 1.0,
 		}).insert(ignore_permissions=True)
 
 	def tearDown(self):
 		for r in frappe.get_all("Risk Event", filters={"project": ["in", [self.project, self.project_alt]]}, pluck="name"):
 			frappe.delete_doc("Risk Event", r, force=True, ignore_permissions=True)
-		frappe.delete_doc("VT Task", self.task.name, force=True, ignore_permissions=True)
+		# Leaf Task node — safe to delete before its parent Project node.
+		frappe.delete_doc("VT Item", self.task.name, force=True, ignore_permissions=True)
 
 	def _make(self, **overrides):
 		base = {
@@ -90,7 +98,7 @@ class TestRiskEventValidations(_RiskBase):
 			self._make(detected_at=detected, resolved_at=resolved).insert(ignore_permissions=True)
 
 	def test_task_must_belong_to_project(self):
-		"""task.project must match risk_event.project — no cross-project leakage."""
+		"""task's project must match risk_event.project — no cross-project leakage."""
 		with self.assertRaises(frappe.ValidationError):
 			self._make(
 				project=self.project_alt,

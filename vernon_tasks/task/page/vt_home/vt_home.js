@@ -24,13 +24,25 @@ const PHASE_COLORS = {
 const PHASE_COLOR_FALLBACK = "#9e9e9e";
 const TEAM_CHART_HEIGHT = 200;
 const LEADERBOARD_COLOR = "#5e64ff";
+// Unified VT Item tree: Task/Project/Sprint are VT Item nodes distinguished by
+// node_type. All navigation targets the VT Item doctype filtered by node_type
+// rather than the (now dead) legacy VT Task/VT Project/VT Sprint doctypes.
+const ITEM_DOCTYPE = "VT Item";
+const NODE_TYPE_FIELD = "node_type";
+const TASK_NODE_TYPE = "Task";
+const PROJECT_NODE_TYPE = "Project";
+const SPRINT_NODE_TYPE = "Sprint";
+// QUICK_LINKS items carry either a string `route` (passed straight to
+// frappe.set_route) or a {list_node_type} that opens the VT Item list filtered
+// to that node_type, or {new_node_type} that opens a new VT Item form preset to
+// that node_type — see wire-up in render quick links (frappe.set_route below).
 const QUICK_LINKS = [
-    { label: "Task Saya", route: "List/VT Task" },
-    { label: "Task Baru", route: "vt-task/new" },
-    { label: "Proyek", route: "List/VT Project" },
-    { label: "Sprint", route: "List/VT Sprint" },
+    { label: "Task Saya", list_node_type: TASK_NODE_TYPE },
+    { label: "Task Baru", new_node_type: TASK_NODE_TYPE },
+    { label: "Proyek", list_node_type: PROJECT_NODE_TYPE },
+    { label: "Sprint", list_node_type: SPRINT_NODE_TYPE },
 ];
-const PROJECT_DOCTYPE = "VT Project";
+const PROJECT_DOCTYPE = ITEM_DOCTYPE;
 const ONB_API = "vernon_tasks.task.api.onboarding";
 
 // Module-scoped lazy state for the lazy tabs (reset on every Refresh).
@@ -255,7 +267,8 @@ function render_next_actions(sec, actions) {
         const item = $(`<div class="vh-item"><span class="vh-item-title">
             ${frappe.utils.escape_html(a.title || a.id)}</span>
             <span class="vh-item-meta">${due}</span></div>`);
-        item.css("cursor", "pointer").on("click", () => frappe.set_route("vt-task", a.id));
+        // a.id is the Task node's VT Item name; open its native VT Item form.
+        item.css("cursor", "pointer").on("click", () => frappe.set_route("Form", ITEM_DOCTYPE, a.id));
         card.append(item);
     });
     sec.append(card);
@@ -270,9 +283,12 @@ function vt_quick_create_project(on_done) {
         ],
         primary_action_label: "Buat",
         primary_action: (v) => {
+            // A Project is a VT Item node (node_type="Project"); owner/leader use
+            // the unified owner_user/leader_user fields (was project_owner/_leader).
             frappe.db.insert({
-                doctype: PROJECT_DOCTYPE, title: v.title, brand: v.brand,
-                project_owner: frappe.session.user, project_leader: frappe.session.user,
+                doctype: ITEM_DOCTYPE, [NODE_TYPE_FIELD]: PROJECT_NODE_TYPE,
+                title: v.title, brand: v.brand,
+                owner_user: frappe.session.user, leader_user: frappe.session.user,
                 start_date: frappe.datetime.get_today(),
                 end_date: frappe.datetime.add_days(frappe.datetime.get_today(), 30),
             }).then((doc) => {
@@ -400,11 +416,26 @@ function render_quick_links(c) {
     const quick = $('<div class="vh-quick"></div>');
     QUICK_LINKS.forEach((l) => {
         const btn = $(`<button>${frappe.utils.escape_html(l.label)}</button>`);
-        btn.on("click", () => frappe.set_route(l.route));
+        btn.on("click", () => open_quick_link(l));
         quick.append(btn);
     });
     sec.append(quick);
     c.append(sec);
+}
+
+/* Route a quick-link button to the unified VT Item tree.
+   - new_node_type → open a new VT Item form preset to that node_type.
+   - list_node_type → open the VT Item list filtered to that node_type.
+   - route → passed straight to frappe.set_route (escape hatch for page routes).
+   Param l: a QUICK_LINKS entry. */
+function open_quick_link(l) {
+    if (l.new_node_type) {
+        frappe.new_doc(ITEM_DOCTYPE, { [NODE_TYPE_FIELD]: l.new_node_type });
+    } else if (l.list_node_type) {
+        frappe.set_route("List", ITEM_DOCTYPE, { [NODE_TYPE_FIELD]: l.list_node_type });
+    } else if (l.route) {
+        frappe.set_route(l.route);
+    }
 }
 
 // ── Shared helpers (used by Tim renderers; ported from leader_dashboard.js) ──
@@ -497,7 +528,7 @@ function render_team_overdue(c, rows) {
         const body = rows.map((t) => `
             <tr>
                 <td>${esc(t.member)}</td>
-                <td><a href="/app/vt-task/${esc(t.task_name)}" target="_blank">${esc(t.task_title)}</a></td>
+                <td><a href="/app/vt-item/${esc(t.task_name)}" target="_blank">${esc(t.task_title)}</a></td>
                 <td>${fmt_deadline(t.deadline)}</td>
                 <td><span style="color:var(--red-500); font-weight:600;">${t.days_overdue ?? 0}d</span></td>
                 <td>${esc(t.phase)}</td>

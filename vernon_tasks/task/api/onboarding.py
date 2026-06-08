@@ -20,7 +20,7 @@ _ONBOARDING_STEPS = [
     {"key": "buat_brand", "title": "Buat brand", "route_kind": "page", "route_target": "vt-brands"},
     {"key": "buat_proyek", "title": "Buat proyek pertama", "route_kind": "quick_create_project", "route_target": ""},
     {"key": "tambah_tim", "title": "Tambah anggota tim", "route_kind": "page", "route_target": "vt-team"},
-    {"key": "buat_task", "title": "Buat task pertama", "route_kind": "new_doc", "route_target": "VT Task"},
+    {"key": "buat_task", "title": "Buat task pertama", "route_kind": "new_doc", "route_target": "VT Item"},
 ]
 
 

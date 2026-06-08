@@ -1,0 +1,15 @@
+{
+ "creation": "2026-06-08 00:00:00.000000",
+ "doctype": "Page",
+ "module": "Task",
+ "name": "vt-tree",
+ "page_name": "vt-tree",
+ "standard": "Yes",
+ "standard_width": 1,
+ "roles": [
+  {"role": "VT Member"},
+  {"role": "VT Leader"},
+  {"role": "VT Manager"}
+ ],
+ "title": "Hierarki"
+}

@@ -21,7 +21,8 @@ frappe.pages['leader-analytics'].on_page_load = function(wrapper) {
     fieldname: 'project',
     label: __('Project'),
     fieldtype: 'Link',
-    options: 'VT Project',
+    options: 'VT Item',
+    get_query: () => ({ filters: { node_type: 'Project' } }),
     change: () => {
       state.project = project_field.get_value();
       refresh();
@@ -32,8 +33,9 @@ frappe.pages['leader-analytics'].on_page_load = function(wrapper) {
     fieldname: 'sprint',
     label: __('Sprint'),
     fieldtype: 'Link',
-    options: 'VT Sprint',
-    get_query: () => ({ filters: { project: state.project } }),
+    options: 'VT Item',
+    // Sprint nodes are tree children of the Project node (parent_vt_item).
+    get_query: () => ({ filters: { node_type: 'Sprint', parent_vt_item: state.project } }),
     change: () => {
       state.sprint = sprint_field.get_value();
       render_burndown();

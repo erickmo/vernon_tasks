@@ -12,7 +12,11 @@
 
 const OKR_API_LIST   = "vernon_tasks.task.page.vt_okr.vt_okr.list_objectives";
 const OKR_API_UPDATE = "vernon_tasks.task.page.vt_okr.vt_okr.update_key_result";
-const OKR_DOCTYPE    = "Objective";
+/* Unified hierarchy: Objective is now a VT Item node (node_type="OKR"). Create
+   presets node_type so the native form opens as an OKR; edit routes to the same
+   VT Item form. */
+const OKR_DOCTYPE    = "VT Item";
+const OKR_NODE_TYPE  = "OKR";
 
 const esc = (v) => frappe.utils.escape_html(v == null ? "" : String(v));
 
@@ -47,7 +51,8 @@ frappe.pages["vt-okr"].on_page_load = function (wrapper) {
         change: () => { state.brand = brand_field.get_value() || ""; render(); },
     });
 
-    page.set_primary_action(__("Buat Objective"), () => frappe.new_doc(OKR_DOCTYPE), "add");
+    page.set_primary_action(__("Buat Objective"),
+        () => frappe.new_doc(OKR_DOCTYPE, { node_type: OKR_NODE_TYPE }), "add");
     page.add_button(__("Refresh"), render, { icon: "refresh" });
 
     const container = $('<div class="vt-home" style="padding:20px 20px 48px 0;"></div>').appendTo(page.main);

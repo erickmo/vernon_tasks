@@ -29,7 +29,8 @@ class TestDemoData(FrappeTestCase):
         refs = _get_refs(self.user)
         self.assertGreaterEqual(len(refs), 5)  # brand + project + sprint + 3 tasks (team_members are child rows, not separate docs)
         self.assertEqual(result["tasks"], 3)
-        self.assertTrue(frappe.db.exists("VT Project", {"project_owner": self.user}))
+        self.assertTrue(frappe.db.exists(
+            "VT Item", {"node_type": "Project", "owner_user": self.user}))
 
     def test_load_twice_is_noop(self):
         load(self.user)
@@ -42,4 +43,6 @@ class TestDemoData(FrappeTestCase):
         load(self.user)
         clear(self.user)
         self.assertEqual(_get_refs(self.user), [])
-        self.assertFalse(frappe.db.exists("VT Task", {"assigned_to": self.user, "title": "Demo: Siapkan brief"}))
+        self.assertFalse(frappe.db.exists(
+            "VT Item",
+            {"node_type": "Task", "owner_user": self.user, "title": "Demo: Siapkan brief"}))

@@ -12,7 +12,6 @@ app_include_js = [
     "/assets/vernon_tasks/js/page_nav.js",
     "/assets/vernon_tasks/js/vt_empty.js",
     "/assets/vernon_tasks/js/vt_navbar.js",
-    "/assets/vernon_tasks/js/vt_project_redirect.js",
     "/assets/vernon_tasks/js/vt_page_style.js",
     "/assets/vernon_tasks/js/vt_focus_panel.js",
 ]
@@ -31,19 +30,14 @@ after_migrate = [
 required_apps = []
 
 doc_events = {
-    "VT Task": {
-        "on_submit": "vernon_tasks.task.services.point_calculator.calculate_points",
+    # Unified hierarchy: Project/Sprint/Task are all VT Item nodes. Handlers are
+    # node_type-aware (calculate_points + invalidate_project_cache early-return
+    # for irrelevant types). calculate_points moved off on_submit → on_update
+    # because VT Item is NOT submittable; it fires once on the CLOSED transition.
+    "VT Item": {
         "on_update": [
+            "vernon_tasks.task.services.point_calculator.calculate_points",
             "vernon_tasks.task.services.scheduling_engine.on_task_update",
-            "vernon_tasks.task.api.analytics.invalidate_project_cache",
-        ],
-        "validate": "vernon_tasks.task.doctype.vt_task.vt_task.validate_permissions",
-    },
-    "VT Project": {
-        "validate": "vernon_tasks.project.doctype.vt_project.vt_project.validate_team",
-    },
-    "VT Sprint": {
-        "on_update": [
             "vernon_tasks.task.api.analytics.invalidate_project_cache",
         ],
     },
@@ -82,6 +76,7 @@ fixtures = [
     {"dt": "Page", "filters": [["name", "=", "vt-projects"]]},
     {"dt": "Page", "filters": [["name", "=", "vt-project-detail"]]},
     {"dt": "Page", "filters": [["name", "=", "vt-settings"]]},
+    {"dt": "Page", "filters": [["name", "=", "vt-tree"]]},
     # Website brand & content
     {"dt": "Website Theme", "filters": [["name", "=", "Vernon Tasks Theme"]]},
     {"dt": "Website Slideshow", "filters": [["name", "=", "Vernon Hero"]]},

@@ -34,7 +34,9 @@ frappe.pages["vt-team"].on_page_load = function (wrapper) {
         fieldname: "project",
         label: __("Proyek"),
         fieldtype: "Link",
-        options: "VT Project",
+        // Projects now live in the unified VT Item tree; filter to Project nodes.
+        options: "VT Item",
+        get_query: () => ({ filters: { node_type: "Project" } }),
         change: () => { state.project = project_field.get_value() || null; render(); },
     });
 

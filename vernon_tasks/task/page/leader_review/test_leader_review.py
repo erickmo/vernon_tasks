@@ -1,19 +1,18 @@
+"""Tests for the leader-review page API.
+
+Seeds nodes in the unified VT Item tree (node_type Project + Task) rather than
+the legacy VT Project / VT Task doctypes. The Project node is a NestedSet group
+(is_group=1) carrying its roster on the team_members child table and its leader
+on leader_user; Task nodes are inserted under the Project via parent_vt_item
+with owner_user set (legacy VT Task.assigned_to -> VT Item.owner_user). A task
+is "done" when pdca_phase == 'CLOSED' (legacy DONE).
+"""
 import frappe
 import unittest
 from frappe.utils import today, add_days
 
 LEADER_USER = "Administrator"
 MEMBER_USER = "test-member@example.com"
-_FIXTURE_BRAND = "TEST-LR-BRAND"
-
-
-def _ensure_brand():
-    if not frappe.db.exists("VT Brand", _FIXTURE_BRAND):
-        frappe.get_doc({
-            "doctype": "VT Brand",
-            "brand_name": _FIXTURE_BRAND,
-        }).insert(ignore_permissions=True)
-    return _FIXTURE_BRAND
 
 
 def _ensure_user(email):
@@ -30,11 +29,12 @@ def _ensure_user(email):
 
 def _make_project(leader, members=None):
     doc = frappe.get_doc({
-        "doctype": "VT Project",
+        "doctype": "VT Item",
+        "node_type": "Project",
         "title": f"Test LR Project - {leader}",
-        "brand": _ensure_brand(),
-        "project_owner": leader,
-        "project_leader": leader,
+        "is_group": 1,  # parent of Task nodes -> must be a NestedSet group
+        "owner_user": leader,  # legacy project_owner -> owner_user
+        "leader_user": leader,  # legacy project_leader -> leader_user
         "start_date": today(),
         "end_date": add_days(today(), 30),
         "pdca_phase": "DO",
@@ -46,18 +46,19 @@ def _make_project(leader, members=None):
     return doc
 
 
-def _make_task(name, assigned_to, project, pdca_phase="PLAN", kanban_status="Scheduled",
-               priority="Medium", estimated_minutes=3.0, deadline_offset=5):
-    if frappe.db.exists("VT Task", name):
-        frappe.delete_doc("VT Task", name, force=True)
+def _make_task(name, owner_user, project, pdca_phase="PLAN", kanban_status="Scheduled",
+               priority="Medium", estimated_minutes=3, deadline_offset=5):
+    if frappe.db.exists("VT Item", name):
+        frappe.delete_doc("VT Item", name, force=True)
     frappe.flags.in_import = True
     try:
         doc = frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": "VT Item",
+            "node_type": "Task",
             "name": name,
             "title": f"Task {name}",
-            "project": project,
-            "assigned_to": assigned_to,
+            "parent_vt_item": project,  # legacy project link -> tree parent
+            "owner_user": owner_user,  # legacy assigned_to -> owner_user
             "pdca_phase": pdca_phase,
             "kanban_status": kanban_status,
             "priority": priority,
@@ -88,18 +89,25 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        # Delete leaf Task nodes before the group Project nodes (NestedSet
+        # rejects deleting a non-empty group).
+        cls._delete_test_tasks()
         for name in [cls.proj_name, cls.proj2_name]:
-            if name and frappe.db.exists("VT Project", name):
-                frappe.delete_doc("VT Project", name, force=True)
+            if name and frappe.db.exists("VT Item", name):
+                frappe.delete_doc("VT Item", name, force=True)
         frappe.db.commit()
+
+    @staticmethod
+    def _delete_test_tasks():
+        for t in ["LR-T1", "LR-T2", "LR-T3", "LR-T4", "LR-BLOCKER", "LR-BLOCKED"]:
+            if frappe.db.exists("VT Item", t):
+                frappe.delete_doc("VT Item", t, force=True)
 
     def setUp(self):
         frappe.set_user("Administrator")
 
     def tearDown(self):
-        for t in ["LR-T1", "LR-T2", "LR-T3", "LR-T4", "LR-BLOCKER", "LR-BLOCKED"]:
-            if frappe.db.exists("VT Task", t):
-                frappe.delete_doc("VT Task", t, force=True)
+        self._delete_test_tasks()
         frappe.db.commit()
 
     # --- get_review_queue ---
@@ -131,8 +139,8 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
     # --- get_team_workload ---
 
     def test_get_team_workload_sums_estimated_minutes_per_member(self):
-        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="DO", estimated_minutes=4.0)
-        _make_task("LR-T2", MEMBER_USER, self.proj_name, pdca_phase="CHECK", estimated_minutes=3.0)
+        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="DO", estimated_minutes=4)
+        _make_task("LR-T2", MEMBER_USER, self.proj_name, pdca_phase="CHECK", estimated_minutes=3)
 
         from vernon_tasks.task.page.leader_review.leader_review import get_team_workload
         result = get_team_workload()
@@ -141,7 +149,7 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
         self.assertAlmostEqual(member_row["total_minutes"], 7.0, places=1)
 
     def test_get_team_workload_excludes_done_and_backlog(self):
-        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="BACKLOG", estimated_minutes=10.0)
+        _make_task("LR-T1", MEMBER_USER, self.proj_name, pdca_phase="BACKLOG", estimated_minutes=10)
 
         from vernon_tasks.task.page.leader_review.leader_review import get_team_workload
         result = get_team_workload()
@@ -155,15 +163,16 @@ class TestLeaderReviewReadAPIs(unittest.TestCase):
         frappe.flags.in_import = True
         try:
             frappe.get_doc({
-                "doctype": "VT Task",
+                "doctype": "VT Item",
+                "node_type": "Task",
                 "name": "LR-BLOCKED",
                 "title": "Blocked Task",
-                "project": self.proj_name,
-                "assigned_to": MEMBER_USER,
+                "parent_vt_item": self.proj_name,
+                "owner_user": MEMBER_USER,
                 "pdca_phase": "PLAN",
                 "kanban_status": "Scheduled",
                 "priority": "High",
-                "estimated_minutes": 2.0,
+                "estimated_minutes": 2,
                 "start_date": today(),
                 "deadline": add_days(today(), 3),
                 "weight": 2.0,
@@ -207,21 +216,26 @@ class TestLeaderReviewWriteAPIs(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls._delete_test_tasks()
         for name in [cls.proj_name, cls.proj2_name]:
-            if name and frappe.db.exists("VT Project", name):
-                frappe.delete_doc("VT Project", name, force=True)
+            if name and frappe.db.exists("VT Item", name):
+                frappe.delete_doc("VT Item", name, force=True)
         frappe.db.commit()
+
+    @staticmethod
+    def _delete_test_tasks():
+        for t in ["LR-W1", "LR-W2", "LR-W3", "LR-W4"]:
+            if frappe.db.exists("VT Item", t):
+                doc = frappe.get_doc("VT Item", t)
+                if doc.docstatus == 1:
+                    doc.cancel()
+                frappe.delete_doc("VT Item", t, force=True, ignore_permissions=True)
 
     def setUp(self):
         frappe.set_user("Administrator")
 
     def tearDown(self):
-        for t in ["LR-W1", "LR-W2", "LR-W3", "LR-W4"]:
-            if frappe.db.exists("VT Task", t):
-                doc = frappe.get_doc("VT Task", t)
-                if doc.docstatus == 1:
-                    doc.cancel()
-                frappe.delete_doc("VT Task", t, force=True, ignore_permissions=True)
+        self._delete_test_tasks()
         frappe.db.commit()
 
     # --- approve_task ---
@@ -232,9 +246,9 @@ class TestLeaderReviewWriteAPIs(unittest.TestCase):
         from vernon_tasks.task.page.leader_review.leader_review import approve_task
         result = approve_task("LR-W1")
         self.assertEqual(result["status"], "ok")
-        phase = frappe.db.get_value("VT Task", "LR-W1", "pdca_phase")
-        self.assertEqual(phase, "DONE")
-        docstatus = frappe.db.get_value("VT Task", "LR-W1", "docstatus")
+        phase = frappe.db.get_value("VT Item", "LR-W1", "pdca_phase")
+        self.assertEqual(phase, "CLOSED")
+        docstatus = frappe.db.get_value("VT Item", "LR-W1", "docstatus")
         self.assertEqual(docstatus, 1, "Task should be submitted (docstatus=1) after approve")
 
     def test_approve_task_wrong_phase_raises_validation_error(self):
@@ -259,11 +273,11 @@ class TestLeaderReviewWriteAPIs(unittest.TestCase):
         from vernon_tasks.task.page.leader_review.leader_review import reject_task
         result = reject_task("LR-W1", "Output tidak lengkap, perlu revisi bagian A")
         self.assertEqual(result["status"], "ok")
-        phase = frappe.db.get_value("VT Task", "LR-W1", "pdca_phase")
+        phase = frappe.db.get_value("VT Item", "LR-W1", "pdca_phase")
         self.assertEqual(phase, "DO")
-        note = frappe.db.get_value("VT Task", "LR-W1", "rejection_note")
+        note = frappe.db.get_value("VT Item", "LR-W1", "rejection_note")
         self.assertEqual(note, "Output tidak lengkap, perlu revisi bagian A")
-        revision_count = frappe.db.get_value("VT Task", "LR-W1", "revision_count")
+        revision_count = frappe.db.get_value("VT Item", "LR-W1", "revision_count")
         self.assertEqual(revision_count, 1, "revision_count should be incremented on rejection")
 
     def test_reject_task_empty_reason_raises_validation_error(self):

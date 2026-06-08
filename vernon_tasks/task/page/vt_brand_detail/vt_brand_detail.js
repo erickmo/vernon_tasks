@@ -4,10 +4,11 @@
 (function () {
 /* vt_brand_detail.js — desk Page: per-brand OKR surface.
    Hero (brand logo/name/desc) + period sections (collapsible, newest first)
-   listing Objectives and their Key Results with progress. Objective create uses
-   Frappe native quick entry; Objective edit opens the native full form. Key Result
-   create/edit stays inline via frappe.ui.Dialog. PDCA transitions and deletes stay
-   on the native form (state machine + cascade guards live in the controllers).
+   listing Objectives and their Key Results with progress. Objective create/edit
+   run through the native VT Item full form (unified hierarchy: an Objective is a
+   VT Item node with node_type="OKR"). Key Result create/edit stays inline via
+   frappe.ui.Dialog. PDCA transitions and deletes stay on the native form (state
+   machine + cascade guards live in the VT Item controller).
    Route shape: ["vt-brand-detail", <brand_id>].
    APIs: vernon_tasks.brand.api.brand_okr.* + brand_okr_mutations.* (KR only) */
 
@@ -17,11 +18,16 @@ const UPDATE_KR_API = "vernon_tasks.brand.api.brand_okr_mutations.update_key_res
 const GET_KR_API = "vernon_tasks.brand.api.brand_okr_mutations.get_key_result";
 
 const BRAND_DOCTYPE = "VT Brand";
-const OBJECTIVE_DOCTYPE = "Objective";
-// Objective create/edit run through native Frappe flows (quick entry / full form).
-// The brand-scoped create prefills + locks this field so the new Objective always
-// belongs to the brand whose page we're on.
+// Unified hierarchy: an Objective is a VT Item node typed OKR. The brand-detail
+// read API (get_brand_okr) returns VT Item node names as objective ids, so create
+// and edit both route through the VT Item form with node_type preset to OKR.
+const VT_ITEM_DOCTYPE = "VT Item";
+const OKR_NODE_TYPE = "OKR";
+// Field literals for the brand-scoped create prefill (route_options on the new
+// VT Item form), so a new Objective node belongs to the brand whose page we're on.
 const BRAND_FIELD = "brand";
+const NODE_TYPE_FIELD = "node_type";
+const OWNER_FIELD = "owner_user";
 const STATUS_COLORS = {
     "Open": "#6b7280", "On Track": "#16a34a", "At Risk": "#f59e0b", "Closed": "#374151",
 };
@@ -433,7 +439,7 @@ function objective_card(page, brand_id, o, perms) {
         o.key_results.forEach((kr) => list.append(kr_row(page, brand_id, kr, perms)));
     }
     card.append(project_chips(o.projects));  // OKR↔Project bridge
-    card.find(".vt-obj-edit").on("click", () => frappe.set_route("Form", OBJECTIVE_DOCTYPE, o.id));
+    card.find(".vt-obj-edit").on("click", () => frappe.set_route("Form", VT_ITEM_DOCTYPE, o.id));
     card.find(".vt-kr-add").on("click", () => kr_dialog(page, brand_id, o.id, null));
     return card;
 }
@@ -475,31 +481,26 @@ function kr_row(page, brand_id, kr, perms) {
 }
 
 /**
- * Create an Objective via Frappe native quick entry, scoped to this brand.
+ * Create an Objective (VT Item node, node_type="OKR") scoped to this brand.
  *
- * Quick entry surfaces the doctype's reqd + allow_in_quick_entry fields (title,
- * brand, period, objective_owner, status, description) and saves through
- * frappe.client.save, so the Objective controller validates exactly as on the
- * full form — no app-specific create endpoint needed. brand is prefilled + locked
- * read-only (page is brand-scoped); owner is prefilled to the current user.
- * after_insert re-renders the page in place instead of redirecting to the new doc.
- * Editing an Objective opens the native full form (see the .vt-obj-edit handler).
+ * Unified hierarchy: an Objective is a VT Item node. frappe.new_doc opens the
+ * native VT Item full form with route_options applied as field defaults, so the
+ * VT Item controller validates exactly as on any node form — no app-specific
+ * create endpoint needed. node_type is preset to OKR (this page only creates
+ * OKR nodes); brand is preset to the page's brand; owner_user is preset to the
+ * current user. The page re-fetches on return via on_page_show (route change),
+ * so the new objective appears without a manual refresh.
+ * Editing an Objective opens the same VT Item form (see the .vt-obj-edit handler).
  *
- * @param {object} page - the desk Page (for re-render via load_page).
- * @param {string} brand_id - VT Brand this Objective must belong to.
+ * @param {object} page - the desk Page (unused; kept for signature symmetry).
+ * @param {string} brand_id - VT Brand this Objective node must belong to.
  */
 function objective_create(page, brand_id) {
-    frappe.ui.form.make_quick_entry(
-        OBJECTIVE_DOCTYPE,
-        () => load_page(page, brand_id),  // after_insert: stay on page, re-render
-        (dialog) => {
-            // Lock brand to this page's brand — the value still reaches the insert
-            // because quick entry reads read-only fields via dialog.get_values(true).
-            dialog.set_value(BRAND_FIELD, brand_id);
-            dialog.set_df_property(BRAND_FIELD, "read_only", 1);
-        },
-        { [BRAND_FIELD]: brand_id, objective_owner: frappe.session.user },
-    );
+    frappe.new_doc(VT_ITEM_DOCTYPE, {
+        [NODE_TYPE_FIELD]: OKR_NODE_TYPE,
+        [BRAND_FIELD]: brand_id,
+        [OWNER_FIELD]: frappe.session.user,
+    });
 }
 
 /**

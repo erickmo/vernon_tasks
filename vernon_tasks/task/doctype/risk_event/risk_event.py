@@ -70,7 +70,9 @@ class RiskEvent(Document):
 		"""If `task` is set, it must belong to `project` (prevent cross-project leak)."""
 		if not (self.task and self.project):
 			return
-		task_project = frappe.db.get_value("VT Task", self.task, "project")
+		# A task's project is its nearest Project ancestor in the VT Item tree.
+		from vernon_tasks.task.services import vt_item_tree as tree
+		task_project = tree.project_of(self.task)
 		if task_project and task_project != self.project:
 			frappe.throw(
 				f"Task '{self.task}' bukan milik project '{self.project}'",

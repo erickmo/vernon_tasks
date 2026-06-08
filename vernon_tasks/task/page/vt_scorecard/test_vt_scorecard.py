@@ -1,44 +1,47 @@
-"""Tests for vt-scorecard page API: get_point_log, get_monthly_summary."""
+"""Tests for vt-scorecard page API: get_point_log, get_monthly_summary.
+
+Seeds the VT Item tree (Project node + Task node) instead of the legacy
+VT Project / VT Task doctypes. A Project is a root node; its Tasks are
+Task-typed descendants — exactly what get_point_log's project filter resolves
+via vt_item_tree.descendants.
+"""
 import frappe
 import unittest
-from frappe.utils import now_datetime, add_months, today
+from frappe.utils import now_datetime
 
 _PROJECT_NAME = None
+_PROJECT_TITLE = "Test Scorecard Project"
+_TASK_TITLE = "Scorecard Test Task"
 
 
 def _make_project():
+    """Create (or reuse) a Project-typed VT Item node at the tree root."""
     global _PROJECT_NAME
-    existing = frappe.db.get_value("VT Project", {"title": "Test Scorecard Project"}, "name")
+    existing = frappe.db.get_value(
+        "VT Item", {"node_type": "Project", "title": _PROJECT_TITLE}, "name"
+    )
     if existing:
         _PROJECT_NAME = existing
         return
-    brand = frappe.db.get_value("VT Brand", {}, "name")
-    if not brand:
-        brand = frappe.get_doc({
-            "doctype": "VT Brand",
-            "title": "Test Scorecard Brand",
-        }).insert(ignore_permissions=True).name
     doc = frappe.get_doc({
-        "doctype": "VT Project",
-        "title": "Test Scorecard Project",
-        "brand": brand,
-        "project_owner": "Administrator",
-        "start_date": today(),
-        "end_date": add_months(today(), 1),
-        "pdca_phase": "DO",
+        "doctype": "VT Item",
+        "node_type": "Project",
+        "title": _PROJECT_TITLE,
+        "owner_user": "Administrator",
+        "health_status": "On Track",
     }).insert(ignore_permissions=True)
     _PROJECT_NAME = doc.name
 
 
 def _make_task(project_name):
+    """Create a Task-typed VT Item node under the given Project node."""
     return frappe.get_doc({
-        "doctype": "VT Task",
-        "title": "Scorecard Test Task",
-        "project": project_name,
-        "assigned_to": "Administrator",
-        "pdca_phase": "DONE",
-        "kanban_status": "Done",
-        "priority": "Medium",
+        "doctype": "VT Item",
+        "node_type": "Task",
+        "title": _TASK_TITLE,
+        "parent_vt_item": project_name,
+        "owner_user": "Administrator",
+        "pdca_phase": "CLOSED",
         "weight": 5.0,
     }).insert(ignore_permissions=True)
 
@@ -61,10 +64,11 @@ class TestScorecardAPI(unittest.TestCase):
         for s in cls._summaries:
             if frappe.db.exists("User Point Summary", s):
                 frappe.delete_doc("User Point Summary", s, force=True)
-        if frappe.db.exists("VT Task", cls._task.name):
-            frappe.delete_doc("VT Task", cls._task.name, force=True)
-        if _PROJECT_NAME and frappe.db.exists("VT Project", _PROJECT_NAME):
-            frappe.delete_doc("VT Project", _PROJECT_NAME, force=True)
+        # Delete the Task node before its Project parent (nested-set ordering).
+        if frappe.db.exists("VT Item", cls._task.name):
+            frappe.delete_doc("VT Item", cls._task.name, force=True)
+        if _PROJECT_NAME and frappe.db.exists("VT Item", _PROJECT_NAME):
+            frappe.delete_doc("VT Item", _PROJECT_NAME, force=True)
         frappe.db.commit()
 
     def _make_log(self, user, amount, ttype="earned"):
@@ -105,7 +109,7 @@ class TestScorecardAPI(unittest.TestCase):
         self.assertGreater(len(matched), 0, "Expected at least one log with amount=50.0")
 
     def test_get_point_log_enriches_task_title(self):
-        """Each log row includes task_title from the linked VT Task."""
+        """Each log row includes task_title from the linked VT Item Task node."""
         self._make_log("Administrator", 10.0, "earned")
         from vernon_tasks.task.page.vt_scorecard.vt_scorecard import get_point_log
         result = get_point_log()

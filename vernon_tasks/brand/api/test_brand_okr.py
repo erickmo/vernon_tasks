@@ -224,11 +224,9 @@ class TestBrandOkrFlowZones(FrappeTestCase):
 
 	spec: 2026-06-07-brand-detail-flow-zones
 
-	brand_okr reads OKR/KPI/Project entirely from the VT Item tree. The execution
-	rollup is delegated to the (separately-migrated) portal_brands.brand_execution
-	helper, which still reads the legacy VT Project doctype; this test seeds both
-	a Project NODE (for brand_okr's own OKR↔Project bridge) and a legacy VT Project
-	(for the execution rollup) pointing at the same OKR so titles resolve.
+	brand_okr reads OKR/KPI/Project entirely from the VT Item tree. A single
+	Project NODE under the OKR feeds both brand_okr's OKR↔Project bridge and the
+	execution rollup, so its objective_title resolves from the tree parent.
 	"""
 
 	def setUp(self):
@@ -262,10 +260,8 @@ class TestBrandOkrFlowZones(FrappeTestCase):
 		self._cleanup()
 
 	def _cleanup(self):
-		for p in frappe.get_all("VT Project", filters={"brand": FLOW_BRAND}, pluck="name"):
-			frappe.delete_doc("VT Project", p, force=True, ignore_permissions=True)
-		for o in frappe.get_all("Objective", filters={"brand": FLOW_BRAND}, pluck="name"):
-			frappe.delete_doc("Objective", o, force=True, ignore_permissions=True)
+		# OKR/KPI/Project nodes for this brand all live in the VT Item tree now;
+		# _delete_brand_tree sweeps them deepest-first (NestedSet-safe).
 		_delete_brand_tree(FLOW_BRAND)
 		if frappe.db.exists("VT Brand", FLOW_BRAND):
 			frappe.delete_doc("VT Brand", FLOW_BRAND, force=True, ignore_permissions=True)

@@ -89,6 +89,16 @@ class VTItem(NestedSet):
 		self._validate_pdca_transition()
 		self._sync_kanban_status()
 		self._stamp_completion()
+		self._validate_children()
+
+	def _validate_children(self) -> None:
+		"""Frappe does NOT auto-call child-row validate(); invoke it for every
+		table field so child-doctype invariants fire (Task Dependency self-block,
+		Task Schedule Entry caps, Project Team Member / Milestone / Documentation
+		rules). Ported from the legacy VT Task/VT Project controllers."""
+		for df in self.meta.get_table_fields():
+			for row in (self.get(df.fieldname) or []):
+				row.run_method("validate")
 
 	def _apply_task_defaults(self) -> None:
 		"""Seed Task lifecycle defaults (legacy VT Task field defaults) so direct
@@ -115,6 +125,11 @@ class VTItem(NestedSet):
 			frappe.throw(_("Override Reason wajib diisi jika Leader Override Points diatur"))
 		if self.is_recurring and not self.recurring_rule:
 			frappe.throw(_("Recurring Rule wajib diisi saat Is Recurring aktif"))
+		# A task may not block itself (would deadlock). Parent-level check: the
+		# child Task Dependency row can't see its parent's name.
+		for dep in (self.dependencies or []):
+			if dep.blocked_by == self.name:
+				frappe.throw(_("Task tidak boleh memblokir dirinya sendiri"))
 
 	def _validate_pdca_transition(self) -> None:
 		"""Reject illegal PDCA moves on an existing Task's phase change."""

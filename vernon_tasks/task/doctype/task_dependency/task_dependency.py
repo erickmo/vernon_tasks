@@ -30,9 +30,9 @@ class TaskDependency(Document):
 		"""blocked_by must reference an existing VT Task."""
 		if not self.blocked_by:
 			frappe.throw("Blocked By wajib diisi", frappe.MandatoryError)
-		if not frappe.db.exists("VT Task", self.blocked_by):
+		if not frappe.db.exists("VT Item", self.blocked_by):
 			frappe.throw(
-				f"VT Task '{self.blocked_by}' tidak ditemukan",
+				f"Task '{self.blocked_by}' tidak ditemukan",
 				frappe.ValidationError,
 			)
 

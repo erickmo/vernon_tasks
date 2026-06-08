@@ -51,8 +51,18 @@ def get_risks(project):
 
 
 def invalidate_project_cache(doc, method=None):
-    """Hook target — clears velocity + forecast cache for a project."""
-    project = getattr(doc, "project", None) or getattr(doc, "name", None)
+    """Hook target (VT Item on_update) — clears velocity + forecast cache for the
+    affected project. Resolves the project from the tree: a Project node IS the
+    project; a Sprint/Task node's project is its nearest ancestor; other node
+    types (OKR/KPI) have no project cache to clear."""
+    node_type = getattr(doc, "node_type", None)
+    if node_type == "Project":
+        project = doc.name
+    elif node_type in ("Sprint", "Task"):
+        from vernon_tasks.task.services import vt_item_tree as tree
+        project = tree.project_of(doc.name)
+    else:
+        return
     if not project:
         return
     for n in (3, 6, 12):
