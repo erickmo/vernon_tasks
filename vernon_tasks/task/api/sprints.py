@@ -1,8 +1,9 @@
 """Sprint endpoints for project detail tabs.
 
-Schema reference: docs/superpowers/specs/2026-05-23-schema-mapping.html
-- VT Sprint fields used: start_date, end_date, project, (optional) burndown_actual_json
-- Task→Sprint join: `tabVT Task.sprint = sprint.name`
+Unified VT Item tree (P3): a Sprint is a `node_type="Sprint"` VT Item; its
+Tasks are `node_type="Task"` children (parent_vt_item = the Sprint node).
+- Sprint fields used: start_date, end_date, (optional) burndown_actual_json
+- Task→Sprint join: Task.parent_vt_item = sprint node name
 """
 from __future__ import annotations
 
@@ -13,6 +14,11 @@ from typing import Any
 import frappe
 
 from vernon_tasks.task.api.security import max_str, require_login
+from vernon_tasks.task.services import vt_item_tree as tree
+
+_SPRINT = "Sprint"
+_TASK = "Task"
+_DONE = "Done"
 
 
 @frappe.whitelist()
@@ -29,9 +35,9 @@ def get_burndown(sprint_id: str) -> list[dict]:
     """
     require_login()
     sprint_id = max_str(sprint_id, 140)
-    if not sprint_id or not frappe.db.exists("VT Sprint", sprint_id):
+    if not sprint_id or not _sprint_exists(sprint_id):
         raise frappe.DoesNotExistError(f"VT Sprint {sprint_id} not found")
-    if not frappe.has_permission("VT Sprint", "read", sprint_id):
+    if not frappe.has_permission("VT Item", "read", sprint_id):
         raise frappe.PermissionError
 
     sprint = _read_sprint(sprint_id)
@@ -45,14 +51,19 @@ def get_burndown(sprint_id: str) -> list[dict]:
     return _compute_burndown(sprint_id, sprint)
 
 
+def _sprint_exists(sprint_id: str) -> bool:
+    return bool(tree.nodes(_SPRINT, {"name": sprint_id}, ["name"], limit=1))
+
+
 def _read_sprint(sprint_id: str) -> dict | None:
     try:
-        return frappe.db.get_value(
-            "VT Sprint",
-            sprint_id,
+        rows = tree.nodes(
+            _SPRINT,
+            {"name": sprint_id},
             ["name", "start_date", "end_date"],
-            as_dict=True,
+            limit=1,
         )
+        return rows[0] if rows else None
     except Exception:
         return None
 
@@ -106,17 +117,18 @@ def _compute_burndown(sprint_id: str, sprint: dict) -> list[dict]:
 
 def _count_sprint_tasks(sprint_id: str) -> int:
     try:
-        return int(frappe.db.count("VT Task", {"sprint": sprint_id}))
+        return len(tree.children(sprint_id, _TASK))
     except Exception:
         return 0
 
 
 def _count_sprint_tasks_open(sprint_id: str) -> int:
     try:
-        return int(
-            frappe.db.count(
-                "VT Task",
-                {"sprint": sprint_id, "kanban_status": ("not in", ["Done"])},
+        return len(
+            tree.children(
+                sprint_id,
+                _TASK,
+                {"kanban_status": ("not in", [_DONE])},
             )
         )
     except Exception:
