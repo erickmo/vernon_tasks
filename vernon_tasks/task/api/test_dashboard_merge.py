@@ -1,6 +1,15 @@
 """Tests for the merged POV dashboard API (personal + team aggregators).
 Covers: PRD-dashboard-merge, bug-hours-unit. See
 docs/superpowers/specs/2026-06-03-dashboard-merge-pov-design.html
+
+VT Item tree migration (P4): Project / Task are `node_type` values on the
+single VT Item nested-set tree (was the dead VT Project / VT Task doctypes).
+Field renames: project_owner/assigned_to → owner_user, project_leader →
+leader_user, Project status → health_status. A Task's project is its parent
+node (here Tasks sit directly under their Project — the allowed backlog skip).
+Done tasks use pdca_phase="CLOSED" (legacy "DONE"); kanban_status is derived by
+the controller from pdca_phase, so seeds never set it directly. Reads still go
+through vernon_tasks.task.api.dashboard, which targets the VT Item tree.
 """
 import unittest
 
@@ -8,6 +17,16 @@ import frappe
 from frappe.utils import today, add_days
 
 from vernon_tasks.task.api import dashboard
+
+# All Project / Task seeds target the unified VT Item tree doctype.
+_ITEM_DOCTYPE = "VT Item"
+_PROJECT_NODE_TYPE = "Project"
+_TASK_NODE_TYPE = "Task"
+# Unified terminal task phase (legacy VT Task "DONE"); controller derives the
+# "Done" kanban column from it, so we never set kanban_status directly.
+_DONE_PHASE = "CLOSED"
+# Active phase for in-progress / overdue fixtures.
+_DO_PHASE = "DO"
 
 _BRAND = "TEST-DM-BRAND"
 _OWNER = "Administrator"
@@ -34,15 +53,21 @@ def _ensure_personal_user():
 
 
 def _make_project(title, leader=None):
-    existing = frappe.db.get_value("VT Project", {"title": title}, "name")
+    """Seed (or reuse) a Project VT Item node. project_owner → owner_user,
+    project_leader → leader_user, status → health_status."""
+    existing = frappe.db.get_value(
+        _ITEM_DOCTYPE, {"title": title, "node_type": _PROJECT_NODE_TYPE}, "name"
+    )
     if existing:
-        return frappe.get_doc("VT Project", existing)
+        return frappe.get_doc(_ITEM_DOCTYPE, existing)
     return frappe.get_doc({
-        "doctype": "VT Project",
+        "doctype": _ITEM_DOCTYPE,
+        "node_type": _PROJECT_NODE_TYPE,
+        "parent_vt_item": None,
         "title": title,
         "brand": _ensure_brand(),
-        "project_owner": _OWNER,
-        "project_leader": leader,
+        "owner_user": _OWNER,
+        "leader_user": leader,
         "start_date": today(),
         "end_date": add_days(today(), 30),
         "pdca_phase": "DO",
@@ -50,16 +75,20 @@ def _make_project(title, leader=None):
 
 
 def _make_task(title, project, assigned_to, pdca_phase="PLAN",
-               kanban_status="Scheduled", earned_points=0, completion_date=None,
+               earned_points=0, completion_date=None,
                revision_count=0, deadline=None, actual_minutes=0,
                estimated_minutes=0):
+    """Seed a Task VT Item node directly under its Project (allowed backlog
+    skip). assigned_to → owner_user; a Task's project is its parent node, not a
+    `project` Link. kanban_status is intentionally NOT set: the controller
+    derives it from pdca_phase (CLOSED → Done, DO → In Progress, …)."""
     return frappe.get_doc({
-        "doctype": "VT Task",
+        "doctype": _ITEM_DOCTYPE,
+        "node_type": _TASK_NODE_TYPE,
+        "parent_vt_item": project,
         "title": title,
-        "project": project,
-        "assigned_to": assigned_to,
+        "owner_user": assigned_to,
         "pdca_phase": pdca_phase,
-        "kanban_status": kanban_status,
         "earned_points": earned_points,
         "completion_date": completion_date,
         "revision_count": revision_count,
@@ -70,29 +99,57 @@ def _make_task(title, project, assigned_to, pdca_phase="PLAN",
     }).insert(ignore_permissions=True)
 
 
+def _delete_tasks_by_title(*titles):
+    """Delete Task nodes by title. Tasks are leaves here (no children), so the
+    nested set lets them go before their parent Project."""
+    for title in titles:
+        for name in frappe.db.get_all(
+            _ITEM_DOCTYPE, {"title": title, "node_type": _TASK_NODE_TYPE},
+            pluck="name",
+        ):
+            frappe.delete_doc(_ITEM_DOCTYPE, name, force=True, ignore_permissions=True)
+
+
+def _delete_project_subtree(*titles):
+    """Delete each named Project plus its whole subtree. NestedSet blocks
+    deleting a parent before its children, so remove descendants deepest-first
+    (highest lft) and then the Project root."""
+    for title in titles:
+        for proj in frappe.db.get_all(
+            _ITEM_DOCTYPE, {"title": title, "node_type": _PROJECT_NODE_TYPE},
+            ["name", "lft", "rgt"],
+        ):
+            for d in frappe.db.get_all(
+                _ITEM_DOCTYPE,
+                filters={"lft": [">", proj["lft"]], "rgt": ["<", proj["rgt"]]},
+                fields=["name"], order_by="lft desc",
+            ):
+                frappe.delete_doc(_ITEM_DOCTYPE, d["name"], force=True,
+                                  ignore_permissions=True)
+            frappe.delete_doc(_ITEM_DOCTYPE, proj["name"], force=True,
+                              ignore_permissions=True)
+
+
 class TestPersonalDashboard(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         frappe.set_user("Administrator")
         _ensure_personal_user()
         # Clean up any leftovers from a prior test run before inserting fixtures.
-        for title in ("DM done today", "DM active hrs"):
-            for name in frappe.db.get_all("VT Task", {"title": title}, pluck="name"):
-                frappe.delete_doc("VT Task", name, force=True, ignore_permissions=True)
+        _delete_tasks_by_title("DM done today", "DM active hrs")
+        _delete_project_subtree("DM Personal Project")
         cls.project = _make_project("DM Personal Project").name
-        _make_task("DM done today", cls.project, _PERSONAL_USER, pdca_phase="DONE",
-                   kanban_status="Done", earned_points=3, completion_date=today())
-        _make_task("DM active hrs", cls.project, _PERSONAL_USER, pdca_phase="DO",
-                   kanban_status="In Progress", actual_minutes=120,
-                   estimated_minutes=180)
+        _make_task("DM done today", cls.project, _PERSONAL_USER, pdca_phase=_DONE_PHASE,
+                   earned_points=3, completion_date=today())
+        _make_task("DM active hrs", cls.project, _PERSONAL_USER, pdca_phase=_DO_PHASE,
+                   actual_minutes=120, estimated_minutes=180)
         frappe.set_user(_PERSONAL_USER)
 
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
-        for title in ("DM done today", "DM active hrs"):
-            for name in frappe.db.get_all("VT Task", {"title": title}, pluck="name"):
-                frappe.delete_doc("VT Task", name, force=True, ignore_permissions=True)
+        _delete_tasks_by_title("DM done today", "DM active hrs")
+        _delete_project_subtree("DM Personal Project")
 
     def test_personal_stats_counts_done_today(self):
         out = dashboard.personal_stats()
@@ -131,18 +188,23 @@ class TestTeamDashboard(unittest.TestCase):
         cls.leader = _ensure_user("dm_leader@test.local", ["VT Leader", "VT Member"])
         cls.manager = _ensure_user("dm_manager@test.local", ["VT Manager", "VT Member"])
         cls.plain = _ensure_user("dm_plain@test.local", ["VT Member"])
-        # Led project (leader is project_leader) + a foreign project the leader
-        # does NOT lead — used to prove led-scope filtering.
+        # Clean any leftovers before seeding so reruns stay deterministic.
+        _delete_tasks_by_title("DM led overdue", "DM other overdue")
+        _delete_project_subtree("DM Led Project", "DM Other Project")
+        # Led project (leader is leader_user) + a foreign project the leader does
+        # NOT lead — used to prove led-scope filtering.
         cls.led = _make_project("DM Led Project", leader=cls.leader).name
         cls.other = _make_project("DM Other Project").name
-        _make_task("DM led overdue", cls.led, cls.leader, pdca_phase="DO",
-                   kanban_status="In Progress", deadline=add_days(today(), -2))
-        _make_task("DM other overdue", cls.other, cls.manager, pdca_phase="DO",
-                   kanban_status="In Progress", deadline=add_days(today(), -2))
+        _make_task("DM led overdue", cls.led, cls.leader, pdca_phase=_DO_PHASE,
+                   deadline=add_days(today(), -2))
+        _make_task("DM other overdue", cls.other, cls.manager, pdca_phase=_DO_PHASE,
+                   deadline=add_days(today(), -2))
 
     @classmethod
     def tearDownClass(cls):
         frappe.set_user("Administrator")
+        _delete_tasks_by_title("DM led overdue", "DM other overdue")
+        _delete_project_subtree("DM Led Project", "DM Other Project")
 
     def test_tab_state_plain_member_not_visible(self):
         frappe.set_user(self.plain)
