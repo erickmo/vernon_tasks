@@ -1,4 +1,4 @@
-"""Tests for Task Dependency (child table on VT Task)."""
+"""Tests for Task Dependency (child table on a VT Item Task node)."""
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -12,14 +12,18 @@ def _ensure_brand():
 
 
 def _ensure_project() -> str:
-	existing = frappe.db.get_value("VT Project", {"title": TEST_PROJECT_TITLE}, "name")
+	existing = frappe.db.get_value(
+		"VT Item", {"node_type": "Project", "title": TEST_PROJECT_TITLE}, "name"
+	)
 	if existing:
 		return existing
 	return frappe.get_doc({
-		"doctype": "VT Project",
+		"doctype": "VT Item",
+		"node_type": "Project",
+		"parent_vt_item": None,
 		"title": TEST_PROJECT_TITLE,
 		"brand": TEST_BRAND,
-		"project_owner": "Administrator",
+		"owner_user": "Administrator",
 		"start_date": "2026-01-01",
 		"end_date": "2026-12-31",
 	}).insert(ignore_permissions=True).name
@@ -29,17 +33,20 @@ class _DepBase(FrappeTestCase):
 	def setUp(self):
 		_ensure_brand()
 		self.project = _ensure_project()
-		# Two tasks: A blocks B (so B has A in its dependencies child table).
+		# Two Task nodes: A blocks B (so B has A in its dependencies child table).
 		self.task_a = frappe.get_doc({
-			"doctype": "VT Task", "title": "Blocker A", "project": self.project, "weight": 1,
+			"doctype": "VT Item", "node_type": "Task", "title": "Blocker A",
+			"parent_vt_item": self.project, "weight": 1,
 		}).insert(ignore_permissions=True)
 		self.task_b = frappe.get_doc({
-			"doctype": "VT Task", "title": "Blocked B", "project": self.project, "weight": 1,
+			"doctype": "VT Item", "node_type": "Task", "title": "Blocked B",
+			"parent_vt_item": self.project, "weight": 1,
 		}).insert(ignore_permissions=True)
 
 	def tearDown(self):
+		# Delete leaf Task nodes before their parent (nested-set: deepest lft first).
 		for t in (self.task_b, self.task_a):
-			frappe.delete_doc("VT Task", t.name, force=True, ignore_permissions=True)
+			frappe.delete_doc("VT Item", t.name, force=True, ignore_permissions=True)
 
 
 class TestTaskDependency(_DepBase):
@@ -71,7 +78,7 @@ class TestTaskDependency(_DepBase):
 			self.task_b.save()
 
 	def test_self_block_rejected(self):
-		"""Tested by VT Task — referenced here to document coverage boundary."""
+		"""Tested by VT Item — referenced here to document coverage boundary."""
 		self.task_b.append("dependencies", {
 			"blocked_by": self.task_b.name,
 			"dependency_type": "Finish-to-Start",

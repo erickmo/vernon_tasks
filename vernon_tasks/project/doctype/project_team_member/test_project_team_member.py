@@ -1,4 +1,10 @@
-"""Tests for Project Team Member (child table on VT Project)."""
+"""Tests for Project Team Member (child table on a Project-type VT Item node).
+
+Seeds the parent in the unified VT Item tree (node_type="Project") rather than
+the legacy VT Project doctype. The team_members child table lives on the VT
+Item node (legacy VT Project.project_owner -> VT Item.owner_user); the child
+controller's own validations are unchanged and fire on the parent's save.
+"""
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -29,16 +35,17 @@ class _PTMBase(FrappeTestCase):
 		_ensure_user(MEMBER_EMAIL)
 		_ensure_user(DEPUTY_EMAIL)
 		self.project = frappe.get_doc({
-			"doctype": "VT Project",
+			"doctype": "VT Item",
+			"node_type": "Project",
 			"title": "PTM Test Project",
 			"brand": TEST_BRAND,
-			"project_owner": OWNER_EMAIL,
+			"owner_user": OWNER_EMAIL,
 			"start_date": "2026-05-01",
 			"end_date": "2026-05-31",
 		}).insert(ignore_permissions=True)
 
 	def tearDown(self):
-		frappe.delete_doc("VT Project", self.project.name, force=True, ignore_permissions=True)
+		frappe.delete_doc("VT Item", self.project.name, force=True, ignore_permissions=True)
 
 	def _append(self, **fields):
 		row = {"user": MEMBER_EMAIL, "role": "Member"}

@@ -1,4 +1,10 @@
-"""Tests for Project Milestone child table."""
+"""Tests for Project Milestone child table.
+
+Seeds the parent in the unified VT Item tree (node_type="Project") rather than
+the legacy VT Project doctype. The milestones child table lives on the VT Item
+node (legacy VT Project.project_owner -> VT Item.owner_user); the child
+controller's own validations are unchanged and fire on the parent's save.
+"""
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -27,16 +33,17 @@ class _MSBase(FrappeTestCase):
 		_ensure_brand()
 		_ensure_user()
 		self.project = frappe.get_doc({
-			"doctype": "VT Project",
+			"doctype": "VT Item",
+			"node_type": "Project",
 			"title": "Milestone Test Project",
 			"brand": TEST_BRAND,
-			"project_owner": OWNER_EMAIL,
+			"owner_user": OWNER_EMAIL,
 			"start_date": "2026-05-01",
 			"end_date": "2026-05-31",
 		}).insert(ignore_permissions=True)
 
 	def tearDown(self):
-		frappe.delete_doc("VT Project", self.project.name, force=True, ignore_permissions=True)
+		frappe.delete_doc("VT Item", self.project.name, force=True, ignore_permissions=True)
 
 	def _append(self, **fields):
 		row = {"milestone_title": "MVP Launch", "status": "Open"}

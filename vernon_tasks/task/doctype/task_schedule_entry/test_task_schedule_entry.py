@@ -1,4 +1,4 @@
-"""Tests for Task Schedule Entry (child table on VT Task)."""
+"""Tests for Task Schedule Entry (child table on a VT Item Task node)."""
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
@@ -12,14 +12,18 @@ def _ensure_brand():
 
 
 def _ensure_project() -> str:
-	existing = frappe.db.get_value("VT Project", {"title": TEST_PROJECT_TITLE}, "name")
+	existing = frappe.db.get_value(
+		"VT Item", {"title": TEST_PROJECT_TITLE, "node_type": "Project"}, "name"
+	)
 	if existing:
 		return existing
 	return frappe.get_doc({
-		"doctype": "VT Project",
+		"doctype": "VT Item",
+		"node_type": "Project",
+		"parent_vt_item": None,
 		"title": TEST_PROJECT_TITLE,
 		"brand": TEST_BRAND,
-		"project_owner": "Administrator",
+		"owner_user": "Administrator",
 		"start_date": "2026-01-01",
 		"end_date": "2026-12-31",
 	}).insert(ignore_permissions=True).name
@@ -30,14 +34,17 @@ class _SchedBase(FrappeTestCase):
 		_ensure_brand()
 		self.project = _ensure_project()
 		self.task = frappe.get_doc({
-			"doctype": "VT Task",
+			"doctype": "VT Item",
+			"node_type": "Task",
+			"parent_vt_item": self.project,
 			"title": "Sched Test Task",
-			"project": self.project,
 			"weight": 1.0,
 		}).insert(ignore_permissions=True)
 
 	def tearDown(self):
-		frappe.delete_doc("VT Task", self.task.name, force=True, ignore_permissions=True)
+		# Task is a leaf node under the Project, so deleting it first keeps the
+		# nested set consistent (no NestedSetChildExistsError on the project).
+		frappe.delete_doc("VT Item", self.task.name, force=True, ignore_permissions=True)
 
 	def _append(self, **fields):
 		"""Append a schedule_entries row with sane defaults overridable by `fields`."""
