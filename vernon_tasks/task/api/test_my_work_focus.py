@@ -2,10 +2,28 @@ import frappe
 import unittest
 from frappe.utils import today, add_days
 
-# Module-level variable to hold the actual project name (auto-generated)
+from vernon_tasks.task.services import vt_item_tree as tree
+
+# VT Item tree model (unified hierarchy):
+# - A project is a VT Item node with node_type="Project".
+# - A task is a VT Item node with node_type="Task" parented to the project.
+# - Legacy VT Task.assigned_to / VT Project.project_owner -> owner_user.
+# - Legacy VT Task.project Link -> parent_vt_item (nested-set tree parent).
+# - Legacy terminal phase pdca_phase="DONE" -> "CLOSED".
+# - kanban_status is DERIVED from pdca_phase by the controller (PDCA_KANBAN_MAP);
+#   seeds set pdca_phase only and never write kanban_status directly.
+#
+# Source of truth:
+# docs/superpowers/specs/2026-06-07-vt-item-unified-hierarchy-design.html
+
+# Module-level variable to hold the actual project node name (auto-generated)
 _PROJECT_NAME = None
 _PROJECT_TITLE = "Test My Work Project - MW"
 _FIXTURE_BRAND = "TEST-MY-WORK-BRAND"
+
+TASK_DOCTYPE = "VT Item"
+TASK_NODE_TYPE = "Task"
+PROJECT_NODE_TYPE = "Project"
 
 
 def _ensure_brand():
@@ -19,17 +37,23 @@ def _ensure_brand():
 
 def _make_project():
     global _PROJECT_NAME
-    if _PROJECT_NAME and frappe.db.exists("VT Project", _PROJECT_NAME):
-        return frappe.get_doc("VT Project", _PROJECT_NAME)
-    existing = frappe.db.get_value("VT Project", {"title": _PROJECT_TITLE}, "name")
+    if _PROJECT_NAME and frappe.db.exists(TASK_DOCTYPE, _PROJECT_NAME):
+        return frappe.get_doc(TASK_DOCTYPE, _PROJECT_NAME)
+    existing = frappe.db.get_value(
+        TASK_DOCTYPE,
+        {"title": _PROJECT_TITLE, "node_type": PROJECT_NODE_TYPE},
+        "name",
+    )
     if existing:
         _PROJECT_NAME = existing
-        return frappe.get_doc("VT Project", _PROJECT_NAME)
+        return frappe.get_doc(TASK_DOCTYPE, _PROJECT_NAME)
     doc = frappe.get_doc({
-        "doctype": "VT Project",
+        "doctype": TASK_DOCTYPE,
+        "node_type": PROJECT_NODE_TYPE,
+        "parent_vt_item": None,
         "title": _PROJECT_TITLE,
         "brand": _ensure_brand(),
-        "project_owner": "Administrator",
+        "owner_user": "Administrator",
         "start_date": today(),
         "end_date": add_days(today(), 30),
         "pdca_phase": "DO",
@@ -42,20 +66,25 @@ def _get_project_name():
     global _PROJECT_NAME
     if _PROJECT_NAME:
         return _PROJECT_NAME
-    existing = frappe.db.get_value("VT Project", {"title": _PROJECT_TITLE}, "name")
+    existing = frappe.db.get_value(
+        TASK_DOCTYPE,
+        {"title": _PROJECT_TITLE, "node_type": PROJECT_NODE_TYPE},
+        "name",
+    )
     if existing:
         _PROJECT_NAME = existing
     return _PROJECT_NAME
 
 
-def _make_task(title_suffix, assigned_to, pdca_phase="PLAN", kanban_status="Scheduled"):
+def _make_task(title_suffix, owner_user, pdca_phase="PLAN"):
+    # kanban_status is derived by the controller from pdca_phase; never set here.
     return frappe.get_doc({
-        "doctype": "VT Task",
+        "doctype": TASK_DOCTYPE,
+        "node_type": TASK_NODE_TYPE,
+        "parent_vt_item": _get_project_name(),
         "title": f"MW Task {title_suffix}",
-        "project": _get_project_name(),
-        "assigned_to": assigned_to,
+        "owner_user": owner_user,
         "pdca_phase": pdca_phase,
-        "kanban_status": kanban_status,
         "start_date": today(),
         "deadline": add_days(today(), 5),
         "weight": 3.0,
@@ -64,7 +93,7 @@ def _make_task(title_suffix, assigned_to, pdca_phase="PLAN", kanban_status="Sche
 
 
 def _make_schedule_entry(task_name, hours=2.0):
-    task = frappe.get_doc("VT Task", task_name)
+    task = frappe.get_doc(TASK_DOCTYPE, task_name)
     task.append("schedule_entries", {
         "date": today(),
         "allocated_minutes": hours,
@@ -83,12 +112,13 @@ class TestMyWorkFocus(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        # Delete Task leaf nodes before the Project parent (nested-set safety).
         for task_name in cls._created_tasks:
-            if frappe.db.exists("VT Task", task_name):
-                frappe.delete_doc("VT Task", task_name, force=True)
+            if frappe.db.exists(TASK_DOCTYPE, task_name):
+                frappe.delete_doc(TASK_DOCTYPE, task_name, force=True)
         project_name = _get_project_name()
-        if project_name and frappe.db.exists("VT Project", project_name):
-            frappe.delete_doc("VT Project", project_name, force=True)
+        if project_name and frappe.db.exists(TASK_DOCTYPE, project_name):
+            frappe.delete_doc(TASK_DOCTYPE, project_name, force=True)
         frappe.db.commit()
 
     def setUp(self):
@@ -96,13 +126,14 @@ class TestMyWorkFocus(unittest.TestCase):
         self._test_tasks = []
 
     def tearDown(self):
+        # Tasks are leaf nodes under the project; safe to delete directly.
         for task_name in self._test_tasks:
-            if frappe.db.exists("VT Task", task_name):
-                frappe.delete_doc("VT Task", task_name, force=True)
+            if frappe.db.exists(TASK_DOCTYPE, task_name):
+                frappe.delete_doc(TASK_DOCTYPE, task_name, force=True)
         frappe.db.commit()
 
     def _track(self, doc):
-        """Track a created task for cleanup."""
+        """Track a created task node for cleanup."""
         self._test_tasks.append(doc.name)
         self.__class__._created_tasks.append(doc.name)
         return doc
@@ -120,7 +151,7 @@ class TestMyWorkFocus(unittest.TestCase):
         self.assertIn(task.name, names)
 
     def test_get_my_day_excludes_done_tasks(self):
-        task = self._track(_make_task("day-done", "Administrator", pdca_phase="DONE", kanban_status="Done"))
+        task = self._track(_make_task("day-done", "Administrator", pdca_phase="CLOSED"))
         _make_schedule_entry(task.name)
 
         from vernon_tasks.task.api.my_work import get_my_day
@@ -133,12 +164,12 @@ class TestMyWorkFocus(unittest.TestCase):
 
     def test_get_what_to_do_today_includes_due_soon(self):
         task = self._track(frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": TASK_DOCTYPE,
+            "node_type": TASK_NODE_TYPE,
+            "parent_vt_item": _get_project_name(),
             "title": "MW Due Soon Task",
-            "project": _get_project_name(),
-            "assigned_to": "Administrator",
+            "owner_user": "Administrator",
             "pdca_phase": "PLAN",
-            "kanban_status": "Scheduled",
             "start_date": today(),
             "deadline": add_days(today(), 2),
             "weight": 2.0,
@@ -152,12 +183,12 @@ class TestMyWorkFocus(unittest.TestCase):
 
     def test_get_what_to_do_today_excludes_blocked(self):
         blocker = self._track(frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": TASK_DOCTYPE,
+            "node_type": TASK_NODE_TYPE,
+            "parent_vt_item": _get_project_name(),
             "title": "MW Blocker A",
-            "project": _get_project_name(),
-            "assigned_to": "Administrator",
+            "owner_user": "Administrator",
             "pdca_phase": "DO",
-            "kanban_status": "In Progress",
             "start_date": today(),
             "deadline": add_days(today(), 10),
             "weight": 1.0,
@@ -165,12 +196,12 @@ class TestMyWorkFocus(unittest.TestCase):
         }).insert(ignore_permissions=True))
 
         blocked = self._track(frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": TASK_DOCTYPE,
+            "node_type": TASK_NODE_TYPE,
+            "parent_vt_item": _get_project_name(),
             "title": "MW Blocked Task A",
-            "project": _get_project_name(),
-            "assigned_to": "Administrator",
+            "owner_user": "Administrator",
             "pdca_phase": "PLAN",
-            "kanban_status": "Scheduled",
             "start_date": today(),
             "deadline": add_days(today(), 1),
             "weight": 2.0,
@@ -187,12 +218,12 @@ class TestMyWorkFocus(unittest.TestCase):
 
     def test_get_my_blocked_tasks_returns_blocker_info(self):
         blocker = self._track(frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": TASK_DOCTYPE,
+            "node_type": TASK_NODE_TYPE,
+            "parent_vt_item": _get_project_name(),
             "title": "MW The Blocker",
-            "project": _get_project_name(),
-            "assigned_to": "Administrator",
+            "owner_user": "Administrator",
             "pdca_phase": "DO",
-            "kanban_status": "In Progress",
             "start_date": today(),
             "deadline": add_days(today(), 10),
             "weight": 1.0,
@@ -200,12 +231,12 @@ class TestMyWorkFocus(unittest.TestCase):
         }).insert(ignore_permissions=True))
 
         blocked = self._track(frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": TASK_DOCTYPE,
+            "node_type": TASK_NODE_TYPE,
+            "parent_vt_item": _get_project_name(),
             "title": "MW My Blocked Task",
-            "project": _get_project_name(),
-            "assigned_to": "Administrator",
+            "owner_user": "Administrator",
             "pdca_phase": "PLAN",
-            "kanban_status": "Scheduled",
             "start_date": today(),
             "deadline": add_days(today(), 5),
             "weight": 2.0,
@@ -224,19 +255,19 @@ class TestMyWorkFocus(unittest.TestCase):
     # --- start_task ---
 
     def test_start_task_transitions_to_in_progress(self):
-        task = self._track(_make_task("start-1", "Administrator", pdca_phase="PLAN", kanban_status="Scheduled"))
+        task = self._track(_make_task("start-1", "Administrator", pdca_phase="PLAN"))
 
         from vernon_tasks.task.api.my_work import start_task
         result = start_task(task.name)
         self.assertEqual(result["status"], "ok")
 
-        phase = frappe.db.get_value("VT Task", task.name, "pdca_phase")
-        kanban = frappe.db.get_value("VT Task", task.name, "kanban_status")
+        phase = frappe.db.get_value(TASK_DOCTYPE, task.name, "pdca_phase")
+        kanban = frappe.db.get_value(TASK_DOCTYPE, task.name, "kanban_status")
         self.assertEqual(phase, "DO")
         self.assertEqual(kanban, "In Progress")
 
     def test_start_task_rejected_on_wrong_status(self):
-        task = self._track(_make_task("start-2", "Administrator", pdca_phase="CHECK", kanban_status="In Review"))
+        task = self._track(_make_task("start-2", "Administrator", pdca_phase="CHECK"))
 
         from vernon_tasks.task.api.my_work import start_task
         with self.assertRaises(frappe.ValidationError):
@@ -244,12 +275,12 @@ class TestMyWorkFocus(unittest.TestCase):
 
     def test_start_task_rejected_when_blocked(self):
         blocker = self._track(frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": TASK_DOCTYPE,
+            "node_type": TASK_NODE_TYPE,
+            "parent_vt_item": _get_project_name(),
             "title": "MW Blocker B",
-            "project": _get_project_name(),
-            "assigned_to": "Administrator",
+            "owner_user": "Administrator",
             "pdca_phase": "DO",
-            "kanban_status": "In Progress",
             "start_date": today(),
             "deadline": add_days(today(), 10),
             "weight": 1.0,
@@ -257,12 +288,12 @@ class TestMyWorkFocus(unittest.TestCase):
         }).insert(ignore_permissions=True))
 
         blocked = self._track(frappe.get_doc({
-            "doctype": "VT Task",
+            "doctype": TASK_DOCTYPE,
+            "node_type": TASK_NODE_TYPE,
+            "parent_vt_item": _get_project_name(),
             "title": "MW Blocked B",
-            "project": _get_project_name(),
-            "assigned_to": "Administrator",
+            "owner_user": "Administrator",
             "pdca_phase": "PLAN",
-            "kanban_status": "Scheduled",
             "start_date": today(),
             "deadline": add_days(today(), 5),
             "weight": 2.0,
@@ -277,19 +308,19 @@ class TestMyWorkFocus(unittest.TestCase):
     # --- submit_for_review ---
 
     def test_submit_for_review_transitions_to_in_review(self):
-        task = self._track(_make_task("sfr-1", "Administrator", pdca_phase="DO", kanban_status="In Progress"))
+        task = self._track(_make_task("sfr-1", "Administrator", pdca_phase="DO"))
 
         from vernon_tasks.task.api.my_work import submit_for_review
         result = submit_for_review(task.name)
         self.assertEqual(result["status"], "ok")
 
-        phase = frappe.db.get_value("VT Task", task.name, "pdca_phase")
-        kanban = frappe.db.get_value("VT Task", task.name, "kanban_status")
+        phase = frappe.db.get_value(TASK_DOCTYPE, task.name, "pdca_phase")
+        kanban = frappe.db.get_value(TASK_DOCTYPE, task.name, "kanban_status")
         self.assertEqual(phase, "CHECK")
         self.assertEqual(kanban, "In Review")
 
     def test_submit_for_review_rejected_on_wrong_status(self):
-        task = self._track(_make_task("sfr-2", "Administrator", pdca_phase="PLAN", kanban_status="Scheduled"))
+        task = self._track(_make_task("sfr-2", "Administrator", pdca_phase="PLAN"))
 
         from vernon_tasks.task.api.my_work import submit_for_review
         with self.assertRaises(frappe.ValidationError):
