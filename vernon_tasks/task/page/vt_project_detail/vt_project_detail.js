@@ -30,7 +30,7 @@ const RISK_FLAG_OPTIONS = "\nlate\nblocked\nscope-drift";
 // Child-table grid columns for the modal (subset shown in the in-dialog grid).
 const DEPENDENCY_GRID_FIELDS = [
     { fieldname: "blocked_by", label: "Diblokir Oleh", fieldtype: "Link",
-      options: "VT Task", in_list_view: 1, reqd: 1 },
+      options: "VT Item", in_list_view: 1, reqd: 1 },
     { fieldname: "dependency_type", label: "Tipe", fieldtype: "Select",
       options: "Finish-to-Start\nStart-to-Start", in_list_view: 1 },
 ];
@@ -44,7 +44,7 @@ const SCHEDULE_GRID_FIELDS = [
 const PROJ_RISK_LABELS = { on_track: "On track", at_risk: "Berisiko", behind: "Tertinggal" };
 const PRIORITY_COLORS = { Critical: "#ef4444", High: "#f59e0b", Medium: "#3b82f6", Low: "#94a3b8" };
 const SORTABLE_GROUP = "vt-board";
-const TASK_DOCTYPE = "VT Task";
+const TASK_DOCTYPE = "VT Item";
 
 // ── Fokus feed (default view) ────────────────────────────────────────────────
 const PATCH_API = "vernon_tasks.task.api.board_mutations.patch_task";
@@ -112,7 +112,7 @@ frappe.pages["vt-project-detail"].on_page_load = function (wrapper) {
     // Button callbacks re-read the route at click time so they stay correct
     // after navigating between projects without re-adding the buttons.
     page.add_button(__("Refresh"), () => load_page(page, frappe.get_route()[1]), { icon: "refresh" });
-    page.add_button(__("Edit"), () => frappe.set_route("Form", "VT Project", frappe.get_route()[1]));
+    page.add_button(__("Edit"), () => frappe.set_route("Form", "VT Item", frappe.get_route()[1]));
     wrapper.__vt_project_page = page;
 };
 
@@ -573,7 +573,7 @@ function dialog_fields(ctx, editing) {
         { fieldname: "risk_flag", label: "Tanda Risiko", fieldtype: "Select",
           options: RISK_FLAG_OPTIONS, read_only: 1 },
         { fieldtype: "Column Break" },
-        { fieldname: "sprint", label: "Sprint", fieldtype: "Link", options: "VT Sprint" },
+        { fieldname: "sprint", label: "Sprint", fieldtype: "Link", options: "VT Item" },
 
         { fieldtype: "Section Break", label: "Penugasan & Jadwal" },
         { fieldname: "assigned_to", label: "Assignee", fieldtype: "Link", options: "User",
