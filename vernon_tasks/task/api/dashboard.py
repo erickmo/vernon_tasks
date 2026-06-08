@@ -36,6 +36,7 @@ from vernon_tasks.task.api.security import require_login
 from vernon_tasks.task.doctype.vt_item.vt_item import (
     KANBAN_BLOCKED,
     PDCA_KANBAN_MAP,
+    VALID_PDCA_TRANSITIONS,
 )
 from vernon_tasks.task.services import vt_item_tree as tree
 
@@ -64,16 +65,9 @@ DONE_PHASE = "CLOSED"
 # Board column ↔ PDCA phase, derived from the unified map (terminal = CLOSED).
 KANBAN_PDCA_MAP = {v: k for k, v in PDCA_KANBAN_MAP.items()}
 BOARD_COLUMNS = tuple(PDCA_KANBAN_MAP.values()) + (KANBAN_BLOCKED,)
-# Legal PDCA transitions (unified: terminal phase is CLOSED). Drives the board's
-# drag-target UX hints only; the server still re-validates every move elsewhere.
-VALID_PDCA_TRANSITIONS = {
-    "BACKLOG": ["PLAN"],
-    "PLAN": ["DO"],
-    "DO": ["CHECK"],
-    "CHECK": ["ACT", "CLOSED", "DO"],
-    "ACT": ["DO"],
-    "CLOSED": [],
-}
+# VALID_PDCA_TRANSITIONS is imported from the VT Item controller (single source
+# of truth). Here it drives the board's drag-target UX hints only; the server
+# re-validates every move via the controller on save.
 
 # Card field set shared by the detail open-task list and the project board.
 # assigned_to → owner_user on VT Item Task nodes.

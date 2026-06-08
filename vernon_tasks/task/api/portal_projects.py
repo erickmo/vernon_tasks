@@ -29,6 +29,10 @@ from vernon_tasks.task.api.security import max_str, require_login
 from vernon_tasks.task.services import vt_item_tree as tree
 from vernon_tasks.task.services.project_task_grouper import group_tasks
 
+# Legacy CLIENT phase vocabulary accepted by bulk_phase_shift — keep "DONE"
+# here (NOT "CLOSED"): it is translated to the unified terminal CLOSED on write
+# (see PHASE_DONE→PHASE_CLOSED in bulk_phase_shift). Changing it to CLOSED would
+# break the existing client payload contract.
 ALLOWED_PHASES = {"BACKLOG", "PLAN", "DO", "CHECK", "DONE", "ACT"}
 # Legacy callers send "DONE" as the terminal phase; the unified pdca_phase select
 # names it CLOSED. Translate on write so the controller's kanban derivation fires.
