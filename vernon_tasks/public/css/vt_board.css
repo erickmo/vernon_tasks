@@ -217,3 +217,27 @@
 .vt-detail .vb-bulk-pic { border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; }
 .vt-detail .vb-bulk-cancel { margin-left: auto; background: none; border: none; color: var(--vh-text-3); cursor: pointer; font-size: 12px; }
 .vt-detail .vb-bulk-cancel:hover { color: #fff; }
+
+/* ── Onboarding help card: workflow guide (dismissible, top of Fokus) ─────────
+   Reuses the .vh-card white surface + --vh-* tokens. A static teaching guide,
+   deliberately separate from home's interactive .vh-onboarding checklist. */
+.vt-detail .vb-help { padding: 14px 16px; }
+.vt-detail .vb-help-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 12px;
+}
+.vt-detail .vb-help-title { font-size: 14px; font-weight: 600; color: var(--vh-navy-2); }
+.vt-detail .vb-help-dismiss { color: var(--vh-text-2); }
+.vt-detail .vb-help-steps { display: grid; gap: 12px; }
+@media (min-width: 720px) {
+  .vt-detail .vb-help-steps { grid-template-columns: 1fr 1fr; gap: 12px 22px; }
+}
+.vt-detail .vb-help-step { display: flex; gap: 10px; align-items: flex-start; }
+.vt-detail .vb-help-num {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--vh-blue); color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; margin-top: 1px;
+}
+.vt-detail .vb-help-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vt-detail .vb-help-step-title { font-size: 13px; font-weight: 600; color: var(--vh-navy-2); }
+.vt-detail .vb-help-step-body { font-size: 12px; color: var(--vh-text-2); line-height: 1.5; }

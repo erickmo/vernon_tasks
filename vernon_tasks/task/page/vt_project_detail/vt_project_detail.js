@@ -72,6 +72,25 @@ const FEED_BUCKETS = [
     { key: "lainnya", label: "Lainnya / terjadwal", icon: "✅", action: false, match: () => true },
 ];
 
+// ── Onboarding help card: static guide teaching the page workflow ─────────────
+// Dismissal is a SINGLE GLOBAL localStorage flag — it teaches the page, not one
+// project, so (unlike COLLAPSE_KEY) it is intentionally not keyed per-project.
+const HELP_DISMISS_KEY = "vt_pd_help_dismissed";
+const HELP_STEPS = [
+    { icon: "⚡", title: "Tambah cepat",
+      body: "Ketik judul di bar Tambah lalu Enter untuk membuat tugas kilat. Prioritas, assignee, dan tenggat opsional; tombol ⋯ membuka form detail." },
+    { icon: "🎯", title: "Fokus = antrian kerja",
+      body: "Tab default ini mengelompokkan tugas yang perlu aksi: Terlambat, Diblokir, Belum Ditugaskan, Berisiko, dan Jatuh Tempo Hari Ini." },
+    { icon: "✏️", title: "Beresi langsung di baris",
+      body: "Atur Assignee, Prioritas, atau Tenggat lewat tombol di tiap baris — tugas keluar dari antrian begitu lengkap. Pakai \"Buka blok →\" untuk melepas blokir." },
+    { icon: "👥", title: "Tugaskan massal",
+      body: "Di bucket Belum Ditugaskan, centang beberapa tugas lalu pilih satu PIC sekaligus. Lensa Tim menampilkan beban tiap orang; klik untuk memfilter." },
+    { icon: "📋", title: "Papan = kanban seret-lepas",
+      body: "Tab Papan: seret kartu antar kolom. Kolom yang valid menyala mengikuti aturan PDCA; seret ke Blocked untuk menandai terblokir." },
+    { icon: "🗂", title: "Tampilan lain",
+      body: "Kalender (jadwal per tanggal), Sprint (per-iterasi), Milestone, Tim, dan Gantt (linimasa) menyajikan tugas yang sama dari sudut berbeda." },
+];
+
 // Tabs that render a heavy view lazily on first open (libs/data loaded on
 // demand). Sprint pulls its own data; calendar/gantt also load their libs.
 const LAZY_TABS = { calendar: render_calendar, gantt: render_gantt, sprint: render_sprints };
@@ -111,6 +130,7 @@ frappe.pages["vt-project-detail"].on_page_load = function (wrapper) {
     const page = frappe.ui.make_app_page({ parent: wrapper, title: "Proyek", single_column: true });
     // Button callbacks re-read the route at click time so they stay correct
     // after navigating between projects without re-adding the buttons.
+    page.add_button(__("Panduan"), () => reopen_help(page), { icon: "help" });
     page.add_button(__("Refresh"), () => load_page(page, frappe.get_route()[1]), { icon: "refresh" });
     page.add_button(__("Edit"), () => frappe.set_route("Form", "VT Item", frappe.get_route()[1]));
     wrapper.__vt_project_page = page;
@@ -134,6 +154,7 @@ function load_page(page, id) {
     const root = $('<div class="vt-home vt-detail"></div>');
     page.main.empty().append(root);
     const ctx = { project_id: id, root };
+    page.__vt_ctx = ctx;  // header buttons (Panduan) reach ctx through the page
     Promise.all([
         frappe.call(DETAIL_API, { project_id: id }),
         frappe.call(BOARD_API, { project_id: id }),
@@ -161,7 +182,12 @@ function render_page(ctx) {
     panels.append($('<div class="vb-panel" data-panel="tim" hidden></div>').append(team_section(ctx.detail.team_members || [])));
     ctx.root.append(panels);
     // Autofocus the quick-capture input so the leader can type a task immediately.
-    setTimeout(() => ctx.root.find(".vb-qc-title").trigger("focus"), 0);
+    // preventScroll keeps the viewport at the top so the help card sitting above
+    // the quick-capture bar stays visible instead of being scrolled past.
+    setTimeout(() => {
+        const qc = ctx.root.find(".vb-qc-title").get(0);
+        if (qc) qc.focus({ preventScroll: true });
+    }, 0);
 }
 
 // Fokus replaces the old Ringkasan tab (it is a richer open-task surface) and is
@@ -271,9 +297,63 @@ function bucketize(cards) {
     return buckets;
 }
 
+// Safe localStorage access mirroring load_collapse's try/catch idiom; the flag is
+// a single global boolean, so a read returns true only when explicitly set.
+function help_dismissed() {
+    try { return localStorage.getItem(HELP_DISMISS_KEY) === "1"; }
+    catch (e) { return false; }
+}
+
+function set_help_dismissed(on) {
+    try {
+        if (on) localStorage.setItem(HELP_DISMISS_KEY, "1");
+        else localStorage.removeItem(HELP_DISMISS_KEY);
+    } catch (e) { /* storage unavailable — card just won't persist */ }
+}
+
+// Dismissible workflow guide; returns an empty set when dismissed so focus_body
+// can prepend it unconditionally. Mirrors render_onboarding/render_onb_step split.
+function help_card(ctx) {
+    if (help_dismissed()) return $();
+    const card = $(`<div class="vh-card vb-help">
+        <div class="vb-help-head">
+            <span class="vb-help-title">📖 Cara pakai halaman ini</span>
+            <button class="vb-help-dismiss btn btn-xs">Sembunyikan</button>
+        </div>
+        <div class="vb-help-steps"></div></div>`);
+    const steps = card.find(".vb-help-steps");
+    HELP_STEPS.forEach((s, i) => steps.append(help_step(s, i + 1)));
+    card.find(".vb-help-dismiss").on("click", () => { set_help_dismissed(true); card.remove(); });
+    return card;
+}
+
+// One numbered step row: index badge + icon/title + body (all escaped).
+function help_step(s, n) {
+    return $(`<div class="vb-help-step">
+        <span class="vb-help-num">${n}</span>
+        <div class="vb-help-text">
+            <span class="vb-help-step-title">${esc(s.icon)} ${esc(s.title)}</span>
+            <span class="vb-help-step-body">${esc(s.body)}</span>
+        </div></div>`);
+}
+
+// Re-show the guide after dismissal: clear the flag, rebuild the Fokus panel for
+// the CURRENT project (ctx is stashed on the page since header buttons only get
+// `page`), then surface the Fokus tab.
+function reopen_help(page) {
+    set_help_dismissed(false);
+    const ctx = page.__vt_ctx;
+    // ctx is stashed before the board fetch resolves; bail until board data and
+    // the rendered panels exist, else focus_body reads ctx.board.* (undefined).
+    if (!ctx || !ctx.board) return;
+    ctx.root.find('[data-panel="fokus"]').empty().append(focus_body(ctx));
+    switch_tab(ctx, "fokus");
+}
+
 function focus_body(ctx) {
     focus_state(ctx).selected = new Set();  // selection resets on a fresh build
     const wrap = $('<div class="vb-focus"></div>');
+    wrap.append(help_card(ctx));  // workflow guide on top (hidden once dismissed)
     wrap.append(quick_capture_bar(ctx));
     wrap.append(focus_toolbar(ctx));
     wrap.append('<div class="vb-kepada"></div>');
